@@ -96,6 +96,8 @@ object SmartEngineAdapter {
         val primaryResult = getEngine().convertWord(phonetic)
         val freq = if (bengali == primaryResult.bengali) 90 else 75
         getEngine().addWord(phonetic, bengali, freq)
+        // Clear cache so the new word takes effect on next lookup
+        getEngine().clearCache()
         // Fire and forget persistence
         storage?.let { s ->
             @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
