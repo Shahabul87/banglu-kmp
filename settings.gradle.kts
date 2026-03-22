@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "banglu-kmp"
 include(":shared")
+include(":dictionary-compiler")
