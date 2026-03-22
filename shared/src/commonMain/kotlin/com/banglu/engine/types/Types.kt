@@ -105,3 +105,18 @@ data class PredictedWord(
     val bengali: String,
     val confidence: Double
 )
+
+data class DictionaryStats(
+    val totalEntries: Int,
+    val totalPhoneticKeys: Int,
+    val trieNodeCount: Int,
+    val averageKeyLength: Double,
+    val longestKey: String,
+    val topFrequencyWords: List<TopWord>
+)
+
+data class TopWord(
+    val bengali: String,
+    val phonetic: String,
+    val frequency: Int
+)
