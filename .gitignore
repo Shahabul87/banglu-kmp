@@ -9,6 +9,9 @@ build/
 *.iml
 .DS_Store
 
+# Android
+local.properties
+
 # Kotlin
 *.class
 
