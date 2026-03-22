@@ -1,0 +1,734 @@
+package com.banglu.engine
+
+import com.banglu.engine.ai.AIDisambiguator
+import com.banglu.engine.ai.BigramModel
+import com.banglu.engine.ai.ViterbiDecoder
+import com.banglu.engine.ai.WordCandidate
+import com.banglu.engine.dictionary.BengaliWordValidator
+import com.banglu.engine.dictionary.PhoneticOverlapScorer
+import com.banglu.engine.dictionary.ProgressiveNarrowingEngine
+import com.banglu.engine.dictionary.SectionNarrowingEngine
+import com.banglu.engine.dictionary.SeedData
+import com.banglu.engine.dictionary.SmartDictionary
+import com.banglu.engine.platform.DictionaryLoader
+import com.banglu.engine.platform.PlatformStorage
+import com.banglu.engine.rules.ConjunctResolver
+import com.banglu.engine.rules.ConjunctTable
+import com.banglu.engine.rules.NasalResolver
+import com.banglu.engine.rules.NatvaVidhan
+import com.banglu.engine.rules.ShatvaVidhan
+import com.banglu.engine.rules.StatisticalDefaults
+import com.banglu.engine.types.Alternative
+import com.banglu.engine.types.ConversionResult
+import com.banglu.engine.types.ResolutionSource
+import com.banglu.engine.types.SmartSuggestion
+import com.banglu.engine.util.ReverseTransliterator
+
+/**
+ * SmartEngine - 7-layer Bengali phonetic conversion orchestrator.
+ *
+ * Receives English phonetic input and converts to Bengali through:
+ *   Layer 1:   Dictionary lookup (PhoneticTrie, ~4K+ seed entries)
+ *   Layer 0:   Section narrowing (480K Bengali dictionary via BengaliSectionIndex)
+ *   Layer 1.5: Root decomposition (stem + suffix + 480K validation)
+ *              English detection (passthrough)
+ *   Layer 2-4: Pattern engine (ConjunctResolver, NasalResolver, ShatvaVidhan, NatvaVidhan)
+ *   Layer 5:   AIDisambiguator (swap rules: ন↔ণ, শ↔ষ, ত↔ট, etc.)
+ *   Layer 5.5: Dictionary validation (character swap fixes against 480K)
+ *   Layer 6:   Bengali dictionary recovery (search 480K by Bengali similarity)
+ */
+data class SmartEngineConfig(
+    val enableExternalDictionaries: Boolean = true,
+    val maxSuggestions: Int = 5,
+    val autoAcceptThreshold: Double = 0.90,
+    val neuralConfidenceThreshold: Double = 0.70
+)
+
+class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
+
+    // ======================== Components ========================
+
+    val dictionary = SmartDictionary()
+    private val disambiguator = AIDisambiguator()
+    private val validator = BengaliWordValidator()
+    private val bigramModel = BigramModel()
+    private val sectionEngine = SectionNarrowingEngine()
+    val narrowingEngine: ProgressiveNarrowingEngine
+    private var viterbiDecoder: ViterbiDecoder? = null
+    private var disambiguationMap: Map<String, String>? = null
+    private var initialized = false
+
+    // ======================== LRU Word Cache ========================
+
+    private val wordCache = object : LinkedHashMap<String, ConversionResult>(256, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ConversionResult>?): Boolean {
+            return size > MAX_CACHE
+        }
+    }
+
+    companion object {
+        const val MAX_CACHE = 2000
+    }
+
+    init {
+        narrowingEngine = ProgressiveNarrowingEngine(dictionary)
+    }
+
+    // ======================== INITIALIZATION ========================
+
+    /**
+     * Synchronous initialization: loads seed dictionary (~4K words).
+     * Call this before any conversions. Safe to call multiple times.
+     */
+    fun initializeSync() {
+        if (initialized) return
+        dictionary.initialize()
+        // Initialize disambiguator with seed Bengali words
+        disambiguator.initialize(SeedData.SEED_DICTIONARY.map { it.bengali })
+        initialized = true
+    }
+
+    /**
+     * Async initialization: loads extended dictionaries, 480K word list,
+     * frequency data, disambiguation map, bigram model, and learned words.
+     *
+     * @param storage Platform-specific storage for learned words (optional)
+     * @param loader Platform-specific dictionary loader (optional)
+     */
+    suspend fun initialize(storage: PlatformStorage? = null, loader: DictionaryLoader? = null) {
+        if (!initialized) initializeSync()
+
+        // Load extended dictionary if available
+        loader?.loadExtendedDictionary()?.let { entries ->
+            dictionary.addEntries(entries)
+        }
+
+        // Load 480K word list
+        loader?.loadFullDictionary()?.let { words ->
+            validator.loadWords(words)
+            sectionEngine.initialize(validator)
+            disambiguator.addKnownWords(words)
+        }
+
+        // Load frequency data
+        loader?.loadFrequencyMap()?.let { freqs ->
+            validator.loadFrequencies(freqs)
+        }
+
+        // Load disambiguation map
+        loader?.loadDisambiguationMap()?.let { map ->
+            disambiguationMap = map
+        }
+
+        // Load bigram model
+        loader?.loadBigramModel()?.let { data ->
+            bigramModel.loadFromData(data)
+            viterbiDecoder = ViterbiDecoder(bigramModel)
+        }
+
+        // Load learned words
+        storage?.getLearnedWords()?.let { learned ->
+            for (word in learned) {
+                val primaryResult = convertWord(word.phonetic)
+                val freq = if (word.bengali == primaryResult.bengali) 90 else 75
+                dictionary.addMapping(word.phonetic, word.bengali, freq)
+            }
+        }
+
+        clearCache()
+    }
+
+    // ======================== SINGLE WORD CONVERSION (7-LAYER PIPELINE) ========================
+
+    /**
+     * Convert a single phonetic word to Bengali through the 7-layer pipeline.
+     *
+     * @param input English phonetic input (e.g., "ami", "bangladesh")
+     * @return ConversionResult with Bengali text, confidence, source, and alternatives
+     */
+    fun convertWord(input: String): ConversionResult {
+        val key = input.lowercase().trim()
+        if (key.isEmpty()) return ConversionResult("", 0.0, ResolutionSource.RULE)
+
+        // Check cache
+        wordCache[key]?.let { return it }
+
+        // Layer 1: Dictionary lookup
+        convertByDictionary(key)?.let { result ->
+            if (result.confidence >= config.autoAcceptThreshold) {
+                cacheResult(key, result); return result
+            }
+            // Even if below threshold, if dictionary found something, cache and return
+            // (gives priority to dictionary over patterns)
+            cacheResult(key, result); return result
+        }
+
+        // Layer 0: Section narrowing (if 480K loaded)
+        if (sectionEngine.isReady()) {
+            convertBySection(key)?.let { result ->
+                if (result.confidence >= 0.95) {
+                    val validated = applyDictionaryValidation(result)
+                    cacheResult(key, validated); return validated
+                }
+            }
+        }
+
+        // Layer 1.5: Root decomposition
+        convertByRootDecomposition(key)?.let { result ->
+            cacheResult(key, result); return result
+        }
+
+        // English detection: if input looks like English, pass through
+        if (isLikelyEnglish(key)) {
+            val result = ConversionResult(key, 0.50, ResolutionSource.ENGLISH_PASSTHROUGH)
+            cacheResult(key, result); return result
+        }
+
+        // Layers 2-4: Pattern conversion
+        var result = convertByPatterns(key)
+
+        // Layer 5: AI Disambiguation (if confidence < 0.92)
+        if (result.confidence < 0.92) {
+            result = applyDisambiguation(result)
+        }
+
+        // Layer 5.5: Dictionary validation (if 480K loaded)
+        if (validator.isLoaded()) {
+            result = applyDictionaryValidation(result)
+        }
+
+        // Layer 6: Bengali dictionary recovery (if 480K loaded and result not valid)
+        if (validator.isLoaded() && !validator.isValid(result.bengali) && result.bengali.length >= 3) {
+            applyBengaliRecovery(result)?.let { recovered ->
+                cacheResult(key, recovered); return recovered
+            }
+        }
+
+        cacheResult(key, result)
+        return result
+    }
+
+    // ======================== MULTI-WORD CONVERSION ========================
+
+    /**
+     * Parse multi-word input, converting each word and preserving whitespace.
+     * Optionally applies Viterbi optimization if bigram model is loaded.
+     *
+     * @param input Full phonetic input (may contain spaces)
+     * @return Converted Bengali text with whitespace preserved
+     */
+    fun parse(input: String): String {
+        if (input.isEmpty()) return ""
+
+        // Tokenize preserving whitespace
+        val allTokens = mutableListOf<String>()
+        val wordPattern = Regex("\\S+")
+        var lastEnd = 0
+        for (match in wordPattern.findAll(input)) {
+            if (match.range.first > lastEnd) {
+                allTokens.add(input.substring(lastEnd, match.range.first)) // whitespace
+            }
+            allTokens.add(match.value) // word
+            lastEnd = match.range.last + 1
+        }
+        if (lastEnd < input.length) allTokens.add(input.substring(lastEnd))
+
+        // Track which tokens are words (not whitespace) and their original phonetic
+        val wordIndices = mutableListOf<Int>()
+        val originalPhonetics = mutableListOf<String>()
+        for ((i, token) in allTokens.withIndex()) {
+            if (token.isNotBlank()) {
+                originalPhonetics.add(token)
+                val result = convertWord(token)
+                allTokens[i] = result.bengali
+                wordIndices.add(i)
+            }
+        }
+
+        // Viterbi optimization (if bigram model loaded and 2+ words)
+        val decoder = viterbiDecoder
+        if (decoder != null && wordIndices.size >= 2) {
+            val candidateSets = wordIndices.mapIndexed { idx, tokenIdx ->
+                val phonetic = originalPhonetics[idx]
+                val result = convertWord(phonetic)
+                val candidates = mutableListOf(WordCandidate(result.bengali, result.confidence))
+                for (alt in result.alternatives.take(4)) {
+                    candidates.add(WordCandidate(alt.bengali, alt.confidence))
+                }
+                candidates
+            }
+            val viterbiResult = decoder.decode(candidateSets)
+            for ((i, wordIdx) in wordIndices.withIndex()) {
+                if (i < viterbiResult.words.size) {
+                    allTokens[wordIdx] = viterbiResult.words[i]
+                }
+            }
+        }
+
+        return allTokens.joinToString("")
+    }
+
+    // ======================== SUGGESTIONS ========================
+
+    /**
+     * Get ranked suggestions for the current phonetic input.
+     *
+     * Tiers:
+     *   0: Primary conversion result
+     *   1: Exact dictionary matches
+     *   2: Prefix matches
+     *   3: Fuzzy matches
+     *   3.6: Progressive narrowing
+     *   3.7: Section narrowing (if 480K loaded)
+     *   4: Pattern conversion alternatives
+     *
+     * @param input Phonetic input
+     * @param limit Maximum suggestions to return
+     * @return Sorted list of SmartSuggestion
+     */
+    fun getSuggestions(input: String, limit: Int = 5): List<SmartSuggestion> {
+        val key = input.lowercase().trim()
+        if (key.isEmpty()) return emptyList()
+
+        val suggestions = mutableListOf<SmartSuggestion>()
+        val seen = mutableSetOf<String>()
+
+        // Tier 0: Primary conversion
+        val primary = convertWord(key)
+        if (primary.bengali.isNotEmpty() && seen.add(primary.bengali)) {
+            suggestions.add(SmartSuggestion(primary.bengali, 1.0, "primary", key, "tier0"))
+        }
+
+        // Tier 1: Exact dictionary matches
+        for (result in dictionary.lookup(key).take(3)) {
+            if (seen.add(result.bengali)) {
+                suggestions.add(
+                    SmartSuggestion(
+                        result.bengali, result.confidence, "dictionary",
+                        result.matchedPhonetic, "tier1"
+                    )
+                )
+            }
+        }
+
+        // Tier 2: Prefix matches
+        for (result in dictionary.searchByPrefix(key, limit).take(5)) {
+            if (seen.add(result.bengali)) {
+                suggestions.add(SmartSuggestion(result.bengali, 0.70, "prefix", result.phonetic, "tier2"))
+            }
+        }
+
+        // Tier 3: Fuzzy matches
+        for (result in dictionary.fuzzyLookup(key, 1, 3, anchorFirst = true)) {
+            if (seen.add(result.bengali)) {
+                suggestions.add(
+                    SmartSuggestion(
+                        result.bengali, result.confidence * 0.8, "fuzzy",
+                        result.matchedPhonetic, "tier3"
+                    )
+                )
+            }
+        }
+
+        // Tier 3.6: Progressive narrowing
+        for (result in narrowingEngine.getSuggestions(key, limit)) {
+            if (seen.add(result.bengali)) {
+                suggestions.add(
+                    SmartSuggestion(result.bengali, result.confidence, "narrowing", result.phonetic, "tier3.6")
+                )
+            }
+        }
+
+        // Tier 3.7: Section narrowing (if 480K loaded)
+        if (sectionEngine.isReady()) {
+            for (result in sectionEngine.getSectionSuggestions(key, limit)) {
+                if (seen.add(result.bengali)) {
+                    suggestions.add(
+                        SmartSuggestion(result.bengali, result.confidence, "section", "", "tier3.7")
+                    )
+                }
+            }
+        }
+
+        // Tier 4: Pattern conversion alternatives
+        for (alt in primary.alternatives.take(3)) {
+            if (seen.add(alt.bengali)) {
+                suggestions.add(SmartSuggestion(alt.bengali, alt.confidence, "pattern", key, "tier4"))
+            }
+        }
+
+        return suggestions.sortedByDescending { it.confidence }.take(limit)
+    }
+
+    // ======================== PRIVATE PIPELINE METHODS ========================
+
+    /**
+     * Layer 1: Dictionary lookup via PhoneticTrie.
+     */
+    private fun convertByDictionary(key: String): ConversionResult? {
+        val results = dictionary.lookup(key)
+        if (results.isEmpty()) return null
+        val best = results[0]
+        val alternatives = results.drop(1).map { Alternative(it.bengali, it.confidence) }
+        return ConversionResult(best.bengali, best.confidence, ResolutionSource.DICTIONARY, alternatives)
+    }
+
+    /**
+     * Layer 0: Section narrowing using 480K Bengali dictionary sections.
+     */
+    private fun convertBySection(key: String): ConversionResult? {
+        val suggestions = sectionEngine.getSectionSuggestions(key, 3)
+        if (suggestions.isEmpty()) return null
+        // Score by phonetic overlap
+        val scored = suggestions.map { s ->
+            val overlap = PhoneticOverlapScorer.score(key, ReverseTransliterator.reverseWord(s.bengali))
+            s to overlap.score
+        }.filter { it.second > 0.50 }
+        if (scored.isEmpty()) return null
+        val best = scored.maxByOrNull { it.second }!!
+        return ConversionResult(best.first.bengali, best.first.confidence, ResolutionSource.SECTION)
+    }
+
+    /**
+     * Layer 1.5: Root decomposition - try splitting word into dictionary root + pattern suffix.
+     */
+    private fun convertByRootDecomposition(key: String): ConversionResult? {
+        for (splitPoint in key.length - 1 downTo 2) {
+            val root = key.substring(0, splitPoint)
+            val suffix = key.substring(splitPoint)
+            val rootResults = dictionary.lookup(root)
+            if (rootResults.isNotEmpty()) {
+                val suffixResult = convertByPatterns(suffix)
+                val combined = rootResults[0].bengali + suffixResult.bengali
+                // Validate compound if validator loaded
+                if (validator.isLoaded() && validator.isValid(combined)) {
+                    return ConversionResult(combined, 0.85, ResolutionSource.DICTIONARY)
+                }
+                // Even without validation, if root is confident and suffix is small
+                if (rootResults[0].confidence >= 0.85 && suffix.length <= 3) {
+                    return ConversionResult(combined, 0.75, ResolutionSource.RULE)
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * Layers 2-4: Pattern-based conversion using ConjunctResolver, ConjunctTable,
+     * NasalResolver, NatvaVidhan, ShatvaVidhan, and basic consonant/vowel mapping.
+     *
+     * Uses greedy longest-match strategy:
+     * 1. ConjunctResolver (locked patterns like sht→ষ্ট, str→স্ত্র)
+     * 2. ConjunctTable entries (kh→খ, gh→ঘ, ch→চ, chh→ছ, etc.)
+     * 3. Single consonants with context-aware rules
+     * 4. Vowels (independent at start, dependent after consonants)
+     */
+    private fun convertByPatterns(key: String): ConversionResult {
+        val result = StringBuilder()
+        var i = 0
+        var confidence = 0.85
+        val alternatives = mutableListOf<Alternative>()
+
+        while (i < key.length) {
+            // Try ConjunctResolver first (highest priority, locked patterns)
+            val conjunctMatch = ConjunctResolver.matchAt(key, i)
+            if (conjunctMatch != null) {
+                result.append(conjunctMatch.bengali)
+                i += conjunctMatch.consumed
+                // Check for dependent vowel after conjunct
+                if (i < key.length && key[i] in "aeiou") {
+                    val vowelResult = resolveVowel(key, i, false)
+                    result.append(vowelResult.first)
+                    i += vowelResult.second
+                    confidence = minOf(confidence, vowelResult.third)
+                }
+                continue
+            }
+
+            // Try ConjunctTable entries (aspirated consonants, common conjuncts)
+            var tableMatched = false
+            for (entry in ConjunctTable.TABLE) {
+                if (key.startsWith(entry.phonetic, i, ignoreCase = true)) {
+                    result.append(entry.bengali)
+                    i += entry.phonetic.length
+                    // Handle dependent vowel after conjunct table entry
+                    if (i < key.length && key[i] in "aeiou") {
+                        val vowelResult = resolveVowel(key, i, false)
+                        result.append(vowelResult.first)
+                        i += vowelResult.second
+                        confidence = minOf(confidence, vowelResult.third)
+                    }
+                    tableMatched = true
+                    break
+                }
+            }
+            if (tableMatched) continue
+
+            val char = key[i]
+
+            when {
+                // Vowels
+                char in "aeiou" -> {
+                    val isInitial = result.isEmpty()
+                    val vowelResult = resolveVowel(key, i, isInitial)
+                    result.append(vowelResult.first)
+                    i += vowelResult.second
+                    confidence = minOf(confidence, vowelResult.third)
+                }
+
+                // Consonants
+                char in "bcdfghjklmnpqrstvwxyz" -> {
+                    val consonantResult = resolveConsonant(key, i, result.toString())
+                    result.append(consonantResult.first)
+                    i += consonantResult.second
+                    confidence = minOf(confidence, consonantResult.third)
+
+                    // Check for dependent vowel after consonant
+                    if (i < key.length && key[i] in "aeiou") {
+                        val vowelResult = resolveVowel(key, i, false)
+                        result.append(vowelResult.first)
+                        i += vowelResult.second
+                        confidence = minOf(confidence, vowelResult.third)
+                    }
+                }
+
+                else -> {
+                    result.append(char)
+                    i++
+                }
+            }
+        }
+
+        return ConversionResult(result.toString(), confidence, ResolutionSource.RULE, alternatives)
+    }
+
+    /**
+     * Resolve a vowel at position i in the phonetic input.
+     *
+     * @param key Full phonetic input
+     * @param i Current position
+     * @param isIndependent True if vowel is at word-start (independent form)
+     * @return Triple of (Bengali vowel string, chars consumed, confidence)
+     */
+    private fun resolveVowel(key: String, i: Int, isIndependent: Boolean): Triple<String, Int, Double> {
+        // Check for compound vowels first (longest match)
+        if (i + 1 < key.length) {
+            val twoChar = key.substring(i, minOf(i + 2, key.length))
+            when (twoChar) {
+                "ou" -> return if (isIndependent) Triple("ঔ", 2, 0.90) else Triple("ৌ", 2, 0.90)
+                "oi" -> return if (isIndependent) Triple("ঐ", 2, 0.90) else Triple("ৈ", 2, 0.90)
+                "oo" -> return if (isIndependent) Triple("ঊ", 2, 0.85) else Triple("ূ", 2, 0.85)
+                "ee" -> return if (isIndependent) Triple("ঈ", 2, 0.85) else Triple("ী", 2, 0.85)
+                "ii" -> return if (isIndependent) Triple("ঈ", 2, 0.85) else Triple("ী", 2, 0.85)
+                "aa" -> return if (isIndependent) Triple("আ", 2, 0.90) else Triple("া", 2, 0.90)
+            }
+        }
+        // Single vowels
+        return when (key[i]) {
+            'a' -> if (isIndependent) Triple("অ", 1, 0.85) else Triple("া", 1, 0.85)
+            'i' -> if (isIndependent) Triple("ই", 1, 0.85) else Triple("ি", 1, 0.85)
+            'u' -> if (isIndependent) Triple("উ", 1, 0.90) else Triple("ু", 1, 0.90)
+            'e' -> if (isIndependent) Triple("এ", 1, 0.90) else Triple("ে", 1, 0.90)
+            'o' -> if (isIndependent) Triple("ও", 1, 0.85) else Triple("ো", 1, 0.85)
+            else -> Triple(key[i].toString(), 1, 0.50)
+        }
+    }
+
+    /**
+     * Resolve a consonant at position i in the phonetic input.
+     * Uses context-aware rules for n (NatvaVidhan), sh (ShatvaVidhan), ng (NasalResolver).
+     *
+     * @param key Full phonetic input
+     * @param i Current position
+     * @param bengaliContext Bengali text generated so far (for context-aware rules)
+     * @return Triple of (Bengali consonant string, chars consumed, confidence)
+     */
+    private fun resolveConsonant(key: String, i: Int, bengaliContext: String): Triple<String, Int, Double> {
+        // 'ng' handling
+        if (key[i] == 'n' && i + 1 < key.length && key[i + 1] == 'g') {
+            val nextAfterNg = if (i + 2 < key.length) key[i + 2].toString() else null
+            val nasal = NasalResolver.resolve(nextAfterNg)
+            return Triple(nasal.toString(), 2, 0.90)
+        }
+
+        // 'sh' handling
+        if (key[i] == 's' && i + 1 < key.length && key[i + 1] == 'h') {
+            val resolution = ShatvaVidhan.resolve(bengaliContext, key, i)
+            return Triple(resolution.bengali.toString(), 2, resolution.confidence)
+        }
+
+        // 'n' (not ng) handling — NatvaVidhan
+        if (key[i] == 'n' && (i + 1 >= key.length || key[i + 1] != 'g')) {
+            val resolution = NatvaVidhan.resolve(bengaliContext)
+            return Triple(resolution.bengali.toString(), 1, resolution.confidence)
+        }
+
+        // Standard consonant mapping
+        val consonantMap = mapOf(
+            'k' to "ক", 'g' to "গ", 'c' to "চ", 'j' to "জ",
+            't' to "ত", 'd' to "দ", 'p' to "প", 'b' to "ব",
+            'f' to "ফ", 'm' to "ম", 'r' to "র", 'l' to "ল",
+            's' to "স", 'h' to "হ", 'v' to "ভ", 'w' to "ও",
+            'y' to "য", 'z' to "জ", 'q' to "ক", 'x' to "ক্স"
+        )
+
+        val bengali = consonantMap[key[i]] ?: key[i].toString()
+        val defaultConf = StatisticalDefaults.getDefault(key[i].toString())?.confidence ?: 0.80
+        return Triple(bengali, 1, defaultConf)
+    }
+
+    /**
+     * Layer 5: Apply AI disambiguation using character swap rules.
+     */
+    private fun applyDisambiguation(result: ConversionResult): ConversionResult {
+        val disambiguated = disambiguator.disambiguate(result.bengali, result.confidence)
+        return if (disambiguated != null) {
+            result.copy(
+                bengali = disambiguated.bengali,
+                confidence = disambiguated.confidence,
+                alternatives = result.alternatives + Alternative(result.bengali, result.confidence)
+            )
+        } else result
+    }
+
+    /**
+     * Layer 5.5: Apply dictionary validation with systematic character swaps.
+     */
+    private fun applyDictionaryValidation(result: ConversionResult): ConversionResult {
+        // Try disambiguation map first (O(1))
+        disambiguationMap?.get(result.bengali)?.let { correct ->
+            if (validator.isValid(correct)) {
+                return result.copy(
+                    bengali = correct, confidence = 0.95,
+                    alternatives = result.alternatives + Alternative(result.bengali, result.confidence)
+                )
+            }
+        }
+
+        // Try systematic swaps
+        val swaps = listOf(
+            "ন" to "ণ", "ণ" to "ন",
+            "শ" to "ষ", "ষ" to "শ", "স" to "ষ", "ষ" to "স",
+            "ি" to "ী", "ী" to "ি",
+            "ু" to "ূ", "ূ" to "ু",
+            "চ" to "ছ", "ছ" to "চ",
+            "ত" to "ট", "ট" to "ত",
+            "দ" to "ড", "ড" to "দ"
+        )
+
+        if (!validator.isValid(result.bengali)) {
+            for ((from, to) in swaps) {
+                if (result.bengali.contains(from)) {
+                    val candidate = result.bengali.replace(from, to)
+                    if (validator.isValid(candidate)) {
+                        return result.copy(
+                            bengali = candidate, confidence = 0.90,
+                            alternatives = result.alternatives + Alternative(result.bengali, result.confidence)
+                        )
+                    }
+                }
+            }
+        }
+
+        return result
+    }
+
+    /**
+     * Layer 6: Bengali dictionary recovery.
+     * Searches 480K dictionary by progressively shorter Bengali prefixes,
+     * scores candidates by Bengali character similarity (LCS).
+     */
+    private fun applyBengaliRecovery(result: ConversionResult): ConversionResult? {
+        val bengali = result.bengali
+        for (prefixLen in minOf(bengali.length, 4) downTo 2) {
+            val prefix = bengali.substring(0, prefixLen)
+            val candidates = validator.findByPrefix(prefix, 20)
+            if (candidates.isEmpty()) continue
+
+            val scored = candidates.map { candidate ->
+                val sim = bengaliSimilarity(bengali, candidate)
+                val freq = validator.getFrequency(candidate)
+                val freqNorm = if (freq > 0) freq / 100.0 else 0.01
+                val score = sim * 0.95 + freqNorm * 0.05
+                candidate to score
+            }.filter { it.second > 0.50 }
+                .sortedByDescending { it.second }
+
+            if (scored.isNotEmpty()) {
+                val best = scored[0]
+                return ConversionResult(
+                    best.first, 0.85, ResolutionSource.DICTIONARY,
+                    listOf(Alternative(result.bengali, result.confidence)) +
+                            scored.drop(1).take(3).map { Alternative(it.first, it.second) }
+                )
+            }
+        }
+        return null
+    }
+
+    /**
+     * LCS-based similarity between two Bengali strings.
+     * Returns normalized score in [0.0, 1.0].
+     */
+    private fun bengaliSimilarity(a: String, b: String): Double {
+        val m = a.length
+        val n = b.length
+        if (m == 0 || n == 0) return 0.0
+        val prev = IntArray(n + 1)
+        val curr = IntArray(n + 1)
+        for (i in 1..m) {
+            for (j in 1..n) {
+                curr[j] = if (a[i - 1] == b[j - 1]) prev[j - 1] + 1
+                else maxOf(prev[j], curr[j - 1])
+            }
+            prev.indices.forEach { prev[it] = curr[it] }
+            curr.fill(0)
+        }
+        return (2.0 * prev[n]) / (m + n)
+    }
+
+    /**
+     * Detect likely English words that should pass through without conversion.
+     */
+    private fun isLikelyEnglish(key: String): Boolean {
+        val englishWords = setOf(
+            "the", "is", "are", "was", "were", "been", "have", "has",
+            "had", "do", "does", "did", "will", "would", "could", "should", "may", "might",
+            "can", "shall", "must", "need", "dare", "for", "and", "but", "not", "you",
+            "all", "any", "few", "her", "him", "his", "how", "its", "let", "new",
+            "now", "old", "our", "out", "own", "say", "she", "too", "use", "way",
+            "who", "why", "yes", "yet", "day", "get", "got", "end", "off", "see"
+        )
+        if (key in englishWords) return true
+        // Words with patterns uncommon in Bengali phonetics
+        if (key.contains("th") && key.contains("e") && key.length <= 4) return true
+        return false
+    }
+
+    // ======================== PUBLIC UTILITY METHODS ========================
+
+    /**
+     * Add a custom word to the dictionary.
+     */
+    fun addWord(phonetic: String, bengali: String, frequency: Int) {
+        dictionary.addMapping(phonetic, bengali, frequency)
+    }
+
+    /**
+     * Set learned words for section narrowing boosting.
+     */
+    fun setLearnedWords(words: Map<String, Int>) {
+        sectionEngine.setLearnedWords(words)
+    }
+
+    /**
+     * Clear the word conversion cache.
+     */
+    fun clearCache() {
+        wordCache.clear()
+    }
+
+    private fun cacheResult(key: String, result: ConversionResult) {
+        wordCache[key] = result
+    }
+}
