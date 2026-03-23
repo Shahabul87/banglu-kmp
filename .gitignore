@@ -18,6 +18,9 @@ local.properties
 # Compiled dictionary (build artifact)
 dictionary.sqlite
 
+# Bundled dictionary in Android assets (39MB, copied from root at build time)
+android-keyboard/src/main/assets/dictionary.sqlite
+
 # Swift Package Manager
 .build/
 .swiftpm/

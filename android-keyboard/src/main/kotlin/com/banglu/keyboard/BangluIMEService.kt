@@ -2,6 +2,7 @@ package com.banglu.keyboard
 
 import android.inputmethodservice.InputMethodService
 import android.text.InputType
+import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -32,16 +33,27 @@ class BangluIMEService : InputMethodService() {
     private var buffer = ""
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    companion object {
+        private const val TAG = "BangluIME"
+    }
+
     override fun onCreate() {
         super.onCreate()
+        Log.d(TAG, "onCreate: Initializing SmartEngine...")
         // Initialize engine with seed dictionary (~4K words, instant)
         SmartEngineAdapter.initializeSync()
-        // Async load of extended dictionaries when AndroidStorage/Loader are implemented
+        Log.d(TAG, "onCreate: Seed dictionary loaded")
+
+        // Load full 480K dictionary from SQLite in background
         serviceScope.launch {
             try {
-                // Full initialization will be added when AndroidDictionaryLoader is implemented.
-                // For now, seed-only mode provides core word coverage.
-            } catch (_: Exception) {
+                val storage = AndroidStorage(applicationContext)
+                val loader = AndroidDictionaryLoader(applicationContext)
+                Log.d(TAG, "onCreate: Loading full dictionary from SQLite...")
+                SmartEngineAdapter.initialize(storage, loader)
+                Log.d(TAG, "onCreate: Full dictionary loaded!")
+            } catch (e: Exception) {
+                Log.e(TAG, "onCreate: Failed to load full dictionary", e)
                 // Engine works with seed data only — graceful degradation
             }
         }
@@ -86,8 +98,12 @@ class BangluIMEService : InputMethodService() {
      */
     private fun onKeyPress(char: Char) {
         buffer += char
+        Log.d(TAG, "onKeyPress: char='$char', buffer='$buffer'")
 
-        val ic = currentInputConnection ?: return
+        val ic = currentInputConnection ?: run {
+            Log.w(TAG, "onKeyPress: no InputConnection!")
+            return
+        }
         val editorInfo = currentInputEditorInfo
 
         // Fallback for editors that don't support composing text
@@ -98,10 +114,12 @@ class BangluIMEService : InputMethodService() {
 
         // Convert phonetic buffer to Bengali and show as composing text
         val result = SmartEngineAdapter.convertWord(buffer)
+        Log.d(TAG, "onKeyPress: '$buffer' → '${result.bengali}' (confidence=${result.confidence})")
         ic.setComposingText(result.bengali, 1)
 
         // Update suggestion bar
         val suggestions = SmartEngineAdapter.getSuggestions(buffer, 6)
+        Log.d(TAG, "onKeyPress: ${suggestions.size} suggestions")
         suggestionBar?.showSuggestions(suggestions)
     }
 
@@ -131,9 +149,11 @@ class BangluIMEService : InputMethodService() {
      * Handle space: commit current Bengali conversion + space, then reset buffer.
      */
     private fun onSpacePress() {
+        Log.d(TAG, "onSpacePress: buffer='$buffer'")
         val ic = currentInputConnection ?: return
         if (buffer.isNotEmpty()) {
             val result = SmartEngineAdapter.convertWord(buffer)
+            Log.d(TAG, "onSpacePress: committing '${result.bengali}'")
             ic.finishComposingText()
             ic.commitText(result.bengali + " ", 1)
             SmartEngineAdapter.onWordSelected(buffer, result.bengali)
