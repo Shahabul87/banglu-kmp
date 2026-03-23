@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import com.banglu.engine.types.SmartSuggestion
 
 // ── Samsung Dark Theme Colors ──────────────────────────────────────────────────
@@ -79,11 +80,21 @@ fun BangluKeyboardLayout(
     onNumberPress: (Char) -> Unit,
     onPunctuationPress: (Char) -> Unit
 ) {
+    // Get nav bar height for bottom padding (permanent fix for Samsung/gesture nav)
+    val context = LocalContext.current
+    val navBarHeightPx = remember {
+        val resourceId = context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        if (resourceId > 0) context.resources.getDimensionPixelSize(resourceId) else 0
+    }
+    val density = context.resources.displayMetrics.density
+    val navBarPadding = (navBarHeightPx / density).dp
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(KeyboardBg)
-            .padding(horizontal = KeyboardPadding, vertical = 4.dp)
+            .padding(horizontal = KeyboardPadding)
+            .padding(top = 4.dp, bottom = navBarPadding)  // Bottom padding = nav bar height
     ) {
         when (keyboardMode) {
             KeyboardMode.BANGLU -> {

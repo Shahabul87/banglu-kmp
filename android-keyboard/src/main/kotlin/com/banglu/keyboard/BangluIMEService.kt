@@ -118,6 +118,18 @@ class BangluIMEService : InputMethodService(),
         return composeView
     }
 
+    /**
+     * PERMANENT FIX for Samsung/gesture nav bar overlap.
+     * Tell the system exactly where our keyboard content is so it positions
+     * the IME window above the navigation bar automatically.
+     */
+    override fun onComputeInsets(outInsets: Insets) {
+        super.onComputeInsets(outInsets)
+        outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
+        // Let the system handle positioning — don't override contentTopInsets
+        // The key is setting touchableInsets so the nav bar area is excluded
+    }
+
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         buffer = ""
@@ -182,6 +194,7 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun onDirectCommit(char: Char) {
+        Log.d(TAG, "onDirectCommit: char='$char'")
         // Commit any pending Banglu buffer first
         commitPendingBuffer()
 
@@ -190,6 +203,7 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun onPunctuationPress(char: Char) {
+        Log.d(TAG, "onPunctuationPress: char='$char'")
         // Commit any pending Banglu buffer first, then commit the punctuation
         commitPendingBuffer()
 
