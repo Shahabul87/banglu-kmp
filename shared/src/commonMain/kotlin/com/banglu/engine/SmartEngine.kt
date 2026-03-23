@@ -806,14 +806,30 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private fun applyBengaliRecovery(result: ConversionResult): ConversionResult? {
         val bengali = result.bengali
 
-        // Collect candidates from multiple prefix lengths for broad coverage
+        // Collect candidates from multiple prefix lengths for broad coverage.
+        // Also try vowel-swapped prefixes (ি↔ী, ু↔ূ) to find words like
+        // নীলপরি when pattern gives নিলপৃ (short ি vs long ী)
         val allCandidates = mutableSetOf<String>()
         for (prefixLen in bengali.length downTo 2) {
             val prefix = bengali.substring(0, prefixLen)
+
+            // Search with original prefix
             val candidates = validator.findByPrefix(prefix, 30)
             for (c in candidates) {
                 if (c != bengali) allCandidates.add(c)
             }
+
+            // Also search with vowel-swapped prefix (ি↔ী, ু↔ূ)
+            val swapped = prefix
+                .replace('ি', '\u0001').replace('ী', 'ি').replace('\u0001', 'ী')
+                .replace('ু', '\u0002').replace('ূ', 'ু').replace('\u0002', 'ূ')
+            if (swapped != prefix) {
+                val swapCandidates = validator.findByPrefix(swapped, 20)
+                for (c in swapCandidates) {
+                    if (c != bengali) allCandidates.add(c)
+                }
+            }
+
             if (allCandidates.size >= 50) break
         }
 
@@ -904,16 +920,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * Strips modifiers that don't change the sound significantly.
      */
     private fun normalizeBengali(text: String): String {
-        val sb = StringBuilder(text.length)
+        val sb = StringBuilder(text.length + 4) // +4 for ৃ→রি expansion
         for (ch in text) {
             when (ch) {
                 '\u09BC' -> {} // Strip nukta (়) — য় ≈ য, ড় ≈ ড
-                'আ' -> sb.append('া')  // আ ≈ া (same 'a' sound)
-                'ী' -> sb.append('ি')   // ী ≈ ি (similar sounds)
-                'ূ' -> sb.append('ু')   // ূ ≈ ু (similar sounds)
-                'ঙ' -> sb.append('ং')   // ঙ ≈ ং (similar sounds)
-                'ণ' -> sb.append('ন')   // ণ ≈ ন (similar sounds)
-                'ষ' -> sb.append('শ')   // ষ ≈ শ (similar sounds)
+                'আ' -> sb.append('া')    // আ ≈ া (same 'a' sound)
+                'ৃ' -> sb.append("রি")   // ৃ ≈ রি (ri-kar sounds same as র+ি)
+                'ী' -> sb.append('ি')    // ী ≈ ি (similar sounds)
+                'ূ' -> sb.append('ু')    // ূ ≈ ু (similar sounds)
+                'ঙ' -> sb.append('ং')    // ঙ ≈ ং (similar sounds)
+                'ণ' -> sb.append('ন')    // ণ ≈ ন (similar sounds)
+                'ষ' -> sb.append('শ')    // ষ ≈ শ (similar sounds)
                 else -> sb.append(ch)
             }
         }
