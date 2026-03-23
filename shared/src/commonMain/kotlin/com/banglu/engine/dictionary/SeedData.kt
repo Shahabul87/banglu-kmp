@@ -37,6 +37,7 @@ object SeedData {
             addAll(chunk12())
             addAll(chunk13())
             addAll(chunk14())
+            addAll(chunkHighFreqFixes())
         }
     }
 
@@ -4421,6 +4422,49 @@ object SeedData {
             e("প্রতিমন্ত্রী", listOf("protimontri", "pratimantrii"), 55, WordCategory.TATSAMA),
             e("তথ্যপ্রযুক্তি", listOf("tothyoprojukti", "tathyaprajukti"), 50, WordCategory.TATSAMA),
             e("নিশ্চয়তা", listOf("nishchoyota", "nischoyota", "nishchayata"), 55, WordCategory.TATSAMA)
+    )
+
+    // High-frequency common words that pattern engine gets wrong (corpus test fix)
+    private fun chunkHighFreqFixes(): List<SmartDictionaryEntry> = listOf(
+        e("এর", listOf("er"), 95, WordCategory.TADBHAVA),                                   // of — must beat এড়
+        e("জন্য", listOf("jonyo", "jonno", "jony"), 94, WordCategory.TATSAMA),              // for — ন্য conjunct
+        e("পর", listOf("por", "par"), 88, WordCategory.TADBHAVA),                           // after — must beat পড়
+        e("মতো", listOf("moto", "mto"), 84, WordCategory.TADBHAVA),                         // like
+        e("তো", listOf("to"), 85, WordCategory.TADBHAVA),                                   // emphasis particle
+        e("কোন", listOf("kon"), 90, WordCategory.TADBHAVA),                                 // which
+        e("কোনো", listOf("kono", "konoo"), 88, WordCategory.TADBHAVA),                      // any
+        e("উপর", listOf("upor", "upore", "upr"), 85, WordCategory.TADBHAVA),                // above
+        e("গত", listOf("gota", "goto", "got"), 81, WordCategory.TATSAMA),                   // past/last — must beat গোটা
+        e("দু", listOf("du"), 78, WordCategory.TADBHAVA),                                    // two prefix — must beat ডু
+        e("একটি", listOf("ekti", "ekoti"), 93, WordCategory.TADBHAVA),                      // one (formal) — ট not ত
+        e("একটা", listOf("ekta", "ekota"), 88, WordCategory.TADBHAVA),                      // one (informal)
+        e("একটু", listOf("ektu", "ekotu"), 79, WordCategory.TADBHAVA),                      // a little
+        e("এতে", listOf("ete"), 78, WordCategory.TADBHAVA),                                 // in this — must beat এটে
+        e("পেতে", listOf("pete"), 75, WordCategory.TADBHAVA),                               // to get — must beat পেটে
+        e("আপনার", listOf("aponar", "apnar", "aponer"), 87, WordCategory.TADBHAVA),         // your (formal) — ন not ণ
+        e("কিনা", listOf("kina"), 75, WordCategory.TADBHAVA),                               // whether — ন not ণ
+        e("ঘণ্টা", listOf("ghonta", "ghanta"), 65, WordCategory.TATSAMA),                   // hour
+        e("কারণ", listOf("karon", "kaaron"), 80, WordCategory.TATSAMA),                     // reason
+        e("কারণে", listOf("karone", "kaarone"), 75, WordCategory.TATSAMA),                  // because of
+        e("অংশ", listOf("ongsh", "ongsho", "ongso"), 82, WordCategory.TATSAMA),            // part — keep শ
+        e("শেখ", listOf("shekh", "sekh"), 75, WordCategory.TADBHAVA),                      // sheikh/learn — keep শ
+        e("সতর্ক", listOf("sotork", "sotorko"), 70, WordCategory.TATSAMA),                  // careful — keep স
+        e("কী", listOf("kii"), 80, WordCategory.TADBHAVA),                                  // what (question) — only "kii" maps here, "ki" stays কি
+        e("মধ্য", listOf("modhyo", "moddho", "mothyo"), 75, WordCategory.TATSAMA),          // middle — ধ্য conjunct
+        e("তথ্য", listOf("tothyo", "tothy"), 80, WordCategory.TATSAMA),                     // information — থ্য conjunct
+        e("অর্থ", listOf("ortho", "orth", "artho"), 78, WordCategory.TATSAMA),              // meaning — র্থ conjunct
+        e("মাত্র", listOf("matro", "matr"), 79, WordCategory.TATSAMA),                      // only — ত্র conjunct
+        e("সত্য", listOf("shotto", "sotto", "sotyo"), 75, WordCategory.TATSAMA),            // truth — ত্য conjunct
+        e("প্রশ্ন", listOf("proshno", "proshn"), 78, WordCategory.TATSAMA),                 // question
+        e("সাহায্য", listOf("shahajyo", "sahajjo", "shohay"), 79, WordCategory.TATSAMA),    // help — হায্য conjunct
+        e("ব্যাপার", listOf("byapar", "byapare"), 79, WordCategory.TADBHAVA),              // matter
+        e("বন্ধ", listOf("bondho", "bondh"), 83, WordCategory.TATSAMA),                     // closed — ন্ধ conjunct
+        e("সরকার", listOf("sorokar", "sorkar", "shorokar"), 84, WordCategory.TATSAMA),      // government — র not ড়
+        e("হলো", listOf("holo", "hlo"), 82, WordCategory.TADBHAVA),                         // happened
+        e("করবো", listOf("korbo"), 70, WordCategory.TADBHAVA),                              // will do (1st person)
+        e("করলো", listOf("korlo"), 70, WordCategory.TADBHAVA),                              // did (3rd person)
+        e("আরো", listOf("aro", "aaro"), 82, WordCategory.TADBHAVA),                         // more
+        e("আরও", listOf("aroo"), 82, WordCategory.TADBHAVA)                                 // more (alt)
     )
 
 }
