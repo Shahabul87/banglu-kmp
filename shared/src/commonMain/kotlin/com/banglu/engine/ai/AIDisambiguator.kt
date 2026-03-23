@@ -74,8 +74,9 @@ class AIDisambiguator {
             val score = scoreCandidate(candidate)
 
             if (isOriginalKnown) {
-                // Both are known words - need significant improvement
-                if (score > bestScore * 1.3 + 10) {
+                // Both are known words - lower threshold when candidate is also a valid word
+                val threshold = if (knownWords.contains(candidate)) 1.2 else 1.3
+                if (score > bestScore * threshold + 10) {
                     bestScore = score
                     bestCandidate = candidate
                 }

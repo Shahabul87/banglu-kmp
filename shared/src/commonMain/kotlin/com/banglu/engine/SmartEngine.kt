@@ -422,8 +422,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private fun convertByDictionary(key: String): ConversionResult? {
         val results = dictionary.lookup(key)
         if (results.isEmpty()) return null
-        val best = results[0]
-        val alternatives = results.drop(1).map { Alternative(it.bengali, it.confidence) }
+
+        // Re-rank by real wordfreq frequency if validator has frequency data
+        val ranked = if (validator.isLoaded() && validator.hasFrequencyData()) {
+            results.sortedByDescending { r ->
+                val realFreq = validator.getFrequency(r.bengali)
+                if (realFreq > 0) realFreq else r.frequency
+            }
+        } else {
+            results
+        }
+
+        val best = ranked[0]
+        val alternatives = ranked.drop(1).map { Alternative(it.bengali, it.confidence) }
         return ConversionResult(best.bengali, best.confidence, ResolutionSource.DICTIONARY, alternatives)
     }
 
