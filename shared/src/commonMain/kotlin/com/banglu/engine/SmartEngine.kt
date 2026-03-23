@@ -429,16 +429,16 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         var results = dictionary.lookup(key)
         if (results.isEmpty()) return null
 
-        // Enforce 's' → স rule: filter out শ results when phonetic starts with 's' (not 'sh').
-        // The extended dictionary has 2,266 entries where 's' wrongly maps to শ words.
+        // Enforce phonetic→Bengali consonant rules:
+        // 's' (not 'sh') → MUST be স, never শ  (2,266 violations in ext dict)
+        // 'd' (not 'dh') → MUST be দ, never ড  (1,798 violations in ext dict)
         if (key.startsWith("s") && !key.startsWith("sh")) {
             val filtered = results.filter { !it.bengali.startsWith("শ") }
-            if (filtered.isNotEmpty()) {
-                results = filtered
-            } else {
-                // ALL results start with শ — skip dictionary, let pattern engine handle
-                return null
-            }
+            if (filtered.isNotEmpty()) results = filtered else return null
+        }
+        if (key.startsWith("d") && !key.startsWith("dh")) {
+            val filtered = results.filter { !it.bengali.startsWith("ড") }
+            if (filtered.isNotEmpty()) results = filtered else return null
         }
 
         // Re-rank by real wordfreq frequency — but ONLY when:

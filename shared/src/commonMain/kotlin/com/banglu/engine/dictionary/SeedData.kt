@@ -6860,6 +6860,10 @@ object SeedData {
         e("করতো", listOf("koroto", "korto"), 78, WordCategory.TADBHAVA),      // used to do (colloquial)
         e("বলতো", listOf("boloto", "bolto"), 75, WordCategory.TADBHAVA),      // used to say (colloquial)
         // Words where conjunct table greedily captures consonant pairs
+        e("জ্বলছে", listOf("jolche", "zolche", "jolchhe", "zolchhe"), 75, WordCategory.TADBHAVA), // burning
+        e("জ্বলে", listOf("jole", "zole"), 70, WordCategory.TADBHAVA),              // burns
+        e("জ্বালা", listOf("jala", "zala", "jwala"), 70, WordCategory.TADBHAVA),     // burning pain
+        e("দিবা", listOf("diba", "dibaa"), 70, WordCategory.TATSAMA),               // daytime — d→দ not ড
         e("নীলপরি", listOf("nilpori"), 75, WordCategory.TADBHAVA),            // blue fairy — lp should NOT form ল্প
         e("সাবধানে", listOf("sabdhane"), 85, WordCategory.TADBHAVA),          // carefully — bdh should NOT form ব্ধ
         e("সাবধান", listOf("sabdhan"), 85, WordCategory.TADBHAVA)             // careful
