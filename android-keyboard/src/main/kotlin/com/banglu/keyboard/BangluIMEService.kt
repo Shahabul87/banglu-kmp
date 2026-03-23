@@ -6,6 +6,20 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.banglu.engine.SmartEngineAdapter
 import com.banglu.engine.types.SmartSuggestion
 import kotlinx.coroutines.CoroutineScope
@@ -14,11 +28,23 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
-class BangluIMEService : InputMethodService() {
+class BangluIMEService : InputMethodService(),
+    LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
-    private var keyboardView: BangluKeyboardView? = null
-    private var suggestionBar: SuggestionBarView? = null
+    // Lifecycle wiring for Compose
+    private val lifecycleRegistry = LifecycleRegistry(this)
+    private val store = ViewModelStore()
+    private val savedStateRegistryController = SavedStateRegistryController.create(this)
+
+    override val lifecycle: Lifecycle get() = lifecycleRegistry
+    override val viewModelStore: ViewModelStore get() = store
+    override val savedStateRegistry: SavedStateRegistry
+        get() = savedStateRegistryController.savedStateRegistry
+
+    // State
     private var buffer = ""
+    private val suggestions = mutableStateListOf<SmartSuggestion>()
+    private val isShifted = mutableStateOf(false)
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     companion object {
@@ -27,6 +53,9 @@ class BangluIMEService : InputMethodService() {
 
     override fun onCreate() {
         super.onCreate()
+        savedStateRegistryController.performRestore(null)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+
         Log.d(TAG, "onCreate: Initializing SmartEngine...")
         SmartEngineAdapter.initializeSync()
         Log.d(TAG, "onCreate: Seed dictionary loaded")
@@ -45,25 +74,38 @@ class BangluIMEService : InputMethodService() {
     }
 
     override fun onCreateInputView(): View {
-        val container = layoutInflater.inflate(R.layout.keyboard_container, null)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
-        suggestionBar = container.findViewById(R.id.suggestion_bar)
-        suggestionBar?.onSuggestionClick = { suggestion -> onSuggestionTap(suggestion) }
+        val composeView = ComposeView(this).apply {
+            setContent {
+                BangluKeyboardLayout(
+                    suggestions = suggestions,
+                    isShifted = isShifted.value,
+                    onKeyPress = { char -> onKeyPress(char) },
+                    onBackspace = { onBackspace() },
+                    onSpace = { onSpacePress() },
+                    onEnter = { onEnterPress() },
+                    onShift = { isShifted.value = !isShifted.value },
+                    onSuggestionClick = { onSuggestionTap(it) }
+                )
+            }
+        }
 
-        keyboardView = container.findViewById(R.id.keyboard_view)
-        keyboardView?.onKeyPress = { key -> onKeyPress(key) }
-        keyboardView?.onBackspace = { onBackspace() }
-        keyboardView?.onSpace = { onSpacePress() }
-        keyboardView?.onEnter = { onEnterPress() }
-        keyboardView?.onShift = { keyboardView?.toggleShift() }
+        // Wire lifecycle trees for Compose
+        window?.window?.decorView?.let { decorView ->
+            decorView.setViewTreeLifecycleOwner(this)
+            decorView.setViewTreeViewModelStoreOwner(this)
+            decorView.setViewTreeSavedStateRegistryOwner(this)
+        }
 
-        return container
+        return composeView
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         buffer = ""
-        suggestionBar?.clear()
+        suggestions.clear()
     }
 
     override fun onFinishInput() {
@@ -73,6 +115,7 @@ class BangluIMEService : InputMethodService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         serviceScope.cancel()
     }
 
@@ -80,10 +123,13 @@ class BangluIMEService : InputMethodService() {
         buffer += char
         Log.d(TAG, "onKeyPress: char='$char', buffer='$buffer'")
 
-        val ic = currentInputConnection ?: return
-        val editorInfo = currentInputEditorInfo
+        // Auto-unshift after typing a letter
+        if (isShifted.value && char.isLetter()) {
+            isShifted.value = false
+        }
 
-        if (editorInfo?.inputType == InputType.TYPE_NULL) {
+        val ic = currentInputConnection ?: return
+        if (currentInputEditorInfo?.inputType == InputType.TYPE_NULL) {
             ic.commitText(char.toString(), 1)
             return
         }
@@ -92,9 +138,9 @@ class BangluIMEService : InputMethodService() {
         Log.d(TAG, "convert: '$buffer' → '${result.bengali}' (${result.confidence})")
         ic.setComposingText(result.bengali, 1)
 
-        val suggestions = SmartEngineAdapter.getSuggestions(buffer, 6)
-        Log.d(TAG, "suggestions: ${suggestions.size} → ${suggestions.joinToString { it.bengali }}")
-        suggestionBar?.showSuggestions(suggestions)
+        val newSuggestions = SmartEngineAdapter.getSuggestions(buffer, 8)
+        suggestions.clear()
+        suggestions.addAll(newSuggestions)
     }
 
     private fun onBackspace() {
@@ -106,11 +152,13 @@ class BangluIMEService : InputMethodService() {
             if (buffer.isEmpty()) {
                 ic.setComposingText("", 0)
                 ic.finishComposingText()
-                suggestionBar?.clear()
+                suggestions.clear()
             } else {
                 val result = SmartEngineAdapter.convertWord(buffer)
                 ic.setComposingText(result.bengali, 1)
-                suggestionBar?.showSuggestions(SmartEngineAdapter.getSuggestions(buffer, 6))
+                val newSuggestions = SmartEngineAdapter.getSuggestions(buffer, 8)
+                suggestions.clear()
+                suggestions.addAll(newSuggestions)
             }
         } else {
             ic.deleteSurroundingText(1, 0)
@@ -124,11 +172,10 @@ class BangluIMEService : InputMethodService() {
         if (buffer.isNotEmpty()) {
             val result = SmartEngineAdapter.convertWord(buffer)
             Log.d(TAG, "onSpacePress: committing '${result.bengali}'")
-            // commitText replaces the current composing text — no need for finishComposingText
             ic.commitText(result.bengali + " ", 1)
             SmartEngineAdapter.onWordSelected(buffer, result.bengali)
             buffer = ""
-            suggestionBar?.clear()
+            suggestions.clear()
         } else {
             ic.commitText(" ", 1)
         }
@@ -143,7 +190,7 @@ class BangluIMEService : InputMethodService() {
             ic.commitText(result.bengali, 1)
             SmartEngineAdapter.onWordSelected(buffer, result.bengali)
             buffer = ""
-            suggestionBar?.clear()
+            suggestions.clear()
         }
         ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
         ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
@@ -152,10 +199,9 @@ class BangluIMEService : InputMethodService() {
     private fun onSuggestionTap(suggestion: SmartSuggestion) {
         Log.d(TAG, "onSuggestionTap: '${suggestion.bengali}'")
         val ic = currentInputConnection ?: return
-        // commitText replaces the composing region automatically
         ic.commitText(suggestion.bengali + " ", 1)
         SmartEngineAdapter.onWordSelected(buffer, suggestion.bengali)
         buffer = ""
-        suggestionBar?.clear()
+        suggestions.clear()
     }
 }

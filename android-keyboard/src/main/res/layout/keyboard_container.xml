@@ -1,18 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Legacy layout - no longer used. Keyboard is rendered with Jetpack Compose. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:background="@color/keyboard_background">
-
-    <com.banglu.keyboard.SuggestionBarView
-        android:id="@+id/suggestion_bar"
-        android:layout_width="match_parent"
-        android:layout_height="44dp" />
-
-    <com.banglu.keyboard.BangluKeyboardView
-        android:id="@+id/keyboard_view"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
-
-</LinearLayout>
+    android:layout_height="wrap_content" />

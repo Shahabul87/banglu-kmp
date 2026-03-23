@@ -62,13 +62,17 @@ class BangluKeyboardView @JvmOverloads constructor(
         val col: Int
     )
 
+    /** Extra bottom padding to clear the navigation bar. Set by IME service. */
+    var bottomInset: Int = 0
+        set(value) { field = value; requestLayout() }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
-        // Fixed keyboard height: 4 rows * 52dp each = 208dp
         val rowHeightPx = (52 * resources.displayMetrics.density).toInt()
-        val height = rowHeightPx * 4
-        setMeasuredDimension(width, height)
-        buildKeys(width.toFloat(), height.toFloat())
+        val keysHeight = rowHeightPx * 4
+        // Add bottom inset so the keyboard draws above the nav bar
+        setMeasuredDimension(width, keysHeight + bottomInset)
+        buildKeys(width.toFloat(), keysHeight.toFloat())
     }
 
     private fun buildKeys(totalWidth: Float, totalHeight: Float) {
