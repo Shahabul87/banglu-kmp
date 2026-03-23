@@ -2186,7 +2186,7 @@ object SeedData {
             e("ল্যান", listOf("lan", "lyaan"), 30, WordCategory.FOREIGN),
             e("আইপি", listOf("ip", "aaiipi"), 30, WordCategory.FOREIGN),
             e("ভিপিএন", listOf("vpn", "bhipien"), 35, WordCategory.FOREIGN),
-            e("অ্যাপ", listOf("app", "ayap", "ap"), 60, WordCategory.FOREIGN),
+            e("অ্যাপ", listOf("app", "ayap"), 60, WordCategory.FOREIGN),
             e("অ্যাপস", listOf("apps", "ayaps", "aps"), 55, WordCategory.FOREIGN),
             e("অ্যাপ্লিকেশন", listOf("application", "aplikeshon", "aaplikeshon"), 40, WordCategory.FOREIGN),
             e("ফাইল", listOf("file", "fail", "phail"), 55, WordCategory.FOREIGN),
