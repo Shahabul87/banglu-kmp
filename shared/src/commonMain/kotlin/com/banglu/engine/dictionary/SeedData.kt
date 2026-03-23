@@ -4440,7 +4440,7 @@ object SeedData {
         e("তো", listOf("to"), 85, WordCategory.TADBHAVA),                                   // emphasis particle
         e("কোন", listOf("kon"), 90, WordCategory.TADBHAVA),                                 // which
         e("কোনো", listOf("kono", "konoo"), 88, WordCategory.TADBHAVA),                      // any
-        e("উপর", listOf("upor", "upore", "upr"), 85, WordCategory.TADBHAVA),                // above
+        e("উপর", listOf("upor", "upore", "upr"), 90, WordCategory.TADBHAVA),                // above — freq 90 beats ওপর(85)
         e("গত", listOf("gota", "goto", "got"), 81, WordCategory.TATSAMA),                   // past/last — must beat গোটা
         e("দু", listOf("du"), 78, WordCategory.TADBHAVA),                                    // two prefix — must beat ডু
         e("একটি", listOf("ekti", "ekoti"), 93, WordCategory.TADBHAVA),                      // one (formal) — ট not ত

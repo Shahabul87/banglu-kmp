@@ -579,7 +579,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
         // Single vowels
         return when (key[i]) {
-            'a' -> if (isIndependent) Triple("অ", 1, 0.85) else Triple("া", 1, 0.85)
+            'a' -> if (isIndependent) Triple("আ", 1, 0.85) else Triple("া", 1, 0.85)
             'i' -> if (isIndependent) Triple("ই", 1, 0.85) else Triple("ি", 1, 0.85)
             'u' -> if (isIndependent) Triple("উ", 1, 0.90) else Triple("ু", 1, 0.90)
             'e' -> if (isIndependent) Triple("এ", 1, 0.90) else Triple("ে", 1, 0.90)
