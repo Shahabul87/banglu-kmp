@@ -32,7 +32,7 @@ class ParityTest {
         // ═══════════════════════ Question words ═══════════════════════
         Case("ki", "কি"),
         Case("ke", "কে"),
-        Case("keno", "কেন"),
+        Case("keno", "কেনো"),
         Case("kokhon", "কখন"),
         Case("kothay", "কোথায়"),
         Case("koto", "কত"),

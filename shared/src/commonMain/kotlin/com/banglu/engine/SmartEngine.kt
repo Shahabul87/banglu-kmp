@@ -35,6 +35,7 @@ import com.banglu.engine.util.ReverseTransliterator
  *   Layer 2-4: Pattern engine (ConjunctResolver, NasalResolver, ShatvaVidhan, NatvaVidhan)
  *   Layer 5:   AIDisambiguator (swap rules: ন↔ণ, শ↔ষ, ত↔ট, etc.)
  *   Layer 5.5: Dictionary validation (character swap fixes against 480K)
+ *   Layer 5.7: Conjunct removal recovery (remove hasanta to find valid words)
  *   Layer 6:   Bengali dictionary recovery (search 480K by Bengali similarity)
  */
 data class SmartEngineConfig(
@@ -203,6 +204,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Layer 5.5: Dictionary validation (if 480K loaded)
         if (validator.isLoaded()) {
             result = applyDictionaryValidation(result)
+        }
+
+        // Layer 5.7: Conjunct removal recovery (if 480K loaded and result not valid)
+        if (validator.isLoaded() && !validator.isValid(result.bengali)) {
+            result = applyConjunctRemovalRecovery(result)
         }
 
         // Layer 6: Bengali dictionary recovery (if 480K loaded and result not valid)
@@ -423,15 +429,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val results = dictionary.lookup(key)
         if (results.isEmpty()) return null
 
-        // Re-rank by real wordfreq frequency if validator has frequency data
-        val ranked = if (validator.isLoaded() && validator.hasFrequencyData()) {
-            results.sortedByDescending { r ->
-                val realFreq = validator.getFrequency(r.bengali)
-                if (realFreq > 0) realFreq else r.frequency
-            }
-        } else {
-            results
-        }
+        // Re-rank by real wordfreq frequency — but ONLY when:
+        // 1. Top result has low dict frequency (< 85) — not a curated seed entry
+        // 2. Wordfreq strongly disagrees (gap > 5)
+        val ranked = if (results.size > 1 && validator.isLoaded() && validator.hasFrequencyData()) {
+            val topDictFreq = results[0].frequency
+            if (topDictFreq < 85) {
+                val topWf = validator.getFrequency(results[0].bengali)
+                val secondWf = validator.getFrequency(results[1].bengali)
+                if (secondWf > topWf + 5) {
+                    results.sortedByDescending { validator.getFrequency(it.bengali) }
+                } else results
+            } else results
+        } else results
 
         val best = ranked[0]
         val alternatives = ranked.drop(1).map { Alternative(it.bengali, it.confidence) }
@@ -743,6 +753,43 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     }
                 }
             }
+        }
+
+        return result
+    }
+
+    /**
+     * Layer 5.7: Conjunct removal recovery.
+     * When the pattern engine produces an invalid word with hasanta (্),
+     * try removing hasantas one at a time or all at once to find a valid word.
+     */
+    private fun applyConjunctRemovalRecovery(result: ConversionResult): ConversionResult {
+        if (!validator.isLoaded()) return result
+        if (validator.isValid(result.bengali)) return result  // Already valid, keep it
+        if (!result.bengali.contains("্")) return result       // No hasanta, nothing to remove
+
+        // Try removing each hasanta one at a time
+        for (i in result.bengali.indices) {
+            if (result.bengali[i] == '্') {
+                val without = result.bengali.removeRange(i, i + 1)
+                if (validator.isValid(without)) {
+                    return result.copy(
+                        bengali = without,
+                        confidence = 0.88,
+                        alternatives = result.alternatives + Alternative(result.bengali, result.confidence)
+                    )
+                }
+            }
+        }
+
+        // Try removing ALL hasantas at once
+        val allRemoved = result.bengali.replace("্", "")
+        if (validator.isValid(allRemoved)) {
+            return result.copy(
+                bengali = allRemoved,
+                confidence = 0.85,
+                alternatives = result.alternatives + Alternative(result.bengali, result.confidence)
+            )
         }
 
         return result

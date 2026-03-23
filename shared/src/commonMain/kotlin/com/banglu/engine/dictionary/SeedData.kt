@@ -49,6 +49,8 @@ object SeedData {
             addAll(chunkWebSync6_1())
             addAll(chunkWebSync6_2())
             addAll(chunkWebSyncFreqUpdates2())
+            addAll(chunkColloquialVerbForms())
+            addAll(chunkWebSync7())
         }
     }
 
@@ -453,7 +455,7 @@ object SeedData {
             e("হলো", listOf("holo", "holou", "hlo", "hlou"), 92, WordCategory.TADBHAVA),
             e("ছিলাম", listOf("chhilam", "chhiilam"), 50, WordCategory.TADBHAVA),
             e("ছিলে", listOf("chhile", "chhiley", "chhiile"), 49, WordCategory.TADBHAVA),
-            e("ছিলো", listOf("chhilo", "chhiilo"), 93, WordCategory.TADBHAVA),
+            e("ছিলো", listOf("chhilo", "chilo", "chhiilo"), 93, WordCategory.TADBHAVA),
             e("করবো", listOf("korbo", "korbou"), 88, WordCategory.TADBHAVA),
             e("করবে", listOf("korbe", "korbey"), 87, WordCategory.TADBHAVA),
             e("যাবো", listOf("jabo", "zabo", "jabou", "zabou"), 88, WordCategory.TADBHAVA),
@@ -1970,7 +1972,7 @@ object SeedData {
             e("হই", listOf("hoi"), 40, WordCategory.TADBHAVA),
             e("চই", listOf("choi", "coi"), 30, WordCategory.TADBHAVA),
             e("কোথা", listOf("kotha"), 50, WordCategory.TADBHAVA),
-            e("কেনো", listOf("kenO", "keno"), 82, WordCategory.TADBHAVA),
+            e("কেনো", listOf("keno", "kenO"), 88, WordCategory.TADBHAVA),
             e("কোনোদিন", listOf("konodin", "kOnodin"), 55, WordCategory.TADBHAVA),
             e("কোনোকিছু", listOf("konokichu", "kOnokichu", "konokiichu", "konokichuu", "konokichoo", "konokichhu", "konokiichoo", "konokiichhu", "konokichhuu"), 50, WordCategory.TADBHAVA),
             e("কোনোভাবে", listOf("konovabe", "kOnovabe", "konovabey", "konobhabe"), 45, WordCategory.TADBHAVA),
@@ -4387,7 +4389,7 @@ object SeedData {
             e("মঙ্গল", listOf("mongol", "mangal", "mongal"), 65, WordCategory.TATSAMA),
             e("উপবাস", listOf("upobash", "upobas", "upbaas"), 55, WordCategory.TATSAMA),
             e("আশীর্বাদ", listOf("ashirbad", "aashiirbaad", "ashirbaad"), 60, WordCategory.TATSAMA),
-            e("ছোটো", listOf("chhoto", "chhotou"), 95, WordCategory.TADBHAVA),
+            e("ছোটো", listOf("chhoto", "choto", "chhotou"), 95, WordCategory.TADBHAVA),
             e("রাত্রি", listOf("ratri", "raatri", "ratree"), 60, WordCategory.TATSAMA),
             e("জন্যে", listOf("jonne", "jonney", "jonnye"), 65, WordCategory.TADBHAVA),
             e("ছুরি", listOf("chhuri", "chhurri", "churi", "chhurii", "churii"), 60, WordCategory.TADBHAVA),
@@ -4796,7 +4798,7 @@ object SeedData {
         e("ফর", listOf("phor"), 69, WordCategory.TADBHAVA),
         e("যাব", listOf("zab"), 69, WordCategory.TADBHAVA),
         e("যেত", listOf("zet"), 69, WordCategory.TADBHAVA),
-        e("করতো", listOf("koroto"), 68, WordCategory.TADBHAVA),
+        e("করতো", listOf("koroto", "korto"), 78, WordCategory.TADBHAVA),
         e("কিশোর", listOf("kishor"), 68, WordCategory.TADBHAVA),
         e("গায়ে", listOf("gaye"), 68, WordCategory.TADBHAVA),
         e("তম", listOf("tom"), 68, WordCategory.TADBHAVA),
@@ -4997,7 +4999,7 @@ object SeedData {
         e("নিকোলাস", listOf("nikolas"), 58, WordCategory.TADBHAVA),
         e("পড়বেন", listOf("poroben"), 58, WordCategory.TADBHAVA),
         e("ফরিদ", listOf("phorid"), 58, WordCategory.TADBHAVA),
-        e("বলতো", listOf("boloto"), 58, WordCategory.TADBHAVA),
+        e("বলতো", listOf("boloto", "bolto"), 75, WordCategory.TADBHAVA),
         e("বাক", listOf("bak"), 58, WordCategory.TADBHAVA),
         e("বেতার", listOf("betar"), 58, WordCategory.TADBHAVA),
         e("বোনকে", listOf("bonoke"), 58, WordCategory.TADBHAVA),
@@ -6847,6 +6849,65 @@ object SeedData {
         e("বিশ্লেষণ", listOf("bishleshon"), 68, WordCategory.UNKNOWN),
         e("বিকাশ", listOf("bikash"), 68, WordCategory.UNKNOWN),
         e("দুর্যোগ", listOf("durjog"), 65, WordCategory.UNKNOWN)
+    )
+
+    // ো colloquial verb forms — users type thakoto/paroto/dito/nito for ো forms
+    private fun chunkColloquialVerbForms(): List<SmartDictionaryEntry> = listOf(
+        e("থাকতো", listOf("thakoto", "thakto"), 78, WordCategory.TADBHAVA),   // would stay (colloquial)
+        e("পারতো", listOf("paroto", "parto"), 75, WordCategory.TADBHAVA),     // could (colloquial)
+        e("দিতো", listOf("dito", "diito"), 75, WordCategory.TADBHAVA),        // used to give (colloquial)
+        e("নিতো", listOf("nito", "niito"), 75, WordCategory.TADBHAVA)         // used to take (colloquial)
+    )
+
+    // Web sync batch 7: missing entries from latest web seed-data.ts batches
+    private fun chunkWebSync7(): List<SmartDictionaryEntry> = listOf(
+        e("দা", listOf("da"), 54, WordCategory.TADBHAVA),
+        e("সাংসদ", listOf("sangsod"), 50, WordCategory.TADBHAVA),
+        e("হ্যা", listOf("hya"), 58, WordCategory.TADBHAVA),
+        e("নিল", listOf("nil"), 43, WordCategory.TADBHAVA),
+        e("মহান", listOf("mohan"), 81, WordCategory.TADBHAVA),
+        e("মামলায়", listOf("mamolay"), 78, WordCategory.TADBHAVA),
+        e("তুলতে", listOf("tulote"), 73, WordCategory.TADBHAVA),
+        e("বজায়", listOf("bojay"), 72, WordCategory.TADBHAVA),
+        e("ভাবতে", listOf("bhabote"), 72, WordCategory.TADBHAVA),
+        e("হামলায়", listOf("hamolay"), 72, WordCategory.TADBHAVA),
+        e("কামনা", listOf("kamona"), 69, WordCategory.TADBHAVA),
+        e("উপরের", listOf("uporer"), 69, WordCategory.TADBHAVA),
+        e("ওয়েবসাইটে", listOf("oyebosaite"), 68, WordCategory.TADBHAVA),
+        e("চিকিৎসার", listOf("chikitosar"), 68, WordCategory.TADBHAVA),
+        e("দক্ষ", listOf("dokkh"), 67, WordCategory.TADBHAVA),
+        e("মতোই", listOf("motoi"), 67, WordCategory.TADBHAVA),
+        e("একমত", listOf("ekomot"), 64, WordCategory.TADBHAVA),
+        e("প্রমাণিত", listOf("promanit"), 64, WordCategory.TADBHAVA),
+        e("উপদেষ্টা", listOf("upodeshta"), 64, WordCategory.TADBHAVA),
+        e("বৃহত্তম", listOf("brrihottom"), 63, WordCategory.TADBHAVA),
+        e("ভবিষ্যতে", listOf("bhobishyote"), 63, WordCategory.TADBHAVA),
+        e("তুলনা", listOf("tulona"), 63, WordCategory.TADBHAVA),
+        e("যতক্ষণ", listOf("zotokkhon"), 62, WordCategory.TADBHAVA),
+        e("বৃহত্তর", listOf("brrihottor"), 59, WordCategory.TADBHAVA),
+        e("এতদিন", listOf("etodin"), 57, WordCategory.TADBHAVA),
+        e("আমদানি", listOf("amodani"), 57, WordCategory.TADBHAVA),
+        e("দেবতা", listOf("debota"), 56, WordCategory.TADBHAVA),
+        e("যন্ত্রণা", listOf("zontrona"), 55, WordCategory.TADBHAVA),
+        e("পদের", listOf("poder"), 54, WordCategory.TADBHAVA),
+        e("চাকরির", listOf("chakorir"), 51, WordCategory.TADBHAVA),
+        e("ছাড়তে", listOf("chharote"), 50, WordCategory.TADBHAVA),
+        e("একর", listOf("ekor"), 49, WordCategory.TADBHAVA),
+        e("মহা", listOf("moha"), 48, WordCategory.TADBHAVA),
+        e("একত্রে", listOf("ekotre"), 48, WordCategory.TADBHAVA),
+        e("খসড়া", listOf("khosora"), 47, WordCategory.TADBHAVA),
+        e("সদ্য", listOf("sody"), 46, WordCategory.TADBHAVA),
+        e("যাপন", listOf("zapon"), 45, WordCategory.TADBHAVA),
+        e("প্রবীণ", listOf("probiin"), 45, WordCategory.TADBHAVA),
+        e("ইন্টারনেটে", listOf("intaronete"), 44, WordCategory.TADBHAVA),
+        e("ক্রস", listOf("kros"), 44, WordCategory.TADBHAVA),
+        e("ছিলনা", listOf("chhilona"), 44, WordCategory.TADBHAVA),
+        e("জঘন্য", listOf("joghony"), 43, WordCategory.TADBHAVA),
+        e("চক্রের", listOf("chokrer"), 42, WordCategory.TADBHAVA),
+        e("ঘটায়", listOf("ghotay"), 42, WordCategory.TADBHAVA),
+        e("মারধর", listOf("marodhor"), 41, WordCategory.TADBHAVA),
+        e("দলিল", listOf("dolil"), 41, WordCategory.TADBHAVA),
+        e("সাক্ষাৎকারে", listOf("sakkhatokare"), 40, WordCategory.TADBHAVA)
     )
 
 }
