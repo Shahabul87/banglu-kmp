@@ -17,3 +17,10 @@ local.properties
 
 # Compiled dictionary (build artifact)
 dictionary.sqlite
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+*.xcodeproj
+xcuserdata/
