@@ -4019,7 +4019,7 @@ object SeedData {
             e("তির", listOf("tiir", "tirh"), 55, WordCategory.UNKNOWN),
             e("তিল", listOf("til", "teel", "tiil"), 60, WordCategory.UNKNOWN),
             e("তুঅ", listOf("tuo", "tooo", "tuou", "tua"), 60, WordCategory.UNKNOWN),
-            e("তুই", listOf("tui", "tuee", "tooi", "tuii"), 60, WordCategory.UNKNOWN),
+            e("তুই", listOf("tui", "tuee", "tooi", "tuii"), 97, WordCategory.TADBHAVA),
             e("তুক", listOf("tuk", "took"), 60, WordCategory.UNKNOWN),
             e("তুঝ", listOf("tujh", "toojh", "tuzh"), 60, WordCategory.UNKNOWN),
             e("তুত", listOf("tut", "toot"), 60, WordCategory.UNKNOWN),
