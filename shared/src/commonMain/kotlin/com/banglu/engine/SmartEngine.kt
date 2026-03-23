@@ -529,7 +529,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             'i' -> if (isIndependent) Triple("ই", 1, 0.85) else Triple("ি", 1, 0.85)
             'u' -> if (isIndependent) Triple("উ", 1, 0.90) else Triple("ু", 1, 0.90)
             'e' -> if (isIndependent) Triple("এ", 1, 0.90) else Triple("ে", 1, 0.90)
-            'o' -> if (isIndependent) Triple("ও", 1, 0.85) else Triple("ো", 1, 0.85)
+            'o' -> if (isIndependent) Triple("অ", 1, 0.85) else Triple("ো", 1, 0.85)
             else -> Triple(key[i].toString(), 1, 0.50)
         }
     }
@@ -543,37 +543,87 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * @param bengaliContext Bengali text generated so far (for context-aware rules)
      * @return Triple of (Bengali consonant string, chars consumed, confidence)
      */
+    // Consonants that can take ya-phala (্য)
+    private val yPhalaConsonants = mapOf(
+        'b' to "ব", 'k' to "ক", 'g' to "গ", 't' to "ত", 'd' to "দ",
+        'n' to "ন", 'm' to "ম", 'j' to "জ", 'p' to "প", 'l' to "ল",
+        'h' to "হ", 'v' to "ভ", 's' to "স", 'r' to "র"
+    )
+
+    // Consonants that can take ra-phala (্র)
+    private val rPhalaConsonants = mapOf(
+        'k' to "ক", 'g' to "গ", 't' to "ত", 'd' to "দ",
+        'n' to "ন", 'm' to "ম", 'p' to "প", 'b' to "ব",
+        'v' to "ভ", 's' to "স", 'j' to "জ", 'l' to "ল",
+        'h' to "হ"
+    )
+
+    private val consonantMap = mapOf(
+        'k' to "ক", 'g' to "গ", 'c' to "চ", 'j' to "জ",
+        't' to "ত", 'd' to "দ", 'p' to "প", 'b' to "ব",
+        'f' to "ফ", 'm' to "ম", 'r' to "র", 'l' to "ল",
+        's' to "স", 'h' to "হ", 'v' to "ভ", 'w' to "ও",
+        'y' to "য়", 'z' to "জ", 'q' to "ক", 'x' to "ক্স"
+    )
+
     private fun resolveConsonant(key: String, i: Int, bengaliContext: String): Triple<String, Int, Double> {
+        val ch = key[i]
+
         // 'ng' handling
-        if (key[i] == 'n' && i + 1 < key.length && key[i + 1] == 'g') {
+        if (ch == 'n' && i + 1 < key.length && key[i + 1] == 'g') {
             val nextAfterNg = if (i + 2 < key.length) key[i + 2].toString() else null
             val nasal = NasalResolver.resolve(nextAfterNg)
             return Triple(nasal.toString(), 2, 0.90)
         }
 
         // 'sh' handling
-        if (key[i] == 's' && i + 1 < key.length && key[i + 1] == 'h') {
+        if (ch == 's' && i + 1 < key.length && key[i + 1] == 'h') {
             val resolution = ShatvaVidhan.resolve(bengaliContext, key, i)
             return Triple(resolution.bengali.toString(), 2, resolution.confidence)
         }
 
+        // ৃ-কার: consonant + "ri" → consonant + ৃ (when followed by consonant or end)
+        if (rPhalaConsonants.containsKey(ch) && i + 2 < key.length && key[i + 1] == 'r' && key[i + 2] == 'i') {
+            val afterRI = if (i + 3 < key.length) key[i + 3] else ' '
+            if (afterRI !in "aeiou") {
+                // consonant + ri + consonant/end → ৃ (কৃষক, সৃষ্টি, বৃক্ষ)
+                return Triple(rPhalaConsonants[ch]!! + "ৃ", 3, 0.90)
+            }
+        }
+
+        // র-ফলা: consonant + "r" → consonant + ্র (প্র, ত্র, ক্র, etc.)
+        if (rPhalaConsonants.containsKey(ch) && i + 1 < key.length && key[i + 1] == 'r') {
+            val afterR = if (i + 2 < key.length) key[i + 2] else ' '
+            if (afterR != 'r') { // Avoid 'rr'
+                return Triple(rPhalaConsonants[ch]!! + "্র", 2, 0.85)
+            }
+        }
+
+        // য-ফলা: consonant + "y" → consonant + ্য (ত্য, ব্য, জ্ঞ, etc.)
+        if (yPhalaConsonants.containsKey(ch) && i + 1 < key.length && key[i + 1] == 'y') {
+            val afterY = if (i + 2 < key.length) key[i + 2] else ' '
+            if (afterY != 'y') { // Avoid 'yy'
+                val conf = if (ch in "td") 0.80 else 0.85
+                return Triple(yPhalaConsonants[ch]!! + "্য", 2, conf)
+            }
+        }
+
+        // Reph: "r" + consonant → র্ (রেফ) when 'r' is followed by a non-vowel non-r non-h
+        if (ch == 'r' && i + 1 < key.length) {
+            val nextCh = key[i + 1]
+            if (nextCh !in "aeiour" && nextCh != 'h') {
+                return Triple("র্", 1, 0.85) // Only consume 'r', next consonant processed next iteration
+            }
+        }
+
         // 'n' (not ng) handling — NatvaVidhan
-        if (key[i] == 'n' && (i + 1 >= key.length || key[i + 1] != 'g')) {
+        if (ch == 'n' && (i + 1 >= key.length || key[i + 1] != 'g')) {
             val resolution = NatvaVidhan.resolve(bengaliContext)
             return Triple(resolution.bengali.toString(), 1, resolution.confidence)
         }
 
-        // Standard consonant mapping
-        val consonantMap = mapOf(
-            'k' to "ক", 'g' to "গ", 'c' to "চ", 'j' to "জ",
-            't' to "ত", 'd' to "দ", 'p' to "প", 'b' to "ব",
-            'f' to "ফ", 'm' to "ম", 'r' to "র", 'l' to "ল",
-            's' to "স", 'h' to "হ", 'v' to "ভ", 'w' to "ও",
-            'y' to "য", 'z' to "জ", 'q' to "ক", 'x' to "ক্স"
-        )
-
-        val bengali = consonantMap[key[i]] ?: key[i].toString()
-        val defaultConf = StatisticalDefaults.getDefault(key[i].toString())?.confidence ?: 0.80
+        val bengali = consonantMap[ch] ?: ch.toString()
+        val defaultConf = StatisticalDefaults.getDefault(ch.toString())?.confidence ?: 0.80
         return Triple(bengali, 1, defaultConf)
     }
 
