@@ -19,110 +19,189 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.banglu.engine.types.SmartSuggestion
 
-// Colors matching Samsung dark keyboard
+// ── Samsung Dark Theme Colors ──────────────────────────────────────────────────
 private val KeyboardBg = Color(0xFF1B1B1B)
 private val KeyBg = Color(0xFF2C2C2C)
 private val KeyPressed = Color(0xFF4A4A4A)
 private val SpecialKeyBg = Color(0xFF3A3A3A)
 private val KeyText = Color.White
+private val SubText = Color(0xFF888888)
 private val SuggestionBg = Color(0xFF1E1E1E)
 private val SuggestionHighlight = Color(0xFF3D5AFE)
 private val SuggestionChipBg = Color(0xFF333333)
 
-private val KeyHeight = 52.dp
-private val KeyGap = 4.dp
-private val KeyCorner = 8.dp
+// ── Samsung Dimensions ─────────────────────────────────────────────────────────
+private val NumberRowHeight = 42.dp
+private val KeyRowHeight = 48.dp
+private val SuggestionBarHeight = 40.dp
+private val KeyGapH = 4.dp
+private val KeyGapV = 4.dp
+private val KeyCorner = 10.dp
+private val KeyboardPadding = 3.dp
+
+// ── Symbol Layouts ─────────────────────────────────────────────────────────────
+private val SYMBOLS_1_ROWS = listOf(
+    listOf("+", "\u00D7", "\u00F7", "=", "/", "_", "<", ">", "[", "]"),
+    listOf("!", "@", "#", "$", "%", "^", "&", "*", "(", ")"),
+    listOf("-", "'", "\"", ":", ";", ",", "?")
+)
+
+private val SYMBOLS_2_ROWS = listOf(
+    listOf("`", "~", "\\", "|", "{", "}", "\u20AC", "\u00A3", "\u00A5", "\u20B9"),
+    listOf("\u00B0", "\u2022", "\u25CB", "\u25CF", "\u25A1", "\u25A0", "\u2664", "\u2661", "\u2662", "\u2667"),
+    listOf("\u2605", "\u2026", "\u00AB", "\u00BB", "\u00A1", "\u00BF")
+)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Root Keyboard Composable
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
 fun BangluKeyboardLayout(
     suggestions: List<SmartSuggestion>,
-    isShifted: Boolean,
+    keyboardMode: KeyboardMode,
+    shiftState: ShiftState,
     onKeyPress: (Char) -> Unit,
     onBackspace: () -> Unit,
     onSpace: () -> Unit,
     onEnter: () -> Unit,
-    onShift: () -> Unit,
-    onSuggestionClick: (SmartSuggestion) -> Unit
+    onShiftTap: () -> Unit,
+    onGlobePress: () -> Unit,
+    onSymbolsPress: () -> Unit,
+    onBackToLetters: () -> Unit,
+    onSymbolPageToggle: () -> Unit,
+    onSuggestionClick: (SmartSuggestion) -> Unit,
+    onNumberPress: (Char) -> Unit,
+    onPunctuationPress: (Char) -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(KeyboardBg)
-            .padding(horizontal = 3.dp, vertical = 4.dp)
+            .padding(horizontal = KeyboardPadding, vertical = 4.dp)
     ) {
-        // Suggestion bar
-        SuggestionRow(suggestions, onSuggestionClick)
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        // Row 1: q w e r t y u i o p
-        KeyRow(
-            keys = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"),
-            isShifted = isShifted,
-            onKeyPress = onKeyPress
-        )
-
-        Spacer(modifier = Modifier.height(KeyGap))
-
-        // Row 2: a s d f g h j k l (indented)
-        KeyRow(
-            keys = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"),
-            isShifted = isShifted,
-            onKeyPress = onKeyPress,
-            indent = true
-        )
-
-        Spacer(modifier = Modifier.height(KeyGap))
-
-        // Row 3: Shift z x c v b n m Backspace
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(KeyGap)
-        ) {
-            SpecialKey(
-                label = "⇧",
-                modifier = Modifier.weight(1.5f),
-                onClick = onShift
-            )
-            for (key in listOf("z", "x", "c", "v", "b", "n", "m")) {
-                LetterKey(
-                    label = if (isShifted) key.uppercase() else key,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        val ch = if (isShifted) key.uppercase()[0] else key[0]
-                        onKeyPress(ch)
-                    }
+        when (keyboardMode) {
+            KeyboardMode.BANGLU -> {
+                BangluSuggestionRow(suggestions, onSuggestionClick)
+                Spacer(modifier = Modifier.height(KeyGapV))
+                NumberRow(onNumberPress)
+                Spacer(modifier = Modifier.height(KeyGapV))
+                LetterRows(
+                    shiftState = shiftState,
+                    onKeyPress = onKeyPress,
+                    onBackspace = onBackspace,
+                    onShiftTap = onShiftTap
+                )
+                Spacer(modifier = Modifier.height(KeyGapV))
+                BottomRow(
+                    leftLabel = "!#1",
+                    spaceLabel = "\u09AC\u09BE\u0982\u09B2\u09C1 (BN)",
+                    onLeftPress = onSymbolsPress,
+                    onGlobePress = onGlobePress,
+                    onSpace = onSpace,
+                    onPunctuationPress = onPunctuationPress,
+                    onEnter = onEnter
                 )
             }
-            SpecialKey(
-                label = "⌫",
-                modifier = Modifier.weight(1.5f),
-                onClick = onBackspace
-            )
-        }
-
-        Spacer(modifier = Modifier.height(KeyGap))
-
-        // Row 4: 123 | , | Space | . | Enter
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(KeyGap)
-        ) {
-            SpecialKey(label = "123", modifier = Modifier.weight(1.2f), onClick = {})
-            SpecialKey(label = ",", modifier = Modifier.weight(0.8f), onClick = { onKeyPress(',') })
-            SpaceKey(modifier = Modifier.weight(4.5f), onClick = onSpace)
-            SpecialKey(label = ".", modifier = Modifier.weight(0.8f), onClick = { onKeyPress('.') })
-            SpecialKey(label = "↵", modifier = Modifier.weight(1.5f), onClick = onEnter)
+            KeyboardMode.ENGLISH -> {
+                // Minimal suggestion bar (empty spacer for consistent height)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(SuggestionBarHeight)
+                        .background(SuggestionBg)
+                )
+                Spacer(modifier = Modifier.height(KeyGapV))
+                NumberRow(onNumberPress)
+                Spacer(modifier = Modifier.height(KeyGapV))
+                LetterRows(
+                    shiftState = shiftState,
+                    onKeyPress = onKeyPress,
+                    onBackspace = onBackspace,
+                    onShiftTap = onShiftTap
+                )
+                Spacer(modifier = Modifier.height(KeyGapV))
+                BottomRow(
+                    leftLabel = "!#1",
+                    spaceLabel = "English (EN)",
+                    onLeftPress = onSymbolsPress,
+                    onGlobePress = onGlobePress,
+                    onSpace = onSpace,
+                    onPunctuationPress = onPunctuationPress,
+                    onEnter = onEnter
+                )
+            }
+            KeyboardMode.SYMBOLS_1 -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(SuggestionBarHeight)
+                        .background(SuggestionBg)
+                )
+                Spacer(modifier = Modifier.height(KeyGapV))
+                NumberRow(onNumberPress)
+                Spacer(modifier = Modifier.height(KeyGapV))
+                SymbolRows(
+                    rows = SYMBOLS_1_ROWS,
+                    pageLabel = "1/2",
+                    onSymbolPress = onPunctuationPress,
+                    onBackspace = onBackspace,
+                    onPageToggle = onSymbolPageToggle
+                )
+                Spacer(modifier = Modifier.height(KeyGapV))
+                BottomRow(
+                    leftLabel = "ABC",
+                    spaceLabel = if (shiftState != ShiftState.OFF) "English (EN)" else "\u09AC\u09BE\u0982\u09B2\u09C1 (BN)",
+                    onLeftPress = onBackToLetters,
+                    onGlobePress = onGlobePress,
+                    onSpace = onSpace,
+                    onPunctuationPress = onPunctuationPress,
+                    onEnter = onEnter
+                )
+            }
+            KeyboardMode.SYMBOLS_2 -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(SuggestionBarHeight)
+                        .background(SuggestionBg)
+                )
+                Spacer(modifier = Modifier.height(KeyGapV))
+                NumberRow(onNumberPress)
+                Spacer(modifier = Modifier.height(KeyGapV))
+                SymbolRows(
+                    rows = SYMBOLS_2_ROWS,
+                    pageLabel = "2/2",
+                    onSymbolPress = onPunctuationPress,
+                    onBackspace = onBackspace,
+                    onPageToggle = onSymbolPageToggle
+                )
+                Spacer(modifier = Modifier.height(KeyGapV))
+                BottomRow(
+                    leftLabel = "ABC",
+                    spaceLabel = if (shiftState != ShiftState.OFF) "English (EN)" else "\u09AC\u09BE\u0982\u09B2\u09C1 (BN)",
+                    onLeftPress = onBackToLetters,
+                    onGlobePress = onGlobePress,
+                    onSpace = onSpace,
+                    onPunctuationPress = onPunctuationPress,
+                    onEnter = onEnter
+                )
+            }
         }
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Suggestion Bar
+// ═══════════════════════════════════════════════════════════════════════════════
+
 @Composable
-private fun SuggestionRow(
+private fun BangluSuggestionRow(
     suggestions: List<SmartSuggestion>,
     onSuggestionClick: (SmartSuggestion) -> Unit
 ) {
@@ -130,7 +209,7 @@ private fun SuggestionRow(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(40.dp)
+                .height(SuggestionBarHeight)
                 .background(SuggestionBg)
         )
         return
@@ -139,7 +218,7 @@ private fun SuggestionRow(
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
-            .height(40.dp)
+            .height(SuggestionBarHeight)
             .background(SuggestionBg),
         contentPadding = PaddingValues(horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -167,34 +246,332 @@ private fun SuggestionRow(
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Number Row (always visible)
+// ═══════════════════════════════════════════════════════════════════════════════
+
 @Composable
-private fun KeyRow(
-    keys: List<String>,
-    isShifted: Boolean,
-    onKeyPress: (Char) -> Unit,
-    indent: Boolean = false
-) {
+private fun NumberRow(onNumberPress: (Char) -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (indent) Modifier.padding(horizontal = 16.dp) else Modifier),
-        horizontalArrangement = Arrangement.spacedBy(KeyGap)
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(KeyGapH)
     ) {
-        for (key in keys) {
-            LetterKey(
-                label = if (isShifted) key.uppercase() else key,
+        for (num in '1'..'9') {
+            KeyButton(
+                label = num.toString(),
                 modifier = Modifier.weight(1f),
-                onClick = {
-                    val ch = if (isShifted) key.uppercase()[0] else key[0]
-                    onKeyPress(ch)
-                }
+                height = NumberRowHeight,
+                bgColor = KeyBg,
+                fontSize = 16,
+                onClick = { onNumberPress(num) }
+            )
+        }
+        KeyButton(
+            label = "0",
+            modifier = Modifier.weight(1f),
+            height = NumberRowHeight,
+            bgColor = KeyBg,
+            fontSize = 16,
+            onClick = { onNumberPress('0') }
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// QWERTY Letter Rows
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun LetterRows(
+    shiftState: ShiftState,
+    onKeyPress: (Char) -> Unit,
+    onBackspace: () -> Unit,
+    onShiftTap: () -> Unit
+) {
+    val isUpper = shiftState != ShiftState.OFF
+
+    // Row 1: q w e r t y u i o p
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(KeyGapH)
+    ) {
+        for (key in listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p")) {
+            val display = if (isUpper) key.uppercase() else key
+            KeyButton(
+                label = display,
+                modifier = Modifier.weight(1f),
+                height = KeyRowHeight,
+                bgColor = KeyBg,
+                onClick = { onKeyPress(display[0]) }
             )
         }
     }
+
+    Spacer(modifier = Modifier.height(KeyGapV))
+
+    // Row 2: a s d f g h j k l (indented)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(KeyGapH)
+    ) {
+        for (key in listOf("a", "s", "d", "f", "g", "h", "j", "k", "l")) {
+            val display = if (isUpper) key.uppercase() else key
+            KeyButton(
+                label = display,
+                modifier = Modifier.weight(1f),
+                height = KeyRowHeight,
+                bgColor = KeyBg,
+                onClick = { onKeyPress(display[0]) }
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(KeyGapV))
+
+    // Row 3: Shift z x c v b n m Backspace
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(KeyGapH)
+    ) {
+        // Shift key with visual state
+        val shiftLabel = when (shiftState) {
+            ShiftState.OFF -> "\u21E7"
+            ShiftState.ON -> "\u2B06"        // Filled up arrow
+            ShiftState.CAPS_LOCK -> "\u21EA"  // Caps lock symbol
+        }
+        val shiftBg = when (shiftState) {
+            ShiftState.OFF -> SpecialKeyBg
+            ShiftState.ON -> SuggestionHighlight
+            ShiftState.CAPS_LOCK -> SuggestionHighlight
+        }
+        KeyButton(
+            label = shiftLabel,
+            modifier = Modifier.weight(1.5f),
+            height = KeyRowHeight,
+            bgColor = shiftBg,
+            fontSize = 18,
+            onClick = onShiftTap
+        )
+
+        for (key in listOf("z", "x", "c", "v", "b", "n", "m")) {
+            val display = if (isUpper) key.uppercase() else key
+            KeyButton(
+                label = display,
+                modifier = Modifier.weight(1f),
+                height = KeyRowHeight,
+                bgColor = KeyBg,
+                onClick = { onKeyPress(display[0]) }
+            )
+        }
+
+        // Backspace
+        KeyButton(
+            label = "\u232B",
+            modifier = Modifier.weight(1.5f),
+            height = KeyRowHeight,
+            bgColor = SpecialKeyBg,
+            fontSize = 18,
+            onClick = onBackspace
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Symbol Rows
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun SymbolRows(
+    rows: List<List<String>>,
+    pageLabel: String,
+    onSymbolPress: (Char) -> Unit,
+    onBackspace: () -> Unit,
+    onPageToggle: () -> Unit
+) {
+    // Symbol row 1 (10 keys)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(KeyGapH)
+    ) {
+        for (sym in rows[0]) {
+            KeyButton(
+                label = sym,
+                modifier = Modifier.weight(1f),
+                height = KeyRowHeight,
+                bgColor = KeyBg,
+                fontSize = 18,
+                onClick = { onSymbolPress(sym[0]) }
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(KeyGapV))
+
+    // Symbol row 2 (10 keys)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(KeyGapH)
+    ) {
+        for (sym in rows[1]) {
+            KeyButton(
+                label = sym,
+                modifier = Modifier.weight(1f),
+                height = KeyRowHeight,
+                bgColor = KeyBg,
+                fontSize = 18,
+                onClick = { onSymbolPress(sym[0]) }
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(KeyGapV))
+
+    // Symbol row 3: [page toggle] symbols... [backspace]
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(KeyGapH)
+    ) {
+        KeyButton(
+            label = pageLabel,
+            modifier = Modifier.weight(1.5f),
+            height = KeyRowHeight,
+            bgColor = SpecialKeyBg,
+            fontSize = 14,
+            onClick = onPageToggle
+        )
+        for (sym in rows[2]) {
+            KeyButton(
+                label = sym,
+                modifier = Modifier.weight(1f),
+                height = KeyRowHeight,
+                bgColor = KeyBg,
+                fontSize = 18,
+                onClick = { onSymbolPress(sym[0]) }
+            )
+        }
+        KeyButton(
+            label = "\u232B",
+            modifier = Modifier.weight(1.5f),
+            height = KeyRowHeight,
+            bgColor = SpecialKeyBg,
+            fontSize = 18,
+            onClick = onBackspace
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Bottom Row (common to all modes)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun BottomRow(
+    leftLabel: String,
+    spaceLabel: String,
+    onLeftPress: () -> Unit,
+    onGlobePress: () -> Unit,
+    onSpace: () -> Unit,
+    onPunctuationPress: (Char) -> Unit,
+    onEnter: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(KeyGapH)
+    ) {
+        // !#1 or ABC
+        KeyButton(
+            label = leftLabel,
+            modifier = Modifier.weight(1.2f),
+            height = KeyRowHeight,
+            bgColor = SpecialKeyBg,
+            fontSize = 14,
+            onClick = onLeftPress
+        )
+
+        // Globe key
+        KeyButton(
+            label = "\uD83C\uDF10",
+            modifier = Modifier.weight(0.8f),
+            height = KeyRowHeight,
+            bgColor = SpecialKeyBg,
+            fontSize = 18,
+            onClick = onGlobePress
+        )
+
+        // Spacebar
+        SpaceBar(
+            label = spaceLabel,
+            modifier = Modifier.weight(4f),
+            onClick = onSpace
+        )
+
+        // Period
+        KeyButton(
+            label = ".",
+            modifier = Modifier.weight(0.8f),
+            height = KeyRowHeight,
+            bgColor = SpecialKeyBg,
+            fontSize = 18,
+            onClick = { onPunctuationPress('.') }
+        )
+
+        // Enter
+        KeyButton(
+            label = "\u21B5",
+            modifier = Modifier.weight(1.5f),
+            height = KeyRowHeight,
+            bgColor = SpecialKeyBg,
+            fontSize = 18,
+            onClick = onEnter
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Individual Key Composables
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun KeyButton(
+    label: String,
+    modifier: Modifier = Modifier,
+    height: Dp = KeyRowHeight,
+    bgColor: Color = KeyBg,
+    fontSize: Int = 20,
+    onClick: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    Box(
+        modifier = modifier
+            .height(height)
+            .clip(RoundedCornerShape(KeyCorner))
+            .background(if (isPressed) KeyPressed else bgColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = KeyText,
+            fontSize = fontSize.sp,
+            fontWeight = FontWeight.Normal,
+            textAlign = TextAlign.Center
+        )
+    }
 }
 
 @Composable
-private fun LetterKey(
+private fun SpaceBar(
     label: String,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
@@ -205,7 +582,7 @@ private fun LetterKey(
 
     Box(
         modifier = modifier
-            .height(KeyHeight)
+            .height(KeyRowHeight)
             .clip(RoundedCornerShape(KeyCorner))
             .background(if (isPressed) KeyPressed else KeyBg)
             .clickable(
@@ -219,75 +596,10 @@ private fun LetterKey(
     ) {
         Text(
             text = label,
-            color = KeyText,
-            fontSize = 20.sp,
+            color = SubText,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Normal,
             textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun SpecialKey(
-    label: String,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val haptic = LocalHapticFeedback.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    Box(
-        modifier = modifier
-            .height(KeyHeight)
-            .clip(RoundedCornerShape(KeyCorner))
-            .background(if (isPressed) KeyPressed else SpecialKeyBg)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onClick()
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            color = KeyText,
-            fontSize = if (label.length > 2) 14.sp else 18.sp,
-            fontWeight = FontWeight.Normal,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun SpaceKey(
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val haptic = LocalHapticFeedback.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    Box(
-        modifier = modifier
-            .height(KeyHeight)
-            .clip(RoundedCornerShape(KeyCorner))
-            .background(if (isPressed) KeyPressed else KeyBg)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onClick()
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "Banglu",
-            color = Color(0xFF888888),
-            fontSize = 14.sp
         )
     }
 }
