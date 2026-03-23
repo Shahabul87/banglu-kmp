@@ -49,6 +49,8 @@ object SmartEngineAdapter {
         this.storage = storage
         val eng = getEngine()
         eng.initialize(storage, loader)
+        // Clear cache so stale seed-only conversions are re-evaluated with 480K data
+        eng.clearCache()
     }
 
     /**

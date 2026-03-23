@@ -150,8 +150,16 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val key = input.lowercase().trim()
         if (key.isEmpty()) return ConversionResult("", 0.0, ResolutionSource.RULE)
 
-        // Check cache
-        wordCache[key]?.let { return it }
+        // Check cache — invalidate stale entries when 480K validator loads
+        wordCache[key]?.let { cached ->
+            val shouldInvalidate = validator.isLoaded()
+                && cached.source != ResolutionSource.DICTIONARY
+                && cached.source != ResolutionSource.ENGLISH_PASSTHROUGH
+                && !validator.isValid(cached.bengali)
+            if (!shouldInvalidate) return cached
+            // Stale cache — re-run conversion with loaded validator
+            wordCache.remove(key)
+        }
 
         // Layer 1: Dictionary lookup
         convertByDictionary(key)?.let { result ->
@@ -732,55 +740,126 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     /**
      * Layer 6: Bengali dictionary recovery.
      * Searches 480K dictionary by progressively shorter Bengali prefixes,
-     * scores candidates by Bengali character similarity (LCS).
+     * scores candidates by Bengali character similarity (LCS with normalization).
+     *
+     * For longer inputs, similarity matters MORE and frequency matters LESS
+     * (user typed enough characters to disambiguate — trust the input).
      */
     private fun applyBengaliRecovery(result: ConversionResult): ConversionResult? {
         val bengali = result.bengali
-        for (prefixLen in minOf(bengali.length, 4) downTo 2) {
+
+        // Collect candidates from multiple prefix lengths for broad coverage
+        val allCandidates = mutableSetOf<String>()
+        for (prefixLen in bengali.length downTo 2) {
             val prefix = bengali.substring(0, prefixLen)
-            val candidates = validator.findByPrefix(prefix, 20)
-            if (candidates.isEmpty()) continue
-
-            val scored = candidates.map { candidate ->
-                val sim = bengaliSimilarity(bengali, candidate)
-                val freq = validator.getFrequency(candidate)
-                val freqNorm = if (freq > 0) freq / 100.0 else 0.01
-                val score = sim * 0.95 + freqNorm * 0.05
-                candidate to score
-            }.filter { it.second > 0.50 }
-                .sortedByDescending { it.second }
-
-            if (scored.isNotEmpty()) {
-                val best = scored[0]
-                return ConversionResult(
-                    best.first, 0.85, ResolutionSource.DICTIONARY,
-                    listOf(Alternative(result.bengali, result.confidence)) +
-                            scored.drop(1).take(3).map { Alternative(it.first, it.second) }
-                )
+            val candidates = validator.findByPrefix(prefix, 30)
+            for (c in candidates) {
+                if (c != bengali) allCandidates.add(c)
             }
+            if (allCandidates.size >= 50) break
+        }
+
+        if (allCandidates.isEmpty()) return null
+
+        val originalLen = bengali.length
+        // Adaptive weighting: longer input = trust similarity more
+        val freqWeight = when {
+            originalLen >= 6 -> 0.05
+            originalLen >= 4 -> 0.15
+            else -> 0.25
+        }
+        val simWeight = 1.0 - freqWeight
+
+        data class ScoredCandidate(
+            val word: String,
+            val similarity: Double,
+            val frequency: Int,
+            val combinedScore: Double
+        )
+
+        val scored = allCandidates.map { candidate ->
+            val sim = bengaliSimilarity(bengali, candidate)
+            val freq = validator.getFrequency(candidate)
+            val combinedScore = sim * simWeight + (freq / 100.0) * freqWeight
+            ScoredCandidate(candidate, sim, freq, combinedScore)
+        }.sortedByDescending { it.combinedScore }
+
+        // Only accept if the top candidate has reasonable similarity (>0.50)
+        if (scored.isNotEmpty() && scored[0].similarity > 0.50) {
+            val best = scored[0]
+            return ConversionResult(
+                best.word, 0.85, ResolutionSource.DICTIONARY,
+                listOf(Alternative(result.bengali, result.confidence)) +
+                        scored.drop(1).take(4)
+                            .filter { it.similarity > 0.40 }
+                            .map { Alternative(it.word, it.combinedScore) }
+            )
         }
         return null
     }
 
     /**
-     * LCS-based similarity between two Bengali strings.
-     * Returns normalized score in [0.0, 1.0].
+     * Bengali similarity using normalized comparison.
+     *
+     * Bengali characters like য়া vs আ, ড়া vs রা are different code points
+     * but sound very similar. We normalize before LCS comparison:
+     *   - Strip nukta (়): য় → য, ড় → ড
+     *   - Replace standalone আ with া (same 'a' sound)
+     *   - ী → ি, ূ → ু (similar sounds)
+     *   - ঙ → ং, ণ → ন, ষ → শ (similar sounds)
+     *
+     * Returns combined score: primarily input coverage, with small candidate coverage factor.
      */
     private fun bengaliSimilarity(a: String, b: String): Double {
-        val m = a.length
-        val n = b.length
-        if (m == 0 || n == 0) return 0.0
+        if (a == b) return 1.0
+        if (a.isEmpty() || b.isEmpty()) return 0.0
+
+        val normA = normalizeBengali(a)
+        val normB = normalizeBengali(b)
+
+        if (normA == normB) return 1.0
+
+        val m = normA.length
+        val n = normB.length
         val prev = IntArray(n + 1)
         val curr = IntArray(n + 1)
         for (i in 1..m) {
             for (j in 1..n) {
-                curr[j] = if (a[i - 1] == b[j - 1]) prev[j - 1] + 1
+                curr[j] = if (normA[i - 1] == normB[j - 1]) prev[j - 1] + 1
                 else maxOf(prev[j], curr[j - 1])
             }
             prev.indices.forEach { prev[it] = curr[it] }
             curr.fill(0)
         }
-        return (2.0 * prev[n]) / (m + n)
+        val lcsLen = prev[n]
+
+        // Input coverage (how much of user's input is explained by candidate)
+        val inputCoverage = lcsLen.toDouble() / m
+        // Candidate coverage (to prevent matching very long words)
+        val candidateCoverage = lcsLen.toDouble() / n
+        // Combined: primarily input coverage, with small candidate coverage factor
+        return inputCoverage * 0.8 + candidateCoverage * 0.2
+    }
+
+    /**
+     * Normalize Bengali text for sound-level comparison.
+     * Strips modifiers that don't change the sound significantly.
+     */
+    private fun normalizeBengali(text: String): String {
+        val sb = StringBuilder(text.length)
+        for (ch in text) {
+            when (ch) {
+                '\u09BC' -> {} // Strip nukta (়) — য় ≈ য, ড় ≈ ড
+                'আ' -> sb.append('া')  // আ ≈ া (same 'a' sound)
+                'ী' -> sb.append('ি')   // ী ≈ ি (similar sounds)
+                'ূ' -> sb.append('ু')   // ূ ≈ ু (similar sounds)
+                'ঙ' -> sb.append('ং')   // ঙ ≈ ং (similar sounds)
+                'ণ' -> sb.append('ন')   // ণ ≈ ন (similar sounds)
+                'ষ' -> sb.append('শ')   // ষ ≈ শ (similar sounds)
+                else -> sb.append(ch)
+            }
+        }
+        return sb.toString()
     }
 
     /**
