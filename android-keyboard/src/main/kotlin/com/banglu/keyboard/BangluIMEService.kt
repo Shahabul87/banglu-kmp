@@ -7,25 +7,13 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import com.banglu.engine.SmartEngineAdapter
+import com.banglu.engine.types.SmartSuggestion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
-/**
- * Android Input Method Editor (IME) service for Bengali phonetic typing.
- *
- * Uses the KMP SmartEngine (via SmartEngineAdapter) to convert English phonetic
- * input to Bengali in real time. Manages a composing buffer that shows live
- * Bengali preview while the user types, committing on Space or suggestion tap.
- *
- * Lifecycle:
- * - onCreate: Initialize SmartEngine with seed dictionary (instant)
- * - onCreateInputView: Inflate keyboard + suggestion bar
- * - onStartInputView: Reset buffer for each new input field
- * - onDestroy: Cancel coroutines
- */
 class BangluIMEService : InputMethodService() {
 
     private var keyboardView: BangluKeyboardView? = null
@@ -40,11 +28,9 @@ class BangluIMEService : InputMethodService() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "onCreate: Initializing SmartEngine...")
-        // Initialize engine with seed dictionary (~4K words, instant)
         SmartEngineAdapter.initializeSync()
         Log.d(TAG, "onCreate: Seed dictionary loaded")
 
-        // Load full 480K dictionary from SQLite in background
         serviceScope.launch {
             try {
                 val storage = AndroidStorage(applicationContext)
@@ -54,7 +40,6 @@ class BangluIMEService : InputMethodService() {
                 Log.d(TAG, "onCreate: Full dictionary loaded!")
             } catch (e: Exception) {
                 Log.e(TAG, "onCreate: Failed to load full dictionary", e)
-                // Engine works with seed data only — graceful degradation
             }
         }
     }
@@ -63,9 +48,7 @@ class BangluIMEService : InputMethodService() {
         val container = layoutInflater.inflate(R.layout.keyboard_container, null)
 
         suggestionBar = container.findViewById(R.id.suggestion_bar)
-        suggestionBar?.onSuggestionClick = { suggestion ->
-            onSuggestionTap(suggestion)
-        }
+        suggestionBar?.onSuggestionClick = { suggestion -> onSuggestionTap(suggestion) }
 
         keyboardView = container.findViewById(R.id.keyboard_view)
         keyboardView?.onKeyPress = { key -> onKeyPress(key) }
@@ -93,68 +76,55 @@ class BangluIMEService : InputMethodService() {
         serviceScope.cancel()
     }
 
-    /**
-     * Handle a character key press: append to buffer, update composing text and suggestions.
-     */
     private fun onKeyPress(char: Char) {
         buffer += char
         Log.d(TAG, "onKeyPress: char='$char', buffer='$buffer'")
 
-        val ic = currentInputConnection ?: run {
-            Log.w(TAG, "onKeyPress: no InputConnection!")
-            return
-        }
+        val ic = currentInputConnection ?: return
         val editorInfo = currentInputEditorInfo
 
-        // Fallback for editors that don't support composing text
         if (editorInfo?.inputType == InputType.TYPE_NULL) {
             ic.commitText(char.toString(), 1)
             return
         }
 
-        // Convert phonetic buffer to Bengali and show as composing text
         val result = SmartEngineAdapter.convertWord(buffer)
-        Log.d(TAG, "onKeyPress: '$buffer' → '${result.bengali}' (confidence=${result.confidence})")
+        Log.d(TAG, "convert: '$buffer' → '${result.bengali}' (${result.confidence})")
         ic.setComposingText(result.bengali, 1)
 
-        // Update suggestion bar
         val suggestions = SmartEngineAdapter.getSuggestions(buffer, 6)
-        Log.d(TAG, "onKeyPress: ${suggestions.size} suggestions")
+        Log.d(TAG, "suggestions: ${suggestions.size} → ${suggestions.joinToString { it.bengali }}")
         suggestionBar?.showSuggestions(suggestions)
     }
 
-    /**
-     * Handle backspace: remove last character from buffer or delete from editor.
-     */
     private fun onBackspace() {
+        Log.d(TAG, "onBackspace: buffer='$buffer'")
         val ic = currentInputConnection ?: return
+
         if (buffer.isNotEmpty()) {
             buffer = buffer.dropLast(1)
             if (buffer.isEmpty()) {
+                ic.setComposingText("", 0)
                 ic.finishComposingText()
                 suggestionBar?.clear()
             } else {
                 val result = SmartEngineAdapter.convertWord(buffer)
                 ic.setComposingText(result.bengali, 1)
-                val suggestions = SmartEngineAdapter.getSuggestions(buffer, 6)
-                suggestionBar?.showSuggestions(suggestions)
+                suggestionBar?.showSuggestions(SmartEngineAdapter.getSuggestions(buffer, 6))
             }
         } else {
-            // No composing buffer — delete the character before the cursor
             ic.deleteSurroundingText(1, 0)
         }
     }
 
-    /**
-     * Handle space: commit current Bengali conversion + space, then reset buffer.
-     */
     private fun onSpacePress() {
         Log.d(TAG, "onSpacePress: buffer='$buffer'")
         val ic = currentInputConnection ?: return
+
         if (buffer.isNotEmpty()) {
             val result = SmartEngineAdapter.convertWord(buffer)
             Log.d(TAG, "onSpacePress: committing '${result.bengali}'")
-            ic.finishComposingText()
+            // commitText replaces the current composing text — no need for finishComposingText
             ic.commitText(result.bengali + " ", 1)
             SmartEngineAdapter.onWordSelected(buffer, result.bengali)
             buffer = ""
@@ -164,31 +134,26 @@ class BangluIMEService : InputMethodService() {
         }
     }
 
-    /**
-     * Handle enter: commit current Bengali conversion, then send Enter key event.
-     */
     private fun onEnterPress() {
+        Log.d(TAG, "onEnterPress: buffer='$buffer'")
         val ic = currentInputConnection ?: return
+
         if (buffer.isNotEmpty()) {
             val result = SmartEngineAdapter.convertWord(buffer)
-            ic.finishComposingText()
             ic.commitText(result.bengali, 1)
             SmartEngineAdapter.onWordSelected(buffer, result.bengali)
             buffer = ""
             suggestionBar?.clear()
         }
-        // Send the Enter key event to the target app
         ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
         ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
     }
 
-    /**
-     * Handle suggestion tap: commit the selected Bengali word and reset buffer.
-     */
-    private fun onSuggestionTap(suggestion: com.banglu.engine.types.SmartSuggestion) {
+    private fun onSuggestionTap(suggestion: SmartSuggestion) {
+        Log.d(TAG, "onSuggestionTap: '${suggestion.bengali}'")
         val ic = currentInputConnection ?: return
-        ic.finishComposingText()
-        ic.commitText(suggestion.bengali, 1)
+        // commitText replaces the composing region automatically
+        ic.commitText(suggestion.bengali + " ", 1)
         SmartEngineAdapter.onWordSelected(buffer, suggestion.bengali)
         buffer = ""
         suggestionBar?.clear()

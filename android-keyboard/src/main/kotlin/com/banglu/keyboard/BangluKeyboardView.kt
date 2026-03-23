@@ -10,15 +10,10 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.AttributeSet
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 
-/**
- * Custom QWERTY keyboard view that renders keys on Canvas.
- *
- * Uses Canvas drawing instead of the deprecated android.inputmethodservice.KeyboardView (API 29+).
- * Supports 4 rows: QWERTY, ASDF, SHIFT-ZXCVBNM-BACK, 123-SPACE-.-ENTER.
- */
 class BangluKeyboardView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
@@ -32,6 +27,7 @@ class BangluKeyboardView @JvmOverloads constructor(
 
     private var isShifted = false
     private var pressedKey: KeyInfo? = null
+    private var actionHandled = false
 
     private val keyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#2C2C2C")
@@ -68,7 +64,9 @@ class BangluKeyboardView @JvmOverloads constructor(
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
-        val height = (width * 0.42).toInt()
+        // Fixed keyboard height: 4 rows * 52dp each = 208dp
+        val rowHeightPx = (52 * resources.displayMetrics.density).toInt()
+        val height = rowHeightPx * 4
         setMeasuredDimension(width, height)
         buildKeys(width.toFloat(), height.toFloat())
     }
@@ -82,79 +80,44 @@ class BangluKeyboardView @JvmOverloads constructor(
             val y = rowIdx * rowHeight
             when (rowIdx) {
                 0 -> {
-                    // QWERTY row: 10 equal-width keys
                     val keyWidth = totalWidth / 10
                     for ((colIdx, key) in row.withIndex()) {
-                        keys.add(
-                            KeyInfo(
-                                key,
-                                RectF(
-                                    colIdx * keyWidth + padding,
-                                    y + padding,
-                                    (colIdx + 1) * keyWidth - padding,
-                                    y + rowHeight - padding
-                                ),
-                                rowIdx,
-                                colIdx
-                            )
-                        )
+                        keys.add(KeyInfo(key, RectF(
+                            colIdx * keyWidth + padding, y + padding,
+                            (colIdx + 1) * keyWidth - padding, y + rowHeight - padding
+                        ), rowIdx, colIdx))
                     }
                 }
                 1 -> {
-                    // ASDF row: 9 keys with half-key offset
                     val keyWidth = totalWidth / 10
                     val offset = keyWidth * 0.5f
                     for ((colIdx, key) in row.withIndex()) {
-                        keys.add(
-                            KeyInfo(
-                                key,
-                                RectF(
-                                    offset + colIdx * keyWidth + padding,
-                                    y + padding,
-                                    offset + (colIdx + 1) * keyWidth - padding,
-                                    y + rowHeight - padding
-                                ),
-                                rowIdx,
-                                colIdx
-                            )
-                        )
+                        keys.add(KeyInfo(key, RectF(
+                            offset + colIdx * keyWidth + padding, y + padding,
+                            offset + (colIdx + 1) * keyWidth - padding, y + rowHeight - padding
+                        ), rowIdx, colIdx))
                     }
                 }
                 2 -> {
-                    // SHIFT-ZXCVBNM-BACK row
                     val modWidth = totalWidth * 0.15f
                     val letterKeyWidth = (totalWidth - 2 * modWidth) / 7
                     var x = 0f
                     for ((colIdx, key) in row.withIndex()) {
-                        val w = when (key) {
-                            "SHIFT", "BACK" -> modWidth
-                            else -> letterKeyWidth
-                        }
-                        keys.add(
-                            KeyInfo(
-                                key,
-                                RectF(x + padding, y + padding, x + w - padding, y + rowHeight - padding),
-                                rowIdx,
-                                colIdx
-                            )
-                        )
+                        val w = when (key) { "SHIFT", "BACK" -> modWidth; else -> letterKeyWidth }
+                        keys.add(KeyInfo(key, RectF(
+                            x + padding, y + padding, x + w - padding, y + rowHeight - padding
+                        ), rowIdx, colIdx))
                         x += w
                     }
                 }
                 3 -> {
-                    // Bottom row: 123 (15%) | SPACE (55%) | . (10%) | ENTER (20%)
                     val widths = listOf(0.15f, 0.55f, 0.10f, 0.20f)
                     var x = 0f
                     for ((colIdx, key) in row.withIndex()) {
                         val w = totalWidth * widths[colIdx]
-                        keys.add(
-                            KeyInfo(
-                                key,
-                                RectF(x + padding, y + padding, x + w - padding, y + rowHeight - padding),
-                                rowIdx,
-                                colIdx
-                            )
-                        )
+                        keys.add(KeyInfo(key, RectF(
+                            x + padding, y + padding, x + w - padding, y + rowHeight - padding
+                        ), rowIdx, colIdx))
                         x += w
                     }
                 }
@@ -171,9 +134,9 @@ class BangluKeyboardView @JvmOverloads constructor(
             canvas.drawRoundRect(key.rect, 12f, 12f, paint)
 
             val displayLabel = when (key.label) {
-                "SHIFT" -> "\u21E7"
+                "SHIFT" -> if (isShifted) "\u21E7" else "\u21E7"
                 "BACK" -> "\u232B"
-                "SPACE" -> "Space"
+                "SPACE" -> ""  // No text on spacebar — just the bar
                 "ENTER" -> "\u21B5"
                 "123" -> "123"
                 else -> if (isShifted) key.label.uppercase() else key.label
@@ -194,32 +157,58 @@ class BangluKeyboardView @JvmOverloads constructor(
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 pressedKey = findKey(event.x, event.y)
+                actionHandled = false
                 invalidate()
                 return true
             }
+            MotionEvent.ACTION_MOVE -> {
+                // Track finger movement — update pressed key visual
+                val currentKey = findKey(event.x, event.y)
+                if (currentKey != pressedKey) {
+                    pressedKey = currentKey
+                    invalidate()
+                }
+                return true
+            }
             MotionEvent.ACTION_UP -> {
-                pressedKey?.let { key ->
+                // Fire the key that the finger is on when released
+                val releasedKey = findKey(event.x, event.y)
+                if (releasedKey != null && !actionHandled) {
                     hapticFeedback()
-                    when (key.label) {
-                        "SHIFT" -> onShift?.invoke()
-                        "BACK" -> onBackspace?.invoke()
-                        "SPACE" -> onSpace?.invoke()
-                        "ENTER" -> onEnter?.invoke()
-                        "123" -> {
-                            // TODO: number/symbol layer
-                        }
-                        else -> {
-                            val char = if (isShifted) key.label.uppercase()[0] else key.label[0]
-                            onKeyPress?.invoke(char)
-                        }
-                    }
+                    fireKey(releasedKey)
                 }
                 pressedKey = null
+                actionHandled = false
+                invalidate()
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                pressedKey = null
+                actionHandled = false
                 invalidate()
                 return true
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    private fun fireKey(key: KeyInfo) {
+        when (key.label) {
+            "SHIFT" -> onShift?.invoke()
+            "BACK" -> onBackspace?.invoke()
+            "SPACE" -> onSpace?.invoke()
+            "ENTER" -> onEnter?.invoke()
+            "123" -> {} // TODO: number/symbol layer
+            else -> {
+                val char = if (isShifted) key.label.uppercase()[0] else key.label[0]
+                onKeyPress?.invoke(char)
+                // Auto-unshift after typing a letter (like real keyboards)
+                if (isShifted) {
+                    isShifted = false
+                    invalidate()
+                }
+            }
+        }
     }
 
     fun toggleShift() {
@@ -236,15 +225,13 @@ class BangluKeyboardView @JvmOverloads constructor(
             if (android.os.Build.VERSION.SDK_INT >= 31) {
                 val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
                 vm?.defaultVibrator?.vibrate(
-                    VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE)
+                    VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE)
                 )
             } else {
                 @Suppress("DEPRECATION")
                 val v = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                v?.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
+                v?.vibrate(VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE))
             }
-        } catch (_: Exception) {
-            // Vibration not available or permission denied
-        }
+        } catch (_: Exception) {}
     }
 }
