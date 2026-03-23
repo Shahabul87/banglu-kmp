@@ -2815,7 +2815,7 @@ object SeedData {
             e("মূল্যায়ন", listOf("mullayon", "mullayeon", "muullayon"), 50, WordCategory.TATSAMA),
             e("পদত্যাগ", listOf("podottyag", "padatyag", "podotteyag"), 50, WordCategory.TATSAMA),
             e("পদত্যাগের", listOf("podottyager", "podotteyager"), 48, WordCategory.TATSAMA),
-            e("যৌক্তিকতা", listOf("jouktikota", "jouktikotaa", "youktikota"), 40, WordCategory.TATSAMA),
+            e("যৌক্তিকতা", listOf("jouktikota", "jowktikota", "joktikota", "jouktikotaa", "youktikota", "zouktikota"), 40, WordCategory.TATSAMA),
             e("সরিয়ে", listOf("soriye", "soriyey", "shoriye"), 60, WordCategory.TADBHAVA),
             e("খাত", listOf("khat", "khaat"), 65, WordCategory.TADBHAVA),
             e("ব্যাংকিং", listOf("banking", "byankig", "byaanking"), 60, WordCategory.TATSAMA),
