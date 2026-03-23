@@ -293,10 +293,56 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val suggestions = mutableListOf<SmartSuggestion>()
         val seen = mutableSetOf<String>()
 
-        // Tier 0: Primary conversion
+        // Tier 0: Primary conversion result (full pipeline)
         val primary = convertWord(key)
         if (primary.bengali.isNotEmpty() && seen.add(primary.bengali)) {
             suggestions.add(SmartSuggestion(primary.bengali, 1.0, "primary", key, "tier0"))
+        }
+
+        // Tier 0.5: Alternatives from convertWord (disambiguation swaps like ন↔ণ, শ↔ষ, ত↔ট, অ↔ও)
+        for (alt in primary.alternatives) {
+            if (seen.add(alt.bengali)) {
+                suggestions.add(SmartSuggestion(alt.bengali, alt.confidence, "alternative", key, "tier0.5"))
+            }
+        }
+
+        // Tier 0.7: Disambiguation swap variants — generate ন↔ণ, শ↔ষ, ত↔ট, অ↔ও swaps
+        // These are the variants the web engine shows (e.g., অত্যাধুনিক → ওত্যাধুনিক, অট্যাধুনিক, etc.)
+        if (primary.bengali.isNotEmpty() && primary.bengali.length >= 3) {
+            val swapCandidates = disambiguator.generateCandidates(primary.bengali)
+            // Filter to only include candidates that are valid 480K words OR close enough
+            val scoredSwaps = swapCandidates
+                .filter { it != primary.bengali }
+                .map { candidate ->
+                    val isValid = validator.isLoaded() && validator.isValid(candidate)
+                    val lengthDiff = kotlin.math.abs(candidate.length - primary.bengali.length)
+                    val conf = if (isValid) 0.85 else maxOf(0.65 - lengthDiff * 0.10, 0.40)
+                    candidate to conf
+                }
+                .sortedByDescending { it.second }
+                .take(5)
+
+            for ((candidate, conf) in scoredSwaps) {
+                if (suggestions.size >= limit) break
+                if (seen.add(candidate)) {
+                    suggestions.add(SmartSuggestion(candidate, conf, "disambiguation_swap", "", "tier0.7"))
+                }
+            }
+        }
+
+        // Tier 0.8: Bengali prefix search in 480K dictionary
+        if (validator.isLoaded() && primary.bengali.isNotEmpty() && primary.bengali.length >= 2) {
+            val prefixLen = maxOf(2, primary.bengali.length - 1)
+            val bengaliPrefix = primary.bengali.substring(0, minOf(prefixLen, primary.bengali.length))
+            val bengaliVariants = validator.findByPrefix(bengaliPrefix, 10)
+            for (variant in bengaliVariants) {
+                if (suggestions.size >= limit) break
+                if (seen.add(variant)) {
+                    val lengthDiff = kotlin.math.abs(variant.length - primary.bengali.length)
+                    val conf = maxOf(0.70 - lengthDiff * 0.08, 0.45)
+                    suggestions.add(SmartSuggestion(variant, conf, "bengali_variant", "", "tier0.8"))
+                }
+            }
         }
 
         // Tier 1: Exact dictionary matches
