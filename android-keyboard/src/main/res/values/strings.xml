@@ -3,5 +3,6 @@
     <string name="app_name">Banglu Keyboard</string>
     <string name="ime_name">Banglu Bengali Keyboard</string>
     <string name="subtype_bengali">বাংলা (Phonetic)</string>
+    <string name="subtype_english">English</string>
     <string name="settings_title">Banglu Keyboard Settings</string>
 </resources>

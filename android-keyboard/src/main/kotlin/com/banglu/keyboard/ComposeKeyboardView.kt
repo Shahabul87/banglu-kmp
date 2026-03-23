@@ -112,6 +112,7 @@ fun BangluKeyboardLayout(
                 BottomRow(
                     leftLabel = "!#1",
                     spaceLabel = "\u09AC\u09BE\u0982\u09B2\u09C1 (BN)",
+                    globeLabel = "EN",
                     onLeftPress = onSymbolsPress,
                     onGlobePress = onGlobePress,
                     onSpace = onSpace,
@@ -140,6 +141,7 @@ fun BangluKeyboardLayout(
                 BottomRow(
                     leftLabel = "!#1",
                     spaceLabel = "English (EN)",
+                    globeLabel = "BN",
                     onLeftPress = onSymbolsPress,
                     onGlobePress = onGlobePress,
                     onSpace = onSpace,
@@ -167,7 +169,8 @@ fun BangluKeyboardLayout(
                 Spacer(modifier = Modifier.height(KeyGapV))
                 BottomRow(
                     leftLabel = "ABC",
-                    spaceLabel = if (shiftState != ShiftState.OFF) "English (EN)" else "\u09AC\u09BE\u0982\u09B2\u09C1 (BN)",
+                    spaceLabel = "Symbols",
+                    globeLabel = "BN",
                     onLeftPress = onBackToLetters,
                     onGlobePress = onGlobePress,
                     onSpace = onSpace,
@@ -195,7 +198,8 @@ fun BangluKeyboardLayout(
                 Spacer(modifier = Modifier.height(KeyGapV))
                 BottomRow(
                     leftLabel = "ABC",
-                    spaceLabel = if (shiftState != ShiftState.OFF) "English (EN)" else "\u09AC\u09BE\u0982\u09B2\u09C1 (BN)",
+                    spaceLabel = "Symbols",
+                    globeLabel = "EN",
                     onLeftPress = onBackToLetters,
                     onGlobePress = onGlobePress,
                     onSpace = onSpace,
@@ -481,6 +485,7 @@ private fun SymbolRows(
 private fun BottomRow(
     leftLabel: String,
     spaceLabel: String,
+    globeLabel: String = "EN",
     onLeftPress: () -> Unit,
     onGlobePress: () -> Unit,
     onSpace: () -> Unit,
@@ -501,13 +506,13 @@ private fun BottomRow(
             onClick = onLeftPress
         )
 
-        // Globe key
+        // Language toggle key (internal switch, NOT system IME switch)
         KeyButton(
-            label = "\uD83C\uDF10",
+            label = globeLabel,
             modifier = Modifier.weight(0.8f),
             height = KeyRowHeight,
             bgColor = SpecialKeyBg,
-            fontSize = 18,
+            fontSize = 14,
             onClick = onGlobePress
         )
 
