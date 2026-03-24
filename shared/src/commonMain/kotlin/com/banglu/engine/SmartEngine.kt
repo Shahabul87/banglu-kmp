@@ -448,7 +448,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
-        return suggestions.sortedByDescending { it.confidence }.take(limit)
+        // Global filter: remove hyphenated garbage from 480K dictionary
+        return suggestions
+            .filter { !it.bengali.contains("-") }
+            .sortedByDescending { it.confidence }
+            .take(limit)
     }
 
     // ======================== PRIVATE PIPELINE METHODS ========================
