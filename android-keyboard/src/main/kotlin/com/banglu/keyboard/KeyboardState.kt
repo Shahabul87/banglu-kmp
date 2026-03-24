@@ -12,3 +12,9 @@ enum class ShiftState {
     ON,         // Uppercase for one letter, then auto-off
     CAPS_LOCK   // Uppercase until toggled off
 }
+
+enum class ThemeMode {
+    LIGHT,
+    DARK,
+    AMOLED
+}

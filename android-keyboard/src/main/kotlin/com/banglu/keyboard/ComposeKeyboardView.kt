@@ -1,11 +1,13 @@
 package com.banglu.keyboard
 
+import android.view.SoundEffectConstants
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -19,39 +21,84 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
 import com.banglu.engine.types.SmartSuggestion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// ── Samsung Dark Theme Colors ──────────────────────────────────────────────────
-private val KeyboardBg = Color(0xFF1B1B1B)
-private val KeyBg = Color(0xFF2C2C2C)
-private val KeyPressed = Color(0xFF4A4A4A)
-private val SpecialKeyBg = Color(0xFF3A3A3A)
-private val KeyText = Color.White
-private val SubText = Color(0xFF888888)
-private val SuggestionBg = Color(0xFF1E1E1E)
-private val SuggestionHighlight = Color(0xFF3D5AFE)
-private val SuggestionChipBg = Color(0xFF333333)
+// ══════════════════════════════════════════════════════════════════════════════════
+// Feature 3.2: Theme Color Schemes
+// ══════════════════════════════════════════════════════════════════════════════════
 
-// ── Samsung Dimensions ─────────────────────────────────────────────────────────
+data class KeyboardColors(
+    val keyboardBg: Color,
+    val keyBg: Color,
+    val keyPressed: Color,
+    val specialKeyBg: Color,
+    val keyText: Color,
+    val subText: Color,
+    val suggestionBg: Color,
+    val suggestionHighlight: Color,
+    val suggestionChipBg: Color
+)
+
+val DarkColors = KeyboardColors(
+    keyboardBg = Color(0xFF1B1B1B),
+    keyBg = Color(0xFF2C2C2C),
+    keyPressed = Color(0xFF4A4A4A),
+    specialKeyBg = Color(0xFF3A3A3A),
+    keyText = Color.White,
+    subText = Color(0xFF888888),
+    suggestionBg = Color(0xFF1E1E1E),
+    suggestionHighlight = Color(0xFF3D5AFE),
+    suggestionChipBg = Color(0xFF333333)
+)
+
+val LightColors = KeyboardColors(
+    keyboardBg = Color(0xFFE8E8E8),
+    keyBg = Color.White,
+    keyPressed = Color(0xFFBDBDBD),
+    specialKeyBg = Color(0xFFCCCCCC),
+    keyText = Color.Black,
+    subText = Color(0xFF666666),
+    suggestionBg = Color(0xFFF0F0F0),
+    suggestionHighlight = Color(0xFF3D5AFE),
+    suggestionChipBg = Color(0xFFDDDDDD)
+)
+
+val AmoledColors = KeyboardColors(
+    keyboardBg = Color.Black,
+    keyBg = Color(0xFF1A1A1A),
+    keyPressed = Color(0xFF333333),
+    specialKeyBg = Color(0xFF222222),
+    keyText = Color.White,
+    subText = Color(0xFF777777),
+    suggestionBg = Color.Black,
+    suggestionHighlight = Color(0xFF3D5AFE),
+    suggestionChipBg = Color(0xFF222222)
+)
+
+val LocalKeyboardColors = compositionLocalOf { DarkColors }
+
+// ── Dimensions ───────────────────────────────────────────────────────────────────
 private val NumberRowHeight = 44.dp
 private val KeyRowHeight = 52.dp
 private val SuggestionBarHeight = 40.dp
+private val ToolbarHeight = 36.dp
 private val KeyGapH = 3.dp
 private val KeyGapV = 8.dp
 private val KeyCorner = 10.dp
 private val KeyboardPadding = 4.dp
 
-// ── Symbol Layouts ─────────────────────────────────────────────────────────────
+// ── Symbol Layouts ───────────────────────────────────────────────────────────────
 private val SYMBOLS_1_ROWS = listOf(
     listOf("+", "\u00D7", "\u00F7", "=", "/", "_", "<", ">", "[", "]"),
     listOf("!", "@", "#", "$", "%", "^", "&", "*", "(", ")"),
@@ -64,7 +111,7 @@ private val SYMBOLS_2_ROWS = listOf(
     listOf("\u2605", "\u2026", "\u00AB", "\u00BB", "\u00A1", "\u00BF")
 )
 
-// ── Number → Symbol Long-Press Map ───────────────────────────────────────────
+// ── Number -> Symbol Long-Press Map ──────────────────────────────────────────────
 private val NUMBER_SYMBOL_MAP = mapOf(
     '1' to '!', '2' to '@', '3' to '#', '4' to '$', '5' to '%',
     '6' to '^', '7' to '&', '8' to '*', '9' to '(', '0' to ')'
@@ -80,6 +127,7 @@ fun BangluKeyboardLayout(
     keyboardMode: KeyboardMode,
     shiftState: ShiftState,
     enterLabel: String = "\u21B5",
+    isToolbarExpanded: Boolean = false,
     onKeyPress: (Char) -> Unit,
     onBackspace: () -> Unit,
     onBackspaceWord: () -> Unit = {},
@@ -94,177 +142,230 @@ fun BangluKeyboardLayout(
     onNumberPress: (Char) -> Unit,
     onPunctuationPress: (Char) -> Unit,
     onCursorMove: (Int) -> Unit = {},
-    onDismiss: () -> Unit = {}
+    onDismiss: () -> Unit = {},
+    onSettingsClick: () -> Unit = {},
+    onToggleToolbar: () -> Unit = {}
 ) {
-    // Get nav bar height for bottom padding (permanent fix for Samsung/gesture nav)
-    val context = LocalContext.current
-    val navBarHeightPx = remember {
-        val resourceId = context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
-        if (resourceId > 0) context.resources.getDimensionPixelSize(resourceId) else 0
-    }
-    val density = context.resources.displayMetrics.density
-    val navBarPadding = (navBarHeightPx / density).dp
+    // Feature 3.2: Select color scheme based on system dark mode
+    val systemDark = isSystemInDarkTheme()
+    val colors = if (systemDark) DarkColors else LightColors
 
-    Column(
+    CompositionLocalProvider(LocalKeyboardColors provides colors) {
+        // Get nav bar height for bottom padding (permanent fix for Samsung/gesture nav)
+        val context = LocalContext.current
+        val navBarHeightPx = remember {
+            val resourceId = context.resources.getIdentifier(
+                "navigation_bar_height", "dimen", "android"
+            )
+            if (resourceId > 0) context.resources.getDimensionPixelSize(resourceId) else 0
+        }
+        val density = context.resources.displayMetrics.density
+        val navBarPadding = (navBarHeightPx / density).dp
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(colors.keyboardBg)
+                .padding(horizontal = KeyboardPadding)
+                .padding(top = 4.dp, bottom = navBarPadding)
+        ) {
+            // Feature 3.1: Toolbar row (visible in ALL keyboard modes)
+            ToolbarRow(
+                onSettingsClick = onSettingsClick,
+                onToggleToolbar = onToggleToolbar,
+                isExpanded = isToolbarExpanded
+            )
+
+            when (keyboardMode) {
+                KeyboardMode.BANGLU -> {
+                    BangluSuggestionRow(suggestions, onSuggestionClick, onDismiss)
+                    Spacer(modifier = Modifier.height(KeyGapV))
+                    NumberRow(
+                        onNumberPress = onNumberPress,
+                        onSymbolPress = onPunctuationPress
+                    )
+                    Spacer(modifier = Modifier.height(KeyGapV))
+                    LetterRows(
+                        shiftState = shiftState,
+                        onKeyPress = onKeyPress,
+                        onBackspace = onBackspace,
+                        onBackspaceWord = onBackspaceWord,
+                        onShiftTap = onShiftTap
+                    )
+                    Spacer(modifier = Modifier.height(KeyGapV))
+                    BottomRow(
+                        leftLabel = "!#1",
+                        spaceLabel = "\u09AC\u09BE\u0982\u09B2\u09C1 (BN)",
+                        globeLabel = "EN",
+                        enterLabel = enterLabel,
+                        onLeftPress = onSymbolsPress,
+                        onGlobePress = onGlobePress,
+                        onSpace = onSpace,
+                        onPunctuationPress = onPunctuationPress,
+                        onCursorMove = onCursorMove,
+                        onEnter = onEnter
+                    )
+                }
+                KeyboardMode.ENGLISH -> {
+                    MinimalSuggestionBar(onDismiss)
+                    Spacer(modifier = Modifier.height(KeyGapV))
+                    NumberRow(
+                        onNumberPress = onNumberPress,
+                        onSymbolPress = onPunctuationPress
+                    )
+                    Spacer(modifier = Modifier.height(KeyGapV))
+                    LetterRows(
+                        shiftState = shiftState,
+                        onKeyPress = onKeyPress,
+                        onBackspace = onBackspace,
+                        onBackspaceWord = onBackspaceWord,
+                        onShiftTap = onShiftTap
+                    )
+                    Spacer(modifier = Modifier.height(KeyGapV))
+                    BottomRow(
+                        leftLabel = "!#1",
+                        spaceLabel = "English (EN)",
+                        globeLabel = "BN",
+                        enterLabel = enterLabel,
+                        onLeftPress = onSymbolsPress,
+                        onGlobePress = onGlobePress,
+                        onSpace = onSpace,
+                        onPunctuationPress = onPunctuationPress,
+                        onCursorMove = onCursorMove,
+                        onEnter = onEnter
+                    )
+                }
+                KeyboardMode.SYMBOLS_1 -> {
+                    MinimalSuggestionBar(onDismiss)
+                    Spacer(modifier = Modifier.height(KeyGapV))
+                    NumberRow(
+                        onNumberPress = onNumberPress,
+                        onSymbolPress = onPunctuationPress
+                    )
+                    Spacer(modifier = Modifier.height(KeyGapV))
+                    SymbolRows(
+                        rows = SYMBOLS_1_ROWS,
+                        pageLabel = "1/2",
+                        onSymbolPress = onPunctuationPress,
+                        onBackspace = onBackspace,
+                        onBackspaceWord = onBackspaceWord,
+                        onPageToggle = onSymbolPageToggle
+                    )
+                    Spacer(modifier = Modifier.height(KeyGapV))
+                    BottomRow(
+                        leftLabel = "ABC",
+                        spaceLabel = "Symbols",
+                        globeLabel = "BN",
+                        enterLabel = enterLabel,
+                        onLeftPress = onBackToLetters,
+                        onGlobePress = onGlobePress,
+                        onSpace = onSpace,
+                        onPunctuationPress = onPunctuationPress,
+                        onCursorMove = onCursorMove,
+                        onEnter = onEnter
+                    )
+                }
+                KeyboardMode.SYMBOLS_2 -> {
+                    MinimalSuggestionBar(onDismiss)
+                    Spacer(modifier = Modifier.height(KeyGapV))
+                    NumberRow(
+                        onNumberPress = onNumberPress,
+                        onSymbolPress = onPunctuationPress
+                    )
+                    Spacer(modifier = Modifier.height(KeyGapV))
+                    SymbolRows(
+                        rows = SYMBOLS_2_ROWS,
+                        pageLabel = "2/2",
+                        onSymbolPress = onPunctuationPress,
+                        onBackspace = onBackspace,
+                        onBackspaceWord = onBackspaceWord,
+                        onPageToggle = onSymbolPageToggle
+                    )
+                    Spacer(modifier = Modifier.height(KeyGapV))
+                    BottomRow(
+                        leftLabel = "ABC",
+                        spaceLabel = "Symbols",
+                        globeLabel = "EN",
+                        enterLabel = enterLabel,
+                        onLeftPress = onBackToLetters,
+                        onGlobePress = onGlobePress,
+                        onSpace = onSpace,
+                        onPunctuationPress = onPunctuationPress,
+                        onCursorMove = onCursorMove,
+                        onEnter = onEnter
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Feature 3.1: Toolbar Row
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun ToolbarRow(
+    onSettingsClick: () -> Unit,
+    onToggleToolbar: () -> Unit,
+    isExpanded: Boolean
+) {
+    val colors = LocalKeyboardColors.current
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(KeyboardBg)
-            .padding(horizontal = KeyboardPadding)
-            .padding(top = 4.dp, bottom = navBarPadding)  // Bottom padding = nav bar height
+            .height(ToolbarHeight)
+            .background(colors.suggestionBg)
+            .padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        when (keyboardMode) {
-            KeyboardMode.BANGLU -> {
-                BangluSuggestionRow(suggestions, onSuggestionClick, onDismiss)
-                Spacer(modifier = Modifier.height(KeyGapV))
-                NumberRow(onNumberPress = onNumberPress, onSymbolPress = onPunctuationPress)
-                Spacer(modifier = Modifier.height(KeyGapV))
-                LetterRows(
-                    shiftState = shiftState,
-                    onKeyPress = onKeyPress,
-                    onBackspace = onBackspace,
-                    onBackspaceWord = onBackspaceWord,
-                    onShiftTap = onShiftTap
-                )
-                Spacer(modifier = Modifier.height(KeyGapV))
-                BottomRow(
-                    leftLabel = "!#1",
-                    spaceLabel = "\u09AC\u09BE\u0982\u09B2\u09C1 (BN)",
-                    globeLabel = "EN",
-                    enterLabel = enterLabel,
-                    onLeftPress = onSymbolsPress,
-                    onGlobePress = onGlobePress,
-                    onSpace = onSpace,
-                    onPunctuationPress = onPunctuationPress,
-                    onCursorMove = onCursorMove,
-                    onEnter = onEnter
-                )
-            }
-            KeyboardMode.ENGLISH -> {
-                // Minimal suggestion bar with dismiss button
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(SuggestionBarHeight)
-                        .background(SuggestionBg),
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clickable { onDismiss() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("\u2304", color = SubText, fontSize = 20.sp)
-                    }
-                }
-                Spacer(modifier = Modifier.height(KeyGapV))
-                NumberRow(onNumberPress = onNumberPress, onSymbolPress = onPunctuationPress)
-                Spacer(modifier = Modifier.height(KeyGapV))
-                LetterRows(
-                    shiftState = shiftState,
-                    onKeyPress = onKeyPress,
-                    onBackspace = onBackspace,
-                    onBackspaceWord = onBackspaceWord,
-                    onShiftTap = onShiftTap
-                )
-                Spacer(modifier = Modifier.height(KeyGapV))
-                BottomRow(
-                    leftLabel = "!#1",
-                    spaceLabel = "English (EN)",
-                    globeLabel = "BN",
-                    enterLabel = enterLabel,
-                    onLeftPress = onSymbolsPress,
-                    onGlobePress = onGlobePress,
-                    onSpace = onSpace,
-                    onPunctuationPress = onPunctuationPress,
-                    onCursorMove = onCursorMove,
-                    onEnter = onEnter
-                )
-            }
-            KeyboardMode.SYMBOLS_1 -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(SuggestionBarHeight)
-                        .background(SuggestionBg),
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clickable { onDismiss() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("\u2304", color = SubText, fontSize = 20.sp)
-                    }
-                }
-                Spacer(modifier = Modifier.height(KeyGapV))
-                NumberRow(onNumberPress = onNumberPress, onSymbolPress = onPunctuationPress)
-                Spacer(modifier = Modifier.height(KeyGapV))
-                SymbolRows(
-                    rows = SYMBOLS_1_ROWS,
-                    pageLabel = "1/2",
-                    onSymbolPress = onPunctuationPress,
-                    onBackspace = onBackspace,
-                    onBackspaceWord = onBackspaceWord,
-                    onPageToggle = onSymbolPageToggle
-                )
-                Spacer(modifier = Modifier.height(KeyGapV))
-                BottomRow(
-                    leftLabel = "ABC",
-                    spaceLabel = "Symbols",
-                    globeLabel = "BN",
-                    enterLabel = enterLabel,
-                    onLeftPress = onBackToLetters,
-                    onGlobePress = onGlobePress,
-                    onSpace = onSpace,
-                    onPunctuationPress = onPunctuationPress,
-                    onCursorMove = onCursorMove,
-                    onEnter = onEnter
-                )
-            }
-            KeyboardMode.SYMBOLS_2 -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(SuggestionBarHeight)
-                        .background(SuggestionBg),
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clickable { onDismiss() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("\u2304", color = SubText, fontSize = 20.sp)
-                    }
-                }
-                Spacer(modifier = Modifier.height(KeyGapV))
-                NumberRow(onNumberPress = onNumberPress, onSymbolPress = onPunctuationPress)
-                Spacer(modifier = Modifier.height(KeyGapV))
-                SymbolRows(
-                    rows = SYMBOLS_2_ROWS,
-                    pageLabel = "2/2",
-                    onSymbolPress = onPunctuationPress,
-                    onBackspace = onBackspace,
-                    onBackspaceWord = onBackspaceWord,
-                    onPageToggle = onSymbolPageToggle
-                )
-                Spacer(modifier = Modifier.height(KeyGapV))
-                BottomRow(
-                    leftLabel = "ABC",
-                    spaceLabel = "Symbols",
-                    globeLabel = "EN",
-                    enterLabel = enterLabel,
-                    onLeftPress = onBackToLetters,
-                    onGlobePress = onGlobePress,
-                    onSpace = onSpace,
-                    onPunctuationPress = onPunctuationPress,
-                    onCursorMove = onCursorMove,
-                    onEnter = onEnter
-                )
-            }
+        if (isExpanded) {
+            ToolbarIcon("\uD83D\uDCCB") { /* clipboard - future */ }
+            ToolbarIcon("\uD83D\uDE0A") { /* emoji - future */ }
+            ToolbarIcon("\u2699") { onSettingsClick() }
+            ToolbarIcon("\uD83D\uDD90") { /* one-hand - future */ }
+        }
+        // Toggle button always visible
+        ToolbarIcon(if (isExpanded) "\u25B2" else "\u00B7\u00B7\u00B7") { onToggleToolbar() }
+    }
+}
+
+@Composable
+private fun ToolbarIcon(icon: String, onClick: () -> Unit) {
+    val colors = LocalKeyboardColors.current
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(icon, fontSize = 18.sp, color = colors.subText)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Minimal Suggestion Bar (for non-Banglu modes)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun MinimalSuggestionBar(onDismiss: () -> Unit) {
+    val colors = LocalKeyboardColors.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(SuggestionBarHeight)
+            .background(colors.suggestionBg),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text("\u2304", color = colors.subText, fontSize = 20.sp)
         }
     }
 }
@@ -279,23 +380,10 @@ private fun BangluSuggestionRow(
     onSuggestionClick: (SmartSuggestion) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val colors = LocalKeyboardColors.current
+
     if (suggestions.isEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(SuggestionBarHeight)
-                .background(SuggestionBg),
-            contentAlignment = Alignment.CenterEnd
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clickable { onDismiss() },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("\u2304", color = SubText, fontSize = 20.sp)
-            }
-        }
+        MinimalSuggestionBar(onDismiss)
         return
     }
 
@@ -303,7 +391,7 @@ private fun BangluSuggestionRow(
         modifier = Modifier
             .fillMaxWidth()
             .height(SuggestionBarHeight)
-            .background(SuggestionBg),
+            .background(colors.suggestionBg),
         verticalAlignment = Alignment.CenterVertically
     ) {
         LazyRow(
@@ -319,14 +407,17 @@ private fun BangluSuggestionRow(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (isFirst) SuggestionHighlight else SuggestionChipBg)
+                        .background(
+                            if (isFirst) colors.suggestionHighlight
+                            else colors.suggestionChipBg
+                        )
                         .clickable { onSuggestionClick(suggestion) }
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = suggestion.bengali,
-                        color = KeyText,
+                        color = if (isFirst) Color.White else colors.keyText,
                         fontSize = 15.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -341,7 +432,7 @@ private fun BangluSuggestionRow(
                 .clickable { onDismiss() },
             contentAlignment = Alignment.Center
         ) {
-            Text("\u2304", color = SubText, fontSize = 20.sp)
+            Text("\u2304", color = colors.subText, fontSize = 20.sp)
         }
     }
 }
@@ -388,6 +479,7 @@ private fun LetterRows(
     onBackspaceWord: () -> Unit = {},
     onShiftTap: () -> Unit
 ) {
+    val colors = LocalKeyboardColors.current
     val isUpper = shiftState != ShiftState.OFF
 
     // Row 1: q w e r t y u i o p
@@ -401,7 +493,7 @@ private fun LetterRows(
                 label = display,
                 modifier = Modifier.weight(1f),
                 height = KeyRowHeight,
-                bgColor = KeyBg,
+                bgColor = colors.keyBg,
                 onClick = { onKeyPress(display[0]) }
             )
         }
@@ -422,7 +514,7 @@ private fun LetterRows(
                 label = display,
                 modifier = Modifier.weight(1f),
                 height = KeyRowHeight,
-                bgColor = KeyBg,
+                bgColor = colors.keyBg,
                 onClick = { onKeyPress(display[0]) }
             )
         }
@@ -442,9 +534,9 @@ private fun LetterRows(
             ShiftState.CAPS_LOCK -> "\u21EA"  // Caps lock symbol
         }
         val shiftBg = when (shiftState) {
-            ShiftState.OFF -> SpecialKeyBg
-            ShiftState.ON -> SuggestionHighlight
-            ShiftState.CAPS_LOCK -> SuggestionHighlight
+            ShiftState.OFF -> colors.specialKeyBg
+            ShiftState.ON -> colors.suggestionHighlight
+            ShiftState.CAPS_LOCK -> colors.suggestionHighlight
         }
         KeyButton(
             label = shiftLabel,
@@ -461,7 +553,7 @@ private fun LetterRows(
                 label = display,
                 modifier = Modifier.weight(1f),
                 height = KeyRowHeight,
-                bgColor = KeyBg,
+                bgColor = colors.keyBg,
                 onClick = { onKeyPress(display[0]) }
             )
         }
@@ -488,6 +580,8 @@ private fun SymbolRows(
     onBackspaceWord: () -> Unit = {},
     onPageToggle: () -> Unit
 ) {
+    val colors = LocalKeyboardColors.current
+
     // Symbol row 1 (10 keys)
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -498,7 +592,7 @@ private fun SymbolRows(
                 label = sym,
                 modifier = Modifier.weight(1f),
                 height = KeyRowHeight,
-                bgColor = KeyBg,
+                bgColor = colors.keyBg,
                 fontSize = 18,
                 onClick = { onSymbolPress(sym[0]) }
             )
@@ -517,7 +611,7 @@ private fun SymbolRows(
                 label = sym,
                 modifier = Modifier.weight(1f),
                 height = KeyRowHeight,
-                bgColor = KeyBg,
+                bgColor = colors.keyBg,
                 fontSize = 18,
                 onClick = { onSymbolPress(sym[0]) }
             )
@@ -535,7 +629,7 @@ private fun SymbolRows(
             label = pageLabel,
             modifier = Modifier.weight(1.5f),
             height = KeyRowHeight,
-            bgColor = SpecialKeyBg,
+            bgColor = colors.specialKeyBg,
             fontSize = 16,
             onClick = onPageToggle
         )
@@ -544,7 +638,7 @@ private fun SymbolRows(
                 label = sym,
                 modifier = Modifier.weight(1f),
                 height = KeyRowHeight,
-                bgColor = KeyBg,
+                bgColor = colors.keyBg,
                 fontSize = 18,
                 onClick = { onSymbolPress(sym[0]) }
             )
@@ -574,6 +668,7 @@ private fun BottomRow(
     onCursorMove: (Int) -> Unit = {},
     onEnter: () -> Unit
 ) {
+    val colors = LocalKeyboardColors.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(KeyGapH)
@@ -583,7 +678,7 @@ private fun BottomRow(
             label = leftLabel,
             modifier = Modifier.weight(1.2f),
             height = KeyRowHeight,
-            bgColor = SpecialKeyBg,
+            bgColor = colors.specialKeyBg,
             fontSize = 16,
             onClick = onLeftPress
         )
@@ -593,7 +688,7 @@ private fun BottomRow(
             label = globeLabel,
             modifier = Modifier.weight(0.8f),
             height = KeyRowHeight,
-            bgColor = SpecialKeyBg,
+            bgColor = colors.specialKeyBg,
             fontSize = 16,
             onClick = onGlobePress
         )
@@ -611,17 +706,17 @@ private fun BottomRow(
             label = ".",
             modifier = Modifier.weight(0.8f),
             height = KeyRowHeight,
-            bgColor = SpecialKeyBg,
+            bgColor = colors.specialKeyBg,
             fontSize = 20,
             onClick = { onPunctuationPress('.') }
         )
 
-        // Enter — context-aware label (search, send, go, etc.)
+        // Enter -- context-aware label (search, send, go, etc.)
         KeyButton(
             label = enterLabel,
             modifier = Modifier.weight(1.5f),
             height = KeyRowHeight,
-            bgColor = SpecialKeyBg,
+            bgColor = colors.specialKeyBg,
             fontSize = 20,
             onClick = onEnter
         )
@@ -637,11 +732,13 @@ private fun KeyButton(
     label: String,
     modifier: Modifier = Modifier,
     height: Dp = KeyRowHeight,
-    bgColor: Color = KeyBg,
+    bgColor: Color,
     fontSize: Int = 22,
     onClick: () -> Unit
 ) {
+    val colors = LocalKeyboardColors.current
     val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
     var isPressed by remember { mutableStateOf(false) }
 
     // Feature 1.4: Scale UP on press for single-character keys (key preview effect)
@@ -662,12 +759,14 @@ private fun KeyButton(
                 scaleY = scale
             }
             .clip(RoundedCornerShape(KeyCorner))
-            .background(if (isPressed) KeyPressed else bgColor)
+            .background(if (isPressed) colors.keyPressed else bgColor)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
                         isPressed = true
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        // Feature 3.4: Sound feedback
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
                         try {
                             awaitRelease()
                         } finally {
@@ -681,7 +780,7 @@ private fun KeyButton(
     ) {
         Text(
             text = label,
-            color = KeyText,
+            color = colors.keyText,
             fontSize = if (isPressed && isCharKey) (fontSize + 6).sp else fontSize.sp,
             fontWeight = if (isPressed && isCharKey) FontWeight.Bold else FontWeight.Normal,
             textAlign = TextAlign.Center,
@@ -697,7 +796,9 @@ private fun SpaceBar(
     onClick: () -> Unit,
     onCursorMove: (Int) -> Unit = {}
 ) {
+    val colors = LocalKeyboardColors.current
     val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
     var isPressed by remember { mutableStateOf(false) }
     var isCursorMode by remember { mutableStateOf(false) }
     var lastDragX by remember { mutableFloatStateOf(0f) }
@@ -711,7 +812,7 @@ private fun SpaceBar(
             .height(KeyRowHeight)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(KeyCorner))
-            .background(if (isPressed) KeyPressed else KeyBg)
+            .background(if (isPressed) colors.keyPressed else colors.keyBg)
             .pointerInput(Unit) {
                 detectDragGesturesAfterLongPress(
                     onDragStart = { offset ->
@@ -740,6 +841,8 @@ private fun SpaceBar(
                     onPress = {
                         isPressed = true
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        // Feature 3.4: Sound feedback
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
                         try { awaitRelease() } finally { isPressed = false }
                         if (!isCursorMode) onClick()
                     }
@@ -749,7 +852,7 @@ private fun SpaceBar(
     ) {
         Text(
             text = if (isCursorMode) "\u25C4 \u25BA cursor" else label,
-            color = if (isCursorMode) KeyText else SubText,
+            color = if (isCursorMode) colors.keyText else colors.subText,
             fontSize = 13.sp,
             textAlign = TextAlign.Center
         )
@@ -766,7 +869,9 @@ private fun BackspaceKey(
     onBackspace: () -> Unit,
     onBackspaceWord: () -> Unit = {}
 ) {
+    val colors = LocalKeyboardColors.current
     val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
@@ -779,12 +884,14 @@ private fun BackspaceKey(
             .height(KeyRowHeight)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(KeyCorner))
-            .background(if (isPressed) KeyPressed else SpecialKeyBg)
+            .background(if (isPressed) colors.keyPressed else colors.specialKeyBg)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
                         isPressed = true
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        // Feature 3.4: Sound feedback
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
                         onBackspace() // First delete immediately
                         val pressStartTime = System.currentTimeMillis()
 
@@ -821,7 +928,7 @@ private fun BackspaceKey(
     ) {
         Text(
             text = "\u232B",
-            color = KeyText,
+            color = colors.keyText,
             fontSize = 20.sp,
             textAlign = TextAlign.Center
         )
@@ -829,7 +936,7 @@ private fun BackspaceKey(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Number Key with Long-Press → Symbol
+// Number Key with Long-Press -> Symbol
 // ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
@@ -839,8 +946,10 @@ private fun NumberKey(
     onNumberPress: (Char) -> Unit,
     onSymbolPress: (Char) -> Unit
 ) {
+    val colors = LocalKeyboardColors.current
     val symbol = NUMBER_SYMBOL_MAP[number] ?: '!'
     val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
@@ -853,12 +962,14 @@ private fun NumberKey(
             .height(NumberRowHeight)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(KeyCorner))
-            .background(if (isPressed) KeyPressed else KeyBg)
+            .background(if (isPressed) colors.keyPressed else colors.keyBg)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
                         isPressed = true
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        // Feature 3.4: Sound feedback
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
 
                         // Start long-press timer
                         val longPressJob = coroutineScope.launch {
@@ -887,14 +998,14 @@ private fun NumberKey(
             // Number in center
             Text(
                 text = number.toString(),
-                color = KeyText,
+                color = colors.keyText,
                 fontSize = 18.sp,
                 modifier = Modifier.align(Alignment.Center)
             )
             // Symbol hint in top-right corner
             Text(
                 text = symbol.toString(),
-                color = SubText,
+                color = colors.subText,
                 fontSize = 10.sp,
                 modifier = Modifier.align(Alignment.TopEnd)
             )

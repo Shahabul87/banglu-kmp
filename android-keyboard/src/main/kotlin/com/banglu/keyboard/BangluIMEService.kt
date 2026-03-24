@@ -1,5 +1,6 @@
 package com.banglu.keyboard
 
+import android.content.Intent
 import android.inputmethodservice.InputMethodService
 import android.text.InputType
 import android.util.Log
@@ -46,6 +47,9 @@ class BangluIMEService : InputMethodService(),
     private val suggestions = mutableStateListOf<SmartSuggestion>()
     private val keyboardMode = mutableStateOf(KeyboardMode.BANGLU)
     private val shiftState = mutableStateOf(ShiftState.OFF)
+
+    // Feature 3.1: Toolbar state
+    private val isToolbarExpanded = mutableStateOf(false)
 
     // Track the letter mode to return to from symbols
     private var letterModeBeforeSymbols = KeyboardMode.BANGLU
@@ -100,6 +104,7 @@ class BangluIMEService : InputMethodService(),
                     keyboardMode = keyboardMode.value,
                     shiftState = shiftState.value,
                     enterLabel = enterKeyLabel.value,
+                    isToolbarExpanded = isToolbarExpanded.value,
                     onKeyPress = { char -> onKeyPress(char) },
                     onBackspace = { onBackspace() },
                     onBackspaceWord = { onBackspaceWord() },
@@ -114,7 +119,9 @@ class BangluIMEService : InputMethodService(),
                     onNumberPress = { char -> onDirectCommit(char) },
                     onPunctuationPress = { char -> onPunctuationPress(char) },
                     onCursorMove = { direction -> onCursorMove(direction) },
-                    onDismiss = { requestHideSelf(0) }
+                    onDismiss = { requestHideSelf(0) },
+                    onSettingsClick = { onSettingsClick() },
+                    onToggleToolbar = { isToolbarExpanded.value = !isToolbarExpanded.value }
                 )
             }
         }
@@ -432,6 +439,14 @@ class BangluIMEService : InputMethodService(),
             else -> keyboardMode.value
         }
         Log.d(TAG, "onSymbolPageToggle: mode=${keyboardMode.value}")
+    }
+
+    // ── Feature 3.1: Toolbar Actions ────────────────────────────────────────
+
+    private fun onSettingsClick() {
+        val intent = Intent(this, SettingsActivity::class.java)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
