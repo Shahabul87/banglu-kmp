@@ -304,10 +304,8 @@ class BangluIMEService : InputMethodService(),
         val ic = currentInputConnection ?: return
         ic.commitText(char.toString(), 1)
 
-        // Feature 1.2: Auto-capitalize after sentence-ending punctuation
-        if (autoCapitalizeEnabled.value && shouldAutoCapitalize() && shiftState.value == ShiftState.OFF) {
-            shiftState.value = ShiftState.ON
-        }
+        // Do NOT auto-capitalize here — only after space/enter
+        // Auto-capitalizing after every keypress causes uppercase in middle of words
     }
 
     private fun onDirectCommit(char: Char) {
@@ -599,8 +597,13 @@ class BangluIMEService : InputMethodService(),
         if (keyboardMode.value != KeyboardMode.ENGLISH) return false
         val ic = currentInputConnection ?: return false
         val before = ic.getTextBeforeCursor(2, 0)?.toString() ?: return false
-        // After ". " or "! " or "? " or at start of field
-        return before.endsWith(". ") || before.endsWith("! ") || before.endsWith("? ") || before.isEmpty()
+        // Auto-capitalize at: start of field, after ". ", after "! ", after "? ", after newline
+        return before.isEmpty()
+            || before.endsWith(". ")
+            || before.endsWith("! ")
+            || before.endsWith("? ")
+            || before.endsWith("\n")
+            || before.endsWith("\n ")
     }
 
     /**

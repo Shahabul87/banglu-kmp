@@ -843,6 +843,8 @@ private fun KeyButton(
                         } finally {
                             isPressed = false
                         }
+                    },
+                    onTap = {
                         onClick()
                     }
                 )
