@@ -1,9 +1,10 @@
 package com.banglu.keyboard
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -14,7 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -24,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import com.banglu.engine.types.SmartSuggestion
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // ── Samsung Dark Theme Colors ──────────────────────────────────────────────────
 private val KeyboardBg = Color(0xFF1B1B1B)
@@ -37,13 +42,13 @@ private val SuggestionHighlight = Color(0xFF3D5AFE)
 private val SuggestionChipBg = Color(0xFF333333)
 
 // ── Samsung Dimensions ─────────────────────────────────────────────────────────
-private val NumberRowHeight = 42.dp
-private val KeyRowHeight = 48.dp
+private val NumberRowHeight = 44.dp
+private val KeyRowHeight = 52.dp
 private val SuggestionBarHeight = 40.dp
-private val KeyGapH = 4.dp
-private val KeyGapV = 4.dp
+private val KeyGapH = 3.dp
+private val KeyGapV = 8.dp
 private val KeyCorner = 10.dp
-private val KeyboardPadding = 3.dp
+private val KeyboardPadding = 4.dp
 
 // ── Symbol Layouts ─────────────────────────────────────────────────────────────
 private val SYMBOLS_1_ROWS = listOf(
@@ -78,7 +83,8 @@ fun BangluKeyboardLayout(
     onSymbolPageToggle: () -> Unit,
     onSuggestionClick: (SmartSuggestion) -> Unit,
     onNumberPress: (Char) -> Unit,
-    onPunctuationPress: (Char) -> Unit
+    onPunctuationPress: (Char) -> Unit,
+    onDismiss: () -> Unit = {}
 ) {
     // Get nav bar height for bottom padding (permanent fix for Samsung/gesture nav)
     val context = LocalContext.current
@@ -98,7 +104,7 @@ fun BangluKeyboardLayout(
     ) {
         when (keyboardMode) {
             KeyboardMode.BANGLU -> {
-                BangluSuggestionRow(suggestions, onSuggestionClick)
+                BangluSuggestionRow(suggestions, onSuggestionClick, onDismiss)
                 Spacer(modifier = Modifier.height(KeyGapV))
                 NumberRow(onNumberPress)
                 Spacer(modifier = Modifier.height(KeyGapV))
@@ -121,13 +127,23 @@ fun BangluKeyboardLayout(
                 )
             }
             KeyboardMode.ENGLISH -> {
-                // Minimal suggestion bar (empty spacer for consistent height)
+                // Minimal suggestion bar with dismiss button
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(SuggestionBarHeight)
-                        .background(SuggestionBg)
-                )
+                        .background(SuggestionBg),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clickable { onDismiss() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("\u2304", color = SubText, fontSize = 20.sp)
+                    }
+                }
                 Spacer(modifier = Modifier.height(KeyGapV))
                 NumberRow(onNumberPress)
                 Spacer(modifier = Modifier.height(KeyGapV))
@@ -154,8 +170,18 @@ fun BangluKeyboardLayout(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(SuggestionBarHeight)
-                        .background(SuggestionBg)
-                )
+                        .background(SuggestionBg),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clickable { onDismiss() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("\u2304", color = SubText, fontSize = 20.sp)
+                    }
+                }
                 Spacer(modifier = Modifier.height(KeyGapV))
                 NumberRow(onNumberPress)
                 Spacer(modifier = Modifier.height(KeyGapV))
@@ -183,8 +209,18 @@ fun BangluKeyboardLayout(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(SuggestionBarHeight)
-                        .background(SuggestionBg)
-                )
+                        .background(SuggestionBg),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clickable { onDismiss() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("\u2304", color = SubText, fontSize = 20.sp)
+                    }
+                }
                 Spacer(modifier = Modifier.height(KeyGapV))
                 NumberRow(onNumberPress)
                 Spacer(modifier = Modifier.height(KeyGapV))
@@ -218,45 +254,72 @@ fun BangluKeyboardLayout(
 @Composable
 private fun BangluSuggestionRow(
     suggestions: List<SmartSuggestion>,
-    onSuggestionClick: (SmartSuggestion) -> Unit
+    onSuggestionClick: (SmartSuggestion) -> Unit,
+    onDismiss: () -> Unit
 ) {
     if (suggestions.isEmpty()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(SuggestionBarHeight)
-                .background(SuggestionBg)
-        )
+                .background(SuggestionBg),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clickable { onDismiss() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text("\u2304", color = SubText, fontSize = 20.sp)
+            }
+        }
         return
     }
 
-    LazyRow(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(SuggestionBarHeight)
             .background(SuggestionBg),
-        contentPadding = PaddingValues(horizontal = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        items(suggestions) { suggestion ->
-            val isFirst = suggestion == suggestions.firstOrNull()
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (isFirst) SuggestionHighlight else SuggestionChipBg)
-                    .clickable { onSuggestionClick(suggestion) }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = suggestion.bengali,
-                    color = KeyText,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+        LazyRow(
+            modifier = Modifier
+                .weight(1f)
+                .height(SuggestionBarHeight),
+            contentPadding = PaddingValues(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items(suggestions) { suggestion ->
+                val isFirst = suggestion == suggestions.firstOrNull()
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (isFirst) SuggestionHighlight else SuggestionChipBg)
+                        .clickable { onSuggestionClick(suggestion) }
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = suggestion.bengali,
+                        color = KeyText,
+                        fontSize = 15.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
+        }
+        // Dismiss button at far right
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text("\u2304", color = SubText, fontSize = 20.sp)
         }
     }
 }
@@ -277,7 +340,7 @@ private fun NumberRow(onNumberPress: (Char) -> Unit) {
                 modifier = Modifier.weight(1f),
                 height = NumberRowHeight,
                 bgColor = KeyBg,
-                fontSize = 16,
+                fontSize = 18,
                 onClick = { onNumberPress(num) }
             )
         }
@@ -286,7 +349,7 @@ private fun NumberRow(onNumberPress: (Char) -> Unit) {
             modifier = Modifier.weight(1f),
             height = NumberRowHeight,
             bgColor = KeyBg,
-            fontSize = 16,
+            fontSize = 18,
             onClick = { onNumberPress('0') }
         )
     }
@@ -366,7 +429,7 @@ private fun LetterRows(
             modifier = Modifier.weight(1.5f),
             height = KeyRowHeight,
             bgColor = shiftBg,
-            fontSize = 18,
+            fontSize = 20,
             onClick = onShiftTap
         )
 
@@ -381,14 +444,10 @@ private fun LetterRows(
             )
         }
 
-        // Backspace
-        KeyButton(
-            label = "\u232B",
+        // Backspace with long-press repeat
+        BackspaceKey(
             modifier = Modifier.weight(1.5f),
-            height = KeyRowHeight,
-            bgColor = SpecialKeyBg,
-            fontSize = 18,
-            onClick = onBackspace
+            onBackspace = onBackspace
         )
     }
 }
@@ -453,7 +512,7 @@ private fun SymbolRows(
             modifier = Modifier.weight(1.5f),
             height = KeyRowHeight,
             bgColor = SpecialKeyBg,
-            fontSize = 14,
+            fontSize = 16,
             onClick = onPageToggle
         )
         for (sym in rows[2]) {
@@ -466,13 +525,9 @@ private fun SymbolRows(
                 onClick = { onSymbolPress(sym[0]) }
             )
         }
-        KeyButton(
-            label = "\u232B",
+        BackspaceKey(
             modifier = Modifier.weight(1.5f),
-            height = KeyRowHeight,
-            bgColor = SpecialKeyBg,
-            fontSize = 18,
-            onClick = onBackspace
+            onBackspace = onBackspace
         )
     }
 }
@@ -502,7 +557,7 @@ private fun BottomRow(
             modifier = Modifier.weight(1.2f),
             height = KeyRowHeight,
             bgColor = SpecialKeyBg,
-            fontSize = 14,
+            fontSize = 16,
             onClick = onLeftPress
         )
 
@@ -512,7 +567,7 @@ private fun BottomRow(
             modifier = Modifier.weight(0.8f),
             height = KeyRowHeight,
             bgColor = SpecialKeyBg,
-            fontSize = 14,
+            fontSize = 16,
             onClick = onGlobePress
         )
 
@@ -529,7 +584,7 @@ private fun BottomRow(
             modifier = Modifier.weight(0.8f),
             height = KeyRowHeight,
             bgColor = SpecialKeyBg,
-            fontSize = 18,
+            fontSize = 20,
             onClick = { onPunctuationPress('.') }
         )
 
@@ -539,7 +594,7 @@ private fun BottomRow(
             modifier = Modifier.weight(1.5f),
             height = KeyRowHeight,
             bgColor = SpecialKeyBg,
-            fontSize = 18,
+            fontSize = 20,
             onClick = onEnter
         )
     }
@@ -555,24 +610,40 @@ private fun KeyButton(
     modifier: Modifier = Modifier,
     height: Dp = KeyRowHeight,
     bgColor: Color = KeyBg,
-    fontSize: Int = 20,
+    fontSize: Int = 22,
     onClick: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    var isPressed by remember { mutableStateOf(false) }
+
+    // Animate scale for press effect
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = tween(durationMillis = 50)
+    )
 
     Box(
         modifier = modifier
             .height(height)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(RoundedCornerShape(KeyCorner))
             .background(if (isPressed) KeyPressed else bgColor)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onClick()
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        try {
+                            awaitRelease()
+                        } finally {
+                            isPressed = false
+                        }
+                        onClick()
+                    }
+                )
             },
         contentAlignment = Alignment.Center
     ) {
@@ -581,7 +652,8 @@ private fun KeyButton(
             color = KeyText,
             fontSize = fontSize.sp,
             fontWeight = FontWeight.Normal,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            maxLines = 1
         )
     }
 }
@@ -593,20 +665,35 @@ private fun SpaceBar(
     onClick: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    var isPressed by remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = tween(durationMillis = 50)
+    )
 
     Box(
         modifier = modifier
             .height(KeyRowHeight)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(RoundedCornerShape(KeyCorner))
             .background(if (isPressed) KeyPressed else KeyBg)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onClick()
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        try {
+                            awaitRelease()
+                        } finally {
+                            isPressed = false
+                        }
+                        onClick()
+                    }
+                )
             },
         contentAlignment = Alignment.Center
     ) {
@@ -615,6 +702,66 @@ private fun SpaceBar(
             color = SubText,
             fontSize = 13.sp,
             fontWeight = FontWeight.Normal,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Backspace Key with Long-Press Repeat
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun BackspaceKey(
+    modifier: Modifier = Modifier,
+    onBackspace: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = tween(durationMillis = 50)
+    )
+    val coroutineScope = rememberCoroutineScope()
+
+    Box(
+        modifier = modifier
+            .height(KeyRowHeight)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(KeyCorner))
+            .background(if (isPressed) KeyPressed else SpecialKeyBg)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onBackspace() // First delete immediately
+
+                        // Start repeat after 400ms
+                        val repeatJob = coroutineScope.launch {
+                            delay(400)
+                            while (true) {
+                                onBackspace()
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                delay(50) // 20 chars/sec
+                            }
+                        }
+
+                        try {
+                            awaitRelease()
+                        } finally {
+                            repeatJob.cancel()
+                            isPressed = false
+                        }
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "\u232B",
+            color = KeyText,
+            fontSize = 20.sp,
             textAlign = TextAlign.Center
         )
     }

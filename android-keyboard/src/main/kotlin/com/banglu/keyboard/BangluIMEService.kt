@@ -103,7 +103,8 @@ class BangluIMEService : InputMethodService(),
                     onSymbolPageToggle = { onSymbolPageToggle() },
                     onSuggestionClick = { onSuggestionTap(it) },
                     onNumberPress = { char -> onDirectCommit(char) },
-                    onPunctuationPress = { char -> onPunctuationPress(char) }
+                    onPunctuationPress = { char -> onPunctuationPress(char) },
+                    onDismiss = { requestHideSelf(0) }
                 )
             }
         }
