@@ -4,7 +4,8 @@ enum class KeyboardMode {
     BANGLU,     // Bengali phonetic conversion
     ENGLISH,    // Direct English passthrough
     SYMBOLS_1,  // Symbols page 1
-    SYMBOLS_2   // Symbols page 2
+    SYMBOLS_2,  // Symbols page 2
+    EMOJI       // Emoji picker panel
 }
 
 enum class ShiftState {

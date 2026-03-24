@@ -10,7 +10,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -145,7 +148,10 @@ fun BangluKeyboardLayout(
     onCursorMove: (Int) -> Unit = {},
     onDismiss: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
-    onToggleToolbar: () -> Unit = {}
+    onToggleToolbar: () -> Unit = {},
+    onEmojiClick: (String) -> Unit = {},
+    onEmojiOpen: () -> Unit = {},
+    onBackFromEmoji: () -> Unit = {}
 ) {
     // Feature 3.2: Select color scheme based on system dark mode
     val systemDark = isSystemInDarkTheme()
@@ -173,6 +179,7 @@ fun BangluKeyboardLayout(
             // Feature 3.1: Toolbar row (visible in ALL keyboard modes)
             ToolbarRow(
                 onSettingsClick = onSettingsClick,
+                onEmojiOpen = onEmojiOpen,
                 onToggleToolbar = onToggleToolbar,
                 isExpanded = isToolbarExpanded
             )
@@ -296,6 +303,16 @@ fun BangluKeyboardLayout(
                         onEnter = onEnter
                     )
                 }
+
+                KeyboardMode.EMOJI -> {
+                    EmojiPanel(
+                        colors = colors,
+                        onEmojiClick = onEmojiClick,
+                        onBackToKeyboard = onBackFromEmoji,
+                        onBackspace = onBackspace,
+                        onDismiss = onDismiss
+                    )
+                }
             }
         }
     }
@@ -308,6 +325,7 @@ fun BangluKeyboardLayout(
 @Composable
 private fun ToolbarRow(
     onSettingsClick: () -> Unit,
+    onEmojiOpen: () -> Unit,
     onToggleToolbar: () -> Unit,
     isExpanded: Boolean
 ) {
@@ -323,7 +341,7 @@ private fun ToolbarRow(
     ) {
         if (isExpanded) {
             ToolbarIcon("\uD83D\uDCCB") { /* clipboard - future */ }
-            ToolbarIcon("\uD83D\uDE0A") { /* emoji - future */ }
+            ToolbarIcon("\uD83D\uDE0A") { onEmojiOpen() }
             ToolbarIcon("\u2699") { onSettingsClick() }
             ToolbarIcon("\uD83D\uDD90") { /* one-hand - future */ }
         }
@@ -1027,6 +1045,147 @@ private fun NumberKey(
                 color = colors.subText,
                 fontSize = 10.sp,
                 modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Emoji Panel
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun EmojiPanel(
+    colors: KeyboardColors,
+    onEmojiClick: (String) -> Unit,
+    onBackToKeyboard: () -> Unit,
+    onBackspace: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedCategory by remember { mutableIntStateOf(0) }
+    val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.keyboardBg)
+    ) {
+        // Category tabs (scrollable row of icons)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(38.dp)
+                .background(colors.suggestionBg)
+                .padding(horizontal = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Back to keyboard button
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onBackToKeyboard() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text("ABC", color = colors.suggestionHighlight, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+
+            // Category icons in a scrollable row
+            LazyRow(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(38.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                itemsIndexed(EmojiData.categories) { index, category ->
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (index == selectedCategory)
+                                    colors.suggestionHighlight.copy(alpha = 0.3f)
+                                else Color.Transparent
+                            )
+                            .clickable { selectedCategory = index },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(category.icon, fontSize = 18.sp)
+                    }
+                }
+            }
+
+            // Dismiss button
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onDismiss() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text("\u2304", color = colors.subText, fontSize = 18.sp)
+            }
+        }
+
+        // Category name label
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(20.dp)
+                .background(colors.keyboardBg),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Text(
+                text = EmojiData.categories.getOrNull(selectedCategory)?.name ?: "",
+                color = colors.subText,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
+
+        // Emoji grid
+        val currentEmojis = EmojiData.categories.getOrNull(selectedCategory)?.emojis ?: emptyList()
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(7),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .padding(horizontal = 4.dp),
+            contentPadding = PaddingValues(2.dp)
+        ) {
+            items(currentEmojis.size) { index ->
+                Box(
+                    modifier = Modifier
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            onEmojiClick(currentEmojis[index])
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(currentEmojis[index], fontSize = 24.sp)
+                }
+            }
+        }
+
+        // Bottom row: backspace
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(42.dp)
+                .background(colors.keyboardBg)
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BackspaceKey(
+                modifier = Modifier.width(56.dp),
+                onBackspace = onBackspace,
+                onBackspaceWord = onBackspace
             )
         }
     }

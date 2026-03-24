@@ -124,7 +124,10 @@ class BangluIMEService : InputMethodService(),
                     onCursorMove = { direction -> onCursorMove(direction) },
                     onDismiss = { requestHideSelf(0) },
                     onSettingsClick = { onSettingsClick() },
-                    onToggleToolbar = { isToolbarExpanded.value = !isToolbarExpanded.value }
+                    onToggleToolbar = { isToolbarExpanded.value = !isToolbarExpanded.value },
+                    onEmojiClick = { emoji -> onEmojiClick(emoji) },
+                    onEmojiOpen = { onEmojiOpen() },
+                    onBackFromEmoji = { onBackFromEmoji() }
                 )
             }
         }
@@ -415,7 +418,7 @@ class BangluIMEService : InputMethodService(),
         val newMode = when (currentMode) {
             KeyboardMode.BANGLU -> KeyboardMode.ENGLISH
             KeyboardMode.ENGLISH -> KeyboardMode.BANGLU
-            // From symbols, toggle the underlying letter mode
+            // From symbols or emoji, toggle the underlying letter mode
             KeyboardMode.SYMBOLS_1, KeyboardMode.SYMBOLS_2 -> {
                 letterModeBeforeSymbols = if (letterModeBeforeSymbols == KeyboardMode.BANGLU) {
                     KeyboardMode.ENGLISH
@@ -424,6 +427,11 @@ class BangluIMEService : InputMethodService(),
                 }
                 // Stay in symbols mode, the label will update
                 currentMode
+            }
+            KeyboardMode.EMOJI -> {
+                // Return to the opposite letter mode
+                if (letterModeBeforeSymbols == KeyboardMode.BANGLU) KeyboardMode.ENGLISH
+                else KeyboardMode.BANGLU
             }
         }
 
@@ -462,6 +470,27 @@ class BangluIMEService : InputMethodService(),
         val intent = Intent(this, SettingsActivity::class.java)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(intent)
+    }
+
+    // ── Emoji Panel ──────────────────────────────────────────────────────────
+
+    private fun onEmojiClick(emoji: String) {
+        val ic = currentInputConnection ?: return
+        commitPendingBuffer()
+        ic.commitText(emoji, 1)
+    }
+
+    private fun onEmojiOpen() {
+        commitPendingBuffer()
+        // Remember which letter mode we came from (ignore if already in symbols/emoji)
+        if (keyboardMode.value == KeyboardMode.BANGLU || keyboardMode.value == KeyboardMode.ENGLISH) {
+            letterModeBeforeSymbols = keyboardMode.value
+        }
+        keyboardMode.value = KeyboardMode.EMOJI
+    }
+
+    private fun onBackFromEmoji() {
+        keyboardMode.value = letterModeBeforeSymbols
     }
 
     // ── Feature 4.1: Next-Word Predictions ─────────────────────────────────
