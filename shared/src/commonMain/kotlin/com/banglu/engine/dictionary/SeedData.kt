@@ -51,6 +51,14 @@ object SeedData {
             addAll(chunkWebSyncFreqUpdates2())
             addAll(chunkColloquialVerbForms())
             addAll(chunkWebSync7())
+            addAll(SeedDataSync0.ENTRIES)
+            addAll(SeedDataSync1.ENTRIES)
+            addAll(SeedDataSync2.ENTRIES)
+            addAll(SeedDataSync3.ENTRIES)
+            addAll(SeedDataSync4.ENTRIES)
+            addAll(SeedDataSync5.ENTRIES)
+            addAll(SeedDataFreqSync0.ENTRIES)
+            addAll(SeedDataFreqSync1.ENTRIES)
         }
     }
 

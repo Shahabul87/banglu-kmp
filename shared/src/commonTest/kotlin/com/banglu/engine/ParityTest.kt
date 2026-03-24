@@ -168,9 +168,10 @@ class ParityTest {
     fun testAdapterOnWordSelected() {
         SmartEngineAdapter.reset()
         SmartEngineAdapter.initializeSync()
-        SmartEngineAdapter.onWordSelected("testparity", "টেস্ট")
-        val result = SmartEngineAdapter.convert("testparity")
-        assertTrue(result == "টেস্ট", "After onWordSelected, convert should return টেস্ট, got '$result'")
+        // Use a phonetic/bengali pair that doesn't conflict with consonant filtering rules
+        SmartEngineAdapter.onWordSelected("parikkhya", "পরীক্ষা")
+        val result = SmartEngineAdapter.convert("parikkhya")
+        assertTrue(result == "পরীক্ষা", "After onWordSelected, convert should return পরীক্ষা, got '$result'")
         SmartEngineAdapter.reset()
     }
 

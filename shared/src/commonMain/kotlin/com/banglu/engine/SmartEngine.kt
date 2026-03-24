@@ -430,22 +430,47 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         var results = dictionary.lookup(key)
         if (results.isEmpty()) return null
 
-        // Enforce phonetic→Bengali consonant rules:
-        // 's' (not 'sh') → MUST be স, never শ  (2,266 violations in ext dict)
-        // 'd' (not 'dh') → MUST be দ, never ড  (1,798 violations in ext dict)
+        // Step 1: HARD FILTER for start-of-word consonant violations
+        // 's' (not 'sh') → filter out শ-starting results (শ needs 'sh')
         if (key.startsWith("s") && !key.startsWith("sh")) {
             val filtered = results.filter { !it.bengali.startsWith("শ") }
             if (filtered.isNotEmpty()) results = filtered else return null
         }
+        // 'sh' → filter out স-starting results (স needs plain 's')
+        if (key.startsWith("sh")) {
+            val filtered = results.filter { !it.bengali.startsWith("স") }
+            if (filtered.isNotEmpty()) results = filtered else return null
+        }
+        // 'z' → filter out জ-starting results (জ needs 'j')
+        if (key.startsWith("z")) {
+            val filtered = results.filter { !it.bengali.startsWith("জ") }
+            if (filtered.isNotEmpty()) results = filtered else return null
+        }
+        // 'j' (not 'jh') → filter out য-starting results (য needs 'z')
+        if (key.startsWith("j") && !key.startsWith("jh")) {
+            val filtered = results.filter { !it.bengali.startsWith("য") }
+            if (filtered.isNotEmpty()) results = filtered else return null
+        }
+        // 't' (not 'th') → filter out ট-starting results (ট needs 'T' or 'tt')
+        if (key.startsWith("t") && !key.startsWith("th")) {
+            val filtered = results.filter { !it.bengali.startsWith("ট") }
+            if (filtered.isNotEmpty()) results = filtered else return null
+        }
+        // 'd' (not 'dh') → filter out ড-starting results (ড needs 'D' or 'dd')
         if (key.startsWith("d") && !key.startsWith("dh")) {
             val filtered = results.filter { !it.bengali.startsWith("ড") }
+            if (filtered.isNotEmpty()) results = filtered else return null
+        }
+        // 'v' → filter out ব-starting results (ব needs 'b', 'v' maps to ভ)
+        if (key.startsWith("v")) {
+            val filtered = results.filter { !it.bengali.startsWith("ব") }
             if (filtered.isNotEmpty()) results = filtered else return null
         }
 
         // Re-rank by real wordfreq frequency — but ONLY when:
         // 1. Top result has low dict frequency (< 85) — not a curated seed entry
         // 2. Wordfreq strongly disagrees (gap > 5)
-        val ranked = if (results.size > 1 && validator.isLoaded() && validator.hasFrequencyData()) {
+        var ranked = if (results.size > 1 && validator.isLoaded() && validator.hasFrequencyData()) {
             val topDictFreq = results[0].frequency
             if (topDictFreq < 85) {
                 val topWf = validator.getFrequency(results[0].bengali)
@@ -455,6 +480,35 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 } else results
             } else results
         } else results
+
+        // Step 2: SOFT SORT for middle/end position consonant violations
+        // Prefer results with fewer শ/ষ when phonetic has standalone 's' (not 'sh')
+        // Prefer results with fewer ড when phonetic has standalone 'd' (not 'dh')
+        // Prefer results with fewer জ when phonetic has 'z'
+        if (ranked.size > 1) {
+            val hasStandaloneS = Regex("s(?!h)").containsMatchIn(key)
+            val hasStandaloneD = Regex("d(?!h)").containsMatchIn(key)
+            val hasZ = key.contains("z")
+            if (hasStandaloneS || hasStandaloneD || hasZ) {
+                ranked = ranked.sortedWith(Comparator { a, b ->
+                    var vA = 0; var vB = 0
+                    if (hasStandaloneS) {
+                        vA += a.bengali.count { it == 'শ' || it == 'ষ' }
+                        vB += b.bengali.count { it == 'শ' || it == 'ষ' }
+                    }
+                    if (hasStandaloneD) {
+                        vA += a.bengali.count { it == 'ড' }
+                        vB += b.bengali.count { it == 'ড' }
+                    }
+                    if (hasZ) {
+                        vA += a.bengali.count { it == 'জ' }
+                        vB += b.bengali.count { it == 'জ' }
+                    }
+                    if (vA != vB) vA - vB
+                    else (b.confidence * 100).toInt() - (a.confidence * 100).toInt()
+                })
+            }
+        }
 
         val best = ranked[0]
         val alternatives = ranked.drop(1).map { Alternative(it.bengali, it.confidence) }

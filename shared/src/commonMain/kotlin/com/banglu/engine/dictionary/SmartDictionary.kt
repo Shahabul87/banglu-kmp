@@ -255,8 +255,7 @@ class SmartDictionary {
             result = result.replace("aa", "a")
             // ou->o at word end only
             result = result.replace(Regex("ou$"), "o")
-            // v->bh before vowels
-            result = result.replace(Regex("v(?=[aeiou])"), "bh")
+            // NOTE: v→bh normalization REMOVED — v now stays as v and maps to ভ (not ব)
             // Consonant simplifications
             result = result.replace("shh", "sh")
             result = result.replace("tth", "th")

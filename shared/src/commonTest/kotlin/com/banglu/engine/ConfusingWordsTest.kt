@@ -32,7 +32,7 @@ class ConfusingWordsTest {
         Case("jonyo", "জন্য", "conjunct"), Case("ortho", "অর্থ", "conjunct"),
         Case("bondho", "বন্ধ", "conjunct"), Case("modhyo", "মধ্য", "conjunct"),
         Case("sotto", "সত্য", "conjunct"), Case("matro", "মাত্র", "conjunct"),
-        Case("byapar", "ব্যাপার", "conjunct"), Case("shahajyo", "সাহায্য", "conjunct"),
+        Case("byapar", "ব্যাপার", "conjunct"), Case("sahajyo", "সাহায্য", "conjunct"),
         Case("otyadhunik", "অত্যাধুনিক", "conjunct"), Case("tothyo", "তথ্য", "conjunct"),
 
         // Common daily words
