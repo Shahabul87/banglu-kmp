@@ -90,12 +90,12 @@ val AmoledColors = KeyboardColors(
 val LocalKeyboardColors = compositionLocalOf { DarkColors }
 
 // ── Dimensions ───────────────────────────────────────────────────────────────────
-private val NumberRowHeight = 44.dp
-private val KeyRowHeight = 52.dp
-private val SuggestionBarHeight = 40.dp
+private val NumberRowHeight = 38.dp
+private val KeyRowHeight = 46.dp
+private val SuggestionBarHeight = 36.dp
 private val ToolbarHeight = 36.dp
 private val KeyGapH = 3.dp
-private val KeyGapV = 8.dp
+private val KeyGapV = 6.dp
 private val KeyCorner = 10.dp
 private val KeyboardPadding = 4.dp
 
