@@ -54,6 +54,13 @@ class BangluIMEService : InputMethodService(),
     private var lastShiftTapTime = 0L
     private val DOUBLE_TAP_THRESHOLD_MS = 300L
 
+    // Feature 1.1: Double-space → period + space
+    private var lastSpaceTime = 0L
+    private val DOUBLE_SPACE_THRESHOLD_MS = 300L
+
+    // Feature 1.3: Context-aware enter key label
+    private val enterKeyLabel = mutableStateOf("\u21B5")
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     companion object {
@@ -92,8 +99,10 @@ class BangluIMEService : InputMethodService(),
                     suggestions = suggestions,
                     keyboardMode = keyboardMode.value,
                     shiftState = shiftState.value,
+                    enterLabel = enterKeyLabel.value,
                     onKeyPress = { char -> onKeyPress(char) },
                     onBackspace = { onBackspace() },
+                    onBackspaceWord = { onBackspaceWord() },
                     onSpace = { onSpacePress() },
                     onEnter = { onEnterPress() },
                     onShiftTap = { onShiftTap() },
@@ -135,6 +144,25 @@ class BangluIMEService : InputMethodService(),
         super.onStartInputView(info, restarting)
         buffer = ""
         suggestions.clear()
+        lastSpaceTime = 0L
+
+        // Feature 1.3: Set enter key label based on IME action
+        enterKeyLabel.value = when (info?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)) {
+            EditorInfo.IME_ACTION_SEARCH -> "\uD83D\uDD0D"  // magnifying glass
+            EditorInfo.IME_ACTION_SEND -> "\u27A4"           // send arrow
+            EditorInfo.IME_ACTION_GO -> "\u2192"             // right arrow
+            EditorInfo.IME_ACTION_NEXT -> "\u21E5"           // tab right
+            EditorInfo.IME_ACTION_DONE -> "\u2713"           // checkmark
+            else -> "\u21B5"                                  // return symbol
+        }
+
+        // Feature 1.2: Auto-capitalize at start of text field (English mode)
+        if (keyboardMode.value == KeyboardMode.ENGLISH) {
+            val before = currentInputConnection?.getTextBeforeCursor(1, 0)?.toString()
+            if (before.isNullOrEmpty()) {
+                shiftState.value = ShiftState.ON
+            }
+        }
     }
 
     override fun onFinishInput() {
@@ -192,6 +220,11 @@ class BangluIMEService : InputMethodService(),
 
         val ic = currentInputConnection ?: return
         ic.commitText(char.toString(), 1)
+
+        // Feature 1.2: Auto-capitalize after sentence-ending punctuation
+        if (shouldAutoCapitalize() && shiftState.value == ShiftState.OFF) {
+            shiftState.value = ShiftState.ON
+        }
     }
 
     private fun onDirectCommit(char: Char) {
@@ -245,6 +278,7 @@ class BangluIMEService : InputMethodService(),
     private fun onSpacePress() {
         Log.d(TAG, "onSpacePress: mode=${keyboardMode.value}, buffer='$buffer'")
         val ic = currentInputConnection ?: return
+        val now = System.currentTimeMillis()
 
         when (keyboardMode.value) {
             KeyboardMode.BANGLU -> {
@@ -256,12 +290,31 @@ class BangluIMEService : InputMethodService(),
                     buffer = ""
                     suggestions.clear()
                 } else {
-                    ic.commitText(" ", 1)
+                    // Feature 1.1: Double-space → Bengali danda + space
+                    if (now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
+                        ic.deleteSurroundingText(1, 0)
+                        ic.commitText("\u0964 ", 1)  // Bengali danda (।) + space
+                    } else {
+                        ic.commitText(" ", 1)
+                    }
                 }
             }
             else -> {
-                ic.commitText(" ", 1)
+                // Feature 1.1: Double-space → period + space (English/Symbol modes)
+                if (now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
+                    ic.deleteSurroundingText(1, 0)
+                    ic.commitText(". ", 1)
+                } else {
+                    ic.commitText(" ", 1)
+                }
             }
+        }
+
+        lastSpaceTime = now
+
+        // Feature 1.2: Auto-capitalize after double-space period
+        if (shouldAutoCapitalize() && shiftState.value == ShiftState.OFF) {
+            shiftState.value = ShiftState.ON
         }
     }
 
@@ -278,8 +331,18 @@ class BangluIMEService : InputMethodService(),
             suggestions.clear()
         }
 
-        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
-        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+        // Feature 1.3: Perform the appropriate IME action
+        val editorInfo = currentInputEditorInfo
+        val action = editorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
+            ?: EditorInfo.IME_ACTION_UNSPECIFIED
+
+        if (action != EditorInfo.IME_ACTION_UNSPECIFIED && action != EditorInfo.IME_ACTION_NONE) {
+            ic.performEditorAction(action)
+        } else {
+            // Default: insert newline
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+        }
     }
 
     private fun onSuggestionTap(suggestion: SmartSuggestion) {
@@ -371,6 +434,43 @@ class BangluIMEService : InputMethodService(),
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
+
+    /**
+     * Feature 1.2: Auto-capitalize after sentence-ending punctuation.
+     * Only applies in English mode.
+     */
+    private fun shouldAutoCapitalize(): Boolean {
+        if (keyboardMode.value != KeyboardMode.ENGLISH) return false
+        val ic = currentInputConnection ?: return false
+        val before = ic.getTextBeforeCursor(2, 0)?.toString() ?: return false
+        // After ". " or "! " or "? " or at start of field
+        return before.endsWith(". ") || before.endsWith("! ") || before.endsWith("? ") || before.isEmpty()
+    }
+
+    /**
+     * Feature 1.5: Word-by-word backspace — delete entire previous word.
+     */
+    private fun onBackspaceWord() {
+        val ic = currentInputConnection ?: return
+
+        // In Banglu mode with buffer, clear the whole buffer at once
+        if (keyboardMode.value == KeyboardMode.BANGLU && buffer.isNotEmpty()) {
+            ic.setComposingText("", 0)
+            ic.finishComposingText()
+            buffer = ""
+            suggestions.clear()
+            return
+        }
+
+        // Delete word: find previous word boundary
+        val before = ic.getTextBeforeCursor(50, 0)?.toString() ?: return
+        val trimmed = before.trimEnd()
+        val lastSpace = trimmed.lastIndexOf(' ')
+        val charsToDelete = if (lastSpace >= 0) before.length - lastSpace else before.length
+        if (charsToDelete > 0) {
+            ic.deleteSurroundingText(charsToDelete, 0)
+        }
+    }
 
     private fun commitPendingBuffer() {
         if (keyboardMode.value == KeyboardMode.BANGLU && buffer.isNotEmpty()) {

@@ -72,8 +72,10 @@ fun BangluKeyboardLayout(
     suggestions: List<SmartSuggestion>,
     keyboardMode: KeyboardMode,
     shiftState: ShiftState,
+    enterLabel: String = "\u21B5",
     onKeyPress: (Char) -> Unit,
     onBackspace: () -> Unit,
+    onBackspaceWord: () -> Unit = {},
     onSpace: () -> Unit,
     onEnter: () -> Unit,
     onShiftTap: () -> Unit,
@@ -112,6 +114,7 @@ fun BangluKeyboardLayout(
                     shiftState = shiftState,
                     onKeyPress = onKeyPress,
                     onBackspace = onBackspace,
+                    onBackspaceWord = onBackspaceWord,
                     onShiftTap = onShiftTap
                 )
                 Spacer(modifier = Modifier.height(KeyGapV))
@@ -119,6 +122,7 @@ fun BangluKeyboardLayout(
                     leftLabel = "!#1",
                     spaceLabel = "\u09AC\u09BE\u0982\u09B2\u09C1 (BN)",
                     globeLabel = "EN",
+                    enterLabel = enterLabel,
                     onLeftPress = onSymbolsPress,
                     onGlobePress = onGlobePress,
                     onSpace = onSpace,
@@ -151,6 +155,7 @@ fun BangluKeyboardLayout(
                     shiftState = shiftState,
                     onKeyPress = onKeyPress,
                     onBackspace = onBackspace,
+                    onBackspaceWord = onBackspaceWord,
                     onShiftTap = onShiftTap
                 )
                 Spacer(modifier = Modifier.height(KeyGapV))
@@ -158,6 +163,7 @@ fun BangluKeyboardLayout(
                     leftLabel = "!#1",
                     spaceLabel = "English (EN)",
                     globeLabel = "BN",
+                    enterLabel = enterLabel,
                     onLeftPress = onSymbolsPress,
                     onGlobePress = onGlobePress,
                     onSpace = onSpace,
@@ -190,6 +196,7 @@ fun BangluKeyboardLayout(
                     pageLabel = "1/2",
                     onSymbolPress = onPunctuationPress,
                     onBackspace = onBackspace,
+                    onBackspaceWord = onBackspaceWord,
                     onPageToggle = onSymbolPageToggle
                 )
                 Spacer(modifier = Modifier.height(KeyGapV))
@@ -197,6 +204,7 @@ fun BangluKeyboardLayout(
                     leftLabel = "ABC",
                     spaceLabel = "Symbols",
                     globeLabel = "BN",
+                    enterLabel = enterLabel,
                     onLeftPress = onBackToLetters,
                     onGlobePress = onGlobePress,
                     onSpace = onSpace,
@@ -229,6 +237,7 @@ fun BangluKeyboardLayout(
                     pageLabel = "2/2",
                     onSymbolPress = onPunctuationPress,
                     onBackspace = onBackspace,
+                    onBackspaceWord = onBackspaceWord,
                     onPageToggle = onSymbolPageToggle
                 )
                 Spacer(modifier = Modifier.height(KeyGapV))
@@ -236,6 +245,7 @@ fun BangluKeyboardLayout(
                     leftLabel = "ABC",
                     spaceLabel = "Symbols",
                     globeLabel = "EN",
+                    enterLabel = enterLabel,
                     onLeftPress = onBackToLetters,
                     onGlobePress = onGlobePress,
                     onSpace = onSpace,
@@ -364,6 +374,7 @@ private fun LetterRows(
     shiftState: ShiftState,
     onKeyPress: (Char) -> Unit,
     onBackspace: () -> Unit,
+    onBackspaceWord: () -> Unit = {},
     onShiftTap: () -> Unit
 ) {
     val isUpper = shiftState != ShiftState.OFF
@@ -444,10 +455,11 @@ private fun LetterRows(
             )
         }
 
-        // Backspace with long-press repeat
+        // Backspace with long-press repeat and word deletion
         BackspaceKey(
             modifier = Modifier.weight(1.5f),
-            onBackspace = onBackspace
+            onBackspace = onBackspace,
+            onBackspaceWord = onBackspaceWord
         )
     }
 }
@@ -462,6 +474,7 @@ private fun SymbolRows(
     pageLabel: String,
     onSymbolPress: (Char) -> Unit,
     onBackspace: () -> Unit,
+    onBackspaceWord: () -> Unit = {},
     onPageToggle: () -> Unit
 ) {
     // Symbol row 1 (10 keys)
@@ -527,7 +540,8 @@ private fun SymbolRows(
         }
         BackspaceKey(
             modifier = Modifier.weight(1.5f),
-            onBackspace = onBackspace
+            onBackspace = onBackspace,
+            onBackspaceWord = onBackspaceWord
         )
     }
 }
@@ -541,6 +555,7 @@ private fun BottomRow(
     leftLabel: String,
     spaceLabel: String,
     globeLabel: String = "EN",
+    enterLabel: String = "\u21B5",
     onLeftPress: () -> Unit,
     onGlobePress: () -> Unit,
     onSpace: () -> Unit,
@@ -588,9 +603,9 @@ private fun BottomRow(
             onClick = { onPunctuationPress('.') }
         )
 
-        // Enter
+        // Enter — context-aware label (search, send, go, etc.)
         KeyButton(
-            label = "\u21B5",
+            label = enterLabel,
             modifier = Modifier.weight(1.5f),
             height = KeyRowHeight,
             bgColor = SpecialKeyBg,
@@ -616,9 +631,13 @@ private fun KeyButton(
     val haptic = LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
 
-    // Animate scale for press effect
+    // Feature 1.4: Scale UP on press for single-character keys (key preview effect)
+    // Multi-character keys (labels like "!#1", "ABC") scale down as before
+    val isCharKey = label.length == 1
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
+        targetValue = if (isPressed) {
+            if (isCharKey) 1.15f else 0.95f
+        } else 1f,
         animationSpec = tween(durationMillis = 50)
     )
 
@@ -650,8 +669,8 @@ private fun KeyButton(
         Text(
             text = label,
             color = KeyText,
-            fontSize = fontSize.sp,
-            fontWeight = FontWeight.Normal,
+            fontSize = if (isPressed && isCharKey) (fontSize + 6).sp else fontSize.sp,
+            fontWeight = if (isPressed && isCharKey) FontWeight.Bold else FontWeight.Normal,
             textAlign = TextAlign.Center,
             maxLines = 1
         )
@@ -714,7 +733,8 @@ private fun SpaceBar(
 @Composable
 private fun BackspaceKey(
     modifier: Modifier = Modifier,
-    onBackspace: () -> Unit
+    onBackspace: () -> Unit,
+    onBackspaceWord: () -> Unit = {}
 ) {
     val haptic = LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
@@ -736,14 +756,25 @@ private fun BackspaceKey(
                         isPressed = true
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onBackspace() // First delete immediately
+                        val pressStartTime = System.currentTimeMillis()
 
-                        // Start repeat after 400ms
+                        // Feature 1.5: Start repeat after 400ms, switch to word
+                        // deletion after 1.5s of continuous holding
                         val repeatJob = coroutineScope.launch {
                             delay(400)
                             while (true) {
-                                onBackspace()
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                delay(50) // 20 chars/sec
+                                val elapsed = System.currentTimeMillis() - pressStartTime
+                                if (elapsed > 1500) {
+                                    // Word-by-word deletion after 1.5s hold
+                                    onBackspaceWord()
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    delay(100) // Slower pace for word deletion
+                                } else {
+                                    // Char-by-char deletion
+                                    onBackspace()
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    delay(50) // 20 chars/sec
+                                }
                             }
                         }
 
