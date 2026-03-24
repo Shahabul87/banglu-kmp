@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -63,6 +64,12 @@ private val SYMBOLS_2_ROWS = listOf(
     listOf("\u2605", "\u2026", "\u00AB", "\u00BB", "\u00A1", "\u00BF")
 )
 
+// ── Number → Symbol Long-Press Map ───────────────────────────────────────────
+private val NUMBER_SYMBOL_MAP = mapOf(
+    '1' to '!', '2' to '@', '3' to '#', '4' to '$', '5' to '%',
+    '6' to '^', '7' to '&', '8' to '*', '9' to '(', '0' to ')'
+)
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Root Keyboard Composable
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -86,6 +93,7 @@ fun BangluKeyboardLayout(
     onSuggestionClick: (SmartSuggestion) -> Unit,
     onNumberPress: (Char) -> Unit,
     onPunctuationPress: (Char) -> Unit,
+    onCursorMove: (Int) -> Unit = {},
     onDismiss: () -> Unit = {}
 ) {
     // Get nav bar height for bottom padding (permanent fix for Samsung/gesture nav)
@@ -108,7 +116,7 @@ fun BangluKeyboardLayout(
             KeyboardMode.BANGLU -> {
                 BangluSuggestionRow(suggestions, onSuggestionClick, onDismiss)
                 Spacer(modifier = Modifier.height(KeyGapV))
-                NumberRow(onNumberPress)
+                NumberRow(onNumberPress = onNumberPress, onSymbolPress = onPunctuationPress)
                 Spacer(modifier = Modifier.height(KeyGapV))
                 LetterRows(
                     shiftState = shiftState,
@@ -127,6 +135,7 @@ fun BangluKeyboardLayout(
                     onGlobePress = onGlobePress,
                     onSpace = onSpace,
                     onPunctuationPress = onPunctuationPress,
+                    onCursorMove = onCursorMove,
                     onEnter = onEnter
                 )
             }
@@ -149,7 +158,7 @@ fun BangluKeyboardLayout(
                     }
                 }
                 Spacer(modifier = Modifier.height(KeyGapV))
-                NumberRow(onNumberPress)
+                NumberRow(onNumberPress = onNumberPress, onSymbolPress = onPunctuationPress)
                 Spacer(modifier = Modifier.height(KeyGapV))
                 LetterRows(
                     shiftState = shiftState,
@@ -168,6 +177,7 @@ fun BangluKeyboardLayout(
                     onGlobePress = onGlobePress,
                     onSpace = onSpace,
                     onPunctuationPress = onPunctuationPress,
+                    onCursorMove = onCursorMove,
                     onEnter = onEnter
                 )
             }
@@ -189,7 +199,7 @@ fun BangluKeyboardLayout(
                     }
                 }
                 Spacer(modifier = Modifier.height(KeyGapV))
-                NumberRow(onNumberPress)
+                NumberRow(onNumberPress = onNumberPress, onSymbolPress = onPunctuationPress)
                 Spacer(modifier = Modifier.height(KeyGapV))
                 SymbolRows(
                     rows = SYMBOLS_1_ROWS,
@@ -209,6 +219,7 @@ fun BangluKeyboardLayout(
                     onGlobePress = onGlobePress,
                     onSpace = onSpace,
                     onPunctuationPress = onPunctuationPress,
+                    onCursorMove = onCursorMove,
                     onEnter = onEnter
                 )
             }
@@ -230,7 +241,7 @@ fun BangluKeyboardLayout(
                     }
                 }
                 Spacer(modifier = Modifier.height(KeyGapV))
-                NumberRow(onNumberPress)
+                NumberRow(onNumberPress = onNumberPress, onSymbolPress = onPunctuationPress)
                 Spacer(modifier = Modifier.height(KeyGapV))
                 SymbolRows(
                     rows = SYMBOLS_2_ROWS,
@@ -250,6 +261,7 @@ fun BangluKeyboardLayout(
                     onGlobePress = onGlobePress,
                     onSpace = onSpace,
                     onPunctuationPress = onPunctuationPress,
+                    onCursorMove = onCursorMove,
                     onEnter = onEnter
                 )
             }
@@ -339,28 +351,27 @@ private fun BangluSuggestionRow(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun NumberRow(onNumberPress: (Char) -> Unit) {
+private fun NumberRow(
+    onNumberPress: (Char) -> Unit,
+    onSymbolPress: (Char) -> Unit
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(KeyGapH)
     ) {
         for (num in '1'..'9') {
-            KeyButton(
-                label = num.toString(),
+            NumberKey(
+                number = num,
                 modifier = Modifier.weight(1f),
-                height = NumberRowHeight,
-                bgColor = KeyBg,
-                fontSize = 18,
-                onClick = { onNumberPress(num) }
+                onNumberPress = onNumberPress,
+                onSymbolPress = onSymbolPress
             )
         }
-        KeyButton(
-            label = "0",
+        NumberKey(
+            number = '0',
             modifier = Modifier.weight(1f),
-            height = NumberRowHeight,
-            bgColor = KeyBg,
-            fontSize = 18,
-            onClick = { onNumberPress('0') }
+            onNumberPress = onNumberPress,
+            onSymbolPress = onSymbolPress
         )
     }
 }
@@ -560,6 +571,7 @@ private fun BottomRow(
     onGlobePress: () -> Unit,
     onSpace: () -> Unit,
     onPunctuationPress: (Char) -> Unit,
+    onCursorMove: (Int) -> Unit = {},
     onEnter: () -> Unit
 ) {
     Row(
@@ -586,11 +598,12 @@ private fun BottomRow(
             onClick = onGlobePress
         )
 
-        // Spacebar
+        // Spacebar with swipe-to-move cursor
         SpaceBar(
             label = spaceLabel,
             modifier = Modifier.weight(4f),
-            onClick = onSpace
+            onClick = onSpace,
+            onCursorMove = onCursorMove
         )
 
         // Period
@@ -681,46 +694,63 @@ private fun KeyButton(
 private fun SpaceBar(
     label: String,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onCursorMove: (Int) -> Unit = {}
 ) {
     val haptic = LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
-
+    var isCursorMode by remember { mutableStateOf(false) }
+    var lastDragX by remember { mutableFloatStateOf(0f) }
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = tween(durationMillis = 50)
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = tween(50)
     )
 
     Box(
         modifier = modifier
             .height(KeyRowHeight)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(KeyCorner))
             .background(if (isPressed) KeyPressed else KeyBg)
+            .pointerInput(Unit) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { offset ->
+                        isCursorMode = true
+                        lastDragX = offset.x
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        val dx = change.position.x - lastDragX
+                        // Move cursor every 15dp of horizontal drag
+                        val threshold = 15.dp.toPx()
+                        if (kotlin.math.abs(dx) > threshold) {
+                            val direction = if (dx > 0) 1 else -1
+                            onCursorMove(direction)
+                            lastDragX = change.position.x
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                    },
+                    onDragEnd = { isCursorMode = false },
+                    onDragCancel = { isCursorMode = false }
+                )
+            }
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
                         isPressed = true
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        try {
-                            awaitRelease()
-                        } finally {
-                            isPressed = false
-                        }
-                        onClick()
+                        try { awaitRelease() } finally { isPressed = false }
+                        if (!isCursorMode) onClick()
                     }
                 )
             },
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = label,
-            color = SubText,
+            text = if (isCursorMode) "\u25C4 \u25BA cursor" else label,
+            color = if (isCursorMode) KeyText else SubText,
             fontSize = 13.sp,
-            fontWeight = FontWeight.Normal,
             textAlign = TextAlign.Center
         )
     }
@@ -795,5 +825,79 @@ private fun BackspaceKey(
             fontSize = 20.sp,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Number Key with Long-Press → Symbol
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun NumberKey(
+    number: Char,
+    modifier: Modifier = Modifier,
+    onNumberPress: (Char) -> Unit,
+    onSymbolPress: (Char) -> Unit
+) {
+    val symbol = NUMBER_SYMBOL_MAP[number] ?: '!'
+    val haptic = LocalHapticFeedback.current
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = tween(50)
+    )
+    val coroutineScope = rememberCoroutineScope()
+
+    Box(
+        modifier = modifier
+            .height(NumberRowHeight)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(KeyCorner))
+            .background(if (isPressed) KeyPressed else KeyBg)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+
+                        // Start long-press timer
+                        val longPressJob = coroutineScope.launch {
+                            delay(500)
+                            // Long press -> symbol
+                            onSymbolPress(symbol)
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+
+                        try {
+                            awaitRelease()
+                        } finally {
+                            isPressed = false
+                            if (longPressJob.isActive) {
+                                longPressJob.cancel()
+                                // Short tap -> number
+                                onNumberPress(number)
+                            }
+                        }
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(modifier = Modifier.fillMaxSize().padding(4.dp)) {
+            // Number in center
+            Text(
+                text = number.toString(),
+                color = KeyText,
+                fontSize = 18.sp,
+                modifier = Modifier.align(Alignment.Center)
+            )
+            // Symbol hint in top-right corner
+            Text(
+                text = symbol.toString(),
+                color = SubText,
+                fontSize = 10.sp,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
     }
 }

@@ -113,6 +113,7 @@ class BangluIMEService : InputMethodService(),
                     onSuggestionClick = { onSuggestionTap(it) },
                     onNumberPress = { char -> onDirectCommit(char) },
                     onPunctuationPress = { char -> onPunctuationPress(char) },
+                    onCursorMove = { direction -> onCursorMove(direction) },
                     onDismiss = { requestHideSelf(0) }
                 )
             }
@@ -470,6 +471,20 @@ class BangluIMEService : InputMethodService(),
         if (charsToDelete > 0) {
             ic.deleteSurroundingText(charsToDelete, 0)
         }
+    }
+
+    /**
+     * Feature 2.1: Swipe spacebar cursor movement.
+     * Commits any pending buffer, then sends a DPAD left/right key event.
+     */
+    private fun onCursorMove(direction: Int) {
+        val ic = currentInputConnection ?: return
+        // Commit any pending buffer first
+        commitPendingBuffer()
+        // Move cursor
+        val keyCode = if (direction > 0) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
+        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
     }
 
     private fun commitPendingBuffer() {
