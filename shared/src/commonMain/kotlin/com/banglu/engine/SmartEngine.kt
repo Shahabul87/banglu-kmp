@@ -627,10 +627,22 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
                     // Check for dependent vowel after consonant
                     if (i < key.length && key[i] in "aeiou") {
-                        val vowelResult = resolveVowel(key, i, false)
-                        result.append(vowelResult.first)
-                        i += vowelResult.second
-                        confidence = minOf(confidence, vowelResult.third)
+                        // Smart trailing ো: skip 'o' before 'y' at/near word end
+                        // moy → ময় (not মোয়), hoy → হয় (not হোয়)
+                        // The 'o' before trailing 'y' is the inherent vowel, not ো
+                        val isOBeforeTrailingY = key[i] == 'o' &&
+                            i + 1 < key.length && key[i + 1] == 'y' &&
+                            (i + 2 >= key.length || key[i + 2] !in "aeiou")
+
+                        if (isOBeforeTrailingY) {
+                            // Skip the 'o' — let inherent vowel + য় handle it
+                            i++ // consume 'o' without adding ো
+                        } else {
+                            val vowelResult = resolveVowel(key, i, false)
+                            result.append(vowelResult.first)
+                            i += vowelResult.second
+                            confidence = minOf(confidence, vowelResult.third)
+                        }
                     }
                 }
 
