@@ -328,13 +328,8 @@ class SmartDictionary {
                 variants.add(key.replace(Regex("s(?!h)"), "sh"))
             }
 
-            // z <-> j
-            if ("z" in key) {
-                variants.add(key.replace("z", "j"))
-            }
-            if ("j" in key && "jh" !in key) {
-                variants.add(key.replace(Regex("j(?!h)"), "z"))
-            }
+            // z and j are now separate consonants (z→য, j→জ)
+            // Do NOT generate z↔j variants — they are different sounds
 
             // ng <-> n
             if ("ng" in key) {

@@ -705,7 +705,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         't' to "ত", 'd' to "দ", 'p' to "প", 'b' to "ব",
         'f' to "ফ", 'm' to "ম", 'r' to "র", 'l' to "ল",
         's' to "স", 'h' to "হ", 'v' to "ভ", 'w' to "ও",
-        'y' to "য়", 'z' to "জ", 'q' to "ক", 'x' to "ক্স"
+        'y' to "য়", 'z' to "য", 'q' to "ক", 'x' to "ক্স"
     )
 
     private fun resolveConsonant(key: String, i: Int, bengaliContext: String): Triple<String, Int, Double> {

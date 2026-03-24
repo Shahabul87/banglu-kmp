@@ -3873,7 +3873,7 @@ object SeedData {
             e("জোখ", listOf("jokh", "joukh", "zokh"), 60, WordCategory.UNKNOWN),
             e("জোট", listOf("jot", "jout", "zot"), 60, WordCategory.UNKNOWN),
             e("জোত", listOf("jot", "jout", "zot"), 60, WordCategory.UNKNOWN),
-            e("জোন", listOf("jon", "joun", "zon"), 60, WordCategory.UNKNOWN),
+            e("জোন", listOf("jon", "joun"), 60, WordCategory.UNKNOWN),
             e("জোল", listOf("jol", "joul", "zol"), 60, WordCategory.UNKNOWN),
             e("জ্ঞ", listOf("gy"), 60, WordCategory.UNKNOWN),
             e("ঝঝি", listOf("jhojhi", "jhojhee", "jhoujhi", "jhojhii", "zhozhi"), 60, WordCategory.UNKNOWN),
