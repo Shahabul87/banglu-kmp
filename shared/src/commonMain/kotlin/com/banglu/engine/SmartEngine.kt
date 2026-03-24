@@ -446,10 +446,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             val filtered = results.filter { !it.bengali.startsWith("জ") }
             if (filtered.isNotEmpty()) results = filtered else return null
         }
-        // 'j' (not 'jh') → filter out য-starting results (য needs 'z')
+        // 'j' (not 'jh') → PREFER জ over য, but don't filter out য entirely
+        // জ and য are both valid for 'j' in Bengali (phonetically similar)
         if (key.startsWith("j") && !key.startsWith("jh")) {
-            val filtered = results.filter { !it.bengali.startsWith("য") }
-            if (filtered.isNotEmpty()) results = filtered else return null
+            val jResults = results.filter { it.bengali.startsWith("জ") }
+            if (jResults.isNotEmpty()) results = jResults  // Prefer জ if available
+            // If only য results, keep them (don't filter to null)
         }
         // 't' (not 'th') → filter out ট-starting results (ট needs 'T' or 'tt')
         if (key.startsWith("t") && !key.startsWith("th")) {

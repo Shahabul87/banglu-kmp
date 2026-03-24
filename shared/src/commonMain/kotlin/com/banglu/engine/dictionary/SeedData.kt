@@ -38,6 +38,7 @@ object SeedData {
             addAll(chunk13())
             addAll(chunk14())
             addAll(chunkHighFreqFixes())
+            addAll(chunkPatternFixes())
             addAll(chunkWebSync0())
             addAll(chunkWebSync1())
             addAll(chunkWebSync2())
@@ -4486,6 +4487,18 @@ object SeedData {
         e("করলো", listOf("korlo"), 70, WordCategory.TADBHAVA),                              // did (3rd person)
         e("আরো", listOf("aro", "aaro"), 82, WordCategory.TADBHAVA),                         // more
         e("আরও", listOf("aroo"), 82, WordCategory.TADBHAVA)                                 // more (alt)
+    )
+
+    // Pattern engine fixes — words that pattern engine gets wrong
+    private fun chunkPatternFixes(): List<SmartDictionaryEntry> = listOf(
+        e("চলুন", listOf("cholun", "colun"), 80, WordCategory.TADBHAVA),
+        e("ধরি", listOf("dhori"), 70, WordCategory.TADBHAVA),
+        e("ফ্রম", listOf("from"), 50, WordCategory.FOREIGN),
+        e("কতো", listOf("koto"), 85, WordCategory.TADBHAVA),
+        e("ট্রেন", listOf("tren", "train"), 60, WordCategory.FOREIGN),
+        e("যাবো", listOf("jabo", "zabo"), 80, WordCategory.TADBHAVA),
+        e("আসুন", listOf("asun"), 75, WordCategory.TADBHAVA),
+        e("বসুন", listOf("bosun"), 70, WordCategory.TADBHAVA)
     )
 
     private fun chunkWebSync0(): List<SmartDictionaryEntry> = listOf(
