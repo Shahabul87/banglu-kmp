@@ -4,60 +4,60 @@ import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+// Brand colors (same as MainActivity)
+private val Gold = Color(0xFFD4A540)
+private val GoldLight = Color(0xFFE8C878)
+private val GoldDim = Color(0xFF8B7035)
+private val Coral = Color(0xFFC4604A)
+private val WarmBlack = Color(0xFF110E08)
+private val WarmDark = Color(0xFF1A1510)
+private val WarmCard = Color(0xFF231E18)
+private val WarmCardBorder = Color(0xFF3A3028)
+private val TextMuted = Color(0xFFA0907A)
+private val TextLight = Color(0xFFD4C8B0)
+private val GoldSwitch = Color(0xFFD4A540)
+private val GoldSwitchTrack = Color(0xFF4A3D25)
+
 class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        setContent {
-            BangluSettingsScreen(onBack = { finish() })
-        }
+        @Suppress("DEPRECATION")
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        setContent { BangluSettingsScreen(onBack = { finish() }) }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BangluSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("banglu_prefs", Context.MODE_PRIVATE) }
 
-    // Setting states
     var autoCapitalize by remember { mutableStateOf(prefs.getBoolean("auto_capitalize", true)) }
     var doubleSpacePeriod by remember { mutableStateOf(prefs.getBoolean("double_space_period", true)) }
     var suggestions by remember { mutableStateOf(prefs.getBoolean("suggestions", true)) }
@@ -68,174 +68,182 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
     var themeMode by remember { mutableStateOf(prefs.getString("theme", "auto") ?: "auto") }
     var defaultMode by remember { mutableStateOf(prefs.getString("default_mode", "banglu") ?: "banglu") }
 
-    fun saveBoolean(key: String, value: Boolean) {
-        prefs.edit().putBoolean(key, value).apply()
-    }
+    fun saveBoolean(key: String, value: Boolean) { prefs.edit().putBoolean(key, value).apply() }
+    fun saveString(key: String, value: String) { prefs.edit().putString(key, value).apply() }
 
-    fun saveString(key: String, value: String) {
-        prefs.edit().putString(key, value).apply()
-    }
-
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Banglu Settings") },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(WarmBlack, WarmDark, WarmBlack)))
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+            contentPadding = PaddingValues(bottom = 40.dp)
+        ) {
+            // ── Header ──
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(WarmCard)
+                            .border(1.dp, WarmCardBorder, CircleShape)
+                            .clickable { onBack() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("←", color = Gold, fontSize = 18.sp)
                     }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text("সেটিংস", color = Gold, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        Text("Banglu Keyboard", color = TextMuted, fontSize = 12.sp)
+                    }
+                }
+
+                // Dashed separator
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .height(1.dp)
+                        .drawBehind {
+                            drawLine(
+                                Gold.copy(alpha = 0.2f),
+                                Offset(0f, 0f), Offset(size.width, 0f),
+                                strokeWidth = 1f,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
+                            )
+                        }
                 )
             }
-        ) { padding ->
-            LazyColumn(modifier = Modifier.padding(padding)) {
-                // TYPING section
-                item { SectionHeader("Typing") }
-                item {
-                    SwitchSetting(
-                        title = "Auto-capitalize",
-                        subtitle = "Capitalize first letter after sentence",
-                        checked = autoCapitalize,
-                        onCheckedChange = { autoCapitalize = it; saveBoolean("auto_capitalize", it) }
-                    )
-                }
-                item {
-                    SwitchSetting(
-                        title = "Double-space period",
-                        subtitle = "Tap space twice for period",
-                        checked = doubleSpacePeriod,
-                        onCheckedChange = { doubleSpacePeriod = it; saveBoolean("double_space_period", it) }
-                    )
-                }
-                item {
-                    SwitchSetting(
-                        title = "Suggestions",
-                        subtitle = "Show word suggestions while typing",
-                        checked = suggestions,
-                        onCheckedChange = { suggestions = it; saveBoolean("suggestions", it) }
-                    )
-                }
-                item {
-                    ListSetting(
-                        title = "Default mode",
-                        currentValue = if (defaultMode == "banglu") "\u09AC\u09BE\u0982\u09B2\u09C1 (Bengali)" else "English",
-                        options = listOf(
-                            "banglu" to "\u09AC\u09BE\u0982\u09B2\u09C1 (Bengali)",
-                            "english" to "English"
-                        ),
-                        selected = defaultMode,
-                        onSelect = { defaultMode = it; saveString("default_mode", it) }
-                    )
-                }
 
-                // FEEDBACK section
-                item { SectionHeader("Feedback") }
-                item {
-                    SwitchSetting(
-                        title = "Haptic feedback",
-                        subtitle = "Vibrate on key press",
-                        checked = hapticFeedback,
-                        onCheckedChange = { hapticFeedback = it; saveBoolean("haptic_feedback", it) }
-                    )
+            // ── Typing Section ──
+            item { BrandSectionHeader("টাইপিং", "Typing") }
+            item {
+                BrandSwitch("অটো-ক্যাপিটালাইজ", "বাক্যের পর প্রথম অক্ষর বড় হাতের", autoCapitalize) {
+                    autoCapitalize = it; saveBoolean("auto_capitalize", it)
                 }
-                item {
-                    SwitchSetting(
-                        title = "Sound on keypress",
-                        subtitle = "Play click sound",
-                        checked = soundFeedback,
-                        onCheckedChange = { soundFeedback = it; saveBoolean("sound_feedback", it) }
-                    )
+            }
+            item {
+                BrandSwitch("ডাবল-স্পেস পিরিয়ড", "দুবার স্পেস চাপলে দাড়ি/পিরিয়ড", doubleSpacePeriod) {
+                    doubleSpacePeriod = it; saveBoolean("double_space_period", it)
                 }
-                item {
-                    SwitchSetting(
-                        title = "Key preview",
-                        subtitle = "Enlarge key on press",
-                        checked = keyPreview,
-                        onCheckedChange = { keyPreview = it; saveBoolean("key_preview", it) }
-                    )
+            }
+            item {
+                BrandSwitch("সাজেশন", "টাইপ করার সময় শব্দ সাজেশন দেখান", suggestions) {
+                    suggestions = it; saveBoolean("suggestions", it)
                 }
+            }
+            item {
+                BrandListSetting(
+                    "ডিফল্ট মোড",
+                    if (defaultMode == "banglu") "বাংলু (বাংলা)" else "English",
+                    listOf("banglu" to "বাংলু (বাংলা)", "english" to "English"),
+                    defaultMode
+                ) { defaultMode = it; saveString("default_mode", it) }
+            }
 
-                // LAYOUT section
-                item { SectionHeader("Layout") }
-                item {
-                    SwitchSetting(
-                        title = "Number row",
-                        subtitle = "Show number row above letters",
-                        checked = numberRow,
-                        onCheckedChange = { numberRow = it; saveBoolean("number_row", it) }
-                    )
+            // ── Feedback Section ──
+            item { BrandSectionHeader("ফিডব্যাক", "Feedback") }
+            item {
+                BrandSwitch("হ্যাপটিক ফিডব্যাক", "কী চাপলে কম্পন", hapticFeedback) {
+                    hapticFeedback = it; saveBoolean("haptic_feedback", it)
                 }
-                item {
-                    ListSetting(
-                        title = "Theme",
-                        currentValue = when (themeMode) {
-                            "light" -> "Light"
-                            "dark" -> "Dark"
-                            "amoled" -> "AMOLED"
-                            else -> "Auto (system)"
-                        },
-                        options = listOf(
-                            "auto" to "Auto (system)",
-                            "light" to "Light",
-                            "dark" to "Dark",
-                            "amoled" to "AMOLED"
-                        ),
-                        selected = themeMode,
-                        onSelect = { themeMode = it; saveString("theme", it) }
-                    )
+            }
+            item {
+                BrandSwitch("সাউন্ড", "কী চাপলে ক্লিক শব্দ", soundFeedback) {
+                    soundFeedback = it; saveBoolean("sound_feedback", it)
                 }
+            }
+            item {
+                BrandSwitch("কী প্রিভিউ", "চাপলে কী বড় দেখায়", keyPreview) {
+                    keyPreview = it; saveBoolean("key_preview", it)
+                }
+            }
 
-                // ABOUT section
-                item { SectionHeader("About") }
-                item { InfoRow("Version", "1.0.0") }
-                item { InfoRow("Engine", "SmartEngine 7-layer AI") }
-                item { InfoRow("Dictionary", "485,000 Bengali words") }
-                item { InfoRow("Seed Dictionary", "6,500+ curated entries") }
+            // ── Layout Section ──
+            item { BrandSectionHeader("লেআউট", "Layout") }
+            item {
+                BrandSwitch("নম্বর সারি", "অক্ষরের উপরে নম্বর সারি দেখান", numberRow) {
+                    numberRow = it; saveBoolean("number_row", it)
+                }
+            }
+            item {
+                BrandListSetting(
+                    "থিম",
+                    when (themeMode) { "light" -> "লাইট"; "dark" -> "ডার্ক"; "amoled" -> "AMOLED"; else -> "অটো (সিস্টেম)" },
+                    listOf("auto" to "অটো (সিস্টেম)", "light" to "লাইট", "dark" to "ডার্ক", "amoled" to "AMOLED"),
+                    themeMode
+                ) { themeMode = it; saveString("theme", it) }
+            }
 
-                // RESET
-                item {
-                    TextButton(
-                        onClick = {
+            // ── About Section ──
+            item { BrandSectionHeader("সম্পর্কে", "About") }
+            item { BrandInfoRow("ভার্সন", "1.0.0") }
+            item { BrandInfoRow("ইঞ্জিন", "SmartEngine 7-layer AI") }
+            item { BrandInfoRow("শব্দভাণ্ডার", "৪৮৫,০০০ বাংলা শব্দ") }
+            item { BrandInfoRow("সিড ডিকশনারি", "৬,৫০০+ নির্বাচিত শব্দ") }
+
+            // ── Reset ──
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, Coral.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                        .clickable {
                             prefs.edit().clear().apply()
-                            autoCapitalize = true
-                            doubleSpacePeriod = true
-                            suggestions = true
-                            hapticFeedback = true
-                            soundFeedback = true
-                            keyPreview = true
-                            numberRow = true
-                            themeMode = "auto"
-                            defaultMode = "banglu"
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                    ) {
-                        Text("Reset all settings", color = Color.Red)
-                    }
+                            autoCapitalize = true; doubleSpacePeriod = true; suggestions = true
+                            hapticFeedback = true; soundFeedback = true; keyPreview = true
+                            numberRow = true; themeMode = "auto"; defaultMode = "banglu"
+                        }
+                        .padding(14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("সব সেটিংস রিসেট করুন", color = Coral, fontSize = 14.sp)
                 }
-
-                // Bottom spacing
-                item { Spacer(modifier = Modifier.height(32.dp)) }
             }
         }
     }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Brand Components
+// ══════════════════════════════════════════════════════════════════════════════
+
 @Composable
-fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        fontSize = 14.sp,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp, end = 16.dp)
-    )
+private fun BrandSectionHeader(bengali: String, english: String) {
+    Row(
+        modifier = Modifier.padding(start = 20.dp, top = 28.dp, bottom = 8.dp, end = 20.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(18.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(Gold)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(bengali, color = Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(english, color = TextMuted, fontSize = 12.sp)
+    }
 }
 
 @Composable
-fun SwitchSetting(
+private fun BrandSwitch(
     title: String,
     subtitle: String,
     checked: Boolean,
@@ -245,24 +253,30 @@ fun SwitchSetting(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 16.sp)
-            Text(
-                text = subtitle,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(title, color = TextLight, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(subtitle, color = TextMuted, fontSize = 12.sp, lineHeight = 16.sp)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Gold,
+                checkedTrackColor = GoldSwitchTrack,
+                uncheckedThumbColor = TextMuted,
+                uncheckedTrackColor = WarmCard
+            )
+        )
     }
 }
 
 @Composable
-fun ListSetting(
+private fun BrandListSetting(
     title: String,
     currentValue: String,
     options: List<Pair<String, String>>,
@@ -275,52 +289,57 @@ fun ListSetting(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { showDialog = true }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 16.sp)
-            Text(
-                text = currentValue,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(title, color = TextLight, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(currentValue, color = Gold.copy(alpha = 0.8f), fontSize = 13.sp)
         }
+        Text("›", color = GoldDim, fontSize = 22.sp)
     }
 
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
-            title = { Text(title) },
+            containerColor = WarmCard,
+            titleContentColor = Gold,
+            title = { Text(title, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     options.forEach { (key, label) ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
-                                    onSelect(key)
-                                    showDialog = false
-                                }
-                                .padding(vertical = 8.dp),
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (selected == key) GoldSwitchTrack else Color.Transparent)
+                                .clickable { onSelect(key); showDialog = false }
+                                .padding(vertical = 12.dp, horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            RadioButton(
-                                selected = selected == key,
-                                onClick = {
-                                    onSelect(key)
-                                    showDialog = false
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clip(CircleShape)
+                                    .border(2.dp, if (selected == key) Gold else TextMuted, CircleShape)
+                                    .background(if (selected == key) Gold else Color.Transparent),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (selected == key) {
+                                    Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(WarmCard))
                                 }
-                            )
-                            Text(text = label, modifier = Modifier.padding(start = 8.dp))
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Text(label, color = if (selected == key) Gold else TextLight, fontSize = 15.sp)
                         }
                     }
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showDialog = false }) {
-                    Text("Cancel")
+                    Text("বাতিল", color = TextMuted)
                 }
             }
         )
@@ -328,19 +347,15 @@ fun ListSetting(
 }
 
 @Composable
-fun InfoRow(label: String, value: String) {
+private fun BrandInfoRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = label, fontSize = 16.sp)
-        Text(
-            text = value,
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Text(label, color = TextLight, fontSize = 15.sp)
+        Text(value, color = Gold.copy(alpha = 0.7f), fontSize = 13.sp)
     }
 }
