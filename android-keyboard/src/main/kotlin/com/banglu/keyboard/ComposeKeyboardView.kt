@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -811,7 +813,8 @@ private fun KeyButton(
     val hapticOn = LocalHapticEnabled.current
     val soundOn = LocalSoundEnabled.current
     val previewOn = LocalKeyPreviewEnabled.current
-    var isPressed by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
 
     // Feature 1.4: Scale UP on press for single-character keys (key preview effect)
     val isCharKey = label.length == 1
@@ -832,22 +835,13 @@ private fun KeyButton(
             }
             .clip(RoundedCornerShape(KeyCorner))
             .background(if (isPressed) colors.keyPressed else bgColor)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
-                        try {
-                            awaitRelease()
-                        } finally {
-                            isPressed = false
-                        }
-                    },
-                    onTap = {
-                        onClick()
-                    }
-                )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) {
+                if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
+                onClick()
             },
         contentAlignment = Alignment.Center
     ) {
