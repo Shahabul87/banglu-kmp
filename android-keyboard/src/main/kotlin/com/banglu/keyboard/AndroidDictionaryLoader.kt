@@ -34,15 +34,15 @@ class AndroidDictionaryLoader(private val context: Context) : DictionaryLoader {
 
         if (!dbFile.exists()) {
             try {
-                Log.d(TAG, "Copying $DB_FILENAME from assets to ${dbFile.absolutePath}")
+                if (BuildConfig.DEBUG) Log.d(TAG, "Copying $DB_FILENAME from assets to ${dbFile.absolutePath}")
                 context.assets.open(DB_FILENAME).use { input ->
                     dbFile.outputStream().use { output ->
                         input.copyTo(output)
                     }
                 }
-                Log.d(TAG, "Copy complete (${dbFile.length() / 1024 / 1024}MB)")
+                if (BuildConfig.DEBUG) Log.d(TAG, "Copy complete (${dbFile.length() / 1024 / 1024}MB)")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to copy database from assets", e)
+                if (BuildConfig.DEBUG) Log.e(TAG, "Failed to copy database from assets", e)
                 return null
             }
         }
@@ -50,7 +50,7 @@ class AndroidDictionaryLoader(private val context: Context) : DictionaryLoader {
         return try {
             SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to open database", e)
+            if (BuildConfig.DEBUG) Log.e(TAG, "Failed to open database", e)
             null
         }
     }
@@ -64,9 +64,9 @@ class AndroidDictionaryLoader(private val context: Context) : DictionaryLoader {
                     words.add(cursor.getString(0))
                 }
             }
-            Log.d(TAG, "Loaded ${words.size} words from dictionary")
+            if (BuildConfig.DEBUG) Log.d(TAG, "Loaded ${words.size} words from dictionary")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load full dictionary", e)
+            if (BuildConfig.DEBUG) Log.e(TAG, "Failed to load full dictionary", e)
             return null
         } finally {
             db.close()
@@ -83,9 +83,9 @@ class AndroidDictionaryLoader(private val context: Context) : DictionaryLoader {
                     freqs[cursor.getString(0)] = cursor.getInt(1)
                 }
             }
-            Log.d(TAG, "Loaded ${freqs.size} frequency entries")
+            if (BuildConfig.DEBUG) Log.d(TAG, "Loaded ${freqs.size} frequency entries")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load frequency map", e)
+            if (BuildConfig.DEBUG) Log.e(TAG, "Failed to load frequency map", e)
             return null
         } finally {
             db.close()
@@ -102,9 +102,9 @@ class AndroidDictionaryLoader(private val context: Context) : DictionaryLoader {
                     map[cursor.getString(0)] = cursor.getString(1)
                 }
             }
-            Log.d(TAG, "Loaded ${map.size} disambiguation entries")
+            if (BuildConfig.DEBUG) Log.d(TAG, "Loaded ${map.size} disambiguation entries")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load disambiguation map", e)
+            if (BuildConfig.DEBUG) Log.e(TAG, "Failed to load disambiguation map", e)
             return null
         } finally {
             db.close()

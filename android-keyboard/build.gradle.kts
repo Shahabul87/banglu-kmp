@@ -1,7 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+}
+
+// Load signing credentials from local.properties (gitignored)
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -19,9 +27,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("banglu-release.jks")
-            storePassword = "banglu2026"
+            storePassword = localProps.getProperty("BANGLU_STORE_PASSWORD", "")
             keyAlias = "banglu"
-            keyPassword = "banglu2026"
+            keyPassword = localProps.getProperty("BANGLU_KEY_PASSWORD", "")
         }
     }
 
@@ -44,6 +52,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

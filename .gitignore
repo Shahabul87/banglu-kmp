@@ -11,6 +11,7 @@ build/
 
 # Android
 local.properties
+*.jks
 
 # Kotlin
 *.class

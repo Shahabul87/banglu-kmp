@@ -1,6 +1,8 @@
 package com.banglu.keyboard
 
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.inputmethodservice.InputMethodService
 import android.text.InputType
 import android.util.Log
@@ -22,6 +24,8 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.banglu.engine.SmartEngineAdapter
+import com.banglu.engine.types.ConversionResult
+import com.banglu.engine.types.ResolutionSource
 import com.banglu.engine.types.SmartSuggestion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,8 +74,58 @@ class BangluIMEService : InputMethodService(),
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    // ── Settings (read from SharedPreferences) ──────────────────────────
+    private lateinit var prefs: SharedPreferences
+    val hapticEnabled = mutableStateOf(true)
+    val soundEnabled = mutableStateOf(true)
+    val suggestionsEnabled = mutableStateOf(true)
+    val autoCapitalizeEnabled = mutableStateOf(true)
+    val doubleSpacePeriodEnabled = mutableStateOf(true)
+    val numberRowEnabled = mutableStateOf(true)
+    val keyPreviewEnabled = mutableStateOf(true)
+    val themeMode = mutableStateOf("auto")
+
     companion object {
         private const val TAG = "BangluIME"
+    }
+
+    /** Debug-only logging — stripped from release builds */
+    private fun log(msg: String) {
+        if (BuildConfig.DEBUG) Log.d(TAG, msg)
+    }
+
+    /** Safe conversion wrapper — never crashes the keyboard */
+    private fun safeConvert(input: String): ConversionResult {
+        return try {
+            SmartEngineAdapter.convertWord(input)
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.e(TAG, "Conversion failed for '$input'", e)
+            ConversionResult(input, 0.0, ResolutionSource.RULE, emptyList())
+        }
+    }
+
+    /** Safe suggestions wrapper */
+    private fun safeSuggestions(input: String, limit: Int = 8): List<SmartSuggestion> {
+        return try {
+            SmartEngineAdapter.getSuggestions(input, limit)
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.e(TAG, "Suggestions failed for '$input'", e)
+            emptyList()
+        }
+    }
+
+    /** Reload settings from SharedPreferences */
+    private fun reloadSettings() {
+        hapticEnabled.value = prefs.getBoolean("haptic_feedback", true)
+        soundEnabled.value = prefs.getBoolean("sound_feedback", true)
+        suggestionsEnabled.value = prefs.getBoolean("suggestions", true)
+        autoCapitalizeEnabled.value = prefs.getBoolean("auto_capitalize", true)
+        doubleSpacePeriodEnabled.value = prefs.getBoolean("double_space_period", true)
+        numberRowEnabled.value = prefs.getBoolean("number_row", true)
+        keyPreviewEnabled.value = prefs.getBoolean("key_preview", true)
+        themeMode.value = prefs.getString("theme", "auto") ?: "auto"
+        val defaultMode = prefs.getString("default_mode", "banglu") ?: "banglu"
+        letterModeBeforeSymbols = if (defaultMode == "english") KeyboardMode.ENGLISH else KeyboardMode.BANGLU
     }
 
     override fun onCreate() {
@@ -79,19 +133,22 @@ class BangluIMEService : InputMethodService(),
         savedStateRegistryController.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
 
-        Log.d(TAG, "onCreate: Initializing SmartEngine...")
+        prefs = getSharedPreferences("banglu_prefs", Context.MODE_PRIVATE)
+        reloadSettings()
+
+        log("onCreate: Initializing SmartEngine...")
         SmartEngineAdapter.initializeSync()
-        Log.d(TAG, "onCreate: Seed dictionary loaded")
+        log("onCreate: Seed dictionary loaded")
 
         serviceScope.launch {
             try {
                 val storage = AndroidStorage(applicationContext)
                 val loader = AndroidDictionaryLoader(applicationContext)
-                Log.d(TAG, "onCreate: Loading full dictionary from SQLite...")
+                log("onCreate: Loading full dictionary from SQLite...")
                 SmartEngineAdapter.initialize(storage, loader)
-                Log.d(TAG, "onCreate: Full dictionary loaded!")
+                log("onCreate: Full dictionary loaded!")
             } catch (e: Exception) {
-                Log.e(TAG, "onCreate: Failed to load full dictionary", e)
+                if (BuildConfig.DEBUG) Log.e(TAG, "onCreate: Failed to load full dictionary", e)
             }
         }
     }
@@ -99,6 +156,7 @@ class BangluIMEService : InputMethodService(),
     override fun onCreateInputView(): View {
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        reloadSettings()
 
         val composeView = ComposeView(this).apply {
             setContent {
@@ -108,6 +166,12 @@ class BangluIMEService : InputMethodService(),
                     shiftState = shiftState.value,
                     enterLabel = enterKeyLabel.value,
                     isToolbarExpanded = isToolbarExpanded.value,
+                    hapticEnabled = hapticEnabled.value,
+                    soundEnabled = soundEnabled.value,
+                    suggestionsEnabled = suggestionsEnabled.value,
+                    numberRowEnabled = numberRowEnabled.value,
+                    keyPreviewEnabled = keyPreviewEnabled.value,
+                    themePref = themeMode.value,
                     onKeyPress = { char -> onKeyPress(char) },
                     onBackspace = { onBackspace() },
                     onBackspaceWord = { onBackspaceWord() },
@@ -156,6 +220,7 @@ class BangluIMEService : InputMethodService(),
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        reloadSettings()
         buffer = ""
         suggestions.clear()
         lastSpaceTime = 0L
@@ -171,7 +236,7 @@ class BangluIMEService : InputMethodService(),
         }
 
         // Feature 1.2: Auto-capitalize at start of text field (English mode)
-        if (keyboardMode.value == KeyboardMode.ENGLISH) {
+        if (autoCapitalizeEnabled.value && keyboardMode.value == KeyboardMode.ENGLISH) {
             val before = currentInputConnection?.getTextBeforeCursor(1, 0)?.toString()
             if (before.isNullOrEmpty()) {
                 shiftState.value = ShiftState.ON
@@ -202,7 +267,7 @@ class BangluIMEService : InputMethodService(),
 
     private fun onBangluKeyPress(char: Char) {
         buffer += char
-        Log.d(TAG, "onBangluKeyPress: char='$char', buffer='$buffer'")
+        log("onBangluKeyPress: char='$char', buffer='$buffer'")
 
         // Auto-unshift after typing a letter (unless caps lock)
         if (shiftState.value == ShiftState.ON && char.isLetter()) {
@@ -215,17 +280,21 @@ class BangluIMEService : InputMethodService(),
             return
         }
 
-        val result = SmartEngineAdapter.convertWord(buffer)
-        Log.d(TAG, "convert: '$buffer' -> '${result.bengali}' (${result.confidence})")
+        val result = safeConvert(buffer)
+        log("convert: '$buffer' -> '${result.bengali}' (${result.confidence})")
         ic.setComposingText(result.bengali, 1)
 
-        val newSuggestions = SmartEngineAdapter.getSuggestions(buffer, 8)
-        suggestions.clear()
-        suggestions.addAll(newSuggestions)
+        if (suggestionsEnabled.value) {
+            val newSuggestions = safeSuggestions(buffer, 8)
+            suggestions.clear()
+            suggestions.addAll(newSuggestions)
+        } else {
+            suggestions.clear()
+        }
     }
 
     private fun onEnglishKeyPress(char: Char) {
-        Log.d(TAG, "onEnglishKeyPress: char='$char'")
+        log("onEnglishKeyPress: char='$char'")
 
         // Auto-unshift after typing a letter (unless caps lock)
         if (shiftState.value == ShiftState.ON && char.isLetter()) {
@@ -236,13 +305,13 @@ class BangluIMEService : InputMethodService(),
         ic.commitText(char.toString(), 1)
 
         // Feature 1.2: Auto-capitalize after sentence-ending punctuation
-        if (shouldAutoCapitalize() && shiftState.value == ShiftState.OFF) {
+        if (autoCapitalizeEnabled.value && shouldAutoCapitalize() && shiftState.value == ShiftState.OFF) {
             shiftState.value = ShiftState.ON
         }
     }
 
     private fun onDirectCommit(char: Char) {
-        Log.d(TAG, "onDirectCommit: char='$char'")
+        log("onDirectCommit: char='$char'")
         // Commit any pending Banglu buffer first
         commitPendingBuffer()
 
@@ -251,7 +320,7 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun onPunctuationPress(char: Char) {
-        Log.d(TAG, "onPunctuationPress: char='$char'")
+        log("onPunctuationPress: char='$char'")
         // Commit any pending Banglu buffer first, then commit the punctuation
         commitPendingBuffer()
 
@@ -260,7 +329,7 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun onBackspace() {
-        Log.d(TAG, "onBackspace: mode=${keyboardMode.value}, buffer='$buffer'")
+        log("onBackspace: mode=${keyboardMode.value}, buffer='$buffer'")
         val ic = currentInputConnection ?: return
 
         when (keyboardMode.value) {
@@ -272,11 +341,13 @@ class BangluIMEService : InputMethodService(),
                         ic.finishComposingText()
                         suggestions.clear()
                     } else {
-                        val result = SmartEngineAdapter.convertWord(buffer)
+                        val result = safeConvert(buffer)
                         ic.setComposingText(result.bengali, 1)
-                        val newSuggestions = SmartEngineAdapter.getSuggestions(buffer, 8)
-                        suggestions.clear()
-                        suggestions.addAll(newSuggestions)
+                        if (suggestionsEnabled.value) {
+                            val newSuggestions = safeSuggestions(buffer, 8)
+                            suggestions.clear()
+                            suggestions.addAll(newSuggestions)
+                        }
                     }
                 } else {
                     ic.deleteSurroundingText(1, 0)
@@ -290,15 +361,15 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun onSpacePress() {
-        Log.d(TAG, "onSpacePress: mode=${keyboardMode.value}, buffer='$buffer'")
+        log("onSpacePress: mode=${keyboardMode.value}, buffer='$buffer'")
         val ic = currentInputConnection ?: return
         val now = System.currentTimeMillis()
 
         when (keyboardMode.value) {
             KeyboardMode.BANGLU -> {
                 if (buffer.isNotEmpty()) {
-                    val result = SmartEngineAdapter.convertWord(buffer)
-                    Log.d(TAG, "onSpacePress: committing '${result.bengali}'")
+                    val result = safeConvert(buffer)
+                    log("onSpacePress: committing '${result.bengali}'")
                     ic.commitText(result.bengali + " ", 1)
                     SmartEngineAdapter.onWordSelected(buffer, result.bengali)
                     buffer = ""
@@ -306,7 +377,7 @@ class BangluIMEService : InputMethodService(),
                     updatePredictions(result.bengali)
                 } else {
                     // Feature 1.1: Double-space → Bengali danda + space
-                    if (now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
+                    if (doubleSpacePeriodEnabled.value && now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
                         ic.deleteSurroundingText(1, 0)
                         ic.commitText("\u0964 ", 1)  // Bengali danda (।) + space
                     } else {
@@ -316,7 +387,7 @@ class BangluIMEService : InputMethodService(),
             }
             else -> {
                 // Feature 1.1: Double-space → period + space (English/Symbol modes)
-                if (now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
+                if (doubleSpacePeriodEnabled.value && now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
                     ic.deleteSurroundingText(1, 0)
                     ic.commitText(". ", 1)
                 } else {
@@ -328,18 +399,18 @@ class BangluIMEService : InputMethodService(),
         lastSpaceTime = now
 
         // Feature 1.2: Auto-capitalize after double-space period
-        if (shouldAutoCapitalize() && shiftState.value == ShiftState.OFF) {
+        if (autoCapitalizeEnabled.value && shouldAutoCapitalize() && shiftState.value == ShiftState.OFF) {
             shiftState.value = ShiftState.ON
         }
     }
 
     private fun onEnterPress() {
-        Log.d(TAG, "onEnterPress: mode=${keyboardMode.value}, buffer='$buffer'")
+        log("onEnterPress: mode=${keyboardMode.value}, buffer='$buffer'")
         val ic = currentInputConnection ?: return
 
         // Commit any pending buffer
         if (keyboardMode.value == KeyboardMode.BANGLU && buffer.isNotEmpty()) {
-            val result = SmartEngineAdapter.convertWord(buffer)
+            val result = safeConvert(buffer)
             ic.commitText(result.bengali, 1)
             SmartEngineAdapter.onWordSelected(buffer, result.bengali)
             val committedBengali = result.bengali
@@ -363,7 +434,7 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun onSuggestionTap(suggestion: SmartSuggestion) {
-        Log.d(TAG, "onSuggestionTap: '${suggestion.bengali}' (tier=${suggestion.tier})")
+        log("onSuggestionTap: '${suggestion.bengali}' (tier=${suggestion.tier})")
         val ic = currentInputConnection ?: return
 
         if (buffer.isEmpty()) {
@@ -404,7 +475,7 @@ class BangluIMEService : InputMethodService(),
             }
         }
 
-        Log.d(TAG, "onShiftTap: shiftState=${shiftState.value}")
+        log("onShiftTap: shiftState=${shiftState.value}")
     }
 
     // ── Mode Switching ─────────────────────────────────────────────────────
@@ -437,7 +508,7 @@ class BangluIMEService : InputMethodService(),
 
         keyboardMode.value = newMode
         suggestions.clear()
-        Log.d(TAG, "onGlobePress: mode=$newMode")
+        log("onGlobePress: mode=$newMode")
     }
 
     private fun onSymbolsPress() {
@@ -447,12 +518,12 @@ class BangluIMEService : InputMethodService(),
         // Remember current letter mode
         letterModeBeforeSymbols = keyboardMode.value
         keyboardMode.value = KeyboardMode.SYMBOLS_1
-        Log.d(TAG, "onSymbolsPress: entering SYMBOLS_1")
+        log("onSymbolsPress: entering SYMBOLS_1")
     }
 
     private fun onBackToLetters() {
         keyboardMode.value = letterModeBeforeSymbols
-        Log.d(TAG, "onBackToLetters: returning to $letterModeBeforeSymbols")
+        log("onBackToLetters: returning to $letterModeBeforeSymbols")
     }
 
     private fun onSymbolPageToggle() {
@@ -461,7 +532,7 @@ class BangluIMEService : InputMethodService(),
             KeyboardMode.SYMBOLS_2 -> KeyboardMode.SYMBOLS_1
             else -> keyboardMode.value
         }
-        Log.d(TAG, "onSymbolPageToggle: mode=${keyboardMode.value}")
+        log("onSymbolPageToggle: mode=${keyboardMode.value}")
     }
 
     // ── Feature 3.1: Toolbar Actions ────────────────────────────────────────
@@ -574,7 +645,7 @@ class BangluIMEService : InputMethodService(),
     private fun commitPendingBuffer() {
         if (keyboardMode.value == KeyboardMode.BANGLU && buffer.isNotEmpty()) {
             val ic = currentInputConnection ?: return
-            val result = SmartEngineAdapter.convertWord(buffer)
+            val result = safeConvert(buffer)
             ic.commitText(result.bengali, 1)
             SmartEngineAdapter.onWordSelected(buffer, result.bengali)
             buffer = ""

@@ -70,6 +70,36 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     companion object {
         const val MAX_CACHE = 2000
+
+        /** Bengali digits ০-৯ */
+        private const val BENGALI_DIGITS = "০১২৩৪৫৬৭৮৯"
+
+        /** Punctuation mapping (longest match first) */
+        private val PUNCTUATION = linkedMapOf(
+            "..." to "...",
+            ".." to "।।",
+            "." to "।",
+            ":" to "ঃ",
+            "^" to "ঁ",
+            "$" to "৳",
+            "," to ",",
+            "!" to "!",
+            "?" to "?",
+            ";" to ";",
+            "(" to "(",
+            ")" to ")",
+            "[" to "[",
+            "]" to "]",
+            "{" to "{",
+            "}" to "}",
+            "\"" to "\"",
+            "'" to "'",
+            "-" to "-",
+            "/" to "/",
+            "\\" to "\\",
+            "=" to "=",
+            "+" to "+",
+        )
     }
 
     init {
@@ -521,13 +551,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * Layer 0: Section narrowing using 480K Bengali dictionary sections.
      */
     private fun convertBySection(key: String): ConversionResult? {
-        val suggestions = sectionEngine.getSectionSuggestions(key, 3)
+        val suggestions = sectionEngine.getSectionSuggestions(key, 5)
         if (suggestions.isEmpty()) return null
-        // Score by phonetic overlap
-        val scored = suggestions.map { s ->
-            val overlap = PhoneticOverlapScorer.score(key, ReverseTransliterator.reverseWord(s.bengali))
-            s to overlap.score
-        }.filter { it.second > 0.50 }
+        // Score by phonetic overlap, reject hyphenated garbage
+        val scored = suggestions
+            .filter { !it.bengali.contains("-") }  // Reject hyphenated entries (garbage from 480K)
+            .map { s ->
+                val overlap = PhoneticOverlapScorer.score(key, ReverseTransliterator.reverseWord(s.bengali))
+                s to overlap.score
+            }.filter { it.second > 0.50 }
         if (scored.isEmpty()) return null
         val best = scored.maxByOrNull { it.second }!!
         return ConversionResult(best.first.bengali, best.first.confidence, ResolutionSource.SECTION)
@@ -574,6 +606,26 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val alternatives = mutableListOf<Alternative>()
 
         while (i < key.length) {
+            // --- Punctuation (longest match first) ---
+            var punctMatched = false
+            for ((phonetic, bengali) in PUNCTUATION) {
+                if (key.startsWith(phonetic, i)) {
+                    result.append(bengali)
+                    i += phonetic.length
+                    punctMatched = true
+                    break
+                }
+            }
+            if (punctMatched) continue
+
+            // --- Digits → Bengali numerals ---
+            val ch = key[i]
+            if (ch in '0'..'9') {
+                result.append(BENGALI_DIGITS[ch - '0'])
+                i++
+                continue
+            }
+
             // Try ConjunctResolver first (highest priority, locked patterns)
             val conjunctMatch = ConjunctResolver.matchAt(key, i)
             if (conjunctMatch != null) {
@@ -826,7 +878,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             for ((from, to) in swaps) {
                 if (result.bengali.contains(from)) {
                     val candidate = result.bengali.replace(from, to)
-                    if (validator.isValid(candidate)) {
+                    // Reject hyphenated candidates (garbage from 480K dictionary)
+                    if (validator.isValid(candidate) && !candidate.contains("-")) {
                         return result.copy(
                             bengali = candidate, confidence = 0.90,
                             alternatives = result.alternatives + Alternative(result.bengali, result.confidence)
@@ -894,10 +947,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         for (prefixLen in bengali.length downTo 2) {
             val prefix = bengali.substring(0, prefixLen)
 
-            // Search with original prefix
+            // Search with original prefix — reject hyphenated garbage
             val candidates = validator.findByPrefix(prefix, 30)
             for (c in candidates) {
-                if (c != bengali) allCandidates.add(c)
+                if (c != bengali && !c.contains("-")) allCandidates.add(c)
             }
 
             // Also search with vowel-swapped prefix (ি↔ী, ু↔ূ)

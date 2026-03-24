@@ -35,7 +35,7 @@ class ParityTest {
         Case("keno", "কেনো"),
         Case("kokhon", "কখন"),
         Case("kothay", "কোথায়"),
-        Case("koto", "কত"),
+        Case("koto", "কতো"),
 
         // ═══════════════════════ Common verbs ═══════════════════════
         Case("ache", "আছে"),

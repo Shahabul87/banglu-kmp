@@ -4499,6 +4499,10 @@ object SeedData {
         e("ময়না", listOf("moyna"), 70, WordCategory.TADBHAVA),      // myna bird
         e("ময়ূর", listOf("moyur"), 65, WordCategory.TATSAMA),       // peacock
         e("মোংলা", listOf("mongla"), 60, WordCategory.TADBHAVA),    // Mongla port
+        e("পেপার", listOf("pepar", "paper"), 75, WordCategory.FOREIGN), // paper — must beat পে-অর্ডার from 480K
+        e("কয়", listOf("koy"), 75, WordCategory.TADBHAVA),           // some/few
+        e("তয়", listOf("toy"), 60, WordCategory.TADBHAVA),           // toy
+        e("দয়", listOf("doy"), 55, WordCategory.TADBHAVA),           // compassion prefix
         e("চলুন", listOf("cholun", "colun"), 80, WordCategory.TADBHAVA),
         e("ধরি", listOf("dhori"), 70, WordCategory.TADBHAVA),
         e("ফ্রম", listOf("from"), 50, WordCategory.FOREIGN),

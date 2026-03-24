@@ -27,6 +27,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -92,6 +94,11 @@ val AmoledColors = KeyboardColors(
 
 val LocalKeyboardColors = compositionLocalOf { DarkColors }
 
+// ── Settings CompositionLocals ──────────────────────────────────────────────────
+val LocalHapticEnabled = compositionLocalOf { true }
+val LocalSoundEnabled = compositionLocalOf { true }
+val LocalKeyPreviewEnabled = compositionLocalOf { true }
+
 // ── Dimensions ───────────────────────────────────────────────────────────────────
 private val NumberRowHeight = 38.dp
 private val KeyRowHeight = 46.dp
@@ -132,6 +139,12 @@ fun BangluKeyboardLayout(
     shiftState: ShiftState,
     enterLabel: String = "\u21B5",
     isToolbarExpanded: Boolean = false,
+    hapticEnabled: Boolean = true,
+    soundEnabled: Boolean = true,
+    suggestionsEnabled: Boolean = true,
+    numberRowEnabled: Boolean = true,
+    keyPreviewEnabled: Boolean = true,
+    themePref: String = "auto",
     onKeyPress: (Char) -> Unit,
     onBackspace: () -> Unit,
     onBackspaceWord: () -> Unit = {},
@@ -153,11 +166,21 @@ fun BangluKeyboardLayout(
     onEmojiOpen: () -> Unit = {},
     onBackFromEmoji: () -> Unit = {}
 ) {
-    // Feature 3.2: Select color scheme based on system dark mode
+    // Feature 3.2: Select color scheme based on theme preference
     val systemDark = isSystemInDarkTheme()
-    val colors = if (systemDark) DarkColors else LightColors
+    val colors = when (themePref) {
+        "light" -> LightColors
+        "dark" -> DarkColors
+        "amoled" -> AmoledColors
+        else -> if (systemDark) DarkColors else LightColors // "auto"
+    }
 
-    CompositionLocalProvider(LocalKeyboardColors provides colors) {
+    CompositionLocalProvider(
+        LocalKeyboardColors provides colors,
+        LocalHapticEnabled provides hapticEnabled,
+        LocalSoundEnabled provides soundEnabled,
+        LocalKeyPreviewEnabled provides keyPreviewEnabled
+    ) {
         // Get nav bar height for bottom padding (permanent fix for Samsung/gesture nav)
         val context = LocalContext.current
         val navBarHeightPx = remember {
@@ -186,13 +209,19 @@ fun BangluKeyboardLayout(
 
             when (keyboardMode) {
                 KeyboardMode.BANGLU -> {
-                    BangluSuggestionRow(suggestions, onSuggestionClick, onDismiss)
+                    if (suggestionsEnabled) {
+                        BangluSuggestionRow(suggestions, onSuggestionClick, onDismiss)
+                    } else {
+                        MinimalSuggestionBar(onDismiss)
+                    }
                     Spacer(modifier = Modifier.height(KeyGapV))
-                    NumberRow(
-                        onNumberPress = onNumberPress,
-                        onSymbolPress = onPunctuationPress
-                    )
-                    Spacer(modifier = Modifier.height(KeyGapV))
+                    if (numberRowEnabled) {
+                        NumberRow(
+                            onNumberPress = onNumberPress,
+                            onSymbolPress = onPunctuationPress
+                        )
+                        Spacer(modifier = Modifier.height(KeyGapV))
+                    }
                     LetterRows(
                         shiftState = shiftState,
                         onKeyPress = onKeyPress,
@@ -217,11 +246,13 @@ fun BangluKeyboardLayout(
                 KeyboardMode.ENGLISH -> {
                     MinimalSuggestionBar(onDismiss)
                     Spacer(modifier = Modifier.height(KeyGapV))
-                    NumberRow(
-                        onNumberPress = onNumberPress,
-                        onSymbolPress = onPunctuationPress
-                    )
-                    Spacer(modifier = Modifier.height(KeyGapV))
+                    if (numberRowEnabled) {
+                        NumberRow(
+                            onNumberPress = onNumberPress,
+                            onSymbolPress = onPunctuationPress
+                        )
+                        Spacer(modifier = Modifier.height(KeyGapV))
+                    }
                     LetterRows(
                         shiftState = shiftState,
                         onKeyPress = onKeyPress,
@@ -771,26 +802,30 @@ private fun KeyButton(
     height: Dp = KeyRowHeight,
     bgColor: Color,
     fontSize: Int = 22,
+    accessibilityLabel: String = label,
     onClick: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
+    val hapticOn = LocalHapticEnabled.current
+    val soundOn = LocalSoundEnabled.current
+    val previewOn = LocalKeyPreviewEnabled.current
     var isPressed by remember { mutableStateOf(false) }
 
     // Feature 1.4: Scale UP on press for single-character keys (key preview effect)
-    // Multi-character keys (labels like "!#1", "ABC") scale down as before
     val isCharKey = label.length == 1
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) {
+        targetValue = if (isPressed && previewOn) {
             if (isCharKey) 1.15f else 0.95f
-        } else 1f,
+        } else if (isPressed) 0.97f else 1f,
         animationSpec = tween(durationMillis = 50)
     )
 
     Box(
         modifier = modifier
             .height(height)
+            .semantics { contentDescription = accessibilityLabel }
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -801,9 +836,8 @@ private fun KeyButton(
                 detectTapGestures(
                     onPress = {
                         isPressed = true
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        // Feature 3.4: Sound feedback
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
                         try {
                             awaitRelease()
                         } finally {
@@ -818,8 +852,8 @@ private fun KeyButton(
         Text(
             text = label,
             color = colors.keyText,
-            fontSize = if (isPressed && isCharKey) (fontSize + 6).sp else fontSize.sp,
-            fontWeight = if (isPressed && isCharKey) FontWeight.Bold else FontWeight.Normal,
+            fontSize = if (isPressed && isCharKey && previewOn) (fontSize + 6).sp else fontSize.sp,
+            fontWeight = if (isPressed && isCharKey && previewOn) FontWeight.Bold else FontWeight.Normal,
             textAlign = TextAlign.Center,
             maxLines = 1
         )
@@ -836,6 +870,8 @@ private fun SpaceBar(
     val colors = LocalKeyboardColors.current
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
+    val hapticOn = LocalHapticEnabled.current
+    val soundOn = LocalSoundEnabled.current
     var isPressed by remember { mutableStateOf(false) }
     var isCursorMode by remember { mutableStateOf(false) }
     var lastDragX by remember { mutableFloatStateOf(0f) }
@@ -847,6 +883,7 @@ private fun SpaceBar(
     Box(
         modifier = modifier
             .height(KeyRowHeight)
+            .semantics { contentDescription = "Space" }
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(KeyCorner))
             .background(if (isPressed) colors.keyPressed else colors.keyBg)
@@ -855,18 +892,17 @@ private fun SpaceBar(
                     onDragStart = { offset ->
                         isCursorMode = true
                         lastDragX = offset.x
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     },
                     onDrag = { change, _ ->
                         change.consume()
                         val dx = change.position.x - lastDragX
-                        // Move cursor every 15dp of horizontal drag
                         val threshold = 15.dp.toPx()
                         if (kotlin.math.abs(dx) > threshold) {
                             val direction = if (dx > 0) 1 else -1
                             onCursorMove(direction)
                             lastDragX = change.position.x
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         }
                     },
                     onDragEnd = { isCursorMode = false },
@@ -877,9 +913,8 @@ private fun SpaceBar(
                 detectTapGestures(
                     onPress = {
                         isPressed = true
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        // Feature 3.4: Sound feedback
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
                         try { awaitRelease() } finally { isPressed = false }
                         if (!isCursorMode) onClick()
                     }
@@ -909,6 +944,8 @@ private fun BackspaceKey(
     val colors = LocalKeyboardColors.current
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
+    val hapticOn = LocalHapticEnabled.current
+    val soundOn = LocalSoundEnabled.current
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
@@ -919,6 +956,7 @@ private fun BackspaceKey(
     Box(
         modifier = modifier
             .height(KeyRowHeight)
+            .semantics { contentDescription = "Backspace" }
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(KeyCorner))
             .background(if (isPressed) colors.keyPressed else colors.specialKeyBg)
@@ -926,28 +964,23 @@ private fun BackspaceKey(
                 detectTapGestures(
                     onPress = {
                         isPressed = true
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        // Feature 3.4: Sound feedback
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        onBackspace() // First delete immediately
+                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
+                        onBackspace()
                         val pressStartTime = System.currentTimeMillis()
 
-                        // Feature 1.5: Start repeat after 400ms, switch to word
-                        // deletion after 1.5s of continuous holding
                         val repeatJob = coroutineScope.launch {
                             delay(400)
                             while (true) {
                                 val elapsed = System.currentTimeMillis() - pressStartTime
                                 if (elapsed > 1500) {
-                                    // Word-by-word deletion after 1.5s hold
                                     onBackspaceWord()
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    delay(100) // Slower pace for word deletion
+                                    if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    delay(100)
                                 } else {
-                                    // Char-by-char deletion
                                     onBackspace()
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    delay(50) // 20 chars/sec
+                                    if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    delay(50)
                                 }
                             }
                         }
@@ -987,6 +1020,8 @@ private fun NumberKey(
     val symbol = NUMBER_SYMBOL_MAP[number] ?: '!'
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
+    val hapticOn = LocalHapticEnabled.current
+    val soundOn = LocalSoundEnabled.current
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
@@ -997,6 +1032,7 @@ private fun NumberKey(
     Box(
         modifier = modifier
             .height(NumberRowHeight)
+            .semantics { contentDescription = "Number $number, long press for $symbol" }
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(KeyCorner))
             .background(if (isPressed) colors.keyPressed else colors.keyBg)
@@ -1004,16 +1040,13 @@ private fun NumberKey(
                 detectTapGestures(
                     onPress = {
                         isPressed = true
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        // Feature 3.4: Sound feedback
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
 
-                        // Start long-press timer
                         val longPressJob = coroutineScope.launch {
                             delay(500)
-                            // Long press -> symbol
                             onSymbolPress(symbol)
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         }
 
                         try {
@@ -1022,7 +1055,6 @@ private fun NumberKey(
                             isPressed = false
                             if (longPressJob.isActive) {
                                 longPressJob.cancel()
-                                // Short tap -> number
                                 onNumberPress(number)
                             }
                         }
@@ -1032,14 +1064,12 @@ private fun NumberKey(
         contentAlignment = Alignment.Center
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(4.dp)) {
-            // Number in center
             Text(
                 text = number.toString(),
                 color = colors.keyText,
                 fontSize = 18.sp,
                 modifier = Modifier.align(Alignment.Center)
             )
-            // Symbol hint in top-right corner
             Text(
                 text = symbol.toString(),
                 color = colors.subText,
@@ -1065,6 +1095,8 @@ private fun EmojiPanel(
     var selectedCategory by remember { mutableIntStateOf(0) }
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
+    val hapticOn = LocalHapticEnabled.current
+    val soundOn = LocalSoundEnabled.current
 
     Column(
         modifier = Modifier
@@ -1161,8 +1193,8 @@ private fun EmojiPanel(
                         .aspectRatio(1f)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
                             onEmojiClick(currentEmojis[index])
                         },
                     contentAlignment = Alignment.Center

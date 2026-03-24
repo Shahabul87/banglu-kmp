@@ -23,12 +23,14 @@ object SmartEngineAdapter {
     private var engine: SmartEngine? = null
     private var storage: PlatformStorage? = null
 
+    @Synchronized
     private fun getEngine(): SmartEngine {
-        if (engine == null) {
-            engine = SmartEngine()
-            engine!!.initializeSync()
-        }
-        return engine!!
+        val existing = engine
+        if (existing != null) return existing
+        val newEngine = SmartEngine()
+        newEngine.initializeSync()
+        engine = newEngine
+        return newEngine
     }
 
     /**
