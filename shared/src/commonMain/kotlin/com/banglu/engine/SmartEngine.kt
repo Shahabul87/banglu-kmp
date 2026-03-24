@@ -20,6 +20,7 @@ import com.banglu.engine.rules.ShatvaVidhan
 import com.banglu.engine.rules.StatisticalDefaults
 import com.banglu.engine.types.Alternative
 import com.banglu.engine.types.ConversionResult
+import com.banglu.engine.types.PredictedWord
 import com.banglu.engine.types.ResolutionSource
 import com.banglu.engine.types.SmartSuggestion
 import com.banglu.engine.util.ReverseTransliterator
@@ -981,6 +982,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      */
     fun setLearnedWords(words: Map<String, Int>) {
         sectionEngine.setLearnedWords(words)
+    }
+
+    /**
+     * Get next-word predictions based on bigram model.
+     *
+     * @param prevBengali The previously committed Bengali word
+     * @param limit Maximum predictions to return
+     * @return List of predicted words with confidence scores
+     */
+    fun getNextWordPredictions(prevBengali: String, limit: Int = 5): List<PredictedWord> {
+        if (!bigramModel.isLoaded()) return emptyList()
+        return bigramModel.getTopPredictions(prevBengali, limit)
     }
 
     /**

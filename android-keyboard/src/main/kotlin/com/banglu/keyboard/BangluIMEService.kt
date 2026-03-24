@@ -62,6 +62,9 @@ class BangluIMEService : InputMethodService(),
     private var lastSpaceTime = 0L
     private val DOUBLE_SPACE_THRESHOLD_MS = 300L
 
+    // Feature 4.1: Bengali next-word predictions
+    private var lastCommittedBengali = ""
+
     // Feature 1.3: Context-aware enter key label
     private val enterKeyLabel = mutableStateOf("\u21B5")
 
@@ -297,6 +300,7 @@ class BangluIMEService : InputMethodService(),
                     SmartEngineAdapter.onWordSelected(buffer, result.bengali)
                     buffer = ""
                     suggestions.clear()
+                    updatePredictions(result.bengali)
                 } else {
                     // Feature 1.1: Double-space → Bengali danda + space
                     if (now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
@@ -335,8 +339,10 @@ class BangluIMEService : InputMethodService(),
             val result = SmartEngineAdapter.convertWord(buffer)
             ic.commitText(result.bengali, 1)
             SmartEngineAdapter.onWordSelected(buffer, result.bengali)
+            val committedBengali = result.bengali
             buffer = ""
             suggestions.clear()
+            updatePredictions(committedBengali)
         }
 
         // Feature 1.3: Perform the appropriate IME action
@@ -354,12 +360,21 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun onSuggestionTap(suggestion: SmartSuggestion) {
-        Log.d(TAG, "onSuggestionTap: '${suggestion.bengali}'")
+        Log.d(TAG, "onSuggestionTap: '${suggestion.bengali}' (tier=${suggestion.tier})")
         val ic = currentInputConnection ?: return
-        ic.commitText(suggestion.bengali + " ", 1)
-        SmartEngineAdapter.onWordSelected(buffer, suggestion.bengali)
-        buffer = ""
-        suggestions.clear()
+
+        if (buffer.isEmpty()) {
+            // Feature 4.1: This is a next-word prediction — commit directly with space
+            ic.commitText(suggestion.bengali + " ", 1)
+            updatePredictions(suggestion.bengali)
+        } else {
+            // This is a conversion suggestion
+            ic.commitText(suggestion.bengali + " ", 1)
+            SmartEngineAdapter.onWordSelected(buffer, suggestion.bengali)
+            buffer = ""
+            suggestions.clear()
+            updatePredictions(suggestion.bengali)
+        }
     }
 
     // ── Shift Handling ─────────────────────────────────────────────────────
@@ -447,6 +462,31 @@ class BangluIMEService : InputMethodService(),
         val intent = Intent(this, SettingsActivity::class.java)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(intent)
+    }
+
+    // ── Feature 4.1: Next-Word Predictions ─────────────────────────────────
+
+    /**
+     * After committing a Bengali word, show predicted next words in the suggestion bar.
+     * Only shows predictions when the composing buffer is empty and keyboard is in Banglu mode.
+     */
+    private fun updatePredictions(committedBengali: String) {
+        lastCommittedBengali = committedBengali
+        if (buffer.isEmpty() && keyboardMode.value == KeyboardMode.BANGLU) {
+            val predictions = SmartEngineAdapter.getNextWordPredictions(committedBengali, 6)
+            suggestions.clear()
+            if (predictions.isNotEmpty()) {
+                suggestions.addAll(predictions.map { pred ->
+                    SmartSuggestion(
+                        bengali = pred.bengali,
+                        confidence = pred.confidence,
+                        source = "prediction",
+                        phonetic = "",
+                        tier = "prediction"
+                    )
+                })
+            }
+        }
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────

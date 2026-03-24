@@ -3,6 +3,7 @@ package com.banglu.engine
 import com.banglu.engine.platform.DictionaryLoader
 import com.banglu.engine.platform.PlatformStorage
 import com.banglu.engine.types.ConversionResult
+import com.banglu.engine.types.PredictedWord
 import com.banglu.engine.types.SmartSuggestion
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -86,6 +87,17 @@ object SmartEngineAdapter {
      */
     fun getSuggestions(input: String, limit: Int = 5): List<SmartSuggestion> =
         getEngine().getSuggestions(input, limit)
+
+    /**
+     * Get next-word predictions based on the bigram model.
+     * Returns predicted Bengali words that commonly follow the given word.
+     *
+     * @param prevBengali The previously committed Bengali word
+     * @param limit Maximum predictions to return (default 5)
+     * @return List of PredictedWord with bengali text and confidence
+     */
+    fun getNextWordPredictions(prevBengali: String, limit: Int = 5): List<PredictedWord> =
+        getEngine().getNextWordPredictions(prevBengali, limit)
 
     /**
      * Record a user's word selection for learning.

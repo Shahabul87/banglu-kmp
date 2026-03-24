@@ -24,6 +24,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -404,24 +405,42 @@ private fun BangluSuggestionRow(
         ) {
             items(suggestions) { suggestion ->
                 val isFirst = suggestion == suggestions.firstOrNull()
+                // Feature 4.4: Prediction chips use different styling
+                val isPrediction = suggestion.tier == "prediction"
+                val chipBg = if (isFirst) colors.suggestionHighlight
+                    else if (isPrediction) colors.keyBg
+                    else colors.suggestionChipBg
+                val chipTextColor = if (isFirst) Color.White else colors.keyText
+
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            if (isFirst) colors.suggestionHighlight
-                            else colors.suggestionChipBg
-                        )
+                        .background(chipBg)
                         .clickable { onSuggestionClick(suggestion) }
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                        .padding(horizontal = 14.dp, vertical = 2.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = suggestion.bengali,
-                        color = if (isFirst) Color.White else colors.keyText,
-                        fontSize = 15.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    // Feature 4.3: Show phonetic hint on primary suggestion
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = suggestion.bengali,
+                            color = chipTextColor,
+                            fontSize = 15.sp,
+                            fontStyle = if (isPrediction) FontStyle.Italic else FontStyle.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (suggestion.phonetic.isNotEmpty() && isFirst) {
+                            Text(
+                                text = suggestion.phonetic,
+                                color = colors.subText,
+                                fontSize = 9.sp,
+                                maxLines = 1
+                            )
+                        }
+                    }
                 }
             }
         }
