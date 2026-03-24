@@ -7,272 +7,389 @@ import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.runtime.rememberUpdatedState
+import com.banglu.engine.SmartEngineAdapter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Banglu Brand Palette — Warm, Earthy, Bengali Premium
+// ══════════════════════════════════════════════════════════════════════════════
+
+private val Gold = Color(0xFFD4A540)
+private val GoldLight = Color(0xFFE8C878)
+private val GoldDim = Color(0xFF8B7035)
+private val Coral = Color(0xFFC4604A)
+private val CoralLight = Color(0xFFD4786A)
+private val WarmBlack = Color(0xFF110E08)
+private val WarmDark = Color(0xFF1A1510)
+private val WarmCard = Color(0xFF231E18)
+private val WarmCardBorder = Color(0xFF3A3028)
+private val TextMuted = Color(0xFFA0907A)
+private val TextLight = Color(0xFFD4C8B0)
+private val Green = Color(0xFF5CB85C)
+private val GreenDim = Color(0xFF2D5A2D)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        setContent {
-            BangluSetupScreen()
-        }
+
+        @Suppress("DEPRECATION")
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+
+        setContent { BangluHomeScreen() }
     }
 }
 
 @Composable
-fun BangluSetupScreen() {
+fun BangluHomeScreen() {
     val context = LocalContext.current
-
+    var demoInput by remember { mutableStateOf("ami") }
     var isEnabled by remember { mutableStateOf(isKeyboardEnabled(context)) }
     var isDefault by remember { mutableStateOf(isKeyboardDefault(context)) }
-    var currentStep by remember { mutableIntStateOf(0) }
-    var testText by remember { mutableStateOf("") }
+    var visible by remember { mutableStateOf(false) }
 
-    // Poll keyboard status every 2 seconds so steps update after user returns from settings
     val currentContext = rememberUpdatedState(context)
     LaunchedEffect(Unit) {
+        SmartEngineAdapter.initializeSync()
+        visible = true
         while (isActive) {
             delay(2000)
-            val ctx = currentContext.value
-            isEnabled = isKeyboardEnabled(ctx)
-            isDefault = isKeyboardDefault(ctx)
-            currentStep = when {
-                !isEnabled -> 0
-                !isDefault -> 1
-                else -> 2
-            }
+            isEnabled = isKeyboardEnabled(currentContext.value)
+            isDefault = isKeyboardDefault(currentContext.value)
         }
     }
 
-    val brandBlue = Color(0xFF3D5AFE)
-
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.height(48.dp))
-
-                // App title
-                Text(
-                    text = "\u09AC\u09BE\u0982\u09B2\u09C1",
-                    fontSize = 48.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = brandBlue
-                )
-                Text(
-                    text = "Bengali Phonetic Keyboard",
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(48.dp))
-
-                // Step 1: Enable keyboard
-                SetupStep(
-                    stepNumber = 1,
-                    title = "Enable Banglu Keyboard",
-                    subtitle = "Turn on Banglu in keyboard settings",
-                    isCompleted = isEnabled,
-                    isCurrent = currentStep == 0,
-                    buttonText = if (isEnabled) "Enabled" else "Enable",
-                    brandColor = brandBlue,
-                    onClick = {
-                        val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
-                        context.startActivity(intent)
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Step 2: Set as default
-                SetupStep(
-                    stepNumber = 2,
-                    title = "Set as Default Keyboard",
-                    subtitle = "Choose Banglu as your keyboard",
-                    isCompleted = isDefault,
-                    isCurrent = currentStep == 1,
-                    buttonText = if (isDefault) "Default" else "Set Default",
-                    brandColor = brandBlue,
-                    onClick = {
-                        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                        imm.showInputMethodPicker()
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Step 3: Try it / Settings
-                SetupStep(
-                    stepNumber = 3,
-                    title = "Try Typing Bengali!",
-                    subtitle = "Type 'ami' to see \u0986\u09AE\u09BF",
-                    isCompleted = false,
-                    isCurrent = currentStep == 2,
-                    buttonText = "Open Settings",
-                    brandColor = brandBlue,
-                    onClick = {
-                        val intent = Intent(context, SettingsActivity::class.java)
-                        context.startActivity(intent)
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Test typing area
-                OutlinedTextField(
-                    value = testText,
-                    onValueChange = { testText = it },
-                    label = { Text("Try typing here...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Text(
-                    text = "Type in English, get Bengali instantly",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun SetupStep(
-    stepNumber: Int,
-    title: String,
-    subtitle: String,
-    isCompleted: Boolean,
-    isCurrent: Boolean,
-    buttonText: String,
-    brandColor: Color,
-    onClick: () -> Unit
-) {
-    val stepColor = when {
-        isCompleted -> Color(0xFF4CAF50)
-        isCurrent -> brandColor
-        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+    val demoOutput = remember(demoInput) {
+        if (demoInput.isNotEmpty()) try { SmartEngineAdapter.convert(demoInput) } catch (_: Exception) { "" } else ""
     }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(
-            width = if (isCurrent) 2.dp else 1.dp,
-            color = if (isCurrent) brandColor else MaterialTheme.colorScheme.outlineVariant
-        ),
-        color = if (isCurrent) brandColor.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surface
+    // Gradient background with warm atmosphere
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(WarmBlack, WarmDark, WarmBlack),
+                    startY = 0f,
+                    endY = 3000f
+                )
+            )
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        // Decorative dashed line across top (matching web)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .offset(y = 120.dp)
+                .drawBehind {
+                    drawLine(
+                        color = Gold.copy(alpha = 0.3f),
+                        start = Offset(0f, 0f),
+                        end = Offset(size.width, 0f),
+                        strokeWidth = 2f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f))
+                    )
+                }
+        )
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+            contentPadding = PaddingValues(horizontal = 28.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // Step number circle
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                color = stepColor
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
+            // ── Status Badge ──
+            item {
+                AnimatedVisibility(visible, enter = fadeIn(tween(600)) + slideInVertically(tween(600)) { -40 }) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(GreenDim.copy(alpha = 0.4f))
+                            .border(1.dp, Green.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Pulsing green dot
+                        val pulseAlpha by rememberInfiniteTransition(label = "pulse").animateFloat(
+                            initialValue = 0.5f, targetValue = 1f,
+                            animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Reverse),
+                            label = "pulseAlpha"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .alpha(pulseAlpha)
+                                .background(Green)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("বাংলাদেশের #১ ফোনেটিক ইঞ্জিন", color = TextLight, fontSize = 13.sp)
+                    }
+                }
+            }
+
+            // ── Brand Title ──
+            item {
+                AnimatedVisibility(visible, enter = fadeIn(tween(800, 200)) + slideInVertically(tween(700, 200)) { 60 }) {
+                    Column {
+                        // Large বাংলু with golden gradient feel
+                        Text(
+                            text = "বাংলু",
+                            fontSize = 64.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Gold,
+                            letterSpacing = 2.sp,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+
+                        // Tagline
+                        Row {
+                            Text("ইংরেজি টাইপ করুন, ", color = TextLight, fontSize = 18.sp)
+                            Text("বাংলা পান", color = GoldLight, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            // ── Subtitle ──
+            item {
+                AnimatedVisibility(visible, enter = fadeIn(tween(600, 400))) {
                     Text(
-                        text = if (isCompleted) "\u2713" else stepNumber.toString(),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
+                        "মাটির মতো গভীর, নদীর মতো স্বচ্ছন্দ — বাংলু দিয়ে বাংলা টাইপ করুন যেন কথা বলছেন। শুধু ইংরেজিতে লিখুন, বাকিটা আমাদের।",
+                        color = TextMuted,
+                        fontSize = 14.sp,
+                        lineHeight = 24.sp,
+                        fontStyle = FontStyle.Italic
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            // ── Demo Card ──
+            item {
+                AnimatedVisibility(visible, enter = fadeIn(tween(800, 500)) + slideInVertically(tween(700, 500)) { 80 }) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = WarmCard),
+                        border = BorderStroke(1.dp, WarmCardBorder)
+                    ) {
+                        Column(modifier = Modifier.padding(24.dp)) {
+                            // Corner decoration
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .drawBehind {
+                                        drawLine(Gold.copy(0.4f), Offset(0f, size.height), Offset(0f, 0f), 1.5f)
+                                        drawLine(Gold.copy(0.4f), Offset(0f, 0f), Offset(size.width, 0f), 1.5f)
+                                    }
+                            )
 
-            // Title and subtitle
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = subtitle,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("ENGLISH INPUT", color = TextMuted, fontSize = 11.sp, letterSpacing = 3.sp)
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            OutlinedTextField(
+                                value = demoInput,
+                                onValueChange = { demoInput = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                textStyle = TextStyle(color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Medium),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Gold.copy(alpha = 0.5f),
+                                    unfocusedBorderColor = WarmCardBorder,
+                                    cursorColor = Gold
+                                )
+                            )
+
+                            // Animated arrow
+                            val arrowAlpha by rememberInfiniteTransition(label = "arrow").animateFloat(
+                                initialValue = 0.4f, targetValue = 1f,
+                                animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
+                                label = "arrowAlpha"
+                            )
+                            Text(
+                                "↓", color = Gold.copy(alpha = arrowAlpha), fontSize = 28.sp,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Text("বাংলা OUTPUT", color = TextMuted, fontSize = 11.sp, letterSpacing = 3.sp)
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(WarmBlack.copy(alpha = 0.5f))
+                                    .border(1.dp, Gold.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                                    .padding(20.dp)
+                            ) {
+                                Text(
+                                    text = demoOutput.ifEmpty { " " },
+                                    color = Gold,
+                                    fontSize = 32.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            // Bottom corner decoration (right-aligned)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .align(Alignment.End)
+                                    .drawBehind {
+                                        drawLine(Gold.copy(0.4f), Offset(size.width, 0f), Offset(size.width, size.height), 1.5f)
+                                        drawLine(Gold.copy(0.4f), Offset(0f, size.height), Offset(size.width, size.height), 1.5f)
+                                    }
+                            )
+                        }
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            // ── Setup CTA ──
+            item {
+                AnimatedVisibility(visible, enter = fadeIn(tween(600, 700)) + slideInVertically(tween(600, 700)) { 40 }) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        when {
+                            !isEnabled -> {
+                                SetupCTA(
+                                    label = "কীবোর্ড সক্রিয় করুন →",
+                                    sublabel = "ধাপ ১/৩ — সেটিংসে Banglu চালু করুন",
+                                    color = Coral,
+                                    onClick = { context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) }
+                                )
+                            }
+                            !isDefault -> {
+                                SetupCTA(
+                                    label = "ডিফল্ট কীবোর্ড সেট করুন →",
+                                    sublabel = "ধাপ ২/৩ — Banglu কে প্রধান কীবোর্ড হিসেবে বেছে নিন",
+                                    color = Coral,
+                                    onClick = {
+                                        (context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+                                            .showInputMethodPicker()
+                                    }
+                                )
+                            }
+                            else -> {
+                                SetupCTA(
+                                    label = "✓ সেটআপ সম্পন্ন!",
+                                    sublabel = "যেকোনো অ্যাপে বাংলায় টাইপ করুন",
+                                    color = Green,
+                                    onClick = { context.startActivity(Intent(context, SettingsActivity::class.java)) }
+                                )
+                            }
+                        }
 
-            // Action button
-            Button(
-                onClick = onClick,
-                enabled = !isCompleted,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isCompleted) Color(0xFF4CAF50) else brandColor,
-                    disabledContainerColor = Color(0xFF4CAF50).copy(alpha = 0.7f),
-                    disabledContentColor = Color.White
-                ),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(buttonText, fontSize = 13.sp)
+                        // Settings outline button
+                        OutlinedButton(
+                            onClick = { context.startActivity(Intent(context, SettingsActivity::class.java)) },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, Gold.copy(alpha = 0.35f))
+                        ) {
+                            Text("⚙ সেটিংস", color = Gold.copy(alpha = 0.8f), fontSize = 15.sp)
+                        }
+                    }
+                }
             }
+
+            // ── Stats Bar ──
+            item {
+                AnimatedVisibility(visible, enter = fadeIn(tween(800, 900))) {
+                    // Dashed separator
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                            .height(1.dp)
+                            .drawBehind {
+                                drawLine(
+                                    Gold.copy(alpha = 0.15f),
+                                    Offset(0f, 0f), Offset(size.width, 0f),
+                                    strokeWidth = 1f,
+                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
+                                )
+                            }
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        StatChip("৪৮৫,০০০+", "শব্দ")
+                        StatChip("৯৯%", "নির্ভুল")
+                        StatChip("<৩০ms", "গতি")
+                        StatChip("৫০০+", "ইমোজি")
+                    }
+                }
+            }
+
+            // Bottom breathing room
+            item { Spacer(modifier = Modifier.height(40.dp)) }
         }
     }
 }
+
+@Composable
+private fun SetupCTA(label: String, sublabel: String, color: Color, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = color),
+        shape = RoundedCornerShape(14.dp),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+    ) {
+        Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+    }
+    Text(sublabel, color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+}
+
+@Composable
+private fun StatChip(value: String, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = GoldLight, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(label, color = TextMuted, fontSize = 11.sp)
+    }
+}
+
+// ── Utility Functions ────────────────────────────────────────────────────────
 
 fun isKeyboardEnabled(context: Context): Boolean {
     val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
