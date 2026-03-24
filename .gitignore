@@ -27,3 +27,4 @@ android-keyboard/src/main/assets/dictionary.sqlite
 Package.resolved
 *.xcodeproj
 xcuserdata/
+android-keyboard/banglu-release.jks
