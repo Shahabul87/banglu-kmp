@@ -4489,8 +4489,16 @@ object SeedData {
         e("আরও", listOf("aroo"), 82, WordCategory.TADBHAVA)                                 // more (alt)
     )
 
-    // Pattern engine fixes — words that pattern engine gets wrong
+    // Pattern engine fixes — words that pattern engine or 480K validation gets wrong
     private fun chunkPatternFixes(): List<SmartDictionaryEntry> = listOf(
+        e("ময়", listOf("moy"), 85, WordCategory.TADBHAVA),          // flour — must beat মো-া from 480K
+        e("হয়", listOf("hoy"), 95, WordCategory.TADBHAVA),          // happens — must stay হয়
+        e("নয়", listOf("noy"), 85, WordCategory.TADBHAVA),          // not/nine
+        e("জয়", listOf("joy"), 85, WordCategory.TATSAMA),           // victory
+        e("সয়", listOf("soy"), 70, WordCategory.TADBHAVA),          // tolerate
+        e("ময়না", listOf("moyna"), 70, WordCategory.TADBHAVA),      // myna bird
+        e("ময়ূর", listOf("moyur"), 65, WordCategory.TATSAMA),       // peacock
+        e("মোংলা", listOf("mongla"), 60, WordCategory.TADBHAVA),    // Mongla port
         e("চলুন", listOf("cholun", "colun"), 80, WordCategory.TADBHAVA),
         e("ধরি", listOf("dhori"), 70, WordCategory.TADBHAVA),
         e("ফ্রম", listOf("from"), 50, WordCategory.FOREIGN),
