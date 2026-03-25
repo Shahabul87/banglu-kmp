@@ -1,0 +1,1424 @@
+[
+  {
+    "input": "bari",
+    "expected": "বাড়ি",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "taka",
+    "expected": "টাকা",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "jibon",
+    "expected": "জীবন",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "bishwas",
+    "expected": "বিশ্বাস",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "krishok",
+    "expected": "কৃষক",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "basha",
+    "expected": "ভাষা",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "bhabi",
+    "expected": "ভাবি",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "shorir",
+    "expected": "শরীর",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "bangla",
+    "expected": "বাংলা",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "onek",
+    "expected": "অনেক",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "shikkha",
+    "expected": "শিক্ষা",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "nishchit",
+    "expected": "নিশ্চিত",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "poribesh",
+    "expected": "পরিবেশ",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "poribar",
+    "expected": "পরিবার",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "somaj",
+    "expected": "সমাজ",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "songskriti",
+    "expected": "সংস্কৃতি",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "bornomala",
+    "expected": "বর্ণমালা",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "prokiti",
+    "expected": "প্রকৃতি",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "somporke",
+    "expected": "সম্পর্কে",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "bishesh",
+    "expected": "বিশেষ",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "proshno",
+    "expected": "প্রশ্ন",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "uttor",
+    "expected": "উত্তর",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "dristhi",
+    "expected": "দৃষ্টি",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "srishti",
+    "expected": "সৃষ্টি",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "misti",
+    "expected": "মিস্টি",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "niti",
+    "expected": "নীতি",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "goti",
+    "expected": "গতি",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "bhiti",
+    "expected": "ভিতি",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "smriti",
+    "expected": "স্মৃতি",
+    "category": "layer5.5-swap",
+    "priority": "P0"
+  },
+  {
+    "input": "banlag",
+    "expected": "বানগুলা",
+    "category": "typo-correction",
+    "priority": "P0"
+  },
+  {
+    "input": "bangaldesh",
+    "expected": "বাঙালিত্বকে",
+    "category": "typo-correction",
+    "priority": "P0"
+  },
+  {
+    "input": "biswsa",
+    "expected": "বিশ্বসা",
+    "category": "typo-correction",
+    "priority": "P0"
+  },
+  {
+    "input": "shikka",
+    "expected": "শিক্ষকতা",
+    "category": "typo-correction",
+    "priority": "P0"
+  },
+  {
+    "input": "porbes",
+    "expected": "পর্বেস",
+    "category": "typo-correction",
+    "priority": "P0"
+  },
+  {
+    "input": "songskrti",
+    "expected": "সংস্কর্তা",
+    "category": "typo-correction",
+    "priority": "P0"
+  },
+  {
+    "input": "prosno",
+    "expected": "প্রশ্ন",
+    "category": "typo-correction",
+    "priority": "P0"
+  },
+  {
+    "input": "sompork",
+    "expected": "সম্পর্ক",
+    "category": "typo-correction",
+    "priority": "P0"
+  },
+  {
+    "input": "bishse",
+    "expected": "বিশসে",
+    "category": "typo-correction",
+    "priority": "P0"
+  },
+  {
+    "input": "uttro",
+    "expected": "উট্রো",
+    "category": "typo-correction",
+    "priority": "P0"
+  },
+  {
+    "input": "duniajora",
+    "expected": "দুনিয়াজোড়া",
+    "category": "layer6-recovery",
+    "priority": "P0"
+  },
+  {
+    "input": "shobkichu",
+    "expected": "শবকিচু",
+    "category": "layer6-recovery",
+    "priority": "P0"
+  },
+  {
+    "input": "prothombar",
+    "expected": "প্রথমবার",
+    "category": "layer6-recovery",
+    "priority": "P0"
+  },
+  {
+    "input": "sheshprojonto",
+    "expected": "শেষ্পরজন্তো",
+    "category": "layer6-recovery",
+    "priority": "P0"
+  },
+  {
+    "input": "onekkhon",
+    "expected": "অনেক্ষন",
+    "category": "layer6-recovery",
+    "priority": "P0"
+  },
+  {
+    "input": "shobcheye",
+    "expected": "শবচেয়ে",
+    "category": "layer6-recovery",
+    "priority": "P0"
+  },
+  {
+    "input": "priyojon",
+    "expected": "প্রিয়জন",
+    "category": "layer6-recovery",
+    "priority": "P0"
+  },
+  {
+    "input": "shomossha",
+    "expected": "শমসেরসহ",
+    "category": "layer6-recovery",
+    "priority": "P0"
+  },
+  {
+    "input": "onnorokom",
+    "expected": "অন্যরকম",
+    "category": "layer6-recovery",
+    "priority": "P0"
+  },
+  {
+    "input": "shorboshesha",
+    "expected": "শর্বশেশা",
+    "category": "layer6-recovery",
+    "priority": "P0"
+  },
+  {
+    "input": "cheleta",
+    "expected": "ছেলেটা",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "cheleti",
+    "expected": "ছেলেটি",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "ghorer",
+    "expected": "ঘরের",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "bariTe",
+    "expected": "বাঋটে",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "cheleder",
+    "expected": "ছেলেদের",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "ghoro",
+    "expected": "ঘর",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "ghora",
+    "expected": "ঘোড়া",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "ghori",
+    "expected": "ঘড়ি",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "cheleke",
+    "expected": "ছেলেকে",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "barira",
+    "expected": "বাড়িরা",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "ghorera",
+    "expected": "ঘরেরা",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "cheleguloo",
+    "expected": "চেলেছিলুম",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "chelegulee",
+    "expected": "চেলেছিলি",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "bariwala",
+    "expected": "বাঋওআলা",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "bariwalader",
+    "expected": "বাঋওআলাদের",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "chelemeye",
+    "expected": "ছেলেমেয়ে",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "ghorete",
+    "expected": "ঘরেতে",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "barirta",
+    "expected": "বাড়ীরটা",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "chelebo",
+    "expected": "ছেলেবো",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "ghorbe",
+    "expected": "ঘরবে",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "chelelo",
+    "expected": "ছেলেলো",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "ghorlam",
+    "expected": "ঘরলাম",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "chelelen",
+    "expected": "চেলেছিলেন",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "ghorlen",
+    "expected": "ঘর্লেন",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "manushgulo",
+    "expected": "মানুষগুলো",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "bacchata",
+    "expected": "বাচ্চাটা",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "cheleraa",
+    "expected": "ছেলেরা",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "desher",
+    "expected": "দেশের",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "meyder",
+    "expected": "মেয়েদের",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "songtaner",
+    "expected": "সন্তানের",
+    "category": "root-decomposition",
+    "priority": "P1"
+  },
+  {
+    "input": "computer",
+    "expected": "কম্পিউটার",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "internet",
+    "expected": "ইন্টারনেট",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "software",
+    "expected": "সফটওয়্যার",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "management",
+    "expected": "ম্যানেজমেন্ট",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "education",
+    "expected": "এদুচাতিওন",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "technology",
+    "expected": "তেচনলজ্ঞ",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "university",
+    "expected": "ইউনিভার্সিটি",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "government",
+    "expected": "গভর্নমেন্ট",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "development",
+    "expected": "ডেভেলপমেন্ট",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "information",
+    "expected": "ইনফরমাসিওন",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "https://google.com",
+    "expected": "https://google.com",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "www.example.com",
+    "expected": "www.example.com",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "UNESCO",
+    "expected": "উঁএSCও",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "NASA",
+    "expected": "ঁআSআ",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "file.pdf",
+    "expected": "file.pdf",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "test123abc",
+    "expected": "তেস্ত১২৩আবচ",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "the",
+    "expected": "থৈ",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "is",
+    "expected": "ইস",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "are",
+    "expected": "আরে",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "for",
+    "expected": "ফর",
+    "category": "english-detection",
+    "priority": "P1"
+  },
+  {
+    "input": "drishti",
+    "expected": "দৃষ্টি",
+    "category": "ai-disambiguation",
+    "priority": "P1"
+  },
+  {
+    "input": "brishti",
+    "expected": "বৃষ্টি",
+    "category": "ai-disambiguation",
+    "priority": "P1"
+  },
+  {
+    "input": "mishti",
+    "expected": "মিষ্টি",
+    "category": "ai-disambiguation",
+    "priority": "P1"
+  },
+  {
+    "input": "nishchinto",
+    "expected": "নিশ্চিন্ত",
+    "category": "ai-disambiguation",
+    "priority": "P1"
+  },
+  {
+    "input": "bishram",
+    "expected": "বিশ্রাম",
+    "category": "ai-disambiguation",
+    "priority": "P1"
+  },
+  {
+    "input": "bichitra",
+    "expected": "বিচিত্র",
+    "category": "ai-disambiguation",
+    "priority": "P1"
+  },
+  {
+    "input": "nishshobd",
+    "expected": "নিষষব্দ",
+    "category": "ai-disambiguation",
+    "priority": "P1"
+  },
+  {
+    "input": "nirbachon",
+    "expected": "নির্বাচন",
+    "category": "ai-disambiguation",
+    "priority": "P1"
+  },
+  {
+    "input": "shongkolpo",
+    "expected": "শঙ্কল্পো",
+    "category": "ai-disambiguation",
+    "priority": "P1"
+  },
+  {
+    "input": "moron",
+    "expected": "মরণ",
+    "category": "natva-shatva-regression",
+    "priority": "P0"
+  },
+  {
+    "input": "puruskar",
+    "expected": "পুরুষ্কার",
+    "category": "natva-shatva-regression",
+    "priority": "P0"
+  },
+  {
+    "input": "purush",
+    "expected": "পুরুষ",
+    "category": "natva-shatva-regression",
+    "priority": "P0"
+  },
+  {
+    "input": "dorshon",
+    "expected": "দর্শন",
+    "category": "natva-shatva-regression",
+    "priority": "P0"
+  },
+  {
+    "input": "borsho",
+    "expected": "বর্ষ",
+    "category": "natva-shatva-regression",
+    "priority": "P0"
+  },
+  {
+    "input": "krishno",
+    "expected": "কৃষ্ণ",
+    "category": "natva-shatva-regression",
+    "priority": "P0"
+  },
+  {
+    "input": "sristhi",
+    "expected": "সৃষ্টি",
+    "category": "natva-shatva-regression",
+    "priority": "P0"
+  },
+  {
+    "input": "kormo",
+    "expected": "কর্ম",
+    "category": "natva-shatva-regression",
+    "priority": "P0"
+  },
+  {
+    "input": "ami",
+    "expected": "আমি",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "tumi",
+    "expected": "তুমি",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "she",
+    "expected": "শে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "apni",
+    "expected": "আপনি",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "amra",
+    "expected": "আমরা",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "tomra",
+    "expected": "তোমরা",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "tara",
+    "expected": "তারা",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "apnara",
+    "expected": "আপনারা",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "amar",
+    "expected": "আমার",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "tomar",
+    "expected": "তোমার",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "tar",
+    "expected": "তার",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "apnar",
+    "expected": "আপনার",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "ki",
+    "expected": "কি",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "keno",
+    "expected": "কেনো",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "kokhon",
+    "expected": "কখন",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "kothay",
+    "expected": "কোথায়",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "kemon",
+    "expected": "কেমন",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "koto",
+    "expected": "কতো",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "ke",
+    "expected": "কে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "kar",
+    "expected": "কার",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "ache",
+    "expected": "আছে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "chilo",
+    "expected": "ছিল",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "hobe",
+    "expected": "হবে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "korche",
+    "expected": "করছে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "kore",
+    "expected": "করে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "jai",
+    "expected": "জাই",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "ashe",
+    "expected": "আশে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "bole",
+    "expected": "বলে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "dekhe",
+    "expected": "দেখে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "shune",
+    "expected": "শুনে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "mone",
+    "expected": "মনে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "jane",
+    "expected": "জানে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "bhalo",
+    "expected": "ভালো",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "kharap",
+    "expected": "খারাপ",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "boro",
+    "expected": "বড়ো",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "choto",
+    "expected": "ছোটো",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "notun",
+    "expected": "নতুন",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "purano",
+    "expected": "পুরানো",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "sundor",
+    "expected": "সুন্দর",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "shundor",
+    "expected": "শুন্দর",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "din",
+    "expected": "দিন",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "raat",
+    "expected": "রাত",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "shokal",
+    "expected": "শোকাল",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "bikel",
+    "expected": "বিকাল",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "shondha",
+    "expected": "শন্ধা",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "ghor",
+    "expected": "ঘর",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "desh",
+    "expected": "দেশ",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "manus",
+    "expected": "মানুষ",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "lok",
+    "expected": "লোক",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "chele",
+    "expected": "ছেলে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "meye",
+    "expected": "মেয়ে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "baba",
+    "expected": "বাবা",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "ma",
+    "expected": "মা",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "bhai",
+    "expected": "ভাই",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "bon",
+    "expected": "বোন",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "bondhu",
+    "expected": "বন্ধু",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "shokol",
+    "expected": "শোকল",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "sob",
+    "expected": "সব",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "kichu",
+    "expected": "কিছু",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "ar",
+    "expected": "আর",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "ba",
+    "expected": "বা",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "kintu",
+    "expected": "কিন্তু",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "tobe",
+    "expected": "তবে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "jodi",
+    "expected": "যদি",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "jemon",
+    "expected": "যেমন",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "temon",
+    "expected": "তেমন",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "akhon",
+    "expected": "এখন",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "tokhon",
+    "expected": "তখন",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "pore",
+    "expected": "পড়ে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "age",
+    "expected": "আগে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "upar",
+    "expected": "উপার",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "niche",
+    "expected": "নিচে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "bhitor",
+    "expected": "ভিতর",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "bahir",
+    "expected": "বাহির",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "kache",
+    "expected": "কাছে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "dure",
+    "expected": "দুরে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "shamne",
+    "expected": "শাম্নে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "pichone",
+    "expected": "পিছনে",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "jol",
+    "expected": "জল",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "khabar",
+    "expected": "খাবার",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "boi",
+    "expected": "বই",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "golpo",
+    "expected": "গল্প",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "gaan",
+    "expected": "গান",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "khelaa",
+    "expected": "খেলা",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "kaj",
+    "expected": "কাজ",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "kotha",
+    "expected": "কথা",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "shanti",
+    "expected": "শান্তি",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "sukh",
+    "expected": "সুখ",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "dukh",
+    "expected": "দুখ",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "prem",
+    "expected": "প্রেম",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "valobasha",
+    "expected": "ভালোবাসা",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "shadhinota",
+    "expected": "শাধিনতা",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "biggan",
+    "expected": "বিজ্ঞান",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "itihash",
+    "expected": "ইতিহাস",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "dharmo",
+    "expected": "ধার্ম",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "rashtra",
+    "expected": "রাষ্ট্র",
+    "category": "common-words",
+    "priority": "P0"
+  },
+  {
+    "input": "bRi",
+    "expected": "বড়ি",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "peTe",
+    "expected": "পেটে",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "baDi",
+    "expected": "বাডি",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "kOno",
+    "expected": "কোনো",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "dIn",
+    "expected": "দিন",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "pUja",
+    "expected": "পুজা",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "bAri",
+    "expected": "বাঋ",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "dEkha",
+    "expected": "দেখা",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "Nara",
+    "expected": "নাড়া",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "bRishTi",
+    "expected": "বড়িষ্টি",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "ghaTi",
+    "expected": "ঘাটি",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "poDa",
+    "expected": "পডা",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "gOl",
+    "expected": "গোল",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "Ish",
+    "expected": "ইশ",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "chIni",
+    "expected": "চিনি",
+    "category": "uppercase-forcers",
+    "priority": "P2"
+  },
+  {
+    "input": "k,,",
+    "expected": "ক্‌",
+    "category": "edge-cases",
+    "priority": "P2"
+  },
+  {
+    "input": "a",
+    "expected": "আ",
+    "category": "edge-cases",
+    "priority": "P2"
+  },
+  {
+    "input": "ab",
+    "expected": "আব",
+    "category": "edge-cases",
+    "priority": "P2"
+  },
+  {
+    "input": "abc",
+    "expected": "আবচ",
+    "category": "edge-cases",
+    "priority": "P2"
+  },
+  {
+    "input": "123",
+    "expected": "১২৩",
+    "category": "edge-cases",
+    "priority": "P2"
+  },
+  {
+    "input": "test 123",
+    "expected": "তেস্ত ১২৩",
+    "category": "edge-cases",
+    "priority": "P2"
+  },
+  {
+    "input": " ",
+    "expected": "",
+    "category": "edge-cases",
+    "priority": "P2"
+  },
+  {
+    "input": "o",
+    "expected": "ও",
+    "category": "edge-cases",
+    "priority": "P2"
+  },
+  {
+    "input": "e",
+    "expected": "এ",
+    "category": "edge-cases",
+    "priority": "P2"
+  },
+  {
+    "input": "oi",
+    "expected": "ওই",
+    "category": "edge-cases",
+    "priority": "P2"
+  }
+]
