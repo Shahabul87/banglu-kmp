@@ -1061,6 +1061,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (!validator.isValid(result.bengali)) {
             var improved = result.bengali
 
+            // ── Fix 1: Strip trailing ো if dictionary validates without it ──────────
+            if (improved.endsWith("ো")) {
+                val withoutOkar = improved.dropLast(1)
+                if (validator.isValid(withoutOkar) && !validator.isValid(improved)) {
+                    improved = withoutOkar
+                }
+            }
+
             // ── ন→ণ (per-position with scorer) ──────────────────────────────────────
             for (idx in improved.indices) {
                 if (improved[idx] == 'ন') {
@@ -1164,6 +1172,71 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                         )
                         if (scorerResult.recommendation == "candidate") {
                             improved = candidate
+                        }
+                    }
+                }
+            }
+
+            // ── Fix 6: ং→ঙ before velar consonants ক/খ/গ/ঘ ─────────────────────
+            if (improved.contains('ং')) {
+                for (idx in improved.indices) {
+                    if (improved[idx] == 'ং' && idx + 1 < improved.length) {
+                        val next = improved[idx + 1]
+                        // ঙ is expected before ক/খ/গ/ঘ (velar consonants)
+                        val isBeforeVelar = next in "কখগঘ" ||
+                            (next == '্' && idx + 2 < improved.length && improved[idx + 2] in "কখগঘ")
+                        if (isBeforeVelar) {
+                            val candidate = improved.substring(0, idx) + "ঙ" + improved.substring(idx + 1)
+                            if (validator.isValid(candidate)) {
+                                improved = candidate
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Fix 7: র→ড় swap (last occurrence) ─────────────────────────────────
+            if (improved.contains('র') && !validator.isValid(improved)) {
+                val lastR = improved.lastIndexOf('র')
+                if (lastR >= 0) {
+                    val candidate = improved.substring(0, lastR) + "ড়" + improved.substring(lastR + 1)
+                    if (validator.isValid(candidate)) {
+                        improved = candidate
+                    }
+                }
+            }
+
+            // ── Fix 8: ট্র→ত্র conjunct swap ──────────────────────────────────────
+            if (improved.contains("ট্র") && !validator.isValid(improved)) {
+                val candidate = improved.replace("ট্র", "ত্র")
+                if (validator.isValid(candidate)) {
+                    improved = candidate
+                }
+            }
+
+            // ── Fix 9: আ↔অ at word start ──────────────────────────────────────────
+            if (improved.startsWith("আ") && !validator.isValid(improved)) {
+                val candidate = "অ" + improved.substring(1)
+                if (validator.isValid(candidate)) {
+                    improved = candidate
+                }
+            }
+            if (improved.startsWith("অ") && !validator.isValid(improved)) {
+                val candidate = "আ" + improved.substring(1)
+                if (validator.isValid(candidate)) {
+                    improved = candidate
+                }
+            }
+
+            // ── Fix 12: ব→ভ per-position swap ─────────────────────────────────────
+            if (improved.contains('ব') && !validator.isValid(improved)) {
+                for (idx in improved.indices) {
+                    if (improved[idx] == 'ব') {
+                        val candidate = improved.substring(0, idx) + "ভ" + improved.substring(idx + 1)
+                        if (validator.isValid(candidate)) {
+                            improved = candidate
+                            break
                         }
                     }
                 }
