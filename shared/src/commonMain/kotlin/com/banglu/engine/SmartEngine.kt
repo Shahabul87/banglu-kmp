@@ -702,27 +702,421 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         return ConversionResult(best.first.bengali, best.first.confidence, ResolutionSource.SECTION)
     }
 
+    // ======================== ROOT DECOMPOSITION (7 CASES) ========================
+
     /**
-     * Layer 1.5: Root decomposition - try splitting word into dictionary root + pattern suffix.
+     * Common Bengali productive suffixes (postpositions/case markers/determiners).
+     * These can attach to ANY noun root without being listed in the dictionary.
+     * Map from phonetic suffix to Bengali suffix.
      */
-    private fun convertByRootDecomposition(key: String): ConversionResult? {
-        for (splitPoint in key.length - 1 downTo 2) {
-            val root = key.substring(0, splitPoint)
-            val suffix = key.substring(splitPoint)
-            val rootResults = dictionary.lookup(root)
-            if (rootResults.isNotEmpty()) {
-                val suffixResult = convertByPatterns(suffix)
-                val combined = rootResults[0].bengali + suffixResult.bengali
-                // Validate compound if validator loaded
-                if (validator.isLoaded() && validator.isValid(combined)) {
-                    return ConversionResult(combined, 0.85, ResolutionSource.DICTIONARY)
+    private val productiveSuffixes: Map<String, String> = mapOf(
+        // Case markers / postpositions (attach to any noun)
+        "ta" to "টা",    // definite article: বইটা (the book)
+        "ti" to "টি",    // definite article (formal): বইটি
+        "te" to "তে",    // locative/instrumental: ঘরতে (in the house)
+        "ke" to "কে",    // accusative/dative: মানুষকে (to the person)
+        "er" to "ের",    // possessive/genitive: মানুষের (of the person)
+        "ra" to "রা",    // plural (animate): মানুষরা (people)
+        "der" to "দের",  // plural genitive: মানুষদের (of the people)
+        "gulo" to "গুলো", // plural (inanimate): বইগুলো (the books)
+        "guli" to "গুলি", // plural (formal): বইগুলি
+        // Verb inflection suffixes (attach to verb roots without conjunct)
+        "lam" to "লাম",  // past 1st person: করলাম, থাকলাম
+        "le" to "লে",    // past/conditional 2nd: করলে, দেখলে
+        "lo" to "লো",    // past 3rd person: করলো, রাখলো
+        "bo" to "বো",    // future 1st person: করবো, রাখবো
+        "be" to "বে",    // future 3rd person: করবে, দেখবে
+        "ben" to "বেন",  // future formal: করবেন, রাখবেন
+    )
+
+    /**
+     * Check if a Unicode character is a Bengali consonant (ক-হ range, plus ড়, ঢ়, য়, ৎ).
+     */
+    private fun isBengaliConsonantChar(ch: Char): Boolean {
+        val code = ch.code
+        return (code in 0x0995..0x09A8) ||  // ক-ন
+               (code in 0x09AA..0x09B9) ||  // প-হ
+               code == 0x09DC ||             // ড়
+               code == 0x09DD ||             // ঢ়
+               code == 0x09DF ||             // য়
+               code == 0x09CE               // ৎ
+    }
+
+    /**
+     * Get the productive Bengali suffix for a phonetic suffix, if it matches.
+     * Returns null if the suffix is not a known productive form.
+     */
+    private fun getProductiveSuffix(suffixPhonetic: String): String? {
+        return productiveSuffixes[suffixPhonetic.lowercase()]
+    }
+
+    /**
+     * Map phonetic vowel suffixes to Bengali vowel-kar (dependent) forms.
+     * Used when a vowel suffix follows a consonant-ending dictionary root.
+     * e.g., root সুন্দর (sundor) + "i" -> সুন্দরী (with ী-kar, not ই standalone)
+     *
+     * Returns Pair(kar, altKar?) or null.
+     */
+    private fun getVowelKar(suffixPhonetic: String): Pair<String, String?>? {
+        return when (suffixPhonetic.lowercase()) {
+            "i"  -> Pair("ি", "ী")     // default short ি; explicitly long via 'ii'/'ee'
+            "ii" -> Pair("ী", null)     // explicitly long ী
+            "ee" -> Pair("ী", null)     // explicitly long ী
+            "e"  -> Pair("ে", null)     // jibone -> জীবনে
+            "u"  -> Pair("ু", "ূ")     // short u-kar, alt long
+            "uu" -> Pair("ূ", null)     // explicitly long ূ
+            "oo" -> Pair("ূ", null)     // explicitly long ূ
+            "o"  -> Pair("ো", null)     // o-kar
+            "a"  -> Pair("া", null)     // a-kar
+            "oi" -> Pair("ৈ", null)     // oi-kar
+            "ou" -> Pair("ৌ", null)     // ou-kar
+            else -> null
+        }
+    }
+
+    /**
+     * Generate all possible Bengali forms for a root+suffix combination.
+     * Tries both direct attachment and hasanta junction, with ambiguous char swaps.
+     *
+     * Priority scoring:
+     * - suffix ends with 'a' -> prefer direct attachment (suffix is a postposition)
+     * - suffix ends with 'o' -> prefer hasanta junction (conjunct formation)
+     */
+    private fun generateAllRootCandidates(
+        rootBengali: String,
+        suffixPhonetic: String
+    ): List<Pair<String, Int>> {
+        val candidates = mutableListOf<Pair<String, Int>>()
+        val seen = mutableSetOf<String>()
+
+        val suffixEndsWithO = suffixPhonetic.endsWith("o")
+
+        // Convert suffix using pattern engine, then generate ambiguous char variants
+        val suffixResult = convertByPatterns(suffixPhonetic)
+        val suffixVariants = generateSuffixVariants(suffixResult.bengali)
+
+        for (suffix in suffixVariants) {
+            val lastChar = rootBengali.last()
+            val firstChar = suffix[0]
+            val bothConsonants =
+                isBengaliConsonantChar(lastChar) && isBengaliConsonantChar(firstChar)
+
+            // === Direct attachment (no hasanta) ===
+            val direct = rootBengali + suffix
+            if (direct !in seen) {
+                seen.add(direct)
+                candidates.add(Pair(direct, if (suffixEndsWithO) 4 else 10))
+            }
+
+            // === Hasanta junction (conjunct formation) ===
+            if (bothConsonants) {
+                val hasantaForm = rootBengali + "\u09CD" + suffix  // ্ (hasanta)
+                if (hasantaForm !in seen) {
+                    seen.add(hasantaForm)
+                    candidates.add(Pair(hasantaForm, if (suffixEndsWithO) 7 else 4))
                 }
-                // Even without validation, if root is confident and suffix is small
-                if (rootResults[0].confidence >= 0.85 && suffix.length <= 3) {
-                    return ConversionResult(combined, 0.75, ResolutionSource.RULE)
+            }
+
+            // === Strip trailing vowel marks (inherent vowel handling) ===
+            val trailingMarks = listOf("া", "ো", "ে", "ি", "ী", "ু", "ূ", "ৈ", "ৌ")
+            val forms = mutableListOf(direct)
+            if (bothConsonants) forms.add(rootBengali + "\u09CD" + suffix)
+
+            for (form in forms) {
+                for (mark in trailingMarks) {
+                    if (form.endsWith(mark)) {
+                        val stripped = form.substring(0, form.length - 1)
+                        if (stripped !in seen) {
+                            seen.add(stripped)
+                            val isHasantaForm = form.contains("\u09CD")
+                            // Only give high priority to hasanta+stripped when suffix ends with 'o'
+                            val priority = if (suffixEndsWithO && isHasantaForm) 12 else 3
+                            candidates.add(Pair(stripped, priority))
+                        }
+                    }
                 }
             }
         }
+
+        // Sort by priority for consistent validation order
+        return candidates.sortedByDescending { it.second }
+    }
+
+    /**
+     * Generate Bengali suffix variants by swapping ambiguous consonants.
+     * Main swaps: ত↔ট, দ↔ড, ন↔ণ, স↔শ↔ষ
+     */
+    private fun generateSuffixVariants(suffixBengali: String): List<String> {
+        val variants = mutableListOf(suffixBengali)
+        val seen = mutableSetOf(suffixBengali)
+
+        // Swap rules for the first consonant of the suffix
+        val swaps = listOf(
+            "ত" to "ট", "ট" to "ত",
+            "দ" to "ড", "ড" to "দ",
+            "ন" to "ণ", "ণ" to "ন",
+            "স" to "শ", "শ" to "স",
+            "স" to "ষ", "ষ" to "স",
+        )
+
+        for ((from, to) in swaps) {
+            if (suffixBengali.startsWith(from)) {
+                val swapped = to + suffixBengali.substring(from.length)
+                if (swapped !in seen) {
+                    seen.add(swapped)
+                    variants.add(swapped)
+                }
+            }
+        }
+
+        return variants
+    }
+
+    /**
+     * Join a consonant-ending root with a suffix, converting independent vowels
+     * at the junction to their dependent (kar) forms.
+     * e.g., কর + এন -> করেন (not করএন), জাম + আই -> জামাই (not জামআই)
+     */
+    private fun joinRootSuffix(rootBengali: String, suffixBengali: String): String {
+        if (suffixBengali.isEmpty()) return rootBengali
+        val lastRoot = rootBengali.last()
+        if (!isBengaliConsonantChar(lastRoot)) {
+            return rootBengali + suffixBengali
+        }
+
+        val independentToDependent = mapOf(
+            'আ' to "া", 'ই' to "ি", 'ঈ' to "ী", 'উ' to "ু", 'ঊ' to "ূ",
+            'এ' to "ে", 'ঐ' to "ৈ", 'ও' to "ো", 'ঔ' to "ৌ", 'ঋ' to "ৃ",
+            'অ' to "",  // inherent vowel — no visible kar
+        )
+
+        val firstSuffix = suffixBengali[0]
+        val depForm = independentToDependent[firstSuffix]
+        if (depForm != null) {
+            return rootBengali + depForm + suffixBengali.substring(1)
+        }
+        return rootBengali + suffixBengali
+    }
+
+    /**
+     * Layer 1.5: Root decomposition - try splitting word into dictionary root + pattern suffix.
+     *
+     * 7-case system ported from web engine (SmartEngine.ts tryRootDecomposition):
+     *   Case 1: Productive suffixes (টা, টি, তে, কে, ের, রা, দের, গুলো, etc.)
+     *   Case 2: Single-char 'o' suffix -> inherent vowel OR explicit ো-kar
+     *   Case 3: Single-char 'a' suffix -> explicit া-kar
+     *   Case 4: Single vowel suffix (i/ii/ee/e/u/uu/oo/oi/ou) -> vowel কার
+     *   Case 5: 2-char suffix ending in 'o' + root consonant -> hasanta junction
+     *   Case 6: 2-char suffix NOT ending in 'o' -> direct attachment
+     *   Case 7: Arbitrary suffix with 480K validation
+     */
+    private fun convertByRootDecomposition(key: String): ConversionResult? {
+        if (key.length < 4) return null // Too short for meaningful decomposition
+        val validatorLoaded = validator.isLoaded()
+
+        // Try progressively shorter prefixes to find the longest dictionary root.
+        for (splitPos in key.length - 1 downTo 2) {
+            val rootPhonetic = key.substring(0, splitPos)
+            val suffixPhonetic = key.substring(splitPos)
+
+            // Root must be an EXACT dictionary match (not suffix-stripped).
+            var rootResults = dictionary.lookup(rootPhonetic)
+            if (rootResults.isEmpty()) continue
+
+            // Enforce consonant rules on root
+            if (key.startsWith("z")) {
+                rootResults = rootResults.filter { !it.bengali.startsWith("জ") }
+            }
+            if (key.startsWith("j") && !key.startsWith("jh")) {
+                rootResults = rootResults.filter { !it.bengali.startsWith("য") }
+            }
+            if (key.startsWith("s") && !key.startsWith("sh")) {
+                rootResults = rootResults.filter { !it.bengali.startsWith("শ") }
+            }
+            if (key.startsWith("sh")) {
+                rootResults = rootResults.filter { !it.bengali.startsWith("স") }
+            }
+            if (rootResults.isEmpty()) continue
+
+            // Skip suffix-stripped matches — only use exact phonetic matches
+            val topResult = rootResults[0]
+            if (topResult.matchedPhonetic.isNotEmpty() && topResult.matchedPhonetic != rootPhonetic) continue
+
+            val rootBengali = topResult.bengali
+            val rootEndsWithConsonant = isBengaliConsonantChar(rootBengali.last())
+
+            // Helper: validate a root decomposition result before returning it.
+            // Root decomposition often produces garbage by combining accidental dictionary
+            // roots with suffixes. Only accept if: (a) the combined result is a valid 480K word, OR
+            // (b) the root was an exact phonetic match (not found through variant generation).
+            fun validateResult(result: ConversionResult): ConversionResult? {
+                if (validatorLoaded && validator.isValid(result.bengali)) {
+                    return result // Valid word — accept
+                }
+                // Not a valid word — only accept if root was an EXACT match with high confidence
+                val isExactRoot = topResult.matchedPhonetic.isEmpty() || topResult.matchedPhonetic == rootPhonetic
+                if (isExactRoot && topResult.confidence >= 0.85) {
+                    return result // Exact root match — accept even if combined form isn't in 480K
+                }
+                return null // Reject — likely garbage from variant-generated root
+            }
+
+            // === 1. Productive suffixes (টা, টি, তে, কে, etc.) ===
+            val productiveSuffix = getProductiveSuffix(suffixPhonetic)
+            if (productiveSuffix != null) {
+                val result = ConversionResult(
+                    bengali = rootBengali + productiveSuffix,
+                    confidence = 0.95,
+                    source = ResolutionSource.DICTIONARY,
+                    alternatives = emptyList()
+                )
+                val validated = validateResult(result)
+                if (validated != null) return validated
+                continue // Root wasn't good enough — try shorter root
+            }
+
+            // === 2. Single-char 'o' -> inherent vowel OR explicit ো-kar ===
+            if (suffixPhonetic == "o" && rootEndsWithConsonant) {
+                val withOkar = rootBengali + "ো"
+                val withoutOkar = rootBengali
+                val withOkarValid = validatorLoaded && validator.isValid(withOkar)
+                val withoutOkarValid = validatorLoaded && validator.isValid(withoutOkar)
+
+                if (withOkarValid && !withoutOkarValid) {
+                    // Only ো version is valid — use it
+                    return ConversionResult(
+                        bengali = withOkar,
+                        confidence = 0.95,
+                        source = ResolutionSource.DICTIONARY,
+                        alternatives = listOf(Alternative(withoutOkar, 0.80))
+                    )
+                } else if (withOkarValid && withoutOkarValid) {
+                    // Both valid — strongly prefer ো since user explicitly typed 'o'
+                    // Only keep without-ো if it has MUCH higher frequency (>30 gap)
+                    val okarFreq = validator.getFrequency(withOkar)
+                    val noOkarFreq = validator.getFrequency(withoutOkar)
+                    if (noOkarFreq > okarFreq + 30) {
+                        return ConversionResult(
+                            bengali = withoutOkar,
+                            confidence = 0.95,
+                            source = ResolutionSource.DICTIONARY,
+                            alternatives = listOf(Alternative(withOkar, 0.90))
+                        )
+                    }
+                    // ো version preferred — user typed 'o' explicitly
+                    return ConversionResult(
+                        bengali = withOkar,
+                        confidence = 0.95,
+                        source = ResolutionSource.DICTIONARY,
+                        alternatives = listOf(Alternative(withoutOkar, 0.90))
+                    )
+                }
+                // Only without-ো is valid
+                return ConversionResult(
+                    bengali = withoutOkar,
+                    confidence = 0.93,
+                    source = ResolutionSource.DICTIONARY,
+                    alternatives = listOf(Alternative(withOkar, 0.88))
+                )
+            }
+
+            // === 3. Single-char 'a' -> explicit া-kar ===
+            if (suffixPhonetic == "a" && rootEndsWithConsonant) {
+                return ConversionResult(
+                    bengali = rootBengali + "া",
+                    confidence = 0.93,
+                    source = ResolutionSource.DICTIONARY,
+                    alternatives = listOf(Alternative(rootBengali, 0.85))
+                )
+            }
+
+            // === 4. Single vowel suffix -> vowel-kar (dependent form) ===
+            if (rootEndsWithConsonant) {
+                val vowelKar = getVowelKar(suffixPhonetic)
+                if (vowelKar != null) {
+                    val alts = if (vowelKar.second != null) {
+                        listOf(Alternative(rootBengali + vowelKar.second!!, 0.85))
+                    } else {
+                        emptyList()
+                    }
+                    val result = ConversionResult(
+                        bengali = rootBengali + vowelKar.first,
+                        confidence = 0.93,
+                        source = ResolutionSource.DICTIONARY,
+                        alternatives = alts
+                    )
+                    val validated = validateResult(result)
+                    if (validated != null) return validated
+                    continue
+                }
+            }
+
+            // === 5. Short consonant+'o' suffix -> hasanta junction (conjunct) ===
+            if (suffixPhonetic.length == 2 && suffixPhonetic.endsWith("o") && rootEndsWithConsonant) {
+                val candidates = generateAllRootCandidates(rootBengali, suffixPhonetic)
+                if (candidates.isNotEmpty()) {
+                    val best = candidates[0]
+                    val alts = candidates
+                        .drop(1)
+                        .take(3)
+                        .filter { it.first != best.first }
+                        .map { Alternative(it.first, 0.88) }
+                    val result = ConversionResult(
+                        bengali = best.first,
+                        confidence = 0.95,
+                        source = ResolutionSource.DICTIONARY,
+                        alternatives = alts
+                    )
+                    val validated = validateResult(result)
+                    if (validated != null) return validated
+                    continue
+                }
+            }
+
+            // === 6. Short consonant+vowel suffix -> direct attachment ===
+            if (suffixPhonetic.length == 2 && rootEndsWithConsonant && !suffixPhonetic.endsWith("o")) {
+                val suffixResult = convertByPatterns(suffixPhonetic)
+                val directForm = joinRootSuffix(rootBengali, suffixResult.bengali)
+                val result = ConversionResult(
+                    bengali = directForm,
+                    confidence = 0.92,
+                    source = ResolutionSource.DICTIONARY,
+                    alternatives = emptyList()
+                )
+                val validated = validateResult(result)
+                if (validated != null) return validated
+                continue // Don't return unvalidated — fall through to pattern engine
+            }
+
+            // === 7. 480K validator — validate arbitrary root+suffix combinations ===
+            if (validatorLoaded) {
+                val candidates = generateAllRootCandidates(rootBengali, suffixPhonetic)
+                val validated = mutableListOf<Pair<String, Int>>()
+                for (candidate in candidates) {
+                    if (validator.isValid(candidate.first)) {
+                        validated.add(Pair(candidate.first, candidate.second + 5))
+                    }
+                }
+                if (validated.isNotEmpty()) {
+                    val sorted = validated.sortedByDescending { it.second }
+                    val best = sorted[0]
+                    val alts = sorted
+                        .drop(1)
+                        .filter { it.first != best.first }
+                        .map { Alternative(it.first, 0.90) }
+                    return ConversionResult(
+                        bengali = best.first,
+                        confidence = 0.95,
+                        source = ResolutionSource.DICTIONARY,
+                        alternatives = alts
+                    )
+                }
+            }
+
+            // For suffixes that don't match any of the above rules (e.g., "moi", "basha"),
+            // do NOT return a result — fall through to pattern conversion.
+        }
+
         return null
     }
 
