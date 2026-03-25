@@ -385,6 +385,22 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
+        // ো variant: when input ends with 'o', ensure both forms available
+        if (key.endsWith("o") && primary.bengali.isNotEmpty()) {
+            val bengali = primary.bengali
+            if (bengali.endsWith("ো")) {
+                val withoutOkar = bengali.dropLast(1)
+                if (withoutOkar.isNotEmpty() && seen.add(withoutOkar)) {
+                    suggestions.add(SmartSuggestion(withoutOkar, 0.90, "okar_variant", key, "tier0_okar"))
+                }
+            } else {
+                val withOkar = bengali + "ো"
+                if (seen.add(withOkar)) {
+                    suggestions.add(SmartSuggestion(withOkar, 0.88, "okar_variant", key, "tier0_okar"))
+                }
+            }
+        }
+
         // ── Bengali variant search (matching web: find related words from 480K by Bengali prefix) ──
         // This is what gives পেপারও, পেপারকে for pepar → পেপার
         if (validator.isLoaded() && primary.bengali.isNotEmpty() && primary.bengali.length >= 2) {
