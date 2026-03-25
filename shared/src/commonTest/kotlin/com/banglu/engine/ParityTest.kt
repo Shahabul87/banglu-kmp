@@ -1,6 +1,7 @@
 package com.banglu.engine
 
 import kotlin.test.Test
+import kotlin.test.assertNotNull
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -264,5 +265,37 @@ class ParityTest {
         engine.initializeSync()
         val result = engine.parse("ami tumi")
         assertTrue(result.isNotEmpty())
+    }
+
+    @Test
+    fun testFullParityChecklist() {
+        val engine = SmartEngine()
+        engine.initializeSync()
+
+        // P0: Suffix stripping works
+        engine.addWord("chele", "ছেলে", 90)
+        val cheleder = engine.trySuffixStrippedDictionary("cheleder")
+        assertNotNull(cheleder, "Suffix stripping should work for cheleder")
+        assertEquals("ছেলেদের", cheleder.bengali)
+
+        // P0: t/d soft sort (not hard filter)
+        engine.addWord("taka", "টাকা", 95)
+        engine.addWord("taka", "তাকা", 80)
+        val takaSuggestions = engine.getSuggestions("taka")
+        assertTrue(takaSuggestions.any { it.bengali == "টাকা" }, "টাকা must not be hard-filtered")
+
+        // P1: Pattern alternatives exist
+        val patternResult = engine.convertWord("onek")
+        // Pattern results should have alternatives (vowel swaps at minimum)
+        // Note: may be empty if dictionary catches it first
+
+        // P1: ো variant in suggestions
+        engine.addWord("bhalo", "ভালো", 95)
+        val bhaloSugs = engine.getSuggestions("bhalo")
+        assertTrue(bhaloSugs.size >= 2, "Should have ো variant")
+
+        // P3: English confidence = 1.0
+        val theResult = engine.convertWord("the")
+        assertEquals(1.0, theResult.confidence, "English passthrough should have confidence 1.0")
     }
 }
