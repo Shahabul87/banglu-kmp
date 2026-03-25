@@ -452,13 +452,33 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
-        // ── Section narrowing (if 480K loaded) ──
+        // Section narrowing with overlap filter (Web Tier 3.7)
         if (suggestions.size < maxResults && sectionEngine.isReady()) {
-            for (result in sectionEngine.getSectionSuggestions(key, maxResults)) {
-                if (seen.add(result.bengali)) {
-                    suggestions.add(SmartSuggestion(result.bengali, result.confidence, "section", "", "tier6"))
+            val sectionResults = sectionEngine.getSectionSuggestions(key, (maxResults - suggestions.size) * 3)
+            val scored = sectionResults
+                .filter { !it.bengali.contains("-") && seen.add(it.bengali) }
+                .mapNotNull { sr ->
+                    val phonetic = dictionary.getPhoneticForBengali(sr.bengali)
+                        ?: ReverseTransliterator.reverseWord(sr.bengali)
+                    if (phonetic.isNotEmpty()) {
+                        val overlap = PhoneticOverlapScorer.score(key, phonetic)
+                        if (overlap.score > 0.30) {
+                            SmartSuggestion(
+                                bengali = sr.bengali,
+                                confidence = maxOf(sr.confidence * overlap.score, overlap.score * 0.8),
+                                source = "section_filtered",
+                                phonetic = phonetic,
+                                tier = "tier6"
+                            )
+                        } else null
+                    } else {
+                        SmartSuggestion(sr.bengali, sr.confidence * 0.5, "section", "", "tier6")
+                    }
                 }
-            }
+                .sortedByDescending { it.confidence }
+                .take(maxResults - suggestions.size)
+
+            suggestions.addAll(scored)
         }
 
         // Global filter: remove hyphenated garbage from 480K dictionary
