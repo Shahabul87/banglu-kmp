@@ -60,6 +60,7 @@ object SeedData {
             addAll(SeedDataSync5.ENTRIES)
             addAll(SeedDataFreqSync0.ENTRIES)
             addAll(SeedDataFreqSync1.ENTRIES)
+            addAll(SeedDataSync6.ENTRIES)
         }
     }
 
