@@ -213,45 +213,61 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val key = trimmed.lowercase()
         if (key.isEmpty()) return ConversionResult("", 0.0, ResolutionSource.RULE)
 
+        // ── Uppercase case-marker detection (before lowercasing destroys info) ──
+        // Web parity: uppercase letters are "forcer" characters that bypass dictionary
+        // layers and produce specific outputs: R→ড়, T→ট, D→ড, N→ঁ (chandrabindu),
+        // O/I/U/A/E→explicit vowel forms. This is the <1% escape hatch.
+        val hasCaseMarkers = trimmed.any { it.isUpperCase() }
+        // Only uppercase N (chandrabindu) → still allow dictionary lookup
+        val hasOnlyChandrabinduMarkers = hasCaseMarkers && trimmed.all { !it.isUpperCase() || it == 'N' }
+
+        // Use trimmed (preserving case) as cache key so "peTe" and "pete" are distinct
+        val cacheKey = trimmed
+
         // Check cache — invalidate stale entries when 480K validator loads
-        wordCache[key]?.let { cached ->
+        wordCache[cacheKey]?.let { cached ->
             val shouldInvalidate = validator.isLoaded()
                 && cached.source != ResolutionSource.DICTIONARY
                 && cached.source != ResolutionSource.ENGLISH_PASSTHROUGH
                 && !validator.isValid(cached.bengali)
             if (!shouldInvalidate) return cached
             // Stale cache — re-run conversion with loaded validator
-            wordCache.remove(key)
+            wordCache.remove(cacheKey)
         }
 
         // Layer 1: Dictionary lookup
-        convertByDictionary(key)?.let { result ->
-            if (result.confidence >= config.autoAcceptThreshold) {
-                cacheResult(key, result); return result
+        // Skip when uppercase forcers are present (except chandrabindu-only N)
+        if (!hasCaseMarkers || hasOnlyChandrabinduMarkers) {
+            convertByDictionary(key)?.let { result ->
+                if (result.confidence >= config.autoAcceptThreshold) {
+                    cacheResult(cacheKey, result); return result
+                }
+                cacheResult(cacheKey, result); return result
             }
-            // Even if below threshold, if dictionary found something, cache and return
-            // (gives priority to dictionary over patterns)
-            cacheResult(key, result); return result
-        }
 
-        // Layer 1.2: Suffix-stripped dictionary lookup
-        trySuffixStrippedDictionary(key)?.let { result ->
-            cacheResult(key, result); return result
+            // Layer 1.2: Suffix-stripped dictionary lookup
+            trySuffixStrippedDictionary(key)?.let { result ->
+                cacheResult(cacheKey, result); return result
+            }
         }
 
         // Layer 0: Section narrowing (if 480K loaded)
-        if (sectionEngine.isReady()) {
+        // Skip when uppercase forcers are present
+        if (!hasCaseMarkers && sectionEngine.isReady()) {
             convertBySection(key)?.let { result ->
                 if (result.confidence >= 0.95) {
                     val validated = applyDictionaryValidation(result)
-                    cacheResult(key, validated); return validated
+                    cacheResult(cacheKey, validated); return validated
                 }
             }
         }
 
         // Layer 1.5: Root decomposition
-        convertByRootDecomposition(key)?.let { result ->
-            cacheResult(key, result); return result
+        // Skip when uppercase forcers are present
+        if (!hasCaseMarkers) {
+            convertByRootDecomposition(key)?.let { result ->
+                cacheResult(cacheKey, result); return result
+            }
         }
 
         // English detection: if input looks like English, pass through unchanged.
@@ -259,38 +275,45 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Return original trimmed input to preserve case (URLs, file paths).
         if (EnglishDetector.isEnglish(key)) {
             val result = ConversionResult(trimmed, 1.0, ResolutionSource.ENGLISH_PASSTHROUGH)
-            cacheResult(key, result); return result
+            cacheResult(cacheKey, result); return result
         }
 
         // Layers 2-4: Pattern conversion
-        var result = convertByPatterns(key)
+        // Pass original trimmed input (with case) to preserve uppercase markers
+        var result = convertByPatterns(if (hasCaseMarkers) trimmed else key)
+
+        // When user typed uppercase forcers (non-chandrabindu), skip all post-processing.
+        // The user deliberately used case markers to force specific outputs (R→ড়, T→ট, etc.)
+        // and Layers 5-6 would undo their intent by swapping/recovering different words.
+        // Chandrabindu-only (N) still goes through post-processing since it's just a modifier.
+        val skipPostProcessing = hasCaseMarkers && !hasOnlyChandrabinduMarkers
 
         // Layer 5: AI Disambiguation (if confidence < 0.92)
-        if (result.confidence < 0.92) {
+        if (!skipPostProcessing && result.confidence < 0.92) {
             result = applyDisambiguation(result)
         }
 
         // Layer 5.5: Dictionary validation (if 480K loaded)
-        if (validator.isLoaded()) {
+        if (!skipPostProcessing && validator.isLoaded()) {
             result = applyDictionaryValidation(result)
         }
 
         // Layer 5.7: Conjunct removal recovery (if 480K loaded and result not valid)
-        if (validator.isLoaded() && !validator.isValid(result.bengali)) {
+        if (!skipPostProcessing && validator.isLoaded() && !validator.isValid(result.bengali)) {
             result = applyConjunctRemovalRecovery(result)
         }
 
         // Layer 6: Bengali dictionary recovery (if 480K loaded and result not valid)
-        if (validator.isLoaded() && !validator.isValid(result.bengali) && result.bengali.length >= 3) {
+        if (!skipPostProcessing && validator.isLoaded() && !validator.isValid(result.bengali) && result.bengali.length >= 3) {
             applyBengaliRecovery(result)?.let { recovered ->
-                cacheResult(key, recovered); return recovered
+                cacheResult(cacheKey, recovered); return recovered
             }
         }
 
         // ======== Typo Correction + Fuzzy Fallback (post-Layer 6) ========
         // Only try typo correction when pattern engine produced low confidence.
         // This prevents "kotobar" from being wrongly corrected to "oktobar"→অক্টোবর.
-        if (result.confidence < 0.5) {
+        if (!skipPostProcessing && result.confidence < 0.5) {
             // Try typo correction: transposition, doubled-char reduction, vowel insertion
             val typoResult = TypoCorrector.correct(key, dictionary)
             if (typoResult != null) {
@@ -302,7 +325,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                             Alternative(result.bengali, result.confidence)
                         ) + result.alternatives
                     )
-                    cacheResult(key, correctedResult)
+                    cacheResult(cacheKey, correctedResult)
                     return correctedResult
                 }
             }
@@ -318,12 +341,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                         Alternative(result.bengali, result.confidence)
                     ) + result.alternatives
                 )
-                cacheResult(key, fuzzyResult)
+                cacheResult(cacheKey, fuzzyResult)
                 return fuzzyResult
             }
         }
 
-        cacheResult(key, result)
+        cacheResult(cacheKey, result)
         return result
     }
 
@@ -743,6 +766,21 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     /**
+     * Check if a string ends with a Bengali consonant.
+     * Handles compound consonants with nukta (য়, ড়, ঢ়) which are two Unicode chars:
+     * base consonant + nukta (়, U+09BC). Web parity: matches SmartEngine.endsWithBengaliConsonant.
+     */
+    private fun endsWithBengaliConsonant(text: CharSequence): Boolean {
+        if (text.isEmpty()) return false
+        // Check two-char nukta consonants: য়, ড়, ঢ়
+        if (text.length >= 2) {
+            val lastTwo = text.substring(text.length - 2)
+            if (lastTwo == "য়" || lastTwo == "ড়" || lastTwo == "ঢ়") return true
+        }
+        return isBengaliConsonantChar(text.last())
+    }
+
+    /**
      * Get the productive Bengali suffix for a phonetic suffix, if it matches.
      * Returns null if the suffix is not a known productive form.
      */
@@ -1157,6 +1195,61 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 continue
             }
 
+            // --- Uppercase case markers (forcer characters) ---
+            // Must be checked BEFORE ConjunctResolver/ConjunctTable which use
+            // ignoreCase and would incorrectly match uppercase chars as patterns.
+            // Web parity: uppercase letters produce forced outputs that bypass
+            // normal pattern matching.
+            if (ch.isUpperCase()) {
+                val afterConsonant = endsWithBengaliConsonant(result)
+                when (ch) {
+                    'N' -> {
+                        // Chandrabindu (nasalization marker): চাঁদ, হাঁস, কাঁদ
+                        result.append('ঁ')
+                    }
+                    'O' -> {
+                        // Explicit ো-কার / ও — bypasses smart-o suppression
+                        result.append(if (afterConsonant) "ো" else "ও")
+                    }
+                    'I' -> {
+                        // Explicit ি-কার / ই
+                        result.append(if (afterConsonant) "ি" else "ই")
+                    }
+                    'U' -> {
+                        // Explicit ু-কার / উ
+                        result.append(if (afterConsonant) "ু" else "উ")
+                    }
+                    'A' -> {
+                        // Explicit া-কার / আ
+                        result.append(if (afterConsonant) "া" else "আ")
+                    }
+                    'E' -> {
+                        // Explicit ে-কার / এ
+                        result.append(if (afterConsonant) "ে" else "এ")
+                    }
+                    'R' -> {
+                        // Retroflex flap: ড়
+                        result.append("ড়")
+                    }
+                    'T' -> {
+                        // Retroflex stop: ট
+                        result.append("ট")
+                    }
+                    'D' -> {
+                        // Retroflex stop: ড
+                        result.append("ড")
+                    }
+                    else -> {
+                        // Unknown uppercase — lowercase and process normally
+                        // by letting it fall through to patterns in the next iteration
+                        // (replace the char at this position conceptually)
+                        result.append(ch)
+                    }
+                }
+                i++
+                continue
+            }
+
             // Try ConjunctResolver first (highest priority, locked patterns)
             val conjunctMatch = ConjunctResolver.matchAt(key, i)
             if (conjunctMatch != null) {
@@ -1440,6 +1533,25 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             if (afterY != 'y') { // Avoid 'yy'
                 val conf = if (ch in "td") 0.80 else 0.85
                 return Triple(yPhalaConsonants[ch]!! + "্য", 2, conf)
+            }
+        }
+
+        // ৃ-কার / ঋ: standalone "ri" handling (web parity: SmartEngine.ts lines 2844-2866)
+        // After consonant output: "ri" + consonant/end → ৃ
+        // After non-consonant (word-initial or after vowel): "ri" + consonant/end → ঋ
+        if (ch == 'r' && i + 1 < key.length && key[i + 1] == 'i') {
+            val afterRI = if (i + 2 < key.length) key[i + 2] else ' '
+            val bengaliEndsWithConsonant = endsWithBengaliConsonant(bengaliContext)
+            if (bengaliEndsWithConsonant) {
+                if (afterRI !in "aeiou" && afterRI != 'r') {
+                    return Triple("ৃ", 2, 0.90) // After consonant: ri → ৃ (কৃষক, সৃষ্টি)
+                } else {
+                    return Triple("্রি", 2, 0.85) // After consonant + ri + vowel → ্রি (ক্রিকেট)
+                }
+            } else if (bengaliContext.isEmpty() || !bengaliEndsWithConsonant) {
+                if (afterRI !in "aeiou" && afterRI != 'r') {
+                    return Triple("ঋ", 2, 0.85) // Word-initial or after vowel: ri → ঋ (ঋতু, ঋণ)
+                }
             }
         }
 

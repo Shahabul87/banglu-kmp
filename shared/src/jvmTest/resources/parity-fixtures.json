@@ -1339,7 +1339,7 @@
   },
   {
     "input": "poDa",
-    "expected": "পডা",
+    "expected": "পোডা",
     "category": "uppercase-forcers",
     "priority": "P2"
   },
