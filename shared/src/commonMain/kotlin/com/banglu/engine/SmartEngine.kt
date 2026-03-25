@@ -542,6 +542,16 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
+        // ── Root decomposition suggestions (web parity: find dictionary root, suggest related 480K words) ──
+        if (suggestions.size < maxResults && validator.isLoaded()) {
+            val rootSuggestions = getRootBasedSuggestions(key, maxResults - suggestions.size)
+            for (rs in rootSuggestions) {
+                if (seen.add(rs.bengali)) {
+                    suggestions.add(rs)
+                }
+            }
+        }
+
         // ── Progressive narrowing ──
         if (suggestions.size < maxResults && key.length >= 2) {
             for (result in narrowingEngine.getSuggestions(key, maxResults - suggestions.size)) {
@@ -580,14 +590,99 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             suggestions.addAll(scored)
         }
 
+        // ── Pattern conversion as fallback suggestion (web parity) ──
+        // If primary came from dictionary, the raw pattern-engine output may differ
+        // and should be offered as an alternative.
+        if (suggestions.size < maxResults) {
+            val patternResult = convertByPatterns(key)
+            if (patternResult.bengali.isNotEmpty() && seen.add(patternResult.bengali)) {
+                suggestions.add(
+                    SmartSuggestion(
+                        bengali = patternResult.bengali,
+                        confidence = patternResult.confidence,
+                        source = "pattern",
+                        phonetic = key,
+                        tier = "tier7_pattern"
+                    )
+                )
+            }
+
+            // ── Pattern alternatives (diphthong splits, অ/ও variants) ──
+            for (alt in patternResult.alternatives) {
+                if (suggestions.size >= maxResults) break
+                if (seen.add(alt.bengali)) {
+                    suggestions.add(
+                        SmartSuggestion(
+                            bengali = alt.bengali,
+                            confidence = alt.confidence,
+                            source = "pattern_alternative",
+                            phonetic = key,
+                            tier = "tier7_pattern_alt"
+                        )
+                    )
+                }
+            }
+        }
+
+        // ── Validator boost: boost confidence of real 480K words (web parity) ──
+        val boosted = if (validator.isLoaded()) {
+            suggestions.map { s ->
+                if (validator.isValid(s.bengali)) {
+                    s.copy(confidence = minOf(s.confidence + 0.05, 1.0))
+                } else s
+            }
+        } else suggestions
+
         // Global filter: remove hyphenated garbage from 480K dictionary
-        return suggestions
+        return boosted
             .filter { !it.bengali.contains("-") }
             .sortedByDescending { it.confidence }
             .take(limit)
     }
 
     // ======================== PRIVATE PIPELINE METHODS ========================
+
+    /**
+     * Root-based suggestions: split input into possible root+suffix,
+     * look up each root in the dictionary, then search the 480K validator
+     * for words starting with that Bengali root.
+     *
+     * Web parity: SmartEngine.ts getRootBasedSuggestions()
+     */
+    private fun getRootBasedSuggestions(key: String, limit: Int): List<SmartSuggestion> {
+        val suggestions = mutableListOf<SmartSuggestion>()
+        if (!validator.isLoaded() || key.length < 3) return suggestions
+
+        // Find the longest dictionary root
+        for (splitPos in (key.length - 1) downTo 2) {
+            val rootPhonetic = key.substring(0, splitPos)
+            val rootResults = dictionary.lookup(rootPhonetic)
+            if (rootResults.isEmpty()) continue
+
+            val rootBengali = rootResults[0].bengali
+
+            // Search the 480K dictionary for words starting with this root
+            val relatedWords = validator.findByPrefix(rootBengali, limit + 5)
+            for (word in relatedWords) {
+                if (word == rootBengali) continue // Skip the root itself (already in exact matches)
+                if (suggestions.size >= limit) break
+                suggestions.add(
+                    SmartSuggestion(
+                        bengali = word,
+                        confidence = 0.80,
+                        source = "root_dictionary",
+                        phonetic = rootPhonetic,
+                        tier = "tier4_root"
+                    )
+                )
+            }
+
+            // Only use the longest root match
+            if (suggestions.isNotEmpty()) break
+        }
+
+        return suggestions
+    }
 
     /**
      * Layer 1: Dictionary lookup via PhoneticTrie.
