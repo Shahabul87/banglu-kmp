@@ -601,7 +601,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             .map { s ->
                 val overlap = PhoneticOverlapScorer.score(key, ReverseTransliterator.reverseWord(s.bengali))
                 s to overlap.score
-            }.filter { it.second > 0.50 }
+            }.filter { it.second > 0.85 }
         if (scored.isEmpty()) return null
         val best = scored.maxByOrNull { it.second }!!
         return ConversionResult(best.first.bengali, best.first.confidence, ResolutionSource.SECTION)
@@ -1250,8 +1250,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             ScoredCandidate(candidate, sim, freq, combinedScore)
         }.sortedByDescending { it.combinedScore }
 
-        // Only accept if the top candidate has reasonable similarity (>0.50)
-        if (scored.isNotEmpty() && scored[0].similarity > 0.50) {
+        // Only accept if the top candidate has reasonable similarity (>0.70) and length is close
+        if (scored.isNotEmpty() && scored[0].similarity > 0.70 && kotlin.math.abs(scored[0].word.length - bengali.length) <= 3) {
             val best = scored[0]
             return ConversionResult(
                 best.word, 0.85, ResolutionSource.DICTIONARY,
