@@ -26,6 +26,7 @@ import com.banglu.engine.types.PredictedWord
 import com.banglu.engine.types.ResolutionSource
 import com.banglu.engine.types.SmartSuggestion
 import com.banglu.engine.util.ReverseTransliterator
+import com.banglu.engine.util.TypoCorrector
 
 /**
  * SmartEngine - 7-layer Bengali phonetic conversion orchestrator.
@@ -279,6 +280,42 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (validator.isLoaded() && !validator.isValid(result.bengali) && result.bengali.length >= 3) {
             applyBengaliRecovery(result)?.let { recovered ->
                 cacheResult(key, recovered); return recovered
+            }
+        }
+
+        // ======== Typo Correction + Fuzzy Fallback (post-Layer 6) ========
+        // Only try typo correction when pattern engine produced low confidence.
+        // This prevents "kotobar" from being wrongly corrected to "oktobar"→অক্টোবর.
+        if (result.confidence < 0.5) {
+            // Try typo correction: transposition, doubled-char reduction, vowel insertion
+            val typoResult = TypoCorrector.correct(key, dictionary)
+            if (typoResult != null) {
+                val typoDictResult = convertByDictionary(typoResult.corrected)
+                if (typoDictResult != null && typoDictResult.confidence > result.confidence) {
+                    val correctedResult = typoDictResult.copy(
+                        confidence = typoDictResult.confidence - 0.05,
+                        alternatives = listOf(
+                            Alternative(result.bengali, result.confidence)
+                        ) + result.alternatives
+                    )
+                    cacheResult(key, correctedResult)
+                    return correctedResult
+                }
+            }
+
+            // Fuzzy dictionary fallback
+            val fuzzyResults = dictionary.fuzzyLookup(key, maxDistance = 1, limit = 1, anchorFirst = true)
+            if (fuzzyResults.isNotEmpty() && fuzzyResults[0].confidence > result.confidence) {
+                val fuzzyResult = ConversionResult(
+                    bengali = fuzzyResults[0].bengali,
+                    confidence = fuzzyResults[0].confidence * 0.9,
+                    source = ResolutionSource.DICTIONARY,
+                    alternatives = listOf(
+                        Alternative(result.bengali, result.confidence)
+                    ) + result.alternatives
+                )
+                cacheResult(key, fuzzyResult)
+                return fuzzyResult
             }
         }
 
