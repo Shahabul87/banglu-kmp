@@ -1,6 +1,7 @@
 package com.banglu.engine
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -216,5 +217,35 @@ class ParityTest {
     fun testWhitespaceOnlyInput() {
         val result = engine.parse("   ")
         assertTrue(result == "   ", "Whitespace-only input should be preserved, got '$result'")
+    }
+
+    @Test
+    fun testMultipleNSwapsInSameWord() {
+        val engine = SmartEngine(SmartEngineConfig())
+        engine.initializeSync()
+        val result = engine.convertWord("bondona")
+        assertTrue(result.bengali.isNotEmpty())
+    }
+
+    @Test
+    fun testSoftSortForTAndD() {
+        val engine = SmartEngine()
+        engine.initializeSync()
+        engine.addWord("taka", "টাকা", 95)
+        engine.addWord("taka", "তাকা", 80)
+
+        val suggestions = engine.getSuggestions("taka")
+        val hasTaka = suggestions.any { it.bengali == "টাকা" }
+        assertTrue(hasTaka, "টাকা should not be hard-filtered for input 'taka'")
+    }
+
+    @Test
+    fun testTrailingOPreference() {
+        val engine = SmartEngine()
+        engine.initializeSync()
+        engine.addWord("koto", "কত", 90)
+        engine.addWord("koto", "কতো", 85)
+        val result = engine.convertWord("koto")
+        assertEquals("কতো", result.bengali, "Should prefer কতো when input ends with 'o'")
     }
 }

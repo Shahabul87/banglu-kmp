@@ -10,6 +10,8 @@ import com.banglu.engine.dictionary.ProgressiveNarrowingEngine
 import com.banglu.engine.dictionary.SectionNarrowingEngine
 import com.banglu.engine.dictionary.SeedData
 import com.banglu.engine.dictionary.SmartDictionary
+import com.banglu.engine.disambiguation.DisambiguationScorer
+import com.banglu.engine.disambiguation.SwapType
 import com.banglu.engine.platform.DictionaryLoader
 import com.banglu.engine.platform.PlatformStorage
 import com.banglu.engine.rules.ConjunctResolver
@@ -67,6 +69,32 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             return size > MAX_CACHE
         }
     }
+
+    private data class InflectionalSuffix(val phonetic: String, val bengali: String)
+
+    private val inflectionalSuffixes: List<InflectionalSuffix> = listOf(
+        InflectionalSuffix("echchhen", "েচ্ছেন"),
+        InflectionalSuffix("echchhe", "েচ্ছে"),
+        InflectionalSuffix("echchhi", "েচ্ছি"),
+        InflectionalSuffix("chchhen", "চ্ছেন"),
+        InflectionalSuffix("chchhe", "চ্ছে"),
+        InflectionalSuffix("chchhi", "চ্ছি"),
+        InflectionalSuffix("chen", "ছেন"),
+        InflectionalSuffix("chi", "ছি"),
+        InflectionalSuffix("che", "ছে"),
+        InflectionalSuffix("gulo", "গুলো"),
+        InflectionalSuffix("guli", "গুলি"),
+        InflectionalSuffix("der", "দের"),
+        InflectionalSuffix("ter", "তের"),
+        InflectionalSuffix("era", "েরা"),
+        InflectionalSuffix("er", "ের"),
+        InflectionalSuffix("ke", "কে"),
+        InflectionalSuffix("te", "তে"),
+        InflectionalSuffix("ra", "রা"),
+        InflectionalSuffix("e", "ে"),
+        InflectionalSuffix("r", "র"),
+        InflectionalSuffix("y", "য়"),
+    )
 
     companion object {
         const val MAX_CACHE = 2000
@@ -200,6 +228,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
             // Even if below threshold, if dictionary found something, cache and return
             // (gives priority to dictionary over patterns)
+            cacheResult(key, result); return result
+        }
+
+        // Layer 1.2: Suffix-stripped dictionary lookup
+        trySuffixStrippedDictionary(key)?.let { result ->
             cacheResult(key, result); return result
         }
 
@@ -451,16 +484,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             if (jResults.isNotEmpty()) results = jResults  // Prefer জ if available
             // If only য results, keep them (don't filter to null)
         }
-        // 't' (not 'th') → filter out ট-starting results (ট needs 'T' or 'tt')
-        if (key.startsWith("t") && !key.startsWith("th")) {
-            val filtered = results.filter { !it.bengali.startsWith("ট") }
-            if (filtered.isNotEmpty()) results = filtered else return null
-        }
-        // 'd' (not 'dh') → filter out ড-starting results (ড needs 'D' or 'dd')
-        if (key.startsWith("d") && !key.startsWith("dh")) {
-            val filtered = results.filter { !it.bengali.startsWith("ড") }
-            if (filtered.isNotEmpty()) results = filtered else return null
-        }
+        // t/d: NO hard filter — soft sort below (web engine parity)
+        // Web SmartEngine.ts uses soft sort to keep ট/ড but rank ত/দ first
         // 'v' → filter out ব-starting results (ব needs 'b', 'v' maps to ভ)
         if (key.startsWith("v")) {
             val filtered = results.filter { !it.bengali.startsWith("ব") }
@@ -481,7 +506,26 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             } else results
         } else results
 
-        // Step 2: SOFT SORT for middle/end position consonant violations
+        // Step 2a: SOFT SORT for t/d start-position — prefer dental (ত/দ) over retroflex (ট/ড)
+        // Web parity: SmartEngine.ts uses soft sort, not hard filter, so টাকা stays reachable
+        if (key.startsWith("t") && !key.startsWith("th")) {
+            ranked = ranked.sortedWith(Comparator { a, b ->
+                val aIsRetro = if (a.bengali.startsWith("ট")) 1 else 0
+                val bIsRetro = if (b.bengali.startsWith("ট")) 1 else 0
+                if (aIsRetro != bIsRetro) aIsRetro - bIsRetro
+                else (b.confidence * 100).toInt() - (a.confidence * 100).toInt()
+            })
+        }
+        if (key.startsWith("d") && !key.startsWith("dh")) {
+            ranked = ranked.sortedWith(Comparator { a, b ->
+                val aIsRetro = if (a.bengali.startsWith("ড")) 1 else 0
+                val bIsRetro = if (b.bengali.startsWith("ড")) 1 else 0
+                if (aIsRetro != bIsRetro) aIsRetro - bIsRetro
+                else (b.confidence * 100).toInt() - (a.confidence * 100).toInt()
+            })
+        }
+
+        // Step 2b: SOFT SORT for middle/end position consonant violations
         // Prefer results with fewer শ/ষ when phonetic has standalone 's' (not 'sh')
         // Prefer results with fewer ড when phonetic has standalone 'd' (not 'dh')
         // Prefer results with fewer জ when phonetic has 'z'
@@ -507,6 +551,20 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     if (vA != vB) vA - vB
                     else (b.confidence * 100).toInt() - (a.confidence * 100).toInt()
                 })
+            }
+        }
+
+        // When input ends with 'o', prefer the ো-version of the top result
+        if (key.endsWith("o") && ranked.size > 1) {
+            val topBengali = ranked[0].bengali
+            val expectedOkar = topBengali + "ো"
+            val okarIdx = ranked.indexOfFirst { it.bengali == expectedOkar }
+            if (okarIdx > 0) {
+                val okarResult = ranked[okarIdx]
+                ranked = ranked.toMutableList().apply {
+                    removeAt(okarIdx)
+                    add(0, okarResult)
+                }
             }
         }
 
@@ -675,7 +733,103 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
-        return ConversionResult(result.toString(), confidence, ResolutionSource.RULE, alternatives)
+        return ConversionResult(result.toString(), confidence, ResolutionSource.RULE, getAlternatives(key, result.toString()))
+    }
+
+    // ======================== PATTERN ALTERNATIVES GENERATOR ========================
+
+    internal fun getAlternatives(input: String, primary: String): List<Alternative> {
+        val alternatives = mutableListOf<Alternative>()
+        val seen = mutableSetOf(primary)
+
+        fun addAlt(bengali: String, confidence: Double) {
+            if (seen.add(bengali)) {
+                alternatives.add(Alternative(bengali, confidence))
+            }
+        }
+
+        for (alt in generateDiphthongAlternatives(primary)) addAlt(alt.bengali, alt.confidence)
+        for (alt in generateInitialVowelAlternatives(primary)) addAlt(alt.bengali, alt.confidence)
+        for (alt in generateAmbiguousCharAlternatives(primary)) addAlt(alt.bengali, alt.confidence)
+
+        return alternatives.take(config.maxSuggestions - 1)
+    }
+
+    internal fun generateDiphthongAlternatives(bengali: String): List<Alternative> {
+        val alts = mutableListOf<Alternative>()
+
+        if (bengali.contains('ৈ')) {
+            val split = bengali.replace('ৈ', 'ই')
+            if (split != bengali) {
+                val isKnown = disambiguator.isKnownWord(split)
+                alts.add(Alternative(split, if (isKnown) 0.92 else 0.60))
+            }
+        }
+
+        if (bengali.contains('ৌ')) {
+            val split = bengali.replace('ৌ', 'উ')
+            if (split != bengali) {
+                val isKnown = disambiguator.isKnownWord(split)
+                alts.add(Alternative(split, if (isKnown) 0.92 else 0.55))
+            }
+        }
+
+        if (bengali.contains('ই') && bengali.length >= 2) {
+            val idx = bengali.indexOf('ই')
+            if (idx > 0) {
+                val prev = bengali[idx - 1].code
+                val isBengaliConsonant = (prev in 0x0995..0x09A8) || (prev in 0x09AA..0x09B9)
+                if (isBengaliConsonant) {
+                    val diphthong = bengali.substring(0, idx) + "ৈ" + bengali.substring(idx + 1)
+                    if (disambiguator.isKnownWord(diphthong)) {
+                        alts.add(Alternative(diphthong, 0.85))
+                    }
+                }
+            }
+        }
+
+        return alts
+    }
+
+    internal fun generateInitialVowelAlternatives(bengali: String): List<Alternative> {
+        val alts = mutableListOf<Alternative>()
+
+        when {
+            bengali.startsWith("অ") -> {
+                val oVersion = "ও" + bengali.substring(1)
+                val isKnown = disambiguator.isKnownWord(oVersion)
+                alts.add(Alternative(oVersion, if (isKnown) 0.90 else 0.55))
+            }
+            bengali.startsWith("ও") -> {
+                val aVersion = "অ" + bengali.substring(1)
+                val isKnown = disambiguator.isKnownWord(aVersion)
+                alts.add(Alternative(aVersion, if (isKnown) 0.90 else 0.55))
+            }
+            bengali.startsWith("আ") -> {
+                val oVersion = "অ" + bengali.substring(1)
+                if (disambiguator.isKnownWord(oVersion)) {
+                    alts.add(Alternative(oVersion, 0.88))
+                }
+            }
+        }
+
+        return alts
+    }
+
+    internal fun generateAmbiguousCharAlternatives(primary: String): List<Alternative> {
+        if (primary.length < 2) return emptyList()
+
+        val candidates = disambiguator.generateCandidates(primary)
+        val seen = mutableSetOf(primary)
+        val alts = mutableListOf<Alternative>()
+
+        for (candidate in candidates) {
+            if (!seen.add(candidate)) continue
+            val isKnown = disambiguator.isKnownWord(candidate)
+            alts.add(Alternative(candidate, if (isKnown) 0.88 else 0.50))
+        }
+
+        return alts.sortedByDescending { it.confidence }.take(5)
     }
 
     /**
@@ -832,18 +986,138 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         // Try systematic swaps
-        val swaps = listOf(
-            "ন" to "ণ", "ণ" to "ন",
-            "শ" to "ষ", "ষ" to "শ", "স" to "ষ", "ষ" to "স",
-            "ি" to "ী", "ী" to "ি",
-            "ু" to "ূ", "ূ" to "ু",
-            "চ" to "ছ", "ছ" to "চ",
-            "ত" to "ট", "ট" to "ত",
-            "দ" to "ড", "ড" to "দ"
-        )
-
+        // ন↔ণ and শ↔ষ use per-position scoring via DisambiguationScorer when both forms are valid.
+        // All other swap pairs use the original simple "only swap if current is invalid" logic.
         if (!validator.isValid(result.bengali)) {
-            for ((from, to) in swaps) {
+            var improved = result.bengali
+
+            // ── ন→ণ (per-position with scorer) ──────────────────────────────────────
+            for (idx in improved.indices) {
+                if (improved[idx] == 'ন') {
+                    val candidate = improved.substring(0, idx) + "ণ" + improved.substring(idx + 1)
+                    if (candidate.contains("-")) continue
+                    val candidateValid = validator.isValid(candidate)
+                    val currentValid = validator.isValid(improved)
+                    if (candidateValid && !currentValid) {
+                        improved = candidate
+                    } else if (candidateValid && currentValid) {
+                        val scorerResult = DisambiguationScorer.score(
+                            current = improved,
+                            candidate = candidate,
+                            swapIndex = idx,
+                            swapType = SwapType.N_NN,
+                            frequency = DisambiguationScorer.FrequencyPair(
+                                current = validator.getFrequency(improved),
+                                candidate = validator.getFrequency(candidate)
+                            )
+                        )
+                        if (scorerResult.recommendation == "candidate") {
+                            improved = candidate
+                        }
+                    }
+                }
+            }
+
+            // ── ণ→ন (per-position with scorer) ──────────────────────────────────────
+            for (idx in improved.indices) {
+                if (improved[idx] == 'ণ') {
+                    val candidate = improved.substring(0, idx) + "ন" + improved.substring(idx + 1)
+                    if (candidate.contains("-")) continue
+                    val candidateValid = validator.isValid(candidate)
+                    val currentValid = validator.isValid(improved)
+                    if (candidateValid && !currentValid) {
+                        improved = candidate
+                    } else if (candidateValid && currentValid) {
+                        val scorerResult = DisambiguationScorer.score(
+                            current = improved,
+                            candidate = candidate,
+                            swapIndex = idx,
+                            swapType = SwapType.N_NN,
+                            frequency = DisambiguationScorer.FrequencyPair(
+                                current = validator.getFrequency(improved),
+                                candidate = validator.getFrequency(candidate)
+                            )
+                        )
+                        if (scorerResult.recommendation == "candidate") {
+                            improved = candidate
+                        }
+                    }
+                }
+            }
+
+            // ── শ→ষ (per-position with scorer) ──────────────────────────────────────
+            for (idx in improved.indices) {
+                if (improved[idx] == 'শ') {
+                    val candidate = improved.substring(0, idx) + "ষ" + improved.substring(idx + 1)
+                    if (candidate.contains("-")) continue
+                    val candidateValid = validator.isValid(candidate)
+                    val currentValid = validator.isValid(improved)
+                    if (candidateValid && !currentValid) {
+                        improved = candidate
+                    } else if (candidateValid && currentValid) {
+                        val scorerResult = DisambiguationScorer.score(
+                            current = improved,
+                            candidate = candidate,
+                            swapIndex = idx,
+                            swapType = SwapType.SH_SS,
+                            frequency = DisambiguationScorer.FrequencyPair(
+                                current = validator.getFrequency(improved),
+                                candidate = validator.getFrequency(candidate)
+                            )
+                        )
+                        if (scorerResult.recommendation == "candidate") {
+                            improved = candidate
+                        }
+                    }
+                }
+            }
+
+            // ── ষ→শ (per-position with scorer) ──────────────────────────────────────
+            for (idx in improved.indices) {
+                if (improved[idx] == 'ষ') {
+                    val candidate = improved.substring(0, idx) + "শ" + improved.substring(idx + 1)
+                    if (candidate.contains("-")) continue
+                    val candidateValid = validator.isValid(candidate)
+                    val currentValid = validator.isValid(improved)
+                    if (candidateValid && !currentValid) {
+                        improved = candidate
+                    } else if (candidateValid && currentValid) {
+                        val scorerResult = DisambiguationScorer.score(
+                            current = improved,
+                            candidate = candidate,
+                            swapIndex = idx,
+                            swapType = SwapType.SH_SS,
+                            frequency = DisambiguationScorer.FrequencyPair(
+                                current = validator.getFrequency(improved),
+                                candidate = validator.getFrequency(candidate)
+                            )
+                        )
+                        if (scorerResult.recommendation == "candidate") {
+                            improved = candidate
+                        }
+                    }
+                }
+            }
+
+            // Early return if any of the scored swaps fixed the word
+            if (validator.isValid(improved) && improved != result.bengali) {
+                return result.copy(
+                    bengali = improved, confidence = 0.90,
+                    alternatives = result.alternatives + Alternative(result.bengali, result.confidence)
+                )
+            }
+
+            // ── Remaining swaps (simple: only apply when current is invalid) ─────────
+            val simpleSwaps = listOf(
+                "স" to "ষ", "ষ" to "স",
+                "ি" to "ী", "ী" to "ি",
+                "ু" to "ূ", "ূ" to "ু",
+                "চ" to "ছ", "ছ" to "চ",
+                "ত" to "ট", "ট" to "ত",
+                "দ" to "ড", "ড" to "দ"
+            )
+
+            for ((from, to) in simpleSwaps) {
                 if (result.bengali.contains(from)) {
                     val candidate = result.bengali.replace(from, to)
                     // Reject hyphenated candidates (garbage from 480K dictionary)
@@ -1090,6 +1364,78 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      */
     fun clearCache() {
         wordCache.clear()
+    }
+
+    /**
+     * Layer 1.2: Try suffix-stripped dictionary lookup.
+     *
+     * Strips inflectional suffixes (দের, ের, রা, গুলো, etc.) from the phonetic key,
+     * looks up the stem in the dictionary, and reconstructs the full inflected form
+     * by appending the corresponding Bengali suffix.
+     *
+     * Prefers longer stems and higher-frequency matches when multiple candidates match.
+     */
+    internal fun trySuffixStrippedDictionary(key: String): ConversionResult? {
+        var bestResult: ConversionResult? = null
+        var bestStemLength = 0
+        var bestFrequency = 0
+
+        for (suffix in inflectionalSuffixes) {
+            if (key.length > suffix.phonetic.length && key.endsWith(suffix.phonetic)) {
+                val stem = key.substring(0, key.length - suffix.phonetic.length)
+                if (stem.length < 2) continue
+
+                val candidates = mutableListOf(stem)
+                if (!stem.endsWith("a") && !stem.endsWith("o")) {
+                    candidates.add(stem + "a")
+                    candidates.add(stem + "o")
+                }
+
+                for (candidate in candidates) {
+                    var stemResults = dictionary.lookup(candidate)
+                    if (stemResults.isNotEmpty()) {
+                        // Enforce consonant rules on stem results
+                        if (key.startsWith("z")) {
+                            stemResults = stemResults.filter { !it.bengali.startsWith("জ") }
+                        }
+                        if (key.startsWith("j") && !key.startsWith("jh")) {
+                            stemResults = stemResults.filter { !it.bengali.startsWith("য") }
+                        }
+                        if (key.startsWith("s") && !key.startsWith("sh")) {
+                            stemResults = stemResults.filter { !it.bengali.startsWith("শ") }
+                        }
+                        if (key.startsWith("sh")) {
+                            stemResults = stemResults.filter { !it.bengali.startsWith("স") }
+                        }
+                        if (stemResults.isEmpty()) continue
+
+                        val best = stemResults[0]
+                        if (stem.length > bestStemLength ||
+                            (stem.length == bestStemLength && best.frequency > bestFrequency)) {
+                            var bengaliStem = best.bengali
+                            if (candidate != stem) {
+                                bengaliStem = bengaliStem.trimEnd('া', 'ো')
+                            }
+                            val combined = bengaliStem + suffix.bengali
+                            val isExact = best.matchedPhonetic.isEmpty() || best.matchedPhonetic == candidate
+                            val isValid = validator.isLoaded() && validator.isValid(combined)
+                            if (isValid || (isExact && best.confidence >= 0.85)) {
+                                bestResult = ConversionResult(
+                                    bengali = combined,
+                                    confidence = best.confidence * if (candidate == stem) 0.95 else 0.90,
+                                    source = ResolutionSource.DICTIONARY,
+                                    alternatives = emptyList()
+                                )
+                                bestStemLength = stem.length
+                                bestFrequency = best.frequency
+                            }
+                        }
+                        break
+                    }
+                }
+            }
+        }
+        return bestResult
     }
 
     private fun cacheResult(key: String, result: ConversionResult) {
