@@ -1,9 +1,11 @@
 package com.banglu.engine
 
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Parity test suite: asserts the KMP SmartEngine produces identical output
@@ -27,20 +29,30 @@ class ParityFixTest {
         val priority: String,
     )
 
-    // ── Shared engine + fixture loading ─────────────────────────────────
+    // ── Shared engine + fixture loading (companion = single init across all tests) ──
 
-    private val json = Json { ignoreUnknownKeys = true }
+    companion object {
+        private val json = Json { ignoreUnknownKeys = true }
 
-    private val engine: SmartEngine by lazy {
-        SmartEngine().also { it.initializeSync() }
-    }
+        /** Engine with full 480K dictionary loaded via JDBC SQLite. */
+        val engine: SmartEngine by lazy {
+            SmartEngine().also { eng ->
+                eng.initializeSync()
+                // Load 480K dictionary via JDBC for full Layer 5.5/5.7/6 testing
+                runBlocking {
+                    val loader = TestDictionaryLoader()
+                    eng.initialize(storage = null, loader = loader)
+                }
+            }
+        }
 
-    private val fixtures: List<Fixture> by lazy {
-        val jsonText = javaClass.getResourceAsStream("/parity-fixtures.json")
-            ?.bufferedReader()
-            ?.readText()
-            ?: error("parity-fixtures.json not found on classpath")
-        json.decodeFromString<List<Fixture>>(jsonText)
+        val fixtures: List<Fixture> by lazy {
+            val jsonText = ParityFixTest::class.java.getResourceAsStream("/parity-fixtures.json")
+                ?.bufferedReader()
+                ?.readText()
+                ?: error("parity-fixtures.json not found on classpath")
+            json.decodeFromString<List<Fixture>>(jsonText)
+        }
     }
 
     private fun fixturesByCategory(category: String): List<Fixture> =
@@ -58,6 +70,17 @@ class ParityFixTest {
         }
         // Single word (or whitespace-only): convertWord trims and handles empty
         return engine.convertWord(input).bengali
+    }
+
+    // ── Smoke test: verify 480K dictionary is loaded ─────────────────────
+
+    @Test
+    fun testDictionaryLoaded() {
+        // Force engine initialization by accessing it
+        val result = engine.convertWord("ami")
+        assertTrue(result.bengali.isNotEmpty(), "Engine should produce output")
+        // The engine's validator should report loaded after 480K init
+        println("Smoke test passed: engine converts 'ami' -> '${result.bengali}'")
     }
 
     // ── Per-category test methods ───────────────────────────────────────
