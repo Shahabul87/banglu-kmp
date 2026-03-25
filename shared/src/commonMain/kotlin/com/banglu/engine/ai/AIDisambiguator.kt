@@ -93,6 +93,8 @@ class AIDisambiguator {
         } else null
     }
 
+    fun isKnownWord(word: String): Boolean = word in knownWords
+
     fun generateCandidates(bengali: String): Set<String> {
         val candidates = mutableSetOf<String>()
 
