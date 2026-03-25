@@ -2,6 +2,7 @@ package com.banglu.engine
 
 import com.banglu.engine.ai.AIDisambiguator
 import com.banglu.engine.ai.BigramModel
+import com.banglu.engine.ai.EnglishDetector
 import com.banglu.engine.ai.ViterbiDecoder
 import com.banglu.engine.ai.WordCandidate
 import com.banglu.engine.dictionary.BengaliWordValidator
@@ -208,7 +209,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * @return ConversionResult with Bengali text, confidence, source, and alternatives
      */
     fun convertWord(input: String): ConversionResult {
-        val key = input.lowercase().trim()
+        val trimmed = input.trim()
+        val key = trimmed.lowercase()
         if (key.isEmpty()) return ConversionResult("", 0.0, ResolutionSource.RULE)
 
         // Check cache — invalidate stale entries when 480K validator loads
@@ -252,9 +254,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             cacheResult(key, result); return result
         }
 
-        // English detection: if input looks like English, pass through
-        if (isLikelyEnglish(key)) {
-            val result = ConversionResult(key, 1.0, ResolutionSource.ENGLISH_PASSTHROUGH)
+        // English detection: if input looks like English, pass through unchanged.
+        // Web parity: pass lowercase key (same as web's `EnglishDetector.isLikelyEnglish(key)`).
+        // Return original trimmed input to preserve case (URLs, file paths).
+        if (EnglishDetector.isEnglish(key)) {
+            val result = ConversionResult(trimmed, 1.0, ResolutionSource.ENGLISH_PASSTHROUGH)
             cacheResult(key, result); return result
         }
 
@@ -1493,23 +1497,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         return sb.toString()
     }
 
-    /**
-     * Detect likely English words that should pass through without conversion.
-     */
-    private fun isLikelyEnglish(key: String): Boolean {
-        val englishWords = setOf(
-            "the", "is", "are", "was", "were", "been", "have", "has",
-            "had", "do", "does", "did", "will", "would", "could", "should", "may", "might",
-            "can", "shall", "must", "need", "dare", "for", "and", "but", "not", "you",
-            "all", "any", "few", "her", "him", "his", "how", "its", "let", "new",
-            "now", "old", "our", "out", "own", "say", "she", "too", "use", "way",
-            "who", "why", "yes", "yet", "day", "get", "got", "end", "off", "see"
-        )
-        if (key in englishWords) return true
-        // Words with patterns uncommon in Bengali phonetics
-        if (key.contains("th") && key.contains("e") && key.length <= 4) return true
-        return false
-    }
+    // English detection is now handled by EnglishDetector.isEnglish() in the ai package.
 
     // ======================== PUBLIC UTILITY METHODS ========================
 

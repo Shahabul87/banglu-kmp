@@ -254,9 +254,13 @@ class ParityTest {
     fun testEnglishDetectionConfidence() {
         val engine = SmartEngine()
         engine.initializeSync()
-        val result = engine.convertWord("the")
-        assertEquals("the", result.bengali)
+        // URLs should pass through as English (not transliterated)
+        val result = engine.convertWord("https://example.com")
+        assertEquals("https://example.com", result.bengali)
         assertEquals(1.0, result.confidence, "English passthrough should have confidence 1.0")
+        // "the" is NOT in the English word set — it should be transliterated to Bengali
+        val theResult = engine.convertWord("the")
+        assertTrue(theResult.bengali != "the", "'the' should be transliterated, not passed through")
     }
 
     @Test
@@ -294,8 +298,9 @@ class ParityTest {
         val bhaloSugs = engine.getSuggestions("bhalo")
         assertTrue(bhaloSugs.size >= 2, "Should have ো variant")
 
-        // P3: English confidence = 1.0
-        val theResult = engine.convertWord("the")
-        assertEquals(1.0, theResult.confidence, "English passthrough should have confidence 1.0")
+        // P3: English passthrough confidence = 1.0 (URL pattern)
+        val urlResult = engine.convertWord("https://example.com")
+        assertEquals(1.0, urlResult.confidence, "English passthrough should have confidence 1.0")
+        assertEquals("https://example.com", urlResult.bengali, "URLs should pass through unchanged")
     }
 }
