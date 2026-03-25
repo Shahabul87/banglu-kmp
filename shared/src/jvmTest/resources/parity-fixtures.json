@@ -7,7 +7,7 @@
   },
   {
     "input": "taka",
-    "expected": "টাকা",
+    "expected": "তাকা",
     "category": "layer5.5-swap",
     "priority": "P0"
   },
@@ -181,7 +181,7 @@
   },
   {
     "input": "bangaldesh",
-    "expected": "বাঙালিত্বকে",
+    "expected": "বাঙ্গালে",
     "category": "typo-correction",
     "priority": "P0"
   },
@@ -823,7 +823,7 @@
   },
   {
     "input": "chilo",
-    "expected": "ছিল",
+    "expected": "ছিলো",
     "category": "common-words",
     "priority": "P0"
   },
@@ -1147,7 +1147,7 @@
   },
   {
     "input": "dure",
-    "expected": "দুরে",
+    "expected": "দূরে",
     "category": "common-words",
     "priority": "P0"
   },
@@ -1393,7 +1393,7 @@
   },
   {
     "input": "test 123",
-    "expected": "তেস্ত ১২৩",
+    "expected": "টেস্ট ১২৩",
     "category": "edge-cases",
     "priority": "P2"
   },

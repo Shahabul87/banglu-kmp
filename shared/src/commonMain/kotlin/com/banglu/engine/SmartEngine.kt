@@ -290,7 +290,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         // Layer 5: AI Disambiguation (if confidence < 0.92)
         if (!skipPostProcessing && result.confidence < 0.92) {
-            result = applyDisambiguation(result)
+            result = applyDisambiguation(result, key)
         }
 
         // Layer 5.5: Dictionary validation (if 480K loaded)
@@ -810,13 +810,26 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val suggestions = sectionEngine.getSectionSuggestions(key, 5)
         if (suggestions.isEmpty()) return null
         // Score by phonetic overlap, reject hyphenated garbage
-        val scored = suggestions
+        var scored = suggestions
             .filter { !it.bengali.contains("-") }  // Reject hyphenated entries (garbage from 480K)
             .map { s ->
                 val overlap = PhoneticOverlapScorer.score(key, ReverseTransliterator.reverseWord(s.bengali))
                 s to overlap.score
             }.filter { it.second > 0.85 }
         if (scored.isEmpty()) return null
+
+        // Apply consonant filters (same logic as dictionary lookup) to prevent
+        // section narrowing from bypassing phonetic→Bengali consonant rules.
+        // e.g., "sh" input should NOT return স-starting words (needs শ/ষ)
+        if (key.startsWith("sh")) {
+            scored = scored.filter { !it.first.bengali.startsWith("স") }
+            if (scored.isEmpty()) return null
+        }
+        if (key.startsWith("s") && !key.startsWith("sh")) {
+            scored = scored.filter { !it.first.bengali.startsWith("শ") }
+            if (scored.isEmpty()) return null
+        }
+
         val best = scored.maxByOrNull { it.second }!!
         return ConversionResult(best.first.bengali, best.first.confidence, ResolutionSource.SECTION)
     }
@@ -1363,10 +1376,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 i += conjunctMatch.consumed
                 // Check for dependent vowel after conjunct
                 if (i < key.length && key[i] in "aeiou") {
-                    val vowelResult = resolveVowel(key, i, false)
-                    result.append(vowelResult.first)
-                    i += vowelResult.second
-                    confidence = minOf(confidence, vowelResult.third)
+                    if (shouldSuppressO(key, i)) {
+                        i++ // Smart "o" suppression
+                    } else {
+                        val vowelResult = resolveVowel(key, i, false)
+                        result.append(vowelResult.first)
+                        i += vowelResult.second
+                        confidence = minOf(confidence, vowelResult.third)
+                    }
                 }
                 continue
             }
@@ -1375,14 +1392,26 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             var tableMatched = false
             for (entry in ConjunctTable.TABLE) {
                 if (key.startsWith(entry.phonetic, i, ignoreCase = true)) {
-                    result.append(entry.bengali)
+                    // Special handling for context-sensitive entries (web parity)
+                    if (entry.phonetic == "sh") {
+                        // Apply ShatvaVidhan for "sh" → ষ/শ disambiguation
+                        val shatva = ShatvaVidhan.resolve(result.toString(), key, i)
+                        result.append(shatva.bengali)
+                        confidence = minOf(confidence, shatva.confidence)
+                    } else {
+                        result.append(entry.bengali)
+                    }
                     i += entry.phonetic.length
                     // Handle dependent vowel after conjunct table entry
                     if (i < key.length && key[i] in "aeiou") {
-                        val vowelResult = resolveVowel(key, i, false)
-                        result.append(vowelResult.first)
-                        i += vowelResult.second
-                        confidence = minOf(confidence, vowelResult.third)
+                        if (shouldSuppressO(key, i)) {
+                            i++ // Smart "o" suppression
+                        } else {
+                            val vowelResult = resolveVowel(key, i, false)
+                            result.append(vowelResult.first)
+                            i += vowelResult.second
+                            confidence = minOf(confidence, vowelResult.third)
+                        }
                     }
                     tableMatched = true
                     break
@@ -1395,11 +1424,27 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             when {
                 // Vowels
                 char in "aeiou" -> {
-                    val isInitial = result.isEmpty()
-                    val vowelResult = resolveVowel(key, i, isInitial)
-                    result.append(vowelResult.first)
-                    i += vowelResult.second
-                    confidence = minOf(confidence, vowelResult.third)
+                    // Web parity: use endsWithBengaliConsonant to decide dependent/independent.
+                    // After digits or punctuation, vowels should be independent (আ not া).
+                    val afterConsonant = endsWithBengaliConsonant(result)
+                    if (afterConsonant) {
+                        // After a Bengali consonant — use dependent (kar) form
+                        // Also apply smart-o suppression
+                        if (shouldSuppressO(key, i)) {
+                            i++ // consume 'o' without adding ো
+                        } else {
+                            val vowelResult = resolveVowel(key, i, false)
+                            result.append(vowelResult.first)
+                            i += vowelResult.second
+                            confidence = minOf(confidence, vowelResult.third)
+                        }
+                    } else {
+                        // Not after consonant (word-initial, after digit, after vowel) — use independent form
+                        val vowelResult = resolveVowel(key, i, true, isWordInitial = result.isEmpty())
+                        result.append(vowelResult.first)
+                        i += vowelResult.second
+                        confidence = minOf(confidence, vowelResult.third)
+                    }
                 }
 
                 // Consonants
@@ -1411,18 +1456,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
                     // Check for dependent vowel after consonant
                     if (i < key.length && key[i] in "aeiou") {
-                        // Smart trailing ো: skip 'o' before 'y' at/near word end
-                        // moy → ময় (not মোয়), hoy → হয় (not হোয়)
-                        // The 'o' before trailing 'y' is the inherent vowel, not ো
-                        val isOBeforeTrailingY = key[i] == 'o' &&
-                            i + 1 < key.length && key[i + 1] == 'y' &&
-                            (i + 2 >= key.length || key[i + 2] !in "aeiou")
-
-                        if (isOBeforeTrailingY) {
-                            // Skip the 'o' — let inherent vowel + য় handle it
+                        // Web parity: check if output actually ends with Bengali consonant.
+                        // Some "consonant" letters like 'w' map to vowels (ও),
+                        // so the following vowel should be independent, not dependent.
+                        val outputEndsWithConsonant = endsWithBengaliConsonant(result)
+                        if (outputEndsWithConsonant && shouldSuppressO(key, i)) {
+                            // Smart "o" suppression: skip 'o' (inherent vowel)
                             i++ // consume 'o' without adding ো
                         } else {
-                            val vowelResult = resolveVowel(key, i, false)
+                            val vowelResult = resolveVowel(key, i, !outputEndsWithConsonant)
                             result.append(vowelResult.first)
                             i += vowelResult.second
                             confidence = minOf(confidence, vowelResult.third)
@@ -1537,14 +1579,57 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     /**
+     * Smart "o" suppression: between consonants, 'o' is the inherent vowel.
+     * Bengali consonants already carry an inherent অ/ও sound, so typing
+     * "bol" means ব+ল (= বল), NOT ব+ো+ল (= বোল).
+     * Only add ো-কার when 'o' is at word end or before another vowel.
+     *
+     * Web parity: SmartEngine.ts lines 2927-2953
+     *
+     * @param key Full phonetic input
+     * @param i Current position (should be pointing at 'o')
+     * @return true if the 'o' should be suppressed (inherent vowel)
+     */
+    private fun shouldSuppressO(key: String, i: Int): Boolean {
+        if (key[i] != 'o') return false
+        val nextIdx = i + 1
+        if (nextIdx >= key.length) return false  // 'o' at word end → don't suppress, add ো
+        val nextChar = key[nextIdx]
+        // Check if next char is a consonant letter (not a vowel)
+        val isConsonantLetter = nextChar in 'a'..'z' && nextChar !in "aeiou"
+        if (!isConsonantLetter) return false  // 'o' before vowel → don't suppress
+        // Special case: 'o' before 'y'
+        // moy → ময় (skip o), but moye → মোয়ে (keep o, because y+vowel needs ো)
+        if (nextChar == 'y') {
+            val afterY = if (nextIdx + 1 < key.length) key[nextIdx + 1] else ' '
+            // o before trailing y (end or y+consonant) → suppress (inherent vowel)
+            // o before y+vowel (moye) → DON'T suppress, let it add ো
+            return afterY == ' ' || afterY !in "aeiou"
+        }
+        // 'o' before any other consonant → suppress (inherent vowel)
+        return true
+    }
+
+    /**
      * Resolve a vowel at position i in the phonetic input.
+     *
+     * Web parity: independent 'o' has three modes:
+     * 1. Word-initial + before consonant → অ (অনেক, অবশ্য)
+     * 2. Word-initial + standalone → ও (conjunction)
+     * 3. Mid-word independent (after non-consonant) → ও (ওকার independent)
      *
      * @param key Full phonetic input
      * @param i Current position
-     * @param isIndependent True if vowel is at word-start (independent form)
+     * @param isIndependent True if vowel is NOT after a Bengali consonant
+     * @param isWordInitial True if output is empty (word-start position)
      * @return Triple of (Bengali vowel string, chars consumed, confidence)
      */
-    private fun resolveVowel(key: String, i: Int, isIndependent: Boolean): Triple<String, Int, Double> {
+    private fun resolveVowel(
+        key: String,
+        i: Int,
+        isIndependent: Boolean,
+        isWordInitial: Boolean = false
+    ): Triple<String, Int, Double> {
         // Check for compound vowels first (longest match)
         if (i + 1 < key.length) {
             val twoChar = key.substring(i, minOf(i + 2, key.length))
@@ -1563,7 +1648,21 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             'i' -> if (isIndependent) Triple("ই", 1, 0.85) else Triple("ি", 1, 0.85)
             'u' -> if (isIndependent) Triple("উ", 1, 0.90) else Triple("ু", 1, 0.90)
             'e' -> if (isIndependent) Triple("এ", 1, 0.90) else Triple("ে", 1, 0.90)
-            'o' -> if (isIndependent) Triple("অ", 1, 0.85) else Triple("ো", 1, 0.85)
+            'o' -> if (!isIndependent) {
+                Triple("ো", 1, 0.85) // Dependent form (after consonant)
+            } else if (isWordInitial) {
+                // Word-initial 'o': অ before consonant, ও standalone/before vowel
+                val nextIdx = i + 1
+                val nextChar = if (nextIdx < key.length) key[nextIdx] else ' '
+                val isFollowedByConsonant = nextChar in 'a'..'z' && nextChar !in "aeiou"
+                if (isFollowedByConsonant) {
+                    Triple("অ", 1, 0.75) // অনেক, অবশ্য
+                } else {
+                    Triple("ও", 1, 0.85) // standalone ও
+                }
+            } else {
+                Triple("ও", 1, 0.85) // Mid-word independent: ও
+            }
             else -> Triple(key[i].toString(), 1, 0.50)
         }
     }
@@ -1682,16 +1781,31 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     /**
      * Layer 5: Apply AI disambiguation using character swap rules.
+     *
+     * Web parity: Enforce consonant rules — reject AI disambiguation results
+     * that violate phonetic→Bengali consonant mapping rules:
+     * - 'sh' input → result must NOT start with স (needs শ/ষ)
+     * - 's' (not 'sh') → result must NOT start with শ (needs স)
+     * - 'z' input → result must NOT start with জ (needs য)
+     * - 'j' (not 'jh') → result must NOT start with য (needs জ)
      */
-    private fun applyDisambiguation(result: ConversionResult): ConversionResult {
-        val disambiguated = disambiguator.disambiguate(result.bengali, result.confidence)
-        return if (disambiguated != null) {
-            result.copy(
-                bengali = disambiguated.bengali,
-                confidence = disambiguated.confidence,
-                alternatives = result.alternatives + Alternative(result.bengali, result.confidence)
-            )
-        } else result
+    private fun applyDisambiguation(result: ConversionResult, key: String = ""): ConversionResult {
+        val disambiguated = disambiguator.disambiguate(result.bengali, result.confidence) ?: return result
+
+        // Enforce consonant rules: reject AI disambiguation that violates mapping rules
+        val aiViolatesRules = disambiguated.improved && (
+            (key.startsWith("z") && disambiguated.bengali.startsWith("জ")) ||
+            (key.startsWith("s") && !key.startsWith("sh") && disambiguated.bengali.startsWith("শ")) ||
+            (key.startsWith("sh") && disambiguated.bengali.startsWith("স")) ||
+            (key.startsWith("j") && !key.startsWith("jh") && disambiguated.bengali.startsWith("য"))
+        )
+        if (aiViolatesRules) return result
+
+        return result.copy(
+            bengali = disambiguated.bengali,
+            confidence = disambiguated.confidence,
+            alternatives = result.alternatives + Alternative(result.bengali, result.confidence)
+        )
     }
 
     /**
