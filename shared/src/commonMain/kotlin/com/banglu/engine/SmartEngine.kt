@@ -323,6 +323,40 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
+        // Per-word bigram re-ranking for ambiguous pairs
+        // When both primary and alternative are valid 480K words, use lower threshold (1.2x vs 1.5x)
+        if (bigramModel.isLoaded() && wordIndices.size >= 2) {
+            for (i in 1 until wordIndices.size) {
+                val prevIdx = wordIndices[i - 1]
+                val currIdx = wordIndices[i]
+                val prevBengali = allTokens[prevIdx]
+                val currPhonetic = originalPhonetics[i]
+                val currResult = convertWord(currPhonetic)
+
+                var bestScore = bigramModel.bigramProb(prevBengali, currResult.bengali)
+                var bestBengali = currResult.bengali
+
+                for (alt in currResult.alternatives) {
+                    val altScore = bigramModel.bigramProb(prevBengali, alt.bengali)
+
+                    val bothValid = validator.isLoaded() &&
+                            validator.isValid(currResult.bengali) &&
+                            validator.isValid(alt.bengali)
+
+                    val threshold = if (bothValid) 1.2 else 1.5
+
+                    if (altScore > bestScore * threshold) {
+                        bestScore = altScore
+                        bestBengali = alt.bengali
+                    }
+                }
+
+                if (bestBengali != allTokens[currIdx]) {
+                    allTokens[currIdx] = bestBengali
+                }
+            }
+        }
+
         // Viterbi optimization (if bigram model loaded and 2+ words)
         val decoder = viterbiDecoder
         if (decoder != null && wordIndices.size >= 2) {

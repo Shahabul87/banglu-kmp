@@ -257,4 +257,12 @@ class ParityTest {
         assertEquals("the", result.bengali)
         assertEquals(1.0, result.confidence, "English passthrough should have confidence 1.0")
     }
+
+    @Test
+    fun testParseMultiWordDoesNotCrash() {
+        val engine = SmartEngine()
+        engine.initializeSync()
+        val result = engine.parse("ami tumi")
+        assertTrue(result.isNotEmpty())
+    }
 }
