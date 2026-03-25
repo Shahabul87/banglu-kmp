@@ -253,7 +253,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         // English detection: if input looks like English, pass through
         if (isLikelyEnglish(key)) {
-            val result = ConversionResult(key, 0.50, ResolutionSource.ENGLISH_PASSTHROUGH)
+            val result = ConversionResult(key, 1.0, ResolutionSource.ENGLISH_PASSTHROUGH)
             cacheResult(key, result); return result
         }
 

@@ -248,4 +248,13 @@ class ParityTest {
         val result = engine.convertWord("koto")
         assertEquals("কতো", result.bengali, "Should prefer কতো when input ends with 'o'")
     }
+
+    @Test
+    fun testEnglishDetectionConfidence() {
+        val engine = SmartEngine()
+        engine.initializeSync()
+        val result = engine.convertWord("the")
+        assertEquals("the", result.bengali)
+        assertEquals(1.0, result.confidence, "English passthrough should have confidence 1.0")
+    }
 }
