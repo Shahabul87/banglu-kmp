@@ -304,7 +304,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         // Layer 6: Bengali dictionary recovery (if 480K loaded and result not valid)
-        if (!skipPostProcessing && validator.isLoaded() && !validator.isValid(result.bengali) && result.bengali.length >= 3) {
+        // Gate: only fire on longer inputs (>= 6 chars) where pattern engine output is less trustworthy
+        if (!skipPostProcessing && key.length >= 6 && validator.isLoaded() && !validator.isValid(result.bengali) && result.bengali.length >= 3) {
             applyBengaliRecovery(result)?.let { recovered ->
                 cacheResult(cacheKey, recovered); return recovered
             }
@@ -1175,6 +1176,16 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val alternatives = mutableListOf<Alternative>()
 
         while (i < key.length) {
+            // --- Hasanta/ZWNJ escape: ",," between consonants prevents conjunct formation ---
+            // e.g., "k,,t" → ক্‌ত instead of ক্ত (explicit halant + ZWNJ)
+            if (i + 1 < key.length && key[i] == ',' && key[i + 1] == ',') {
+                if (endsWithBengaliConsonant(result.toString())) {
+                    result.append("্\u200C") // hasanta + ZWNJ
+                }
+                i += 2
+                continue
+            }
+
             // --- Punctuation (longest match first) ---
             var punctMatched = false
             for ((phonetic, bengali) in PUNCTUATION) {
@@ -1841,7 +1852,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 if (validator.isValid(without)) {
                     return result.copy(
                         bengali = without,
-                        confidence = 0.88,
+                        confidence = 0.92,
                         alternatives = result.alternatives + Alternative(result.bengali, result.confidence)
                     )
                 }
@@ -1853,7 +1864,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (validator.isValid(allRemoved)) {
             return result.copy(
                 bengali = allRemoved,
-                confidence = 0.85,
+                confidence = 0.90,
                 alternatives = result.alternatives + Alternative(result.bengali, result.confidence)
             )
         }
