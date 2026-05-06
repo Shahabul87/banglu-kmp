@@ -7,7 +7,7 @@
   },
   {
     "input": "taka",
-    "expected": "তাকা",
+    "expected": "টাকা",
     "category": "layer5.5-swap",
     "priority": "P0"
   },
@@ -241,7 +241,7 @@
   },
   {
     "input": "shobkichu",
-    "expected": "শবকিচু",
+    "expected": "সবকিছু",
     "category": "layer6-recovery",
     "priority": "P0"
   },
@@ -265,7 +265,7 @@
   },
   {
     "input": "shobcheye",
-    "expected": "শবচেয়ে",
+    "expected": "সবচেয়ে",
     "category": "layer6-recovery",
     "priority": "P0"
   },
@@ -277,7 +277,7 @@
   },
   {
     "input": "shomossha",
-    "expected": "শমসেরসহ",
+    "expected": "সমস্যা",
     "category": "layer6-recovery",
     "priority": "P0"
   },
@@ -643,7 +643,7 @@
   },
   {
     "input": "shongkolpo",
-    "expected": "শঙ্কল্পো",
+    "expected": "সংকল্প",
     "category": "ai-disambiguation",
     "priority": "P1"
   },
@@ -709,7 +709,7 @@
   },
   {
     "input": "she",
-    "expected": "শে",
+    "expected": "সে",
     "category": "common-words",
     "priority": "P0"
   },
@@ -931,7 +931,7 @@
   },
   {
     "input": "shundor",
-    "expected": "শুন্দর",
+    "expected": "সুন্দর",
     "category": "common-words",
     "priority": "P0"
   },
@@ -949,7 +949,7 @@
   },
   {
     "input": "shokal",
-    "expected": "শোকাল",
+    "expected": "সকাল",
     "category": "common-words",
     "priority": "P0"
   },
@@ -961,7 +961,7 @@
   },
   {
     "input": "shondha",
-    "expected": "শন্ধা",
+    "expected": "সন্ধ্যা",
     "category": "common-words",
     "priority": "P0"
   },
@@ -1033,7 +1033,7 @@
   },
   {
     "input": "shokol",
-    "expected": "শোকল",
+    "expected": "সকল",
     "category": "common-words",
     "priority": "P0"
   },
@@ -1153,7 +1153,7 @@
   },
   {
     "input": "shamne",
-    "expected": "শাম্নে",
+    "expected": "সামনে",
     "category": "common-words",
     "priority": "P0"
   },
@@ -1243,7 +1243,7 @@
   },
   {
     "input": "shadhinota",
-    "expected": "শাধিনতা",
+    "expected": "স্বাধীনতা",
     "category": "common-words",
     "priority": "P0"
   },

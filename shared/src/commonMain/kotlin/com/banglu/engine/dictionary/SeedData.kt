@@ -52,6 +52,7 @@ object SeedData {
             addAll(chunkWebSyncFreqUpdates2())
             addAll(chunkColloquialVerbForms())
             addAll(chunkWebSync7())
+            addAll(chunkWebSync8ForeignTerms())
             addAll(SeedDataSync0.ENTRIES)
             addAll(SeedDataSync1.ENTRIES)
             addAll(SeedDataSync2.ENTRIES)
@@ -61,6 +62,7 @@ object SeedData {
             addAll(SeedDataFreqSync0.ENTRIES)
             addAll(SeedDataFreqSync1.ENTRIES)
             addAll(SeedDataSync6.ENTRIES)
+            addAll(EnglishDirectData.ENTRIES)
         }
     }
 
@@ -86,7 +88,7 @@ object SeedData {
             e("যে", listOf("je", "ze"), 82, WordCategory.TADBHAVA),
             e("এই", listOf("ei"), 81, WordCategory.TADBHAVA),
             e("ওই", listOf("oi", "oy"), 80, WordCategory.TADBHAVA),
-            e("কি", listOf("ki", "kii"), 79, WordCategory.TADBHAVA),
+            e("কি", listOf("ki"), 79, WordCategory.TADBHAVA),
             e("কে", listOf("ke"), 78, WordCategory.TADBHAVA),
             e("কেন", listOf("keno", "kenou", "ken", "kaeno", "kaenou", "kn"), 85, WordCategory.TADBHAVA),
             e("কখন", listOf("kokhon", "kakhon", "kokhun"), 76, WordCategory.TADBHAVA),
@@ -172,7 +174,14 @@ object SeedData {
             e("সুপথ", listOf("supoth", "shupoth", "suupoth"), 80, WordCategory.TATSAMA),
             e("সুপথে", listOf("supothe", "supothey", "shupothe", "suupothe"), 80, WordCategory.TATSAMA),
             e("কুপথ", listOf("kupoth", "kuupoth"), 50, WordCategory.TATSAMA),
-            e("পথ", listOf("poth", "patha"), 80, WordCategory.TATSAMA),
+            e("পথ", listOf("poth", "path"), 80, WordCategory.TATSAMA),
+            e("পাঠ", listOf("paath", "path"), 70, WordCategory.TATSAMA),
+            e("পাথা", listOf("patha"), 72, WordCategory.TADBHAVA),
+            e("পাঠান", listOf("pathan", "paathan"), 78, WordCategory.TADBHAVA),
+            e("পাঠানো", listOf("pathano", "paathano"), 76, WordCategory.TADBHAVA),
+            e("পাঠাল", listOf("pathal", "paathal"), 62, WordCategory.TADBHAVA),
+            e("পঠন", listOf("pothon", "pathon"), 58, WordCategory.TATSAMA),
+            e("পাঠ্য", listOf("pathyo", "paathyo", "pathy"), 58, WordCategory.TATSAMA),
             e("গতি", listOf("goti", "gotii", "gotee"), 65, WordCategory.TATSAMA),
             e("বাংলা", listOf("bangla", "banla", "banglaa", "banlaa"), 98, WordCategory.TADBHAVA),
             e("বাংলাদেশ", listOf("bangladesh", "banladesh", "bangladsh", "bangldesh", "bangladeshh"), 98, WordCategory.TADBHAVA),
@@ -1977,7 +1986,8 @@ object SeedData {
             e("অবিশ্বাস", listOf("obishshash", "abisshash", "obiishshash", "abiisshash", "obisshash", "abissash", "obiisshash", "abiissash"), 40, WordCategory.TATSAMA),
             e("ওঠা", listOf("otha", "othaa", "outha", "outhaa"), 65, WordCategory.TADBHAVA),
             e("ওড়না", listOf("orna", "odhna", "orna", "ornaa", "odhnaa"), 40, WordCategory.TADBHAVA),
-            e("কই", listOf("koi", "koy"), 50, WordCategory.TADBHAVA),
+            e("কই", listOf("koi"), 75, WordCategory.TADBHAVA),
+            e("কই", listOf("koy"), 45, WordCategory.TADBHAVA),
             e("নই", listOf("noi", "noy"), 55, WordCategory.TADBHAVA),
             e("হই", listOf("hoi"), 40, WordCategory.TADBHAVA),
             e("চই", listOf("choi", "coi"), 30, WordCategory.TADBHAVA),
@@ -3324,7 +3334,7 @@ object SeedData {
             e("কমি", listOf("komi", "komee", "koumi", "komii"), 60, WordCategory.UNKNOWN),
             e("কমে", listOf("kome", "koume"), 60, WordCategory.UNKNOWN),
             e("কমো", listOf("komo", "koumou", "koma"), 60, WordCategory.UNKNOWN),
-            e("কয়", listOf("koy", "kouy", "koi"), 60, WordCategory.UNKNOWN),
+            e("কয়", listOf("koy", "kouy", "koi"), 70, WordCategory.TADBHAVA),
             e("করই", listOf("koroi", "koroee", "kouroui", "koroy", "koroii"), 60, WordCategory.UNKNOWN),
             e("করছ", listOf("korochh", "kourouchh", "koroch", "korhochh"), 60, WordCategory.UNKNOWN),
             e("করজ", listOf("koroj", "kourouj", "korhoj", "koroz"), 60, WordCategory.UNKNOWN),
@@ -5159,6 +5169,7 @@ object SeedData {
         e("কাচের", listOf("kacher"), 55, WordCategory.TADBHAVA),
         e("কান্ড", listOf("kand"), 55, WordCategory.TADBHAVA),
         e("কিছুতে", listOf("kichhute"), 55, WordCategory.TADBHAVA),
+        e("কিছুতেই", listOf("kichutei", "kichhutei", "kichuteii", "kichhuteii"), 58, WordCategory.TADBHAVA),
         e("কিরণ", listOf("kiron"), 55, WordCategory.TADBHAVA),
         e("কিরে", listOf("kire"), 55, WordCategory.TADBHAVA),
         e("কুসুম", listOf("kusum"), 55, WordCategory.TADBHAVA),
@@ -6167,7 +6178,7 @@ object SeedData {
 
     /** Frequency updates for existing entries where web corpus has higher frequency */
     private fun chunkWebSyncFreqUpdates(): List<SmartDictionaryEntry> = listOf(
-        e("কি", listOf("ki", "kii"), 90, WordCategory.TADBHAVA),
+        e("কি", listOf("ki"), 90, WordCategory.TADBHAVA),
         e("বিষ", listOf("bish", "biish", "bis", "vish", "biis", "viish", "bhish"), 63, WordCategory.TATSAMA),
         e("হাট", listOf("hat"), 65, WordCategory.TADBHAVA),
         e("বর", listOf("bor"), 60, WordCategory.TADBHAVA),
@@ -6952,6 +6963,64 @@ object SeedData {
         e("মারধর", listOf("marodhor"), 41, WordCategory.TADBHAVA),
         e("দলিল", listOf("dolil"), 41, WordCategory.TADBHAVA),
         e("সাক্ষাৎকারে", listOf("sakkhatokare"), 40, WordCategory.TADBHAVA)
+    )
+
+    // Web sync batch 8: English-spelled countries, science/tech terms, and names.
+    private fun chunkWebSync8ForeignTerms(): List<SmartDictionaryEntry> = listOf(
+        e("ডান", listOf("dan", "daan"), 88, WordCategory.TADBHAVA),
+        e("দাল", listOf("dal"), 84, WordCategory.TADBHAVA),
+        e("ডাল", listOf("dal", "daal"), 70, WordCategory.TADBHAVA),
+        e("আমেরিকা", listOf("america", "amerika"), 72, WordCategory.PROPER),
+        e("কানাডা", listOf("canada", "kanada"), 72, WordCategory.PROPER),
+        e("ইংল্যান্ড", listOf("england", "ingland"), 72, WordCategory.PROPER),
+        e("ফ্রান্স", listOf("france", "frans"), 72, WordCategory.PROPER),
+        e("জার্মানি", listOf("germany", "jarmani", "germani"), 72, WordCategory.PROPER),
+        e("ইতালি", listOf("italy", "itali"), 72, WordCategory.PROPER),
+        e("চীন", listOf("china"), 72, WordCategory.PROPER),
+        e("ভারত", listOf("india"), 72, WordCategory.PROPER),
+        e("ইন্ডিয়া", listOf("indiya"), 68, WordCategory.PROPER),
+        e("রাশিয়া", listOf("russia", "rashia", "rasiya"), 72, WordCategory.PROPER),
+        e("ব্রাজিল", listOf("brazil", "brajil"), 72, WordCategory.PROPER),
+        e("অস্ট্রেলিয়া", listOf("australia", "ostrelia"), 72, WordCategory.PROPER),
+        e("নেপাল", listOf("nepal"), 72, WordCategory.PROPER),
+        e("ভুটান", listOf("bhutan", "vutan"), 72, WordCategory.PROPER),
+        e("ইন্দোনেশিয়া", listOf("indonesia", "indoneshia"), 72, WordCategory.PROPER),
+        e("মালয়েশিয়া", listOf("malaysia", "maleshia"), 72, WordCategory.PROPER),
+        e("সিঙ্গাপুর", listOf("singapore", "singapur"), 72, WordCategory.PROPER),
+        e("তুরস্ক", listOf("turkey"), 72, WordCategory.PROPER),
+        e("মিশর", listOf("egypt"), 72, WordCategory.PROPER),
+        e("মেক্সিকো", listOf("mexico", "meksiko"), 72, WordCategory.PROPER),
+        e("আফগানিস্তান", listOf("afghanistan"), 72, WordCategory.PROPER),
+        e("হার্ডওয়্যার", listOf("hardware", "hardwear"), 70, WordCategory.FOREIGN),
+        e("ফিজিক্স", listOf("physics", "fiziks"), 70, WordCategory.FOREIGN),
+        e("কেমিস্ট্রি", listOf("chemistry", "kemistri"), 70, WordCategory.FOREIGN),
+        e("বায়োলজি", listOf("biology", "bayoloji"), 70, WordCategory.FOREIGN),
+        e("ম্যাথমেটিক্স", listOf("mathematics", "mathmatics"), 70, WordCategory.FOREIGN),
+        e("অ্যাটম", listOf("atom"), 70, WordCategory.FOREIGN),
+        e("মলিকিউল", listOf("molecule", "molikule"), 70, WordCategory.FOREIGN),
+        e("সেল", listOf("cell"), 70, WordCategory.FOREIGN),
+        e("ভাইরাস", listOf("virus", "vairus"), 70, WordCategory.FOREIGN),
+        e("ব্যাকটেরিয়া", listOf("bacteria", "bakteria"), 70, WordCategory.FOREIGN),
+        e("এনার্জি", listOf("energy", "enarji"), 70, WordCategory.FOREIGN),
+        e("গ্রাভিটি", listOf("gravity", "graviti"), 70, WordCategory.FOREIGN),
+        e("ইলেকট্রিসিটি", listOf("electricity", "ilektrisiti"), 70, WordCategory.FOREIGN),
+        e("প্রোটিন", listOf("protein", "protin"), 70, WordCategory.FOREIGN),
+        e("এনজাইম", listOf("enzyme", "enjaim"), 70, WordCategory.FOREIGN),
+        e("জেনেটিক্স", listOf("genetics", "jenetiks"), 70, WordCategory.FOREIGN),
+        e("জন", listOf("john"), 68, WordCategory.PROPER),
+        e("মাইকেল", listOf("michael", "maikel"), 68, WordCategory.PROPER),
+        e("ডেভিড", listOf("david", "devid"), 68, WordCategory.PROPER),
+        e("রবার্ট", listOf("robert"), 68, WordCategory.PROPER),
+        e("জেমস", listOf("james"), 68, WordCategory.PROPER),
+        e("উইলিয়াম", listOf("william", "wiliam"), 68, WordCategory.PROPER),
+        e("ইলন", listOf("elon"), 68, WordCategory.PROPER),
+        e("মার্ক", listOf("mark"), 68, WordCategory.PROPER),
+        e("স্টিভ", listOf("steve", "stiv"), 68, WordCategory.PROPER),
+        e("মারিয়া", listOf("maria"), 68, WordCategory.PROPER),
+        e("শাহাবুল", listOf("shahabul"), 68, WordCategory.PROPER),
+        e("ফাতিমা", listOf("fatima"), 68, WordCategory.PROPER),
+        e("আইশা", listOf("aisha"), 68, WordCategory.PROPER),
+        e("মোহাম্মদ", listOf("mohammad", "mohammed"), 68, WordCategory.PROPER)
     )
 
 }

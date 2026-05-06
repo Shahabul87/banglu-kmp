@@ -29,9 +29,11 @@ import com.banglu.engine.types.ResolutionSource
 import com.banglu.engine.types.SmartSuggestion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class BangluIMEService : InputMethodService(),
     LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
@@ -73,6 +75,7 @@ class BangluIMEService : InputMethodService(),
     private val enterKeyLabel = mutableStateOf("\u21B5")
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var suggestionJob: Job? = null
 
     // ── Settings (read from SharedPreferences) ──────────────────────────
     private lateinit var prefs: SharedPreferences
@@ -84,6 +87,7 @@ class BangluIMEService : InputMethodService(),
     val numberRowEnabled = mutableStateOf(true)
     val keyPreviewEnabled = mutableStateOf(true)
     val themeMode = mutableStateOf("auto")
+    val keyboardHeightMode = mutableStateOf("normal")
 
     companion object {
         private const val TAG = "BangluIME"
@@ -114,6 +118,31 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
+    private fun refreshSuggestionsAsync(input: String) {
+        suggestionJob?.cancel()
+        if (!suggestionsEnabled.value || input.isEmpty()) {
+            suggestions.clear()
+            return
+        }
+
+        val snapshot = input
+        suggestionJob = serviceScope.launch {
+            val newSuggestions = withContext(Dispatchers.Default) {
+                safeSuggestions(snapshot, 8)
+            }
+            if (keyboardMode.value == KeyboardMode.BANGLU && buffer == snapshot) {
+                suggestions.clear()
+                suggestions.addAll(newSuggestions)
+            }
+        }
+    }
+
+    private fun learnCommittedWordAsync(phonetic: String, bengali: String) {
+        serviceScope.launch {
+            SmartEngineAdapter.onWordSelected(phonetic, bengali)
+        }
+    }
+
     /** Reload settings from SharedPreferences */
     private fun reloadSettings() {
         hapticEnabled.value = prefs.getBoolean("haptic_feedback", true)
@@ -124,6 +153,7 @@ class BangluIMEService : InputMethodService(),
         numberRowEnabled.value = prefs.getBoolean("number_row", true)
         keyPreviewEnabled.value = prefs.getBoolean("key_preview", true)
         themeMode.value = prefs.getString("theme", "auto") ?: "auto"
+        keyboardHeightMode.value = prefs.getString("keyboard_height", "normal") ?: "normal"
         val defaultMode = prefs.getString("default_mode", "banglu") ?: "banglu"
         letterModeBeforeSymbols = if (defaultMode == "english") KeyboardMode.ENGLISH else KeyboardMode.BANGLU
     }
@@ -158,52 +188,60 @@ class BangluIMEService : InputMethodService(),
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
         reloadSettings()
 
-        val composeView = ComposeView(this).apply {
-            setContent {
-                BangluKeyboardLayout(
-                    suggestions = suggestions,
-                    keyboardMode = keyboardMode.value,
-                    shiftState = shiftState.value,
-                    enterLabel = enterKeyLabel.value,
-                    isToolbarExpanded = isToolbarExpanded.value,
-                    hapticEnabled = hapticEnabled.value,
-                    soundEnabled = soundEnabled.value,
-                    suggestionsEnabled = suggestionsEnabled.value,
-                    numberRowEnabled = numberRowEnabled.value,
-                    keyPreviewEnabled = keyPreviewEnabled.value,
-                    themePref = themeMode.value,
-                    onKeyPress = { char -> onKeyPress(char) },
-                    onBackspace = { onBackspace() },
-                    onBackspaceWord = { onBackspaceWord() },
-                    onSpace = { onSpacePress() },
-                    onEnter = { onEnterPress() },
-                    onShiftTap = { onShiftTap() },
-                    onGlobePress = { onGlobePress() },
-                    onSymbolsPress = { onSymbolsPress() },
-                    onBackToLetters = { onBackToLetters() },
-                    onSymbolPageToggle = { onSymbolPageToggle() },
-                    onSuggestionClick = { onSuggestionTap(it) },
-                    onNumberPress = { char -> onDirectCommit(char) },
-                    onPunctuationPress = { char -> onPunctuationPress(char) },
-                    onCursorMove = { direction -> onCursorMove(direction) },
-                    onDismiss = { requestHideSelf(0) },
-                    onSettingsClick = { onSettingsClick() },
-                    onToggleToolbar = { isToolbarExpanded.value = !isToolbarExpanded.value },
-                    onEmojiClick = { emoji -> onEmojiClick(emoji) },
-                    onEmojiOpen = { onEmojiOpen() },
-                    onBackFromEmoji = { onBackFromEmoji() }
-                )
+        return try {
+            val composeView = ComposeView(this).apply {
+                setContent {
+                    BangluKeyboardLayout(
+                        suggestions = suggestions,
+                        keyboardMode = keyboardMode.value,
+                        shiftState = shiftState.value,
+                        enterLabel = enterKeyLabel.value,
+                        isToolbarExpanded = isToolbarExpanded.value,
+                        hapticEnabled = hapticEnabled.value,
+                        soundEnabled = soundEnabled.value,
+                        suggestionsEnabled = suggestionsEnabled.value,
+                        numberRowEnabled = numberRowEnabled.value,
+                        keyPreviewEnabled = keyPreviewEnabled.value,
+                        themePref = themeMode.value,
+                        keyboardHeightMode = keyboardHeightMode.value,
+                        onKeyPress = { char -> onKeyPress(char) },
+                        onTextInput = { text -> onTextInput(text) },
+                        onBackspace = { onBackspace() },
+                        onBackspaceWord = { onBackspaceWord() },
+                        onSpace = { onSpacePress() },
+                        onEnter = { onEnterPress() },
+                        onShiftTap = { onShiftTap() },
+                        onGlobePress = { onGlobePress() },
+                        onSymbolsPress = { onSymbolsPress() },
+                        onBackToLetters = { onBackToLetters() },
+                        onSymbolPageToggle = { onSymbolPageToggle() },
+                        onSuggestionClick = { onSuggestionTap(it) },
+                        onNumberPress = { char -> onDirectCommit(char) },
+                        onPunctuationPress = { char -> onPunctuationPress(char) },
+                        onCursorMove = { direction -> onCursorMove(direction) },
+                        onDismiss = { requestHideSelf(0) },
+                        onSettingsClick = { onSettingsClick() },
+                        onToggleToolbar = { isToolbarExpanded.value = !isToolbarExpanded.value },
+                        onEmojiClick = { emoji -> onEmojiClick(emoji) },
+                        onEmojiOpen = { onEmojiOpen() },
+                        onBackFromEmoji = { onBackFromEmoji() }
+                    )
+                }
             }
-        }
 
-        // Wire lifecycle trees for Compose
-        window?.window?.decorView?.let { decorView ->
-            decorView.setViewTreeLifecycleOwner(this)
-            decorView.setViewTreeViewModelStoreOwner(this)
-            decorView.setViewTreeSavedStateRegistryOwner(this)
-        }
+            // Wire lifecycle trees for Compose
+            window?.window?.decorView?.let { decorView ->
+                decorView.setViewTreeLifecycleOwner(this)
+                decorView.setViewTreeViewModelStoreOwner(this)
+                decorView.setViewTreeSavedStateRegistryOwner(this)
+            }
 
-        return composeView
+            composeView
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.e(TAG, "onCreateInputView: Compose failed, using fallback", e)
+            // Minimal fallback view so the keyboard doesn't crash
+            View(this)
+        }
     }
 
     /**
@@ -228,10 +266,8 @@ class BangluIMEService : InputMethodService(),
         // Feature 1.3: Set enter key label based on IME action
         enterKeyLabel.value = when (info?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)) {
             EditorInfo.IME_ACTION_SEARCH -> "\uD83D\uDD0D"  // magnifying glass
-            EditorInfo.IME_ACTION_SEND -> "\u27A4"           // send arrow
             EditorInfo.IME_ACTION_GO -> "\u2192"             // right arrow
             EditorInfo.IME_ACTION_NEXT -> "\u21E5"           // tab right
-            EditorInfo.IME_ACTION_DONE -> "\u2713"           // checkmark
             else -> "\u21B5"                                  // return symbol
         }
 
@@ -247,6 +283,7 @@ class BangluIMEService : InputMethodService(),
     override fun onFinishInput() {
         super.onFinishInput()
         buffer = ""
+        suggestions.clear()
     }
 
     override fun onDestroy() {
@@ -262,6 +299,18 @@ class BangluIMEService : InputMethodService(),
             KeyboardMode.BANGLU -> onBangluKeyPress(char)
             KeyboardMode.ENGLISH -> onEnglishKeyPress(char)
             else -> onDirectCommit(char)
+        }
+    }
+
+    private fun onTextInput(text: String) {
+        if (text.isEmpty()) return
+        when (keyboardMode.value) {
+            KeyboardMode.BANGLU -> text.forEach { onBangluKeyPress(it) }
+            KeyboardMode.ENGLISH -> {
+                val ic = currentInputConnection ?: return
+                ic.commitText(text, 1)
+            }
+            else -> text.forEach { onDirectCommit(it) }
         }
     }
 
@@ -284,13 +333,7 @@ class BangluIMEService : InputMethodService(),
         log("convert: '$buffer' -> '${result.bengali}' (${result.confidence})")
         ic.setComposingText(result.bengali, 1)
 
-        if (suggestionsEnabled.value) {
-            val newSuggestions = safeSuggestions(buffer, 8)
-            suggestions.clear()
-            suggestions.addAll(newSuggestions)
-        } else {
-            suggestions.clear()
-        }
+        refreshSuggestionsAsync(buffer)
     }
 
     private fun onEnglishKeyPress(char: Char) {
@@ -341,11 +384,7 @@ class BangluIMEService : InputMethodService(),
                     } else {
                         val result = safeConvert(buffer)
                         ic.setComposingText(result.bengali, 1)
-                        if (suggestionsEnabled.value) {
-                            val newSuggestions = safeSuggestions(buffer, 8)
-                            suggestions.clear()
-                            suggestions.addAll(newSuggestions)
-                        }
+                        refreshSuggestionsAsync(buffer)
                     }
                 } else {
                     ic.deleteSurroundingText(1, 0)
@@ -369,7 +408,7 @@ class BangluIMEService : InputMethodService(),
                     val result = safeConvert(buffer)
                     log("onSpacePress: committing '${result.bengali}'")
                     ic.commitText(result.bengali + " ", 1)
-                    SmartEngineAdapter.onWordSelected(buffer, result.bengali)
+                    learnCommittedWordAsync(buffer, result.bengali)
                     buffer = ""
                     suggestions.clear()
                     updatePredictions(result.bengali)
@@ -410,7 +449,7 @@ class BangluIMEService : InputMethodService(),
         if (keyboardMode.value == KeyboardMode.BANGLU && buffer.isNotEmpty()) {
             val result = safeConvert(buffer)
             ic.commitText(result.bengali, 1)
-            SmartEngineAdapter.onWordSelected(buffer, result.bengali)
+            learnCommittedWordAsync(buffer, result.bengali)
             val committedBengali = result.bengali
             buffer = ""
             suggestions.clear()
@@ -422,7 +461,10 @@ class BangluIMEService : InputMethodService(),
         val action = editorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
             ?: EditorInfo.IME_ACTION_UNSPECIFIED
 
-        if (action != EditorInfo.IME_ACTION_UNSPECIFIED && action != EditorInfo.IME_ACTION_NONE) {
+        if (action == EditorInfo.IME_ACTION_SEARCH ||
+            action == EditorInfo.IME_ACTION_GO ||
+            action == EditorInfo.IME_ACTION_NEXT
+        ) {
             ic.performEditorAction(action)
         } else {
             // Default: insert newline
@@ -442,7 +484,7 @@ class BangluIMEService : InputMethodService(),
         } else {
             // This is a conversion suggestion
             ic.commitText(suggestion.bengali + " ", 1)
-            SmartEngineAdapter.onWordSelected(buffer, suggestion.bengali)
+            learnCommittedWordAsync(buffer, suggestion.bengali)
             buffer = ""
             suggestions.clear()
             updatePredictions(suggestion.bengali)
@@ -571,18 +613,25 @@ class BangluIMEService : InputMethodService(),
     private fun updatePredictions(committedBengali: String) {
         lastCommittedBengali = committedBengali
         if (buffer.isEmpty() && keyboardMode.value == KeyboardMode.BANGLU) {
-            val predictions = SmartEngineAdapter.getNextWordPredictions(committedBengali, 6)
+            suggestionJob?.cancel()
             suggestions.clear()
-            if (predictions.isNotEmpty()) {
-                suggestions.addAll(predictions.map { pred ->
-                    SmartSuggestion(
-                        bengali = pred.bengali,
-                        confidence = pred.confidence,
-                        source = "prediction",
-                        phonetic = "",
-                        tier = "prediction"
-                    )
-                })
+            val snapshot = committedBengali
+            suggestionJob = serviceScope.launch {
+                val predictions = withContext(Dispatchers.Default) {
+                    SmartEngineAdapter.getNextWordPredictions(snapshot, 6)
+                }
+                if (buffer.isEmpty() && keyboardMode.value == KeyboardMode.BANGLU && lastCommittedBengali == snapshot) {
+                    suggestions.clear()
+                    suggestions.addAll(predictions.map { pred ->
+                        SmartSuggestion(
+                            bengali = pred.bengali,
+                            confidence = pred.confidence,
+                            source = "prediction",
+                            phonetic = "",
+                            tier = "prediction"
+                        )
+                    })
+                }
             }
         }
     }

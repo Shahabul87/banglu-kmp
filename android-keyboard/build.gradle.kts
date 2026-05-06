@@ -17,16 +17,16 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.banglu.keyboard"
+        applicationId = "com.banglu.banglu_type"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0.0"
+        versionCode = 2026
+        versionName = "1.4.0"
     }
 
     signingConfigs {
         create("release") {
-            storeFile = file("banglu-release.jks")
+            storeFile = file(localProps.getProperty("BANGLU_STORE_FILE", "banglu-release.jks"))
             storePassword = localProps.getProperty("BANGLU_STORE_PASSWORD", "")
             keyAlias = "banglu"
             keyPassword = localProps.getProperty("BANGLU_KEY_PASSWORD", "")

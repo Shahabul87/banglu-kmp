@@ -74,6 +74,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     private data class InflectionalSuffix(val phonetic: String, val bengali: String)
 
+    private data class CandidatePath(
+        val bengali: String,
+        val score: Double,
+        val literal: Boolean
+    )
+
+    private data class TokenExpansion(
+        val out: String,
+        val prior: Double,
+        val literal: Boolean = true
+    )
+
     private val inflectionalSuffixes: List<InflectionalSuffix> = listOf(
         InflectionalSuffix("echchhen", "েচ্ছেন"),
         InflectionalSuffix("echchhe", "েচ্ছে"),
@@ -193,7 +205,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             for (word in learned) {
                 val primaryResult = convertWord(word.phonetic)
                 val freq = if (word.bengali == primaryResult.bengali) 90 else 75
-                dictionary.addMapping(word.phonetic, word.bengali, freq)
+                addWord(word.phonetic, word.bengali, freq)
             }
         }
 
@@ -239,15 +251,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Skip when uppercase forcers are present (except chandrabindu-only N)
         if (!hasCaseMarkers || hasOnlyChandrabinduMarkers) {
             convertByDictionary(key)?.let { result ->
-                if (result.confidence >= config.autoAcceptThreshold) {
-                    cacheResult(cacheKey, result); return result
+                val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
+                if (ranked.confidence >= config.autoAcceptThreshold) {
+                    cacheResult(cacheKey, ranked); return ranked
                 }
-                cacheResult(cacheKey, result); return result
+                cacheResult(cacheKey, ranked); return ranked
             }
 
             // Layer 1.2: Suffix-stripped dictionary lookup
             trySuffixStrippedDictionary(key)?.let { result ->
-                cacheResult(cacheKey, result); return result
+                val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
+                cacheResult(cacheKey, ranked); return ranked
             }
         }
 
@@ -257,7 +271,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             convertBySection(key)?.let { result ->
                 if (result.confidence >= 0.95) {
                     val validated = applyDictionaryValidation(result)
-                    cacheResult(cacheKey, validated); return validated
+                    val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, validated) else validated
+                    cacheResult(cacheKey, ranked); return ranked
                 }
             }
         }
@@ -266,7 +281,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Skip when uppercase forcers are present
         if (!hasCaseMarkers) {
             convertByRootDecomposition(key)?.let { result ->
-                cacheResult(cacheKey, result); return result
+                val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
+                cacheResult(cacheKey, ranked); return ranked
             }
         }
 
@@ -345,6 +361,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 cacheResult(cacheKey, fuzzyResult)
                 return fuzzyResult
             }
+        }
+
+        if (!skipPostProcessing) {
+            result = applyCandidateLatticeRanking(key, result)
         }
 
         cacheResult(cacheKey, result)
@@ -477,10 +497,32 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             suggestions.add(SmartSuggestion(primary.bengali, 1.0, "primary", key, "tier0"))
         }
 
+        for (alt in generateAmbiguousCharAlternatives(primary.bengali)) {
+            if (seen.add(alt.bengali)) {
+                suggestions.add(SmartSuggestion(alt.bengali, alt.confidence, "ambiguous_variant", key, "tier0_ambiguous"))
+            }
+        }
+
         // Include alternatives from convertWord (user's literal + swap variants)
         for (alt in primary.alternatives) {
             if (seen.add(alt.bengali)) {
                 suggestions.add(SmartSuggestion(alt.bengali, alt.confidence, "alternative", key, "tier0"))
+            }
+        }
+
+        // Same-sound candidate lattice: keep dental/retroflex, sibilant, nasal,
+        // j/y, and vowel ambiguity visible even when the primary came from dictionary.
+        for (candidate in generateCandidateLattice(key, 80)) {
+            if (seen.add(candidate.bengali)) {
+                suggestions.add(
+                    SmartSuggestion(
+                        bengali = candidate.bengali,
+                        confidence = candidate.score.coerceIn(0.30, 0.96),
+                        source = "candidate_lattice",
+                        phonetic = key,
+                        tier = "tier0_lattice"
+                    )
+                )
             }
         }
 
@@ -636,8 +678,64 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Global filter: remove hyphenated garbage from 480K dictionary
         return boosted
             .filter { !it.bengali.contains("-") }
+            .filter { hasSuggestionPhoneticFit(key, it.bengali, primary.bengali) }
             .sortedByDescending { it.confidence }
             .take(limit)
+    }
+
+    private fun hasSuggestionPhoneticFit(key: String, bengali: String, primary: String): Boolean {
+        if (key.isEmpty() || bengali.isEmpty() || bengali == primary) return true
+
+        val dictionaryPhonetic = dictionary.getPhoneticForBengali(bengali)
+        val reversePhonetic = ReverseTransliterator.reverseWord(bengali)
+        val threshold = if (key.length >= 5) 0.55 else 0.34
+        val reverseThreshold = if (key.length >= 5) 0.55 else 0.30
+
+        val dictionaryScore = dictionaryPhonetic?.let { PhoneticOverlapScorer.score(key, it).score } ?: 0.0
+        val reverseScore = if (reversePhonetic.isNotEmpty()) {
+            PhoneticOverlapScorer.score(key, reversePhonetic).score
+        } else 0.0
+
+        return if (dictionaryScore >= threshold) {
+            reverseScore >= reverseThreshold && hasCompatibleVowelPath(key, reversePhonetic)
+        } else {
+            reverseScore >= threshold && hasCompatibleVowelPath(key, reversePhonetic)
+        }
+    }
+
+    private fun hasCompatibleVowelPath(key: String, phonetic: String): Boolean {
+        if (key.length < 5) return true
+
+        val keyVowels = vowelPath(key)
+        if (keyVowels.length < 3) return true
+
+        val candidateVowels = vowelPath(phonetic)
+        if (candidateVowels.isEmpty()) return false
+
+        val lcs = vowelPathLcs(keyVowels, candidateVowels)
+        return lcs.toDouble() / keyVowels.length >= 0.67
+    }
+
+    private fun vowelPath(value: String): String = value
+        .lowercase()
+        .replace(Regex("ee|ii"), "i")
+        .replace(Regex("oo|uu"), "u")
+        .replace("ou", "o")
+        .replace(Regex("oi|oy"), "i")
+        .replace(Regex("[^aeiou]"), "")
+
+    private fun vowelPathLcs(a: String, b: String): Int {
+        val dp = Array(a.length + 1) { IntArray(b.length + 1) }
+        for (i in 1..a.length) {
+            for (j in 1..b.length) {
+                dp[i][j] = if (a[i - 1] == b[j - 1]) {
+                    dp[i - 1][j - 1] + 1
+                } else {
+                    maxOf(dp[i - 1][j], dp[i][j - 1])
+                }
+            }
+        }
+        return dp[a.length][b.length]
     }
 
     // ======================== PRIVATE PIPELINE METHODS ========================
@@ -697,10 +795,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             val filtered = results.filter { !it.bengali.startsWith("শ") }
             if (filtered.isNotEmpty()) results = filtered else return null
         }
-        // 'sh' → filter out স-starting results (স needs plain 's')
-        if (key.startsWith("sh")) {
-            val filtered = results.filter { !it.bengali.startsWith("স") }
-            if (filtered.isNotEmpty()) results = filtered else return null
+        // For very short "sh" prefixes prefer শ/ষ visually, but let completed
+        // words such as shokal/shobar rank by dictionary frequency.
+        if (key.startsWith("sh") && results.size > 1 && key.length <= 2) {
+            results = results.sortedWith(Comparator { a, b ->
+                val aIsDental = if (a.bengali.startsWith("স")) 1 else 0
+                val bIsDental = if (b.bengali.startsWith("স")) 1 else 0
+                if (aIsDental != bIsDental) aIsDental - bIsDental
+                else (b.confidence * 100).toInt() - (a.confidence * 100).toInt()
+            })
         }
         // 'z' → filter out জ-starting results (জ needs 'j')
         if (key.startsWith("z")) {
@@ -736,9 +839,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             } else results
         } else results
 
-        // Step 2a: SOFT SORT for t/d start-position — prefer dental (ত/দ) over retroflex (ট/ড)
-        // Web parity: SmartEngine.ts uses soft sort, not hard filter, so টাকা stays reachable
-        if (key.startsWith("t") && !key.startsWith("th")) {
+        // Step 2a: SOFT SORT for very short ambiguous prefixes only.
+        // t/ta and d/da keep the default dental forms visible, but completed
+        // words like taka/dan must be ranked by dictionary evidence.
+        if (key.startsWith("t") && !key.startsWith("th") && key.length <= 2) {
             ranked = ranked.sortedWith(Comparator { a, b ->
                 val aIsRetro = if (a.bengali.startsWith("ট")) 1 else 0
                 val bIsRetro = if (b.bengali.startsWith("ট")) 1 else 0
@@ -746,7 +850,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 else (b.confidence * 100).toInt() - (a.confidence * 100).toInt()
             })
         }
-        if (key.startsWith("d") && !key.startsWith("dh")) {
+        if (key.startsWith("d") && !key.startsWith("dh") && key.length <= 2) {
             ranked = ranked.sortedWith(Comparator { a, b ->
                 val aIsRetro = if (a.bengali.startsWith("ড")) 1 else 0
                 val bIsRetro = if (b.bengali.startsWith("ড")) 1 else 0
@@ -761,7 +865,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Prefer results with fewer জ when phonetic has 'z'
         if (ranked.size > 1) {
             val hasStandaloneS = Regex("s(?!h)").containsMatchIn(key)
-            val hasStandaloneD = Regex("d(?!h)").containsMatchIn(key)
+            val hasStandaloneD = false
             val hasZ = key.contains("z")
             if (hasStandaloneS || hasStandaloneD || hasZ) {
                 ranked = ranked.sortedWith(Comparator { a, b ->
@@ -1497,8 +1601,405 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         for (alt in generateDiphthongAlternatives(primary)) addAlt(alt.bengali, alt.confidence)
         for (alt in generateInitialVowelAlternatives(primary)) addAlt(alt.bengali, alt.confidence)
         for (alt in generateAmbiguousCharAlternatives(primary)) addAlt(alt.bengali, alt.confidence)
+        for (candidate in generateCandidateLattice(input.lowercase().trim(), 80)) {
+            if (candidate.bengali != primary) {
+                addAlt(candidate.bengali, candidate.score.coerceIn(0.30, 0.96))
+            }
+        }
 
         return alternatives.take(config.maxSuggestions - 1)
+    }
+
+    private fun generateCandidateLattice(key: String, limit: Int = 20): List<CandidatePath> {
+        if (key.isEmpty() || key.length > 18 || key.any { it !in 'a'..'z' }) return emptyList()
+
+        var beam = listOf(CandidatePath("", 0.0, true))
+        var i = 0
+
+        while (i < key.length) {
+            val token = nextLatticeToken(key, i) ?: return emptyList()
+            val next = mutableListOf<CandidatePath>()
+
+            for (path in beam) {
+                val expansions = expandLatticeToken(token, key, i, path.bengali)
+                for (expansion in expansions) {
+                    next.add(
+                        CandidatePath(
+                            bengali = path.bengali + expansion.out,
+                            score = path.score + expansion.prior,
+                            literal = path.literal && expansion.literal
+                        )
+                    )
+                }
+            }
+
+            beam = rankLatticeBeam(next, key).take(if (key.length < 4) 24 else 128)
+            i += token.length
+        }
+
+        return rankLatticeBeam(beam, key)
+            .distinctBy { it.bengali }
+            .take(limit)
+    }
+
+    private fun nextLatticeToken(key: String, index: Int): String? {
+        val rest = key.substring(index)
+        val locked = listOf(
+            "shtr", "shth", "shph", "shchh", "ngkh", "nggh", "chch", "jhjh",
+            "sht", "shn", "shk", "shp", "shm", "sth", "sph", "str", "kkh", "ksh",
+            "ngk", "ngg", "ngm", "cch", "shr", "dhr", "bhr", "ghr", "khr", "ttr",
+            "ddh", "dbh", "dgh", "mbh", "lbh", "nth", "tth", "ntr", "ndr", "bdh",
+            "gdh", "ndh", "gy", "jn", "pt", "kt", "gn", "mn", "nt", "nd", "nj",
+            "nc", "mb", "mp", "lp", "lb", "ld", "lt", "lk", "lm", "lg", "lf",
+            "tn", "tm", "tb", "db", "dg", "dm", "jb", "hm", "hn", "hl", "hb",
+            "nm", "ns", "gm", "gl", "kl", "km", "kb", "pl", "pn", "ps", "bl",
+            "bd", "ml", "fl", "kk", "cc", "jj", "dd", "tt", "nn", "mm", "ll",
+            "ss", "pp", "bb", "rr"
+        )
+
+        for (token in locked) {
+            if (rest.startsWith(token)) return token
+        }
+
+        for (token in listOf("th", "dh", "sh", "chh", "ch", "kh", "gh", "jh", "ph", "bh", "rh", "ng", "oi", "oy", "ou", "ow", "ee", "ii", "uu", "oo", "aa")) {
+            if (rest.startsWith(token)) return token
+        }
+
+        return rest.firstOrNull()?.toString()
+    }
+
+    private fun expandLatticeToken(token: String, key: String, index: Int, current: String): List<TokenExpansion> {
+        val afterConsonant = endsWithBengaliConsonant(current)
+        val nextIndex = index + token.length
+        val next = if (nextIndex < key.length) key[nextIndex] else null
+        val nextIsConsonant = next != null && next in 'a'..'z' && next !in "aeiou"
+
+        fun dependent(short: String, long: String? = null): List<TokenExpansion> {
+            val primary = if (afterConsonant) short else independentVowelFor(short)
+            val expansions = mutableListOf(TokenExpansion(primary, 0.90, true))
+            if (long != null) {
+                expansions.add(TokenExpansion(if (afterConsonant) long else independentVowelFor(long), 0.55, false))
+            }
+            return expansions
+        }
+
+        val mapped = when (token) {
+            "shtr" -> listOf(TokenExpansion("ষ্ট্র", 1.0))
+            "shth" -> listOf(TokenExpansion("ষ্ঠ", 1.0))
+            "shph" -> listOf(TokenExpansion("ষ্ফ", 1.0))
+            "shchh" -> listOf(TokenExpansion("শ্ছ", 1.0))
+            "shch" -> listOf(TokenExpansion("শ্চ", 1.0))
+            "sht" -> listOf(TokenExpansion("ষ্ট", 1.0))
+            "shn" -> listOf(TokenExpansion("ষ্ণ", 1.0))
+            "shk" -> listOf(TokenExpansion("ষ্ক", 1.0))
+            "shp" -> listOf(TokenExpansion("ষ্প", 1.0))
+            "shm" -> listOf(TokenExpansion("ষ্ম", 1.0))
+            "sth" -> listOf(TokenExpansion("স্থ", 1.0))
+            "sph" -> listOf(TokenExpansion("স্ফ", 1.0))
+            "str" -> listOf(TokenExpansion("স্ত্র", 1.0))
+            "kkh", "ksh" -> listOf(TokenExpansion("ক্ষ", 1.0))
+            "ngkh" -> listOf(TokenExpansion("ঙ্খ", 1.0))
+            "nggh" -> listOf(TokenExpansion("ঙ্ঘ", 1.0))
+            "ngk" -> listOf(TokenExpansion("ঙ্ক", 1.0))
+            "ngg" -> listOf(TokenExpansion("ঙ্গ", 1.0))
+            "ngm" -> listOf(TokenExpansion("ঙ্ম", 1.0))
+            "chch", "cch" -> listOf(TokenExpansion("চ্ছ", 1.0))
+            "kh" -> listOf(TokenExpansion("খ", 1.0))
+            "gh" -> listOf(TokenExpansion("ঘ", 1.0))
+            "jh" -> listOf(TokenExpansion("ঝ", 1.0))
+            "ph" -> listOf(TokenExpansion("ফ", 1.0))
+            "bh" -> listOf(TokenExpansion("ভ", 1.0))
+            "rh" -> listOf(TokenExpansion("ড়", 1.0))
+            "gy", "jn" -> listOf(TokenExpansion("জ্ঞ", 1.0))
+            "pt" -> listOf(TokenExpansion("প্ত", 1.0))
+            "kt" -> listOf(TokenExpansion("ক্ত", 1.0))
+            "nt" -> listOf(TokenExpansion("ন্ত", 1.0))
+            "nd" -> listOf(TokenExpansion("ন্দ", 1.0))
+            "nj" -> listOf(TokenExpansion("ঞ্জ", 1.0))
+            "nc" -> listOf(TokenExpansion("ঞ্চ", 1.0))
+            "mb" -> listOf(TokenExpansion("ম্ব", 1.0))
+            "mp" -> listOf(TokenExpansion("ম্প", 1.0))
+            "rr" -> listOf(TokenExpansion(if (afterConsonant) "্র" else "রর", 0.95))
+            "th" -> listOf(TokenExpansion("থ", 0.70), TokenExpansion("ঠ", 0.42, false))
+            "dh" -> listOf(TokenExpansion("ধ", 0.80), TokenExpansion("ঢ", 0.38, false))
+            "sh" -> listOf(TokenExpansion("শ", 0.55), TokenExpansion("ষ", 0.42, false), TokenExpansion("স", 0.35, false))
+            "chh" -> listOf(TokenExpansion("ছ", 0.90))
+            "ch" -> listOf(TokenExpansion("চ", 0.84), TokenExpansion("ছ", 0.58, false))
+            "ng" -> if (next != null && next in "aeiou") {
+                listOf(TokenExpansion("ঙ", 0.75), TokenExpansion("ং", 0.55, false))
+            } else {
+                listOf(TokenExpansion("ং", 0.75), TokenExpansion("ঙ", 0.55, false))
+            }
+            else -> null
+        }
+        if (mapped != null) return mapped
+
+        if (token == "a" || token == "aa") return dependent("া")
+        if (token == "i") return dependent("ি", "ী")
+        if (token == "ee" || token == "ii") return dependent("ী", "ি")
+        if (token == "u") return dependent("ু", "ূ")
+        if (token == "oo" || token == "uu") return dependent("ূ", "ু")
+        if (token == "e") return dependent("ে")
+        if (token == "oi") {
+            return if (afterConsonant) {
+                listOf(
+                    TokenExpansion("ৈ", 0.78),
+                    TokenExpansion("ই", 0.56, false),
+                    TokenExpansion("য়", 0.46, false)
+                )
+            } else {
+                listOf(
+                    TokenExpansion("ঐ", 0.78),
+                    TokenExpansion("ওই", 0.52, false),
+                    TokenExpansion("ওয়", 0.36, false)
+                )
+            }
+        }
+        if (token == "oy") {
+            return if (afterConsonant) {
+                listOf(
+                    TokenExpansion("য়", 0.78),
+                    TokenExpansion("ই", 0.54, false),
+                    TokenExpansion("ৈ", 0.42, false)
+                )
+            } else {
+                listOf(
+                    TokenExpansion("ওয়", 0.78),
+                    TokenExpansion("ওই", 0.50, false),
+                    TokenExpansion("ঐ", 0.35, false)
+                )
+            }
+        }
+        if (token == "ou" || token == "ow") return dependent("ৌ")
+        if (token == "o") {
+            if (afterConsonant && nextIsConsonant) {
+                return listOf(TokenExpansion("", 0.86), TokenExpansion("ো", 0.48, false))
+            }
+            return if (afterConsonant) {
+                listOf(TokenExpansion("ো", 0.78), TokenExpansion("", 0.40, false))
+            } else {
+                listOf(
+                    TokenExpansion(if (nextIsConsonant) "অ" else "ও", 0.70),
+                    TokenExpansion(if (nextIsConsonant) "ও" else "অ", 0.42, false)
+                )
+            }
+        }
+
+        return when (token) {
+            "k" -> listOf(TokenExpansion("ক", 1.0))
+            "g" -> listOf(TokenExpansion("গ", 1.0))
+            "c" -> listOf(TokenExpansion("ছ", 0.84), TokenExpansion("চ", 0.58, false))
+            "j" -> listOf(TokenExpansion("জ", 0.76), TokenExpansion("য", 0.50, false))
+            "z" -> listOf(TokenExpansion("য", 0.85), TokenExpansion("জ", 0.35, false))
+            "t" -> listOf(TokenExpansion("ত", 0.80), TokenExpansion("ট", 0.52, false))
+            "d" -> listOf(TokenExpansion("দ", 0.75), TokenExpansion("ড", 0.48, false))
+            "n" -> listOf(TokenExpansion("ন", 0.85), TokenExpansion("ণ", 0.42, false))
+            "s" -> listOf(TokenExpansion("স", 0.60), TokenExpansion("শ", 0.38, false), TokenExpansion("ষ", 0.30, false))
+            "r" -> if (index == 0) listOf(TokenExpansion("র", 0.90)) else listOf(TokenExpansion("র", 0.85), TokenExpansion("ড়", 0.45, false))
+            "y" -> if (afterConsonant) {
+                listOf(TokenExpansion("্য", 0.78), TokenExpansion("য়", 0.36, false))
+            } else {
+                listOf(TokenExpansion(if (index == 0) "য" else "য়", 0.76), TokenExpansion(if (index == 0) "য়" else "য", 0.32, false))
+            }
+            "p" -> listOf(TokenExpansion("প", 1.0))
+            "f" -> listOf(TokenExpansion("ফ", 1.0))
+            "b" -> listOf(TokenExpansion("ব", 1.0))
+            "v" -> listOf(TokenExpansion("ভ", 1.0))
+            "m" -> listOf(TokenExpansion("ম", 1.0))
+            "l" -> listOf(TokenExpansion("ল", 1.0))
+            "h" -> listOf(TokenExpansion("হ", 1.0))
+            "q" -> listOf(TokenExpansion("ক", 0.70))
+            "w" -> listOf(TokenExpansion("ও", 0.55), TokenExpansion("উ", 0.35, false), TokenExpansion("ব", 0.25, false))
+            "x" -> listOf(TokenExpansion("ক্স", 0.70))
+            else -> listOf(TokenExpansion(token, 0.10))
+        }
+    }
+
+    private fun independentVowelFor(mark: String): String {
+        return when (mark) {
+            "া" -> "আ"
+            "ি" -> "ই"
+            "ী" -> "ঈ"
+            "ু" -> "উ"
+            "ূ" -> "ঊ"
+            "ে" -> "এ"
+            "ৈ" -> "ঐ"
+            "ো" -> "ও"
+            "ৌ" -> "ঔ"
+            else -> mark
+        }
+    }
+
+    private fun rankLatticeBeam(paths: List<CandidatePath>, key: String): List<CandidatePath> {
+        val unique = linkedMapOf<String, CandidatePath>()
+        for (path in paths) {
+            val scored = path.copy(score = scoreLatticeCandidate(path, key))
+            val previous = unique[path.bengali]
+            if (previous == null || scored.score > previous.score) {
+                unique[path.bengali] = scored
+            }
+        }
+
+        return unique.values.sortedWith(
+            compareByDescending<CandidatePath> { it.score }
+                .thenByDescending { it.literal }
+                .thenBy { it.bengali }
+        )
+    }
+
+    private fun scoreLatticeCandidate(path: CandidatePath, key: String): Double {
+        var score = path.score
+
+        if (path.literal) score += if (key.length <= 2) 1.2 else 0.20
+
+        if (dictionary.getPhoneticForBengali(path.bengali) != null) {
+            score += if (key.length <= 2) 0.40 else 2.4
+        }
+
+        if (validator.isLoaded() && validator.isValid(path.bengali)) {
+            score += minOf(1.2, validator.getFrequency(path.bengali) / 50.0)
+        } else if (disambiguator.isKnownWord(path.bengali)) {
+            score += 0.75
+        }
+
+        if (hasInvalidInitial(path.bengali)) score -= 2.5
+        return score
+    }
+
+    private fun hasInvalidInitial(bengali: String): Boolean {
+        return bengali.startsWith("ড়") ||
+            bengali.startsWith("ঢ়") ||
+            bengali.startsWith("ণ") ||
+            bengali.startsWith("ঙ") ||
+            bengali.startsWith("ঞ") ||
+            bengali.startsWith("ৎ")
+    }
+
+    private fun applyCandidateLatticeRanking(key: String, result: ConversionResult): ConversionResult {
+        if (key.length < 4 || result.source == ResolutionSource.ENGLISH_PASSTHROUGH) return result
+
+        val exactMatches = dictionary.lookup(key)
+        val exactMatchRank = mutableMapOf<String, Pair<Int, Int>>()
+        exactMatches.forEachIndexed { rank, match ->
+            val previous = exactMatchRank[match.bengali]
+            if (previous == null || match.frequency > previous.first) {
+                exactMatchRank[match.bengali] = match.frequency to rank
+            }
+        }
+
+        val lattice = generateCandidateLattice(key, 80)
+            .filter { it.bengali.isNotEmpty() && it.bengali != result.bengali }
+        if (lattice.isEmpty()) return result
+
+        fun isKnown(word: String): Boolean =
+            dictionary.getPhoneticForBengali(word) != null ||
+                disambiguator.isKnownWord(word) ||
+                (validator.isLoaded() && validator.isValid(word))
+
+        fun candidatePriority(word: String): Int {
+            val exact = exactMatchRank[word]
+            if (exact != null) {
+                return 1000 + exact.first * 3 - exact.second
+            }
+
+            if (dictionary.getPhoneticForBengali(word) != null) return 500
+
+            if (validator.isLoaded() && validator.isValid(word)) {
+                return validator.getFrequency(word)
+            }
+
+            if (disambiguator.isKnownWord(word)) return 40
+
+            return 0
+        }
+
+        val exactCandidates = exactMatches
+            .map { CandidatePath(it.bengali, candidatePriority(it.bengali).toDouble(), true) }
+            .filter { it.bengali != result.bengali }
+        val rankedPool = (exactCandidates + lattice)
+            .distinctBy { it.bengali }
+        val currentIsExact = exactMatchRank.containsKey(result.bengali)
+        val known = rankedPool.filter {
+            if (currentIsExact) {
+                exactMatchRank.containsKey(it.bengali)
+            } else {
+                isKnown(it.bengali) &&
+                    (exactMatchRank.containsKey(it.bengali) || hasConsonantAmbiguityDifference(result.bengali, it.bengali))
+            }
+        }
+        if (known.isEmpty()) {
+            val extras = lattice.take(config.maxSuggestions).map {
+                Alternative(it.bengali, it.score.coerceIn(0.30, 0.86))
+            }
+            return result.copy(alternatives = mergeAlternatives(result.alternatives, extras, result.bengali))
+        }
+
+        val currentKnown = isKnown(result.bengali)
+        val currentPriority = candidatePriority(result.bengali)
+        val currentIsValidated = validator.isLoaded() && validator.isValid(result.bengali)
+        val best = known.maxWithOrNull(
+            compareBy<CandidatePath> { candidatePriority(it.bengali) }
+                .thenBy { it.score }
+        ) ?: return result
+
+        if (!currentIsExact && currentIsValidated && !exactMatchRank.containsKey(best.bengali)) {
+            val extras = lattice.take(config.maxSuggestions + 2).map {
+                Alternative(it.bengali, it.score.coerceIn(0.30, 0.90))
+            }
+            return result.copy(alternatives = mergeAlternatives(result.alternatives, extras, result.bengali))
+        }
+
+        val shouldPromote = !currentKnown || candidatePriority(best.bengali) > currentPriority + 1
+
+        val extras = lattice.take(config.maxSuggestions + 2).map {
+            Alternative(it.bengali, it.score.coerceIn(0.30, 0.90))
+        }
+
+        if (!shouldPromote) {
+            return result.copy(alternatives = mergeAlternatives(result.alternatives, extras, result.bengali))
+        }
+
+        val oldPrimary = Alternative(result.bengali, result.confidence.coerceAtMost(0.86))
+        return result.copy(
+            bengali = best.bengali,
+            confidence = maxOf(result.confidence, best.score.coerceIn(0.60, 0.96)),
+            source = ResolutionSource.DICTIONARY,
+            alternatives = mergeAlternatives(listOf(oldPrimary) + result.alternatives, extras, best.bengali)
+        )
+    }
+
+    private fun shouldApplyEarlyCandidateLattice(key: String): Boolean {
+        return key.contains("oi") || key.contains("oy")
+    }
+
+    private fun mergeAlternatives(
+        existing: List<Alternative>,
+        extras: List<Alternative>,
+        primary: String
+    ): List<Alternative> {
+        val seen = mutableSetOf(primary)
+        val merged = mutableListOf<Alternative>()
+        for (alt in existing + extras) {
+            if (alt.bengali.isNotEmpty() && seen.add(alt.bengali)) {
+                merged.add(alt)
+            }
+        }
+        return merged.take(config.maxSuggestions - 1)
+    }
+
+    private fun hasConsonantAmbiguityDifference(left: String, right: String): Boolean {
+        if (left == right) return false
+        val pairs = listOf(
+            "ত" to "ট", "থ" to "ঠ",
+            "দ" to "ড", "ধ" to "ঢ",
+            "ন" to "ণ", "ং" to "ঙ",
+            "স" to "শ", "স" to "ষ", "শ" to "ষ",
+            "র" to "ড়", "র" to "ঢ়",
+            "জ" to "য", "চ" to "ছ"
+        )
+        return pairs.any { (a, b) ->
+            left.contains(a) && right.contains(b) || left.contains(b) && right.contains(a)
+        }
     }
 
     internal fun generateDiphthongAlternatives(bengali: String): List<Alternative> {
@@ -1565,17 +2066,68 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     internal fun generateAmbiguousCharAlternatives(primary: String): List<Alternative> {
         if (primary.length < 2) return emptyList()
 
-        val candidates = disambiguator.generateCandidates(primary)
         val seen = mutableSetOf(primary)
         val alts = mutableListOf<Alternative>()
 
+        val directSwaps = listOf(
+            "ত" to listOf("ট"), "ট" to listOf("ত"),
+            "থ" to listOf("ঠ"), "ঠ" to listOf("থ"),
+            "দ" to listOf("ড"), "ড" to listOf("দ"),
+            "ধ" to listOf("ঢ"), "ঢ" to listOf("ধ"),
+            "ন" to listOf("ণ"), "ণ" to listOf("ন"),
+            "স" to listOf("শ", "ষ"), "শ" to listOf("স", "ষ"), "ষ" to listOf("স", "শ"),
+            "জ" to listOf("য"), "য" to listOf("জ"),
+            "চ" to listOf("ছ"), "ছ" to listOf("চ"),
+            "ই" to listOf("য়", "ৈ"), "য়" to listOf("ই", "ৈ"), "ৈ" to listOf("ই", "য়")
+        )
+        val directCandidates = mutableListOf<String>()
+        fun addDirectCandidate(candidate: String, from: String) {
+            if (seen.add(candidate)) {
+                val isKnown = disambiguator.isKnownWord(candidate)
+                val confidence = when {
+                    isKnown -> 0.98
+                    from == "র" || from == "ড়" || from == "ঢ়" -> 0.89
+                    else -> 0.97
+                }
+                alts.add(Alternative(candidate, confidence))
+                directCandidates.add(candidate)
+            }
+        }
+        for ((from, replacements) in directSwaps) {
+            var searchFrom = 0
+            while (searchFrom <= primary.length - from.length) {
+                val idx = primary.indexOf(from, searchFrom)
+                if (idx == -1) break
+                for (replacement in replacements) {
+                    val candidate = primary.substring(0, idx) + replacement + primary.substring(idx + from.length)
+                    addDirectCandidate(candidate, from)
+                }
+                searchFrom = idx + from.length
+            }
+        }
+        for (base in directCandidates.toList()) {
+            for ((from, replacements) in directSwaps) {
+                if (from == "র" || from == "ড়" || from == "ঢ়") continue
+                var searchFrom = 0
+                while (searchFrom <= base.length - from.length) {
+                    val idx = base.indexOf(from, searchFrom)
+                    if (idx == -1) break
+                    for (replacement in replacements) {
+                        addDirectCandidate(base.substring(0, idx) + replacement + base.substring(idx + from.length), from)
+                    }
+                    searchFrom = idx + from.length
+                }
+            }
+        }
+
+        val candidates = disambiguator.generateCandidates(primary)
         for (candidate in candidates) {
             if (!seen.add(candidate)) continue
             val isKnown = disambiguator.isKnownWord(candidate)
-            alts.add(Alternative(candidate, if (isKnown) 0.88 else 0.50))
+            alts.add(Alternative(candidate, if (isKnown) 0.95 else 0.91))
         }
 
-        return alts.sortedByDescending { it.confidence }.take(5)
+        return alts.sortedByDescending { it.confidence }.take(32)
     }
 
     /**
@@ -1996,19 +2548,6 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 }
             }
 
-            // ── Fix 12: ব→ভ per-position swap ─────────────────────────────────────
-            if (improved.contains('ব') && !validator.isValid(improved)) {
-                for (idx in improved.indices) {
-                    if (improved[idx] == 'ব') {
-                        val candidate = improved.substring(0, idx) + "ভ" + improved.substring(idx + 1)
-                        if (validator.isValid(candidate)) {
-                            improved = candidate
-                            break
-                        }
-                    }
-                }
-            }
-
             // Early return if any of the scored swaps fixed the word
             if (validator.isValid(improved) && improved != result.bengali) {
                 return result.copy(
@@ -2231,7 +2770,21 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * Add a custom word to the dictionary.
      */
     fun addWord(phonetic: String, bengali: String, frequency: Int) {
-        dictionary.addMapping(phonetic, bengali, frequency)
+        val key = phonetic.lowercase().trim()
+        if (!isPlausibleDynamicMapping(key, bengali)) return
+        dictionary.addMapping(key, bengali, frequency)
+    }
+
+    fun isPlausibleDynamicMapping(phonetic: String, bengali: String): Boolean {
+        val key = phonetic.lowercase().trim()
+        if (key.isEmpty() || bengali.isEmpty()) return false
+        if (convertWord(key).bengali == bengali) return true
+
+        val reversePhonetic = ReverseTransliterator.reverseWord(bengali)
+        if (reversePhonetic.isEmpty()) return false
+
+        val overlap = PhoneticOverlapScorer.score(key, reversePhonetic).score
+        return overlap >= (if (key.length >= 5) 0.65 else 0.30) && hasCompatibleVowelPath(key, reversePhonetic)
     }
 
     /**

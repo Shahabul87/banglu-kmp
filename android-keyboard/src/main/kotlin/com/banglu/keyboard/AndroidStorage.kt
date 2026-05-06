@@ -26,6 +26,7 @@ class AndroidStorage(context: Context) : PlatformStorage {
         private const val KEY_LEARNED_WORDS = "learned_words"
         private const val KEY_DICT_VERSION = "dict_version"
         private const val SEPARATOR = "::"
+        private const val MAX_LEARNED_WORDS = 500
     }
 
     override suspend fun getLearnedWords(): List<LearnedWord> {
@@ -51,11 +52,19 @@ class AndroidStorage(context: Context) : PlatformStorage {
     override suspend fun saveLearnedWord(phonetic: String, bengali: String, frequency: Int) {
         val existing = prefs.getString(KEY_LEARNED_WORDS, "") ?: ""
         val line = "$phonetic$SEPARATOR$bengali$SEPARATOR$frequency"
-        if (!existing.contains(line)) {
-            prefs.edit()
-                .putString(KEY_LEARNED_WORDS, existing + line + "\n")
-                .apply()
+        if (existing.contains(line)) return
+
+        val lines = existing.lines().filter { it.isNotBlank() }.toMutableList()
+        lines.add(line)
+
+        // FIFO eviction: keep only the most recent entries
+        while (lines.size > MAX_LEARNED_WORDS) {
+            lines.removeFirst()
         }
+
+        prefs.edit()
+            .putString(KEY_LEARNED_WORDS, lines.joinToString("\n") + "\n")
+            .apply()
     }
 
     override suspend fun clearLearnedWords() {

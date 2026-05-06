@@ -25,38 +25,45 @@ class AndroidDictionaryLoader(private val context: Context) : DictionaryLoader {
         private const val DB_FILENAME = "dictionary.sqlite"
     }
 
-    /**
-     * Open the SQLite database, copying from assets on first access.
-     * Returns null if the database cannot be opened (graceful degradation).
-     */
-    private fun openDatabase(): SQLiteDatabase? {
-        val dbFile = File(context.filesDir, DB_FILENAME)
-
-        if (!dbFile.exists()) {
+    /** Lazily ensure the database file exists in internal storage (copy from assets once). */
+    private val dbFile: File by lazy {
+        val file = File(context.filesDir, DB_FILENAME)
+        if (!file.exists()) {
             try {
-                if (BuildConfig.DEBUG) Log.d(TAG, "Copying $DB_FILENAME from assets to ${dbFile.absolutePath}")
+                if (BuildConfig.DEBUG) Log.d(TAG, "Copying $DB_FILENAME from assets to ${file.absolutePath}")
                 context.assets.open(DB_FILENAME).use { input ->
-                    dbFile.outputStream().use { output ->
+                    file.outputStream().use { output ->
                         input.copyTo(output)
                     }
                 }
-                if (BuildConfig.DEBUG) Log.d(TAG, "Copy complete (${dbFile.length() / 1024 / 1024}MB)")
+                if (BuildConfig.DEBUG) Log.d(TAG, "Copy complete (${file.length() / 1024 / 1024}MB)")
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) Log.e(TAG, "Failed to copy database from assets", e)
-                return null
             }
         }
+        file
+    }
 
-        return try {
+    /**
+     * Open the database, run the block, and close the database.
+     * Returns null if the database cannot be opened.
+     */
+    private inline fun <T> withDatabase(block: (SQLiteDatabase) -> T): T? {
+        if (!dbFile.exists()) return null
+        val db = try {
             SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Failed to open database", e)
-            null
+            return null
+        }
+        return try {
+            block(db)
+        } finally {
+            db.close()
         }
     }
 
-    override suspend fun loadFullDictionary(): List<String>? {
-        val db = openDatabase() ?: return null
+    override suspend fun loadFullDictionary(): List<String>? = withDatabase { db ->
         val words = mutableListOf<String>()
         try {
             db.rawQuery("SELECT bengali FROM words", null).use { cursor ->
@@ -67,15 +74,12 @@ class AndroidDictionaryLoader(private val context: Context) : DictionaryLoader {
             if (BuildConfig.DEBUG) Log.d(TAG, "Loaded ${words.size} words from dictionary")
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Failed to load full dictionary", e)
-            return null
-        } finally {
-            db.close()
+            return@withDatabase null
         }
-        return if (words.isNotEmpty()) words else null
+        if (words.isNotEmpty()) words else null
     }
 
-    override suspend fun loadFrequencyMap(): Map<String, Int>? {
-        val db = openDatabase() ?: return null
+    override suspend fun loadFrequencyMap(): Map<String, Int>? = withDatabase { db ->
         val freqs = mutableMapOf<String, Int>()
         try {
             db.rawQuery("SELECT bengali, frequency FROM words WHERE frequency > 0", null).use { cursor ->
@@ -86,15 +90,12 @@ class AndroidDictionaryLoader(private val context: Context) : DictionaryLoader {
             if (BuildConfig.DEBUG) Log.d(TAG, "Loaded ${freqs.size} frequency entries")
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Failed to load frequency map", e)
-            return null
-        } finally {
-            db.close()
+            return@withDatabase null
         }
-        return if (freqs.isNotEmpty()) freqs else null
+        if (freqs.isNotEmpty()) freqs else null
     }
 
-    override suspend fun loadDisambiguationMap(): Map<String, String>? {
-        val db = openDatabase() ?: return null
+    override suspend fun loadDisambiguationMap(): Map<String, String>? = withDatabase { db ->
         val map = mutableMapOf<String, String>()
         try {
             db.rawQuery("SELECT wrong_form, correct_form FROM disambiguation", null).use { cursor ->
@@ -105,11 +106,9 @@ class AndroidDictionaryLoader(private val context: Context) : DictionaryLoader {
             if (BuildConfig.DEBUG) Log.d(TAG, "Loaded ${map.size} disambiguation entries")
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Failed to load disambiguation map", e)
-            return null
-        } finally {
-            db.close()
+            return@withDatabase null
         }
-        return if (map.isNotEmpty()) map else null
+        if (map.isNotEmpty()) map else null
     }
 
     override suspend fun loadExtendedDictionary(): List<SmartDictionaryEntry>? {

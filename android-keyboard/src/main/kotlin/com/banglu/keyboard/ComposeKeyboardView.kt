@@ -22,11 +22,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
@@ -35,9 +35,12 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import com.banglu.engine.types.SmartSuggestion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -59,15 +62,15 @@ data class KeyboardColors(
 )
 
 val DarkColors = KeyboardColors(
-    keyboardBg = Color(0xFF1B1B1B),
-    keyBg = Color(0xFF2C2C2C),
-    keyPressed = Color(0xFF4A4A4A),
-    specialKeyBg = Color(0xFF3A3A3A),
+    keyboardBg = Color(0xFF141414),
+    keyBg = Color(0xFF2D2D2D),
+    keyPressed = Color(0xFF4B4B4B),
+    specialKeyBg = Color(0xFF242424),
     keyText = Color.White,
-    subText = Color(0xFF888888),
-    suggestionBg = Color(0xFF1E1E1E),
+    subText = Color(0xFFA6A6A6),
+    suggestionBg = Color(0xFF1A1A1A),
     suggestionHighlight = Color(0xFF3D5AFE),
-    suggestionChipBg = Color(0xFF333333)
+    suggestionChipBg = Color(0xFF2A2A2A)
 )
 
 val LightColors = KeyboardColors(
@@ -84,9 +87,9 @@ val LightColors = KeyboardColors(
 
 val AmoledColors = KeyboardColors(
     keyboardBg = Color.Black,
-    keyBg = Color(0xFF1A1A1A),
-    keyPressed = Color(0xFF333333),
-    specialKeyBg = Color(0xFF222222),
+    keyBg = Color(0xFF202020),
+    keyPressed = Color(0xFF3A3A3A),
+    specialKeyBg = Color(0xFF171717),
     keyText = Color.White,
     subText = Color(0xFF777777),
     suggestionBg = Color.Black,
@@ -100,16 +103,21 @@ val LocalKeyboardColors = compositionLocalOf { DarkColors }
 val LocalHapticEnabled = compositionLocalOf { true }
 val LocalSoundEnabled = compositionLocalOf { true }
 val LocalKeyPreviewEnabled = compositionLocalOf { true }
+val LocalKeyboardHeightScale = compositionLocalOf { 1f }
+
+private data class KeyAlternative(val label: String, val input: String)
 
 // ── Dimensions ───────────────────────────────────────────────────────────────────
 private val NumberRowHeight = 38.dp
 private val KeyRowHeight = 46.dp
-private val SuggestionBarHeight = 36.dp
-private val ToolbarHeight = 36.dp
+private val SuggestionBarHeight = 34.dp
+private val ToolbarExpandedHeight = 36.dp
+private val ToolbarCollapsedHeight = 28.dp
 private val KeyGapH = 3.dp
 private val KeyGapV = 6.dp
-private val KeyCorner = 10.dp
+private val KeyCorner = 12.dp
 private val KeyboardPadding = 4.dp
+private val NavigationFallbackBottomPadding = 56.dp
 
 // ── Symbol Layouts ───────────────────────────────────────────────────────────────
 private val SYMBOLS_1_ROWS = listOf(
@@ -130,6 +138,42 @@ private val NUMBER_SYMBOL_MAP = mapOf(
     '6' to '^', '7' to '&', '8' to '*', '9' to '(', '0' to ')'
 )
 
+private val LETTER_ROW_1 = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p")
+private val LETTER_ROW_2 = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l")
+private val LETTER_ROW_3 = listOf("z", "x", "c", "v", "b", "n", "m")
+
+private fun letterKeyLabel(key: String, shiftState: ShiftState, useShiftedLetterInput: Boolean): String {
+    return if (useShiftedLetterInput && shiftState != ShiftState.OFF) {
+        key.uppercase()
+    } else {
+        key.lowercase()
+    }
+}
+
+private fun letterKeyInput(key: String, shiftState: ShiftState, useShiftedLetterInput: Boolean): Char {
+    val char = key.lowercase().first()
+    if (useShiftedLetterInput) {
+        return if (shiftState != ShiftState.OFF) char.uppercaseChar() else char
+    }
+
+    return if (shiftState != ShiftState.OFF) bangluShiftInput(char) else char
+}
+
+private fun bangluShiftInput(char: Char): Char {
+    return when (char.lowercaseChar()) {
+        't' -> 'T'
+        'd' -> 'D'
+        'r' -> 'R'
+        'i' -> 'I'
+        'u' -> 'U'
+        else -> char.lowercaseChar()
+    }
+}
+
+private fun displayPhoneticHint(phonetic: String): String {
+    return phonetic.map { if (it in 'A'..'Z') it.lowercaseChar() else it }.joinToString("")
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Root Keyboard Composable
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -147,7 +191,9 @@ fun BangluKeyboardLayout(
     numberRowEnabled: Boolean = true,
     keyPreviewEnabled: Boolean = true,
     themePref: String = "auto",
+    keyboardHeightMode: String = "normal",
     onKeyPress: (Char) -> Unit,
+    onTextInput: (String) -> Unit = { text -> text.forEach { onKeyPress(it) } },
     onBackspace: () -> Unit,
     onBackspaceWord: () -> Unit = {},
     onSpace: () -> Unit,
@@ -176,45 +222,46 @@ fun BangluKeyboardLayout(
         "amoled" -> AmoledColors
         else -> if (systemDark) DarkColors else LightColors // "auto"
     }
+    val heightScale = when (keyboardHeightMode) {
+        "compact" -> 0.90f
+        "tall" -> 1.10f
+        else -> 1.0f
+    }
 
     CompositionLocalProvider(
         LocalKeyboardColors provides colors,
         LocalHapticEnabled provides hapticEnabled,
         LocalSoundEnabled provides soundEnabled,
-        LocalKeyPreviewEnabled provides keyPreviewEnabled
+        LocalKeyPreviewEnabled provides keyPreviewEnabled,
+        LocalKeyboardHeightScale provides heightScale
     ) {
-        // Get nav bar height for bottom padding (permanent fix for Samsung/gesture nav)
-        val context = LocalContext.current
-        val navBarHeightPx = remember {
-            val resourceId = context.resources.getIdentifier(
-                "navigation_bar_height", "dimen", "android"
-            )
-            if (resourceId > 0) context.resources.getDimensionPixelSize(resourceId) else 0
-        }
-        val density = context.resources.displayMetrics.density
-        val navBarPadding = (navBarHeightPx / density).dp
+        val navBottomPadding = WindowInsets.navigationBars
+            .asPaddingValues()
+            .calculateBottomPadding()
+        val bottomSafePadding = maxOf(navBottomPadding, NavigationFallbackBottomPadding)
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(colors.keyboardBg)
                 .padding(horizontal = KeyboardPadding)
-                .padding(top = 4.dp, bottom = navBarPadding)
+                .padding(top = 3.dp, bottom = bottomSafePadding)
         ) {
-            // Feature 3.1: Toolbar row (visible in ALL keyboard modes)
-            ToolbarRow(
-                onSettingsClick = onSettingsClick,
-                onEmojiOpen = onEmojiOpen,
-                onToggleToolbar = onToggleToolbar,
-                isExpanded = isToolbarExpanded
-            )
+            if (isToolbarExpanded) {
+                ToolbarRow(
+                    onSettingsClick = onSettingsClick,
+                    onEmojiOpen = onEmojiOpen,
+                    onToggleToolbar = onToggleToolbar,
+                    isExpanded = true
+                )
+            }
 
             when (keyboardMode) {
                 KeyboardMode.BANGLU -> {
                     if (suggestionsEnabled) {
-                        BangluSuggestionRow(suggestions, onSuggestionClick, onDismiss)
+                        BangluSuggestionRow(suggestions, onSuggestionClick, onDismiss, onToggleToolbar)
                     } else {
-                        MinimalSuggestionBar(onDismiss)
+                        MinimalSuggestionBar(onDismiss, onToggleToolbar)
                     }
                     Spacer(modifier = Modifier.height(KeyGapV))
                     if (numberRowEnabled) {
@@ -226,7 +273,9 @@ fun BangluKeyboardLayout(
                     }
                     LetterRows(
                         shiftState = shiftState,
+                        useShiftedLetterInput = false,
                         onKeyPress = onKeyPress,
+                        onTextInput = onTextInput,
                         onBackspace = onBackspace,
                         onBackspaceWord = onBackspaceWord,
                         onShiftTap = onShiftTap
@@ -246,7 +295,7 @@ fun BangluKeyboardLayout(
                     )
                 }
                 KeyboardMode.ENGLISH -> {
-                    MinimalSuggestionBar(onDismiss)
+                    MinimalSuggestionBar(onDismiss, onToggleToolbar)
                     Spacer(modifier = Modifier.height(KeyGapV))
                     if (numberRowEnabled) {
                         NumberRow(
@@ -257,7 +306,9 @@ fun BangluKeyboardLayout(
                     }
                     LetterRows(
                         shiftState = shiftState,
+                        useShiftedLetterInput = true,
                         onKeyPress = onKeyPress,
+                        onTextInput = onTextInput,
                         onBackspace = onBackspace,
                         onBackspaceWord = onBackspaceWord,
                         onShiftTap = onShiftTap
@@ -277,7 +328,7 @@ fun BangluKeyboardLayout(
                     )
                 }
                 KeyboardMode.SYMBOLS_1 -> {
-                    MinimalSuggestionBar(onDismiss)
+                    MinimalSuggestionBar(onDismiss, onToggleToolbar)
                     Spacer(modifier = Modifier.height(KeyGapV))
                     NumberRow(
                         onNumberPress = onNumberPress,
@@ -307,7 +358,7 @@ fun BangluKeyboardLayout(
                     )
                 }
                 KeyboardMode.SYMBOLS_2 -> {
-                    MinimalSuggestionBar(onDismiss)
+                    MinimalSuggestionBar(onDismiss, onToggleToolbar)
                     Spacer(modifier = Modifier.height(KeyGapV))
                     NumberRow(
                         onNumberPress = onNumberPress,
@@ -363,32 +414,37 @@ private fun ToolbarRow(
     isExpanded: Boolean
 ) {
     val colors = LocalKeyboardColors.current
+    val height = if (isExpanded) ToolbarExpandedHeight else ToolbarCollapsedHeight
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(ToolbarHeight)
+            .height(height)
             .background(colors.suggestionBg)
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (isExpanded) {
-            ToolbarIcon("\uD83D\uDCCB") { /* clipboard - future */ }
-            ToolbarIcon("\uD83D\uDE0A") { onEmojiOpen() }
-            ToolbarIcon("\u2699") { onSettingsClick() }
-            ToolbarIcon("\uD83D\uDD90") { /* one-hand - future */ }
+            ToolbarIcon("\uD83D\uDCCB", "Clipboard") { /* clipboard - future */ }
+            ToolbarIcon("\uD83D\uDE0A", "Emoji") { onEmojiOpen() }
+            ToolbarIcon("\u2699", "Settings") { onSettingsClick() }
+            ToolbarIcon("\uD83D\uDD90", "One-hand mode") { /* one-hand - future */ }
         }
         // Toggle button always visible
-        ToolbarIcon(if (isExpanded) "\u25B2" else "\u00B7\u00B7\u00B7") { onToggleToolbar() }
+        ToolbarIcon(
+            if (isExpanded) "\u25B2" else "\u00B7\u00B7\u00B7",
+            if (isExpanded) "Collapse toolbar" else "Expand toolbar"
+        ) { onToggleToolbar() }
     }
 }
 
 @Composable
-private fun ToolbarIcon(icon: String, onClick: () -> Unit) {
+private fun ToolbarIcon(icon: String, accessibilityLabel: String = icon, onClick: () -> Unit) {
     val colors = LocalKeyboardColors.current
     Box(
         modifier = Modifier
-            .size(36.dp)
+            .size(32.dp)
+            .semantics { contentDescription = accessibilityLabel }
             .clip(RoundedCornerShape(8.dp))
             .clickable { onClick() },
         contentAlignment = Alignment.Center
@@ -402,22 +458,38 @@ private fun ToolbarIcon(icon: String, onClick: () -> Unit) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun MinimalSuggestionBar(onDismiss: () -> Unit) {
+private fun MinimalSuggestionBar(
+    onDismiss: () -> Unit,
+    onToggleToolbar: () -> Unit
+) {
     val colors = LocalKeyboardColors.current
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(SuggestionBarHeight)
-            .background(colors.suggestionBg),
-        contentAlignment = Alignment.CenterEnd
+            .background(colors.suggestionBg)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
+        Text(
+            text = "\u00B7\u00B7\u00B7",
+            color = colors.subText,
+            fontSize = 18.sp,
             modifier = Modifier
                 .size(40.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { onToggleToolbar() }
+                .padding(start = 10.dp)
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .semantics { contentDescription = "Dismiss keyboard" }
                 .clickable { onDismiss() },
             contentAlignment = Alignment.Center
         ) {
-            Text("\u2304", color = colors.subText, fontSize = 20.sp)
+            Text("\u2304", color = colors.subText, fontSize = 19.sp)
         }
     }
 }
@@ -430,12 +502,13 @@ private fun MinimalSuggestionBar(onDismiss: () -> Unit) {
 private fun BangluSuggestionRow(
     suggestions: List<SmartSuggestion>,
     onSuggestionClick: (SmartSuggestion) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onToggleToolbar: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
 
     if (suggestions.isEmpty()) {
-        MinimalSuggestionBar(onDismiss)
+        MinimalSuggestionBar(onDismiss, onToggleToolbar)
         return
     }
 
@@ -446,6 +519,16 @@ private fun BangluSuggestionRow(
             .background(colors.suggestionBg),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .semantics { contentDescription = "Expand toolbar" }
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { onToggleToolbar() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text("\u00B7\u00B7\u00B7", color = colors.subText, fontSize = 18.sp)
+        }
         LazyRow(
             modifier = Modifier
                 .weight(1f)
@@ -465,10 +548,12 @@ private fun BangluSuggestionRow(
 
                 Box(
                     modifier = Modifier
+                        .semantics { contentDescription = suggestion.bengali }
+                        .shadow(if (isFirst) 1.dp else 0.dp, RoundedCornerShape(16.dp), clip = false)
                         .clip(RoundedCornerShape(16.dp))
                         .background(chipBg)
                         .clickable { onSuggestionClick(suggestion) }
-                        .padding(horizontal = 14.dp, vertical = 2.dp),
+                        .padding(horizontal = 13.dp, vertical = 2.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     // Feature 4.3: Show phonetic hint on primary suggestion
@@ -479,13 +564,14 @@ private fun BangluSuggestionRow(
                             text = suggestion.bengali,
                             color = chipTextColor,
                             fontSize = 15.sp,
+                            fontWeight = if (isFirst) FontWeight.Medium else FontWeight.Normal,
                             fontStyle = if (isPrediction) FontStyle.Italic else FontStyle.Normal,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         if (suggestion.phonetic.isNotEmpty() && isFirst) {
                             Text(
-                                text = suggestion.phonetic,
+                                text = displayPhoneticHint(suggestion.phonetic),
                                 color = colors.subText,
                                 fontSize = 9.sp,
                                 maxLines = 1
@@ -499,6 +585,7 @@ private fun BangluSuggestionRow(
         Box(
             modifier = Modifier
                 .size(40.dp)
+                .semantics { contentDescription = "Dismiss keyboard" }
                 .clickable { onDismiss() },
             contentAlignment = Alignment.Center
         ) {
@@ -516,6 +603,7 @@ private fun NumberRow(
     onNumberPress: (Char) -> Unit,
     onSymbolPress: (Char) -> Unit
 ) {
+    val height = NumberRowHeight * LocalKeyboardHeightScale.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(KeyGapH)
@@ -524,6 +612,7 @@ private fun NumberRow(
             NumberKey(
                 number = num,
                 modifier = Modifier.weight(1f),
+                height = height,
                 onNumberPress = onNumberPress,
                 onSymbolPress = onSymbolPress
             )
@@ -531,6 +620,7 @@ private fun NumberRow(
         NumberKey(
             number = '0',
             modifier = Modifier.weight(1f),
+            height = height,
             onNumberPress = onNumberPress,
             onSymbolPress = onSymbolPress
         )
@@ -544,27 +634,32 @@ private fun NumberRow(
 @Composable
 private fun LetterRows(
     shiftState: ShiftState,
+    useShiftedLetterInput: Boolean,
     onKeyPress: (Char) -> Unit,
+    onTextInput: (String) -> Unit,
     onBackspace: () -> Unit,
     onBackspaceWord: () -> Unit = {},
     onShiftTap: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
-    val isUpper = shiftState != ShiftState.OFF
+    val keyHeight = KeyRowHeight * LocalKeyboardHeightScale.current
 
     // Row 1: q w e r t y u i o p
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(KeyGapH)
     ) {
-        for (key in listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p")) {
-            val display = if (isUpper) key.uppercase() else key
+        for (key in LETTER_ROW_1) {
+            val display = letterKeyLabel(key, shiftState, useShiftedLetterInput)
+            val input = letterKeyInput(key, shiftState, useShiftedLetterInput)
             KeyButton(
                 label = display,
                 modifier = Modifier.weight(1f),
-                height = KeyRowHeight,
+                height = keyHeight,
                 bgColor = colors.keyBg,
-                onClick = { onKeyPress(display[0]) }
+                longPressOptions = longPressAlternatives(key[0]),
+                onTextInput = onTextInput,
+                onClick = { onKeyPress(input) }
             )
         }
     }
@@ -578,14 +673,17 @@ private fun LetterRows(
             .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(KeyGapH)
     ) {
-        for (key in listOf("a", "s", "d", "f", "g", "h", "j", "k", "l")) {
-            val display = if (isUpper) key.uppercase() else key
+        for (key in LETTER_ROW_2) {
+            val display = letterKeyLabel(key, shiftState, useShiftedLetterInput)
+            val input = letterKeyInput(key, shiftState, useShiftedLetterInput)
             KeyButton(
                 label = display,
                 modifier = Modifier.weight(1f),
-                height = KeyRowHeight,
+                height = keyHeight,
                 bgColor = colors.keyBg,
-                onClick = { onKeyPress(display[0]) }
+                longPressOptions = longPressAlternatives(key[0]),
+                onTextInput = onTextInput,
+                onClick = { onKeyPress(input) }
             )
         }
     }
@@ -611,29 +709,45 @@ private fun LetterRows(
         KeyButton(
             label = shiftLabel,
             modifier = Modifier.weight(1.5f),
-            height = KeyRowHeight,
+            height = keyHeight,
             bgColor = shiftBg,
             fontSize = 20,
             onClick = onShiftTap
         )
 
-        for (key in listOf("z", "x", "c", "v", "b", "n", "m")) {
-            val display = if (isUpper) key.uppercase() else key
+        for (key in LETTER_ROW_3) {
+            val display = letterKeyLabel(key, shiftState, useShiftedLetterInput)
+            val input = letterKeyInput(key, shiftState, useShiftedLetterInput)
             KeyButton(
                 label = display,
                 modifier = Modifier.weight(1f),
-                height = KeyRowHeight,
+                height = keyHeight,
                 bgColor = colors.keyBg,
-                onClick = { onKeyPress(display[0]) }
+                longPressOptions = longPressAlternatives(key[0]),
+                onTextInput = onTextInput,
+                onClick = { onKeyPress(input) }
             )
         }
 
         // Backspace with long-press repeat and word deletion
         BackspaceKey(
             modifier = Modifier.weight(1.5f),
+            height = keyHeight,
             onBackspace = onBackspace,
             onBackspaceWord = onBackspaceWord
         )
+    }
+}
+
+private fun longPressAlternatives(char: Char): List<KeyAlternative> {
+    return when (char.lowercaseChar()) {
+        't' -> listOf(KeyAlternative("ট", "T"))
+        'd' -> listOf(KeyAlternative("ড", "D"))
+        'r' -> listOf(KeyAlternative("ড়", "R"))
+        's' -> listOf(KeyAlternative("শ", "sh"))
+        'i' -> listOf(KeyAlternative("ঈ", "ii"))
+        'u' -> listOf(KeyAlternative("ঊ", "uu"))
+        else -> emptyList()
     }
 }
 
@@ -651,6 +765,7 @@ private fun SymbolRows(
     onPageToggle: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
+    val keyHeight = KeyRowHeight * LocalKeyboardHeightScale.current
 
     // Symbol row 1 (10 keys)
     Row(
@@ -661,7 +776,7 @@ private fun SymbolRows(
             KeyButton(
                 label = sym,
                 modifier = Modifier.weight(1f),
-                height = KeyRowHeight,
+                height = keyHeight,
                 bgColor = colors.keyBg,
                 fontSize = 18,
                 onClick = { onSymbolPress(sym[0]) }
@@ -680,7 +795,7 @@ private fun SymbolRows(
             KeyButton(
                 label = sym,
                 modifier = Modifier.weight(1f),
-                height = KeyRowHeight,
+                height = keyHeight,
                 bgColor = colors.keyBg,
                 fontSize = 18,
                 onClick = { onSymbolPress(sym[0]) }
@@ -698,7 +813,7 @@ private fun SymbolRows(
         KeyButton(
             label = pageLabel,
             modifier = Modifier.weight(1.5f),
-            height = KeyRowHeight,
+            height = keyHeight,
             bgColor = colors.specialKeyBg,
             fontSize = 16,
             onClick = onPageToggle
@@ -707,7 +822,7 @@ private fun SymbolRows(
             KeyButton(
                 label = sym,
                 modifier = Modifier.weight(1f),
-                height = KeyRowHeight,
+                height = keyHeight,
                 bgColor = colors.keyBg,
                 fontSize = 18,
                 onClick = { onSymbolPress(sym[0]) }
@@ -715,6 +830,7 @@ private fun SymbolRows(
         }
         BackspaceKey(
             modifier = Modifier.weight(1.5f),
+            height = keyHeight,
             onBackspace = onBackspace,
             onBackspaceWord = onBackspaceWord
         )
@@ -739,6 +855,7 @@ private fun BottomRow(
     onEnter: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
+    val keyHeight = KeyRowHeight * LocalKeyboardHeightScale.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(KeyGapH)
@@ -747,7 +864,7 @@ private fun BottomRow(
         KeyButton(
             label = leftLabel,
             modifier = Modifier.weight(1.2f),
-            height = KeyRowHeight,
+            height = keyHeight,
             bgColor = colors.specialKeyBg,
             fontSize = 16,
             onClick = onLeftPress
@@ -757,7 +874,7 @@ private fun BottomRow(
         KeyButton(
             label = globeLabel,
             modifier = Modifier.weight(0.8f),
-            height = KeyRowHeight,
+            height = keyHeight,
             bgColor = colors.specialKeyBg,
             fontSize = 16,
             onClick = onGlobePress
@@ -767,6 +884,7 @@ private fun BottomRow(
         SpaceBar(
             label = spaceLabel,
             modifier = Modifier.weight(4f),
+            height = keyHeight,
             onClick = onSpace,
             onCursorMove = onCursorMove
         )
@@ -775,7 +893,7 @@ private fun BottomRow(
         KeyButton(
             label = ".",
             modifier = Modifier.weight(0.8f),
-            height = KeyRowHeight,
+            height = keyHeight,
             bgColor = colors.specialKeyBg,
             fontSize = 20,
             onClick = { onPunctuationPress('.') }
@@ -785,7 +903,7 @@ private fun BottomRow(
         KeyButton(
             label = enterLabel,
             modifier = Modifier.weight(1.5f),
-            height = KeyRowHeight,
+            height = keyHeight,
             bgColor = colors.specialKeyBg,
             fontSize = 20,
             onClick = onEnter
@@ -805,6 +923,8 @@ private fun KeyButton(
     bgColor: Color,
     fontSize: Int = 22,
     accessibilityLabel: String = label,
+    longPressOptions: List<KeyAlternative> = emptyList(),
+    onTextInput: (String) -> Unit = {},
     onClick: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
@@ -815,44 +935,104 @@ private fun KeyButton(
     val previewOn = LocalKeyPreviewEnabled.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    var showAlternatives by remember { mutableStateOf(false) }
 
     // Feature 1.4: Scale UP on press for single-character keys (key preview effect)
     val isCharKey = label.length == 1
     val scale by animateFloatAsState(
         targetValue = if (isPressed && previewOn) {
-            if (isCharKey) 1.15f else 0.95f
+            if (isCharKey) 1.04f else 0.97f
         } else if (isPressed) 0.97f else 1f,
         animationSpec = tween(durationMillis = 50)
     )
+    val keyShape = RoundedCornerShape(KeyCorner)
 
     Box(
         modifier = modifier
             .height(height)
             .semantics { contentDescription = accessibilityLabel }
+            .shadow(if (isPressed) 0.dp else 1.dp, keyShape, clip = false)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(KeyCorner))
+            .clip(keyShape)
             .background(if (isPressed) colors.keyPressed else bgColor)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) {
-                if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
-                onClick()
-            },
+            .then(
+                if (longPressOptions.isEmpty()) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = null
+                    ) {
+                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
+                        onClick()
+                    }
+                } else {
+                    Modifier.pointerInput(longPressOptions) {
+                        detectTapGestures(
+                            onTap = {
+                                if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
+                                onClick()
+                            },
+                            onLongPress = {
+                                showAlternatives = true
+                                if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                        )
+                    }
+                }
+            ),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = label,
             color = colors.keyText,
-            fontSize = if (isPressed && isCharKey && previewOn) (fontSize + 6).sp else fontSize.sp,
-            fontWeight = if (isPressed && isCharKey && previewOn) FontWeight.Bold else FontWeight.Normal,
+            fontSize = if (isPressed && isCharKey && previewOn) (fontSize + 2).sp else fontSize.sp,
+            fontWeight = if (label.length <= 2) FontWeight.Medium else FontWeight.Normal,
             textAlign = TextAlign.Center,
             maxLines = 1
         )
+        if (showAlternatives) {
+            Popup(
+                alignment = Alignment.TopCenter,
+                offset = IntOffset(0, -96),
+                properties = PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true),
+                onDismissRequest = { showAlternatives = false }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(colors.keyBg)
+                        .padding(horizontal = 6.dp, vertical = 5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    longPressOptions.forEach { option ->
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(colors.specialKeyBg)
+                                .clickable {
+                                    showAlternatives = false
+                                    if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    onTextInput(option.input)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = option.label,
+                                color = colors.keyText,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -860,6 +1040,7 @@ private fun KeyButton(
 private fun SpaceBar(
     label: String,
     modifier: Modifier = Modifier,
+    height: Dp = KeyRowHeight,
     onClick: () -> Unit,
     onCursorMove: (Int) -> Unit = {}
 ) {
@@ -875,13 +1056,15 @@ private fun SpaceBar(
         targetValue = if (isPressed) 0.97f else 1f,
         animationSpec = tween(50)
     )
+    val keyShape = RoundedCornerShape(KeyCorner)
 
     Box(
         modifier = modifier
-            .height(KeyRowHeight)
+            .height(height)
             .semantics { contentDescription = "Space" }
+            .shadow(if (isPressed) 0.dp else 1.dp, keyShape, clip = false)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(KeyCorner))
+            .clip(keyShape)
             .background(if (isPressed) colors.keyPressed else colors.keyBg)
             .pointerInput(Unit) {
                 detectDragGesturesAfterLongPress(
@@ -920,9 +1103,12 @@ private fun SpaceBar(
     ) {
         Text(
             text = if (isCursorMode) "\u25C4 \u25BA cursor" else label,
-            color = if (isCursorMode) colors.keyText else colors.subText,
+            color = if (isCursorMode) colors.keyText else colors.keyText.copy(alpha = 0.68f),
             fontSize = 13.sp,
-            textAlign = TextAlign.Center
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -934,6 +1120,7 @@ private fun SpaceBar(
 @Composable
 private fun BackspaceKey(
     modifier: Modifier = Modifier,
+    height: Dp = KeyRowHeight,
     onBackspace: () -> Unit,
     onBackspaceWord: () -> Unit = {}
 ) {
@@ -948,45 +1135,35 @@ private fun BackspaceKey(
         animationSpec = tween(durationMillis = 50)
     )
     val coroutineScope = rememberCoroutineScope()
+    val keyShape = RoundedCornerShape(KeyCorner)
 
     Box(
         modifier = modifier
-            .height(KeyRowHeight)
+            .height(height)
             .semantics { contentDescription = "Backspace" }
+            .shadow(if (isPressed) 0.dp else 1.dp, keyShape, clip = false)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(KeyCorner))
+            .clip(keyShape)
             .background(if (isPressed) colors.keyPressed else colors.specialKeyBg)
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onPress = {
-                        isPressed = true
+                    onTap = {
                         if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
                         onBackspace()
-                        val pressStartTime = System.currentTimeMillis()
-
-                        val repeatJob = coroutineScope.launch {
-                            delay(400)
-                            while (true) {
-                                val elapsed = System.currentTimeMillis() - pressStartTime
-                                if (elapsed > 1500) {
-                                    onBackspaceWord()
-                                    if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    delay(100)
-                                } else {
-                                    onBackspace()
-                                    if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    delay(50)
-                                }
-                            }
-                        }
-
+                    },
+                    onPress = {
+                        isPressed = true
                         try {
                             awaitRelease()
                         } finally {
-                            repeatJob.cancel()
                             isPressed = false
                         }
+                    },
+                    onLongPress = {
+                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
+                        onBackspaceWord()
                     }
                 )
             },
@@ -1009,6 +1186,7 @@ private fun BackspaceKey(
 private fun NumberKey(
     number: Char,
     modifier: Modifier = Modifier,
+    height: Dp = NumberRowHeight,
     onNumberPress: (Char) -> Unit,
     onSymbolPress: (Char) -> Unit
 ) {
@@ -1024,13 +1202,15 @@ private fun NumberKey(
         animationSpec = tween(50)
     )
     val coroutineScope = rememberCoroutineScope()
+    val keyShape = RoundedCornerShape(KeyCorner)
 
     Box(
         modifier = modifier
-            .height(NumberRowHeight)
+            .height(height)
             .semantics { contentDescription = "Number $number, long press for $symbol" }
+            .shadow(if (isPressed) 0.dp else 1.dp, keyShape, clip = false)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(KeyCorner))
+            .clip(keyShape)
             .background(if (isPressed) colors.keyPressed else colors.keyBg)
             .pointerInput(Unit) {
                 detectTapGestures(

@@ -48,7 +48,7 @@ object SeedDataFreqSync0 {
             e("করবো", listOf("korbo"), 70),
             e("করলো", listOf("korlo"), 70),
             e("আরো", listOf("aro", "aaro"), 82),
-            e("কি", listOf("ki", "kii"), 79),
+            e("কি", listOf("ki"), 79),
             e("কেন", listOf("keno", "kenou"), 77),
             e("কোথায়", listOf("kothay", "kothae", "kothaey"), 75),
             e("কিভাবে", listOf("kivabe", "kibhabe", "kivhabe", "kivabey", "kiivabe", "kibhabey", "kiibhabe", "kivhabey", "kiivhabe", "kibhhabe"), 74),

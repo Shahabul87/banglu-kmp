@@ -11,10 +11,18 @@ class ConfusingWordsTest {
 
     private val cases = listOf(
         // ত/ট confusion
+        Case("t", "ত", "ত/ট"), Case("ta", "তা", "ত/ট"),
+        Case("T", "ট", "ত/ট"), Case("Ta", "টা", "ত/ট"),
+        Case("taka", "টাকা", "ত/ট"),
         Case("aponar", "আপনার", "ত/ট"), Case("ekti", "একটি", "ত/ট"),
         Case("ekta", "একটা", "ত/ট"), Case("ektu", "একটু", "ত/ট"),
         Case("pete", "পেতে", "ত/ট"), Case("ete", "এতে", "ত/ট"),
         Case("du", "দু", "ত/ট"),
+
+        // দ/ড confusion
+        Case("d", "দ", "দ/ড"), Case("da", "দা", "দ/ড"),
+        Case("D", "ড", "দ/ড"), Case("Da", "ডা", "দ/ড"),
+        Case("dan", "ডান", "দ/ড"), Case("dal", "দাল", "দ/ড"),
 
         // ন/ণ confusion
         Case("karon", "কারণ", "ন/ণ"), Case("karone", "কারণে", "ন/ণ"),
@@ -25,6 +33,8 @@ class ConfusingWordsTest {
         Case("sorokar", "সরকার", "র/ড়"),
 
         // শ/ষ/স confusion
+        Case("s", "স", "শ/ষ/স"), Case("sh", "শ", "শ/ষ/স"),
+        Case("shokal", "সকাল", "শ/ষ/স"), Case("shobar", "সবার", "শ/ষ/স"),
         Case("sundor", "সুন্দর", "শ/ষ/স"), Case("proshno", "প্রশ্ন", "শ/ষ/স"),
         Case("ongsh", "অংশ", "শ/ষ/স"),
 

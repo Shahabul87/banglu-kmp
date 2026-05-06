@@ -230,7 +230,7 @@ object SeedDataFreqSync1 {
             e("কাজ", listOf("kaj", "kaaj"), 70),
             e("গান", listOf("gaan", "gan"), 60),
             e("রঙ", listOf("rong", "rang"), 50),
-            e("পথ", listOf("poth", "patha"), 55),
+            e("পথ", listOf("poth", "path"), 55),
             e("খবর", listOf("khabor", "khobar"), 60),
             e("ঘণ্টা", listOf("ghonta", "ghantaa", "ghontaa"), 55),
             e("মিনিট", listOf("minit", "minute"), 50),

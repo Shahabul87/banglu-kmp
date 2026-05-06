@@ -67,6 +67,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
     var numberRow by remember { mutableStateOf(prefs.getBoolean("number_row", true)) }
     var themeMode by remember { mutableStateOf(prefs.getString("theme", "auto") ?: "auto") }
     var defaultMode by remember { mutableStateOf(prefs.getString("default_mode", "banglu") ?: "banglu") }
+    var keyboardHeight by remember { mutableStateOf(prefs.getString("keyboard_height", "normal") ?: "normal") }
 
     fun saveBoolean(key: String, value: Boolean) { prefs.edit().putBoolean(key, value).apply() }
     fun saveString(key: String, value: String) { prefs.edit().putString(key, value).apply() }
@@ -185,6 +186,14 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                     themeMode
                 ) { themeMode = it; saveString("theme", it) }
             }
+            item {
+                BrandListSetting(
+                    "কীবোর্ড উচ্চতা",
+                    when (keyboardHeight) { "compact" -> "কমপ্যাক্ট"; "tall" -> "লম্বা"; else -> "নরমাল" },
+                    listOf("compact" to "কমপ্যাক্ট", "normal" to "নরমাল", "tall" to "লম্বা"),
+                    keyboardHeight
+                ) { keyboardHeight = it; saveString("keyboard_height", it) }
+            }
 
             // ── About Section ──
             item { BrandSectionHeader("সম্পর্কে", "About") }
@@ -206,7 +215,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                             prefs.edit().clear().apply()
                             autoCapitalize = true; doubleSpacePeriod = true; suggestions = true
                             hapticFeedback = true; soundFeedback = true; keyPreview = true
-                            numberRow = true; themeMode = "auto"; defaultMode = "banglu"
+                            numberRow = true; themeMode = "auto"; defaultMode = "banglu"; keyboardHeight = "normal"
                         }
                         .padding(14.dp),
                     contentAlignment = Alignment.Center
