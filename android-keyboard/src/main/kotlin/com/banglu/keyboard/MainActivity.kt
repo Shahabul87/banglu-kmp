@@ -1,7 +1,9 @@
 package com.banglu.keyboard
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
@@ -59,6 +61,11 @@ private val Green = Color(0xFF5CB85C)
 private val GreenDim = Color(0xFF2D5A2D)
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val EXTRA_REQUEST_VOICE_PERMISSION = "com.banglu.keyboard.REQUEST_VOICE_PERMISSION"
+        private const val REQUEST_RECORD_AUDIO = 9101
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -69,6 +76,13 @@ class MainActivity : ComponentActivity() {
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
 
         setContent { BangluHomeScreen() }
+
+        if (
+            intent?.getBooleanExtra(EXTRA_REQUEST_VOICE_PERMISSION, false) == true &&
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_RECORD_AUDIO)
+        }
     }
 }
 

@@ -50,7 +50,7 @@ object PhoneticSectionMapper {
         "ng" to ConsonantMapping(listOf("ং", "ঙ"), 0.70),
         "k" to ConsonantMapping(listOf("ক"), 1.0),
         "g" to ConsonantMapping(listOf("গ"), 1.0),
-        "c" to ConsonantMapping(listOf("চ", "ছ"), 0.50),
+        "c" to ConsonantMapping(listOf("ছ", "চ"), 0.62),
         "j" to ConsonantMapping(listOf("জ", "য"), 0.70),
         "t" to ConsonantMapping(listOf("ত", "ট"), 0.80),
         "d" to ConsonantMapping(listOf("দ", "ড"), 0.75),

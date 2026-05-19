@@ -305,11 +305,12 @@ class SmartDictionary {
                 variants.add(key.replace("ee", "i"))
             }
 
-            // ch <-> c
+            // c prefers ছ, while ch remains the primary spelling for চ.
             if ("ch" in key && "chh" !in key && "cch" !in key) {
                 variants.add(key.replace("ch", "c"))
             }
             if (Regex("c[^ch]").containsMatchIn(key) || key.endsWith("c")) {
+                variants.add(key.replace(Regex("c(?!h)"), "chh"))
                 variants.add(key.replace(Regex("c(?!h)"), "ch"))
             }
 

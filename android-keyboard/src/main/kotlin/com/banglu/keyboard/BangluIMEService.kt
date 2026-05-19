@@ -1,9 +1,15 @@
 package com.banglu.keyboard
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.inputmethodservice.InputMethodService
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.text.InputType
 import android.util.Log
 import android.view.KeyEvent
@@ -32,6 +38,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -56,6 +63,8 @@ class BangluIMEService : InputMethodService(),
 
     // Feature 3.1: Toolbar state
     private val isToolbarExpanded = mutableStateOf(false)
+    private val voiceInputState = mutableStateOf(VoiceInputState.IDLE)
+    private val voiceInputLevel = mutableStateOf(0f)
 
     // Track the letter mode to return to from symbols
     private var letterModeBeforeSymbols = KeyboardMode.BANGLU
@@ -76,6 +85,10 @@ class BangluIMEService : InputMethodService(),
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var suggestionJob: Job? = null
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var voiceCancelRequested = false
+    private var voiceStopRequested = false
+    private var voiceDictationActive = false
 
     // ── Settings (read from SharedPreferences) ──────────────────────────
     private lateinit var prefs: SharedPreferences
@@ -91,6 +104,11 @@ class BangluIMEService : InputMethodService(),
 
     companion object {
         private const val TAG = "BangluIME"
+        private const val VOICE_LANGUAGE = "bn-BD"
+        private const val VOICE_MINIMUM_LENGTH_MS = 60_000
+        private const val VOICE_COMPLETE_SILENCE_MS = 12_000
+        private const val VOICE_POSSIBLY_COMPLETE_SILENCE_MS = 6_000
+        private const val VOICE_RESTART_DELAY_MS = 250L
     }
 
     /** Debug-only logging — stripped from release builds */
@@ -108,6 +126,16 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
+    /** Conservative conversion for live composing text while the word is incomplete. */
+    private fun safeComposingConvert(input: String): ConversionResult {
+        return try {
+            SmartEngineAdapter.convertForComposing(input)
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.e(TAG, "Composing conversion failed for '$input'", e)
+            ConversionResult(input, 0.0, ResolutionSource.RULE, emptyList())
+        }
+    }
+
     /** Safe suggestions wrapper */
     private fun safeSuggestions(input: String, limit: Int = 8): List<SmartSuggestion> {
         return try {
@@ -116,6 +144,11 @@ class BangluIMEService : InputMethodService(),
             if (BuildConfig.DEBUG) Log.e(TAG, "Suggestions failed for '$input'", e)
             emptyList()
         }
+    }
+
+    private fun resetShiftState() {
+        shiftState.value = ShiftState.OFF
+        lastShiftTapTime = 0L
     }
 
     private fun refreshSuggestionsAsync(input: String) {
@@ -127,6 +160,8 @@ class BangluIMEService : InputMethodService(),
 
         val snapshot = input
         suggestionJob = serviceScope.launch {
+            delay(70)
+            if (keyboardMode.value != KeyboardMode.BANGLU || buffer != snapshot) return@launch
             val newSuggestions = withContext(Dispatchers.Default) {
                 safeSuggestions(snapshot, 8)
             }
@@ -145,8 +180,14 @@ class BangluIMEService : InputMethodService(),
 
     /** Reload settings from SharedPreferences */
     private fun reloadSettings() {
-        hapticEnabled.value = prefs.getBoolean("haptic_feedback", true)
-        soundEnabled.value = prefs.getBoolean("sound_feedback", true)
+        val feedbackMode = prefs.getString("key_feedback_mode", null)
+            ?: when {
+                prefs.getBoolean("sound_feedback", true) -> "sound"
+                prefs.getBoolean("haptic_feedback", true) -> "vibration"
+                else -> "silent"
+            }
+        hapticEnabled.value = feedbackMode == "vibration"
+        soundEnabled.value = feedbackMode == "sound"
         suggestionsEnabled.value = prefs.getBoolean("suggestions", true)
         autoCapitalizeEnabled.value = prefs.getBoolean("auto_capitalize", true)
         doubleSpacePeriodEnabled.value = prefs.getBoolean("double_space_period", true)
@@ -173,12 +214,11 @@ class BangluIMEService : InputMethodService(),
         serviceScope.launch {
             try {
                 val storage = AndroidStorage(applicationContext)
-                val loader = AndroidDictionaryLoader(applicationContext)
-                log("onCreate: Loading full dictionary from SQLite...")
-                SmartEngineAdapter.initialize(storage, loader)
-                log("onCreate: Full dictionary loaded!")
+                log("onCreate: Loading learned words...")
+                SmartEngineAdapter.initialize(storage, loader = null)
+                log("onCreate: Learned words loaded")
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "onCreate: Failed to load full dictionary", e)
+                if (BuildConfig.DEBUG) Log.e(TAG, "onCreate: Failed to load learned words", e)
             }
         }
     }
@@ -195,6 +235,8 @@ class BangluIMEService : InputMethodService(),
                         suggestions = suggestions,
                         keyboardMode = keyboardMode.value,
                         shiftState = shiftState.value,
+                        voiceInputState = voiceInputState.value,
+                        voiceInputLevel = voiceInputLevel.value,
                         enterLabel = enterKeyLabel.value,
                         isToolbarExpanded = isToolbarExpanded.value,
                         hapticEnabled = hapticEnabled.value,
@@ -222,6 +264,9 @@ class BangluIMEService : InputMethodService(),
                         onDismiss = { requestHideSelf(0) },
                         onSettingsClick = { onSettingsClick() },
                         onToggleToolbar = { isToolbarExpanded.value = !isToolbarExpanded.value },
+                        onVoiceInput = { onVoiceInput() },
+                        onVoiceStop = { stopVoiceInput(cancel = false) },
+                        onVoiceCancel = { stopVoiceInput(cancel = true) },
                         onEmojiClick = { emoji -> onEmojiClick(emoji) },
                         onEmojiOpen = { onEmojiOpen() },
                         onBackFromEmoji = { onBackFromEmoji() }
@@ -282,12 +327,16 @@ class BangluIMEService : InputMethodService(),
 
     override fun onFinishInput() {
         super.onFinishInput()
+        stopVoiceInput(cancel = true)
         buffer = ""
         suggestions.clear()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        stopVoiceInput(cancel = true)
+        speechRecognizer?.destroy()
+        speechRecognizer = null
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         serviceScope.cancel()
     }
@@ -316,7 +365,6 @@ class BangluIMEService : InputMethodService(),
 
     private fun onBangluKeyPress(char: Char) {
         buffer += char
-        log("onBangluKeyPress: char='$char', buffer='$buffer'")
 
         // Auto-unshift after typing a letter (unless caps lock)
         if (shiftState.value == ShiftState.ON && char.isLetter()) {
@@ -329,8 +377,7 @@ class BangluIMEService : InputMethodService(),
             return
         }
 
-        val result = safeConvert(buffer)
-        log("convert: '$buffer' -> '${result.bengali}' (${result.confidence})")
+        val result = safeComposingConvert(buffer)
         ic.setComposingText(result.bengali, 1)
 
         refreshSuggestionsAsync(buffer)
@@ -382,7 +429,7 @@ class BangluIMEService : InputMethodService(),
                         ic.finishComposingText()
                         suggestions.clear()
                     } else {
-                        val result = safeConvert(buffer)
+                        val result = safeComposingConvert(buffer)
                         ic.setComposingText(result.bengali, 1)
                         refreshSuggestionsAsync(buffer)
                     }
@@ -547,6 +594,7 @@ class BangluIMEService : InputMethodService(),
         }
 
         keyboardMode.value = newMode
+        resetShiftState()
         suggestions.clear()
         log("onGlobePress: mode=$newMode")
     }
@@ -558,11 +606,13 @@ class BangluIMEService : InputMethodService(),
         // Remember current letter mode
         letterModeBeforeSymbols = keyboardMode.value
         keyboardMode.value = KeyboardMode.SYMBOLS_1
+        resetShiftState()
         log("onSymbolsPress: entering SYMBOLS_1")
     }
 
     private fun onBackToLetters() {
         keyboardMode.value = letterModeBeforeSymbols
+        resetShiftState()
         log("onBackToLetters: returning to $letterModeBeforeSymbols")
     }
 
@@ -583,6 +633,222 @@ class BangluIMEService : InputMethodService(),
         startActivity(intent)
     }
 
+    // ── Bengali Voice Typing ────────────────────────────────────────────────
+
+    private fun onVoiceInput() {
+        log("onVoiceInput: state=${voiceInputState.value}")
+        if (voiceInputState.value == VoiceInputState.LISTENING || voiceInputState.value == VoiceInputState.PROCESSING) {
+            stopVoiceInput(cancel = false)
+            return
+        }
+
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            log("onVoiceInput: RECORD_AUDIO permission missing")
+            voiceInputState.value = VoiceInputState.PERMISSION_REQUIRED
+            val intent = Intent(this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra(MainActivity.EXTRA_REQUEST_VOICE_PERMISSION, true)
+            startActivity(intent)
+            resetVoiceStateSoon()
+            return
+        }
+
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            log("onVoiceInput: SpeechRecognizer unavailable")
+            voiceInputState.value = VoiceInputState.UNAVAILABLE
+            resetVoiceStateSoon()
+            return
+        }
+
+        commitPendingBuffer()
+        suggestions.clear()
+        keyboardMode.value = KeyboardMode.BANGLU
+        voiceInputState.value = VoiceInputState.PROCESSING
+        voiceInputLevel.value = 0f
+        voiceCancelRequested = false
+        voiceStopRequested = false
+        voiceDictationActive = true
+
+        startVoiceRecognition()
+    }
+
+    private fun startVoiceRecognition() {
+        val recognizer = speechRecognizer ?: SpeechRecognizer.createSpeechRecognizer(this).also {
+            speechRecognizer = it
+            it.setRecognitionListener(createVoiceRecognitionListener())
+        }
+
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, VOICE_LANGUAGE)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, VOICE_LANGUAGE)
+            putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, VOICE_MINIMUM_LENGTH_MS)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, VOICE_COMPLETE_SILENCE_MS)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, VOICE_POSSIBLY_COMPLETE_SILENCE_MS)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "বাংলায় বলুন")
+        }
+
+        try {
+            log("onVoiceInput: startListening $VOICE_LANGUAGE")
+            voiceInputState.value = VoiceInputState.PROCESSING
+            voiceInputLevel.value = 0f
+            recognizer.startListening(intent)
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.e(TAG, "Voice typing failed to start", e)
+            voiceDictationActive = false
+            voiceInputState.value = VoiceInputState.ERROR
+            resetVoiceStateSoon()
+        }
+    }
+
+    private fun createVoiceRecognitionListener(): RecognitionListener {
+        return object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {
+                log("voice: ready")
+                voiceInputState.value = VoiceInputState.LISTENING
+            }
+
+            override fun onBeginningOfSpeech() {
+                log("voice: beginning")
+                voiceInputState.value = VoiceInputState.LISTENING
+            }
+
+            override fun onRmsChanged(rmsdB: Float) {
+                voiceInputLevel.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
+            }
+            override fun onBufferReceived(buffer: ByteArray?) = Unit
+            override fun onEndOfSpeech() {
+                log("voice: end")
+                voiceInputState.value = VoiceInputState.PROCESSING
+                voiceInputLevel.value = 0f
+            }
+
+            override fun onError(error: Int) {
+                log("voice: error=$error")
+                voiceInputLevel.value = 0f
+                if (
+                    voiceDictationActive &&
+                    !voiceStopRequested &&
+                    !voiceCancelRequested &&
+                    (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
+                ) {
+                    restartVoiceRecognitionSoon()
+                    return
+                }
+
+                voiceDictationActive = false
+                voiceInputState.value = when (error) {
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> VoiceInputState.PERMISSION_REQUIRED
+                    SpeechRecognizer.ERROR_CLIENT -> VoiceInputState.IDLE
+                    else -> VoiceInputState.ERROR
+                }
+                if (voiceInputState.value != VoiceInputState.IDLE) resetVoiceStateSoon()
+            }
+
+            override fun onResults(results: Bundle?) {
+                if (voiceCancelRequested) {
+                    log("voice: ignored canceled result")
+                    suggestions.clear()
+                    voiceInputLevel.value = 0f
+                    voiceDictationActive = false
+                    voiceInputState.value = VoiceInputState.IDLE
+                    return
+                }
+
+                val phrases = results
+                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    .orEmpty()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+
+                val best = phrases.firstOrNull()
+                if (best == null) {
+                    log("voice: empty results")
+                    voiceInputState.value = VoiceInputState.ERROR
+                    resetVoiceStateSoon()
+                    return
+                }
+
+                log("voice: result='$best'")
+                commitVoiceSegment(best)
+                suggestions.clear()
+                voiceInputLevel.value = 0f
+                if (voiceDictationActive && !voiceStopRequested) {
+                    restartVoiceRecognitionSoon()
+                } else {
+                    voiceDictationActive = false
+                    voiceInputState.value = VoiceInputState.IDLE
+                }
+            }
+
+            override fun onPartialResults(partialResults: Bundle?) {
+                val partial = partialResults
+                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()
+                    ?.trim()
+                    .orEmpty()
+                if (partial.isNotEmpty()) {
+                    suggestions.clear()
+                    suggestions.add(SmartSuggestion(partial, 0.75, "voice_partial", "", "voice"))
+                }
+            }
+
+            override fun onEvent(eventType: Int, params: Bundle?) = Unit
+        }
+    }
+
+    private fun stopVoiceInput(cancel: Boolean) {
+        val recognizer = speechRecognizer
+        if (recognizer == null) {
+            voiceInputLevel.value = 0f
+            voiceInputState.value = VoiceInputState.IDLE
+            voiceDictationActive = false
+            return
+        }
+        log("stopVoiceInput: cancel=$cancel state=${voiceInputState.value}")
+        voiceCancelRequested = cancel
+        voiceStopRequested = !cancel
+        if (cancel) voiceDictationActive = false
+        if (cancel) recognizer.cancel() else recognizer.stopListening()
+        voiceInputLevel.value = 0f
+        if (cancel) suggestions.clear()
+        if (voiceInputState.value != VoiceInputState.IDLE) {
+            voiceInputState.value = if (cancel) VoiceInputState.IDLE else VoiceInputState.PROCESSING
+        }
+    }
+
+    private fun commitVoiceSegment(segment: String) {
+        val text = if (voiceStopRequested) segment else "$segment "
+        currentInputConnection?.commitText(text, 1)
+    }
+
+    private fun restartVoiceRecognitionSoon() {
+        voiceInputState.value = VoiceInputState.LISTENING
+        voiceInputLevel.value = 0f
+        serviceScope.launch {
+            delay(VOICE_RESTART_DELAY_MS)
+            if (voiceDictationActive && !voiceStopRequested && !voiceCancelRequested) {
+                startVoiceRecognition()
+            }
+        }
+    }
+
+    private fun resetVoiceStateSoon() {
+        serviceScope.launch {
+            delay(1800)
+            if (
+                voiceInputState.value == VoiceInputState.ERROR ||
+                voiceInputState.value == VoiceInputState.PERMISSION_REQUIRED ||
+                voiceInputState.value == VoiceInputState.UNAVAILABLE
+            ) {
+                voiceInputState.value = VoiceInputState.IDLE
+            }
+        }
+    }
+
     // ── Emoji Panel ──────────────────────────────────────────────────────────
 
     private fun onEmojiClick(emoji: String) {
@@ -598,10 +864,12 @@ class BangluIMEService : InputMethodService(),
             letterModeBeforeSymbols = keyboardMode.value
         }
         keyboardMode.value = KeyboardMode.EMOJI
+        resetShiftState()
     }
 
     private fun onBackFromEmoji() {
         keyboardMode.value = letterModeBeforeSymbols
+        resetShiftState()
     }
 
     // ── Feature 4.1: Next-Word Predictions ─────────────────────────────────

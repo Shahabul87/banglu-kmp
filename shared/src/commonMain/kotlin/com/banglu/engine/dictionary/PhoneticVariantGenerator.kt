@@ -28,7 +28,8 @@ object PhoneticVariantGenerator {
         AlternationPair("ii", "i", "VOWEL"),
         // Consonant alternations
         AlternationPair("sh", "s", "CONSONANT"),
-        AlternationPair("chh", "ch", "CONSONANT"),
+        AlternationPair("chh", "c", "CONSONANT"),
+        AlternationPair("ch", "c", "CONSONANT"),
         AlternationPair("rh", "r", "CONSONANT"),
         // z↔j removed: z→য and j→জ are now separate consonant rules
         AlternationPair("w", "v", "CONSONANT"),

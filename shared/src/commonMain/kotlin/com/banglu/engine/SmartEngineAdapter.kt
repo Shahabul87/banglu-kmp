@@ -48,7 +48,7 @@ object SmartEngineAdapter {
      * @param storage Platform-specific storage for learned words and dictionary cache
      * @param loader Platform-specific dictionary loader for large files
      */
-    suspend fun initialize(storage: PlatformStorage, loader: DictionaryLoader) {
+    suspend fun initialize(storage: PlatformStorage, loader: DictionaryLoader? = null) {
         this.storage = storage
         val eng = getEngine()
         eng.initialize(storage, loader)
@@ -71,6 +71,15 @@ object SmartEngineAdapter {
      * @return ConversionResult with Bengali text, confidence, source, and alternatives
      */
     fun convertWord(word: String): ConversionResult = getEngine().convertWord(word)
+
+    /**
+     * Convert for live IME composing text. This is deliberately more
+     * conservative than convertWord() so incomplete words do not jump through
+     * fuzzy/recovery dictionary candidates while the user is still typing.
+     */
+    fun convertForComposing(word: String): ConversionResult = getEngine().convertForComposing(word)
+
+    fun getCompositionPreview(word: String): String = getEngine().getCompositionPreview(word)
 
     /**
      * Parse multi-word input, converting each word and preserving whitespace.

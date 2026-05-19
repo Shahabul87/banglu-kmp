@@ -7,8 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -108,15 +106,17 @@ val LocalKeyboardHeightScale = compositionLocalOf { 1f }
 private data class KeyAlternative(val label: String, val input: String)
 
 // ── Dimensions ───────────────────────────────────────────────────────────────────
-private val NumberRowHeight = 38.dp
-private val KeyRowHeight = 46.dp
+private val NumberRowHeight = 40.dp
+private val LetterKeyRowHeight = 42.dp
+private val BottomKeyRowHeight = 46.dp
 private val SuggestionBarHeight = 34.dp
 private val ToolbarExpandedHeight = 36.dp
 private val ToolbarCollapsedHeight = 28.dp
-private val KeyGapH = 3.dp
+private val KeyGapH = 5.dp
 private val KeyGapV = 6.dp
-private val KeyCorner = 12.dp
-private val KeyboardPadding = 4.dp
+private val KeyVisualPaddingH = 0.dp
+private val KeyCorner = 8.dp
+private val KeyboardPadding = 8.dp
 private val NavigationFallbackBottomPadding = 56.dp
 
 // ── Symbol Layouts ───────────────────────────────────────────────────────────────
@@ -143,10 +143,19 @@ private val LETTER_ROW_2 = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l")
 private val LETTER_ROW_3 = listOf("z", "x", "c", "v", "b", "n", "m")
 
 private fun letterKeyLabel(key: String, shiftState: ShiftState, useShiftedLetterInput: Boolean): String {
-    return if (useShiftedLetterInput && shiftState != ShiftState.OFF) {
+    if (shiftState == ShiftState.OFF) return key.lowercase()
+
+    return if (useShiftedLetterInput) {
         key.uppercase()
     } else {
-        key.lowercase()
+        bangluShiftLabel(key)
+    }
+}
+
+private fun bangluShiftLabel(key: String): String {
+    return when (key.lowercase().first()) {
+        't', 'd', 'r', 'i', 'u' -> key.uppercase()
+        else -> key.lowercase()
     }
 }
 
@@ -183,6 +192,8 @@ fun BangluKeyboardLayout(
     suggestions: List<SmartSuggestion>,
     keyboardMode: KeyboardMode,
     shiftState: ShiftState,
+    voiceInputState: VoiceInputState = VoiceInputState.IDLE,
+    voiceInputLevel: Float = 0f,
     enterLabel: String = "\u21B5",
     isToolbarExpanded: Boolean = false,
     hapticEnabled: Boolean = true,
@@ -210,6 +221,9 @@ fun BangluKeyboardLayout(
     onDismiss: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onToggleToolbar: () -> Unit = {},
+    onVoiceInput: () -> Unit = {},
+    onVoiceStop: () -> Unit = {},
+    onVoiceCancel: () -> Unit = {},
     onEmojiClick: (String) -> Unit = {},
     onEmojiOpen: () -> Unit = {},
     onBackFromEmoji: () -> Unit = {}
@@ -251,9 +265,22 @@ fun BangluKeyboardLayout(
                 ToolbarRow(
                     onSettingsClick = onSettingsClick,
                     onEmojiOpen = onEmojiOpen,
+                    onVoiceInput = onVoiceInput,
+                    voiceInputState = voiceInputState,
                     onToggleToolbar = onToggleToolbar,
                     isExpanded = true
                 )
+            }
+
+            if (voiceInputState != VoiceInputState.IDLE) {
+                VoiceStatusPanel(
+                    state = voiceInputState,
+                    level = voiceInputLevel,
+                    onRetry = onVoiceInput,
+                    onStop = onVoiceStop,
+                    onCancel = onVoiceCancel
+                )
+                Spacer(modifier = Modifier.height(KeyGapV))
             }
 
             when (keyboardMode) {
@@ -410,6 +437,8 @@ fun BangluKeyboardLayout(
 private fun ToolbarRow(
     onSettingsClick: () -> Unit,
     onEmojiOpen: () -> Unit,
+    onVoiceInput: () -> Unit,
+    voiceInputState: VoiceInputState,
     onToggleToolbar: () -> Unit,
     isExpanded: Boolean
 ) {
@@ -427,14 +456,150 @@ private fun ToolbarRow(
         if (isExpanded) {
             ToolbarIcon("\uD83D\uDCCB", "Clipboard") { /* clipboard - future */ }
             ToolbarIcon("\uD83D\uDE0A", "Emoji") { onEmojiOpen() }
+            ToolbarIcon(
+                if (voiceInputState == VoiceInputState.LISTENING) "\uD83D\uDD34" else "\uD83C\uDFA4",
+                "Bangla voice typing"
+            ) { onVoiceInput() }
             ToolbarIcon("\u2699", "Settings") { onSettingsClick() }
-            ToolbarIcon("\uD83D\uDD90", "One-hand mode") { /* one-hand - future */ }
         }
         // Toggle button always visible
         ToolbarIcon(
             if (isExpanded) "\u25B2" else "\u00B7\u00B7\u00B7",
             if (isExpanded) "Collapse toolbar" else "Expand toolbar"
         ) { onToggleToolbar() }
+    }
+}
+
+@Composable
+private fun VoiceStatusPanel(
+    state: VoiceInputState,
+    level: Float,
+    onRetry: () -> Unit,
+    onStop: () -> Unit,
+    onCancel: () -> Unit
+) {
+    val colors = LocalKeyboardColors.current
+    val animatedLevel by animateFloatAsState(
+        targetValue = level.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 120),
+        label = "voiceLevel"
+    )
+    val message = when (state) {
+        VoiceInputState.LISTENING -> "বাংলায় বলুন"
+        VoiceInputState.PROCESSING -> "ভয়েস লেখা হচ্ছে..."
+        VoiceInputState.PERMISSION_REQUIRED -> "মাইক্রোফোন পারমিশন দিন"
+        VoiceInputState.UNAVAILABLE -> "ভয়েস সার্ভিস পাওয়া যায়নি"
+        VoiceInputState.ERROR -> "আবার চেষ্টা করুন"
+        VoiceInputState.IDLE -> ""
+    }
+    val detail = when (state) {
+        VoiceInputState.LISTENING -> "বিরতি দিলেও শুনবে, শেষ হলে থামান"
+        VoiceInputState.PROCESSING -> "একটু অপেক্ষা করুন"
+        VoiceInputState.PERMISSION_REQUIRED -> "Banglu অ্যাপে অনুমতি চালু করুন"
+        VoiceInputState.UNAVAILABLE -> "ডিভাইসে speech service নেই"
+        VoiceInputState.ERROR -> "মাইক চেক করে আবার চেষ্টা করুন"
+        VoiceInputState.IDLE -> ""
+    }
+    val isActive = state == VoiceInputState.LISTENING || state == VoiceInputState.PROCESSING
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (state == VoiceInputState.ERROR || state == VoiceInputState.PERMISSION_REQUIRED)
+                    Color(0xFF3A2424)
+                else
+                    Color(0xFF17281D)
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(21.dp))
+                    .background(if (state == VoiceInputState.LISTENING) Color(0xFF2E7D32) else colors.suggestionChipBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (state == VoiceInputState.LISTENING) "\uD83C\uDFA4" else "\u2022\u2022\u2022",
+                    color = colors.keyText,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 10.dp)
+            ) {
+                Text(
+                    text = message,
+                    color = colors.keyText,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = detail,
+                    color = colors.subText,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (isActive) {
+                VoiceActionButton("থামান", onStop)
+                Spacer(modifier = Modifier.width(6.dp))
+                VoiceActionButton("বাতিল", onCancel)
+            } else {
+                VoiceActionButton("আবার", onRetry)
+            }
+        }
+        if (isActive) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                repeat(18) { index ->
+                    val threshold = (index + 1) / 18f
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(if (animatedLevel >= threshold) 7.dp else 3.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(
+                                if (animatedLevel >= threshold) Color(0xFF66BB6A) else Color(0xFF344338)
+                            )
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VoiceActionButton(label: String, onClick: () -> Unit) {
+    val colors = LocalKeyboardColors.current
+    Box(
+        modifier = Modifier
+            .height(32.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(colors.suggestionChipBg)
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = colors.keyText,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
     }
 }
 
@@ -642,7 +807,7 @@ private fun LetterRows(
     onShiftTap: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
-    val keyHeight = KeyRowHeight * LocalKeyboardHeightScale.current
+    val keyHeight = LetterKeyRowHeight * LocalKeyboardHeightScale.current
 
     // Row 1: q w e r t y u i o p
     Row(
@@ -670,7 +835,7 @@ private fun LetterRows(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(KeyGapH)
     ) {
         for (key in LETTER_ROW_2) {
@@ -698,8 +863,8 @@ private fun LetterRows(
         // Shift key with visual state
         val shiftLabel = when (shiftState) {
             ShiftState.OFF -> "\u21E7"
-            ShiftState.ON -> "\u2B06"        // Filled up arrow
-            ShiftState.CAPS_LOCK -> "\u21EA"  // Caps lock symbol
+            ShiftState.ON -> "\u21E7"
+            ShiftState.CAPS_LOCK -> "\u21EA"
         }
         val shiftBg = when (shiftState) {
             ShiftState.OFF -> colors.specialKeyBg
@@ -765,7 +930,7 @@ private fun SymbolRows(
     onPageToggle: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
-    val keyHeight = KeyRowHeight * LocalKeyboardHeightScale.current
+    val keyHeight = LetterKeyRowHeight * LocalKeyboardHeightScale.current
 
     // Symbol row 1 (10 keys)
     Row(
@@ -855,7 +1020,7 @@ private fun BottomRow(
     onEnter: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
-    val keyHeight = KeyRowHeight * LocalKeyboardHeightScale.current
+    val keyHeight = BottomKeyRowHeight * LocalKeyboardHeightScale.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(KeyGapH)
@@ -919,7 +1084,7 @@ private fun BottomRow(
 private fun KeyButton(
     label: String,
     modifier: Modifier = Modifier,
-    height: Dp = KeyRowHeight,
+    height: Dp = LetterKeyRowHeight,
     bgColor: Color,
     fontSize: Int = 22,
     accessibilityLabel: String = label,
@@ -933,8 +1098,8 @@ private fun KeyButton(
     val hapticOn = LocalHapticEnabled.current
     val soundOn = LocalSoundEnabled.current
     val previewOn = LocalKeyPreviewEnabled.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val currentOnClick by rememberUpdatedState(onClick)
+    var isPressed by remember { mutableStateOf(false) }
     var showAlternatives by remember { mutableStateOf(false) }
 
     // Feature 1.4: Scale UP on press for single-character keys (key preview effect)
@@ -951,49 +1116,53 @@ private fun KeyButton(
         modifier = modifier
             .height(height)
             .semantics { contentDescription = accessibilityLabel }
-            .shadow(if (isPressed) 0.dp else 1.dp, keyShape, clip = false)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(keyShape)
-            .background(if (isPressed) colors.keyPressed else bgColor)
-            .then(
-                if (longPressOptions.isEmpty()) {
-                    Modifier.clickable(
-                        interactionSource = interactionSource,
-                        indication = null
-                    ) {
+            .pointerInput(longPressOptions) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        try {
+                            awaitRelease()
+                        } finally {
+                            isPressed = false
+                        }
+                    },
+                    onTap = {
                         if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
-                        onClick()
+                        currentOnClick()
+                    },
+                    onLongPress = if (longPressOptions.isEmpty()) null else {
+                        {
+                            showAlternatives = true
+                            if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
                     }
-                } else {
-                    Modifier.pointerInput(longPressOptions) {
-                        detectTapGestures(
-                            onTap = {
-                                if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
-                                onClick()
-                            },
-                            onLongPress = {
-                                showAlternatives = true
-                                if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            }
-                        )
-                    }
-                }
-            ),
+                )
+            },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = label,
-            color = colors.keyText,
-            fontSize = if (isPressed && isCharKey && previewOn) (fontSize + 2).sp else fontSize.sp,
-            fontWeight = if (label.length <= 2) FontWeight.Medium else FontWeight.Normal,
-            textAlign = TextAlign.Center,
-            maxLines = 1
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = KeyVisualPaddingH)
+                .shadow(if (isPressed) 0.dp else 1.dp, keyShape, clip = false)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .clip(keyShape)
+                .background(if (isPressed) colors.keyPressed else bgColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                color = colors.keyText,
+                fontSize = if (isPressed && isCharKey && previewOn) (fontSize + 2).sp else fontSize.sp,
+                fontWeight = if (label.length <= 2) FontWeight.Medium else FontWeight.Normal,
+                textAlign = TextAlign.Center,
+                maxLines = 1
+            )
+        }
         if (showAlternatives) {
             Popup(
                 alignment = Alignment.TopCenter,
@@ -1040,7 +1209,7 @@ private fun KeyButton(
 private fun SpaceBar(
     label: String,
     modifier: Modifier = Modifier,
-    height: Dp = KeyRowHeight,
+    height: Dp = BottomKeyRowHeight,
     onClick: () -> Unit,
     onCursorMove: (Int) -> Unit = {}
 ) {
@@ -1049,6 +1218,8 @@ private fun SpaceBar(
     val view = LocalView.current
     val hapticOn = LocalHapticEnabled.current
     val soundOn = LocalSoundEnabled.current
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnCursorMove by rememberUpdatedState(onCursorMove)
     var isPressed by remember { mutableStateOf(false) }
     var isCursorMode by remember { mutableStateOf(false) }
     var lastDragX by remember { mutableFloatStateOf(0f) }
@@ -1062,10 +1233,6 @@ private fun SpaceBar(
         modifier = modifier
             .height(height)
             .semantics { contentDescription = "Space" }
-            .shadow(if (isPressed) 0.dp else 1.dp, keyShape, clip = false)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(keyShape)
-            .background(if (isPressed) colors.keyPressed else colors.keyBg)
             .pointerInput(Unit) {
                 detectDragGesturesAfterLongPress(
                     onDragStart = { offset ->
@@ -1079,7 +1246,7 @@ private fun SpaceBar(
                         val threshold = 15.dp.toPx()
                         if (kotlin.math.abs(dx) > threshold) {
                             val direction = if (dx > 0) 1 else -1
-                            onCursorMove(direction)
+                            currentOnCursorMove(direction)
                             lastDragX = change.position.x
                             if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         }
@@ -1095,21 +1262,32 @@ private fun SpaceBar(
                         if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
                         try { awaitRelease() } finally { isPressed = false }
-                        if (!isCursorMode) onClick()
+                        if (!isCursorMode) currentOnClick()
                     }
                 )
             },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = if (isCursorMode) "\u25C4 \u25BA cursor" else label,
-            color = if (isCursorMode) colors.keyText else colors.keyText.copy(alpha = 0.68f),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = KeyVisualPaddingH)
+                .shadow(if (isPressed) 0.dp else 1.dp, keyShape, clip = false)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .clip(keyShape)
+                .background(if (isPressed) colors.keyPressed else colors.keyBg),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = if (isCursorMode) "\u25C4 \u25BA cursor" else label,
+                color = if (isCursorMode) colors.keyText else colors.keyText.copy(alpha = 0.68f),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -1120,7 +1298,7 @@ private fun SpaceBar(
 @Composable
 private fun BackspaceKey(
     modifier: Modifier = Modifier,
-    height: Dp = KeyRowHeight,
+    height: Dp = LetterKeyRowHeight,
     onBackspace: () -> Unit,
     onBackspaceWord: () -> Unit = {}
 ) {
@@ -1129,6 +1307,8 @@ private fun BackspaceKey(
     val view = LocalView.current
     val hapticOn = LocalHapticEnabled.current
     val soundOn = LocalSoundEnabled.current
+    val currentOnBackspace by rememberUpdatedState(onBackspace)
+    val currentOnBackspaceWord by rememberUpdatedState(onBackspaceWord)
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
@@ -1141,16 +1321,12 @@ private fun BackspaceKey(
         modifier = modifier
             .height(height)
             .semantics { contentDescription = "Backspace" }
-            .shadow(if (isPressed) 0.dp else 1.dp, keyShape, clip = false)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(keyShape)
-            .background(if (isPressed) colors.keyPressed else colors.specialKeyBg)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = {
                         if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
-                        onBackspace()
+                        currentOnBackspace()
                     },
                     onPress = {
                         isPressed = true
@@ -1163,18 +1339,29 @@ private fun BackspaceKey(
                     onLongPress = {
                         if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
-                        onBackspaceWord()
+                        currentOnBackspaceWord()
                     }
                 )
             },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "\u232B",
-            color = colors.keyText,
-            fontSize = 20.sp,
-            textAlign = TextAlign.Center
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = KeyVisualPaddingH)
+                .shadow(if (isPressed) 0.dp else 1.dp, keyShape, clip = false)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .clip(keyShape)
+                .background(if (isPressed) colors.keyPressed else colors.specialKeyBg),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "\u232B",
+                color = colors.keyText,
+                fontSize = 20.sp,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -1196,6 +1383,8 @@ private fun NumberKey(
     val view = LocalView.current
     val hapticOn = LocalHapticEnabled.current
     val soundOn = LocalSoundEnabled.current
+    val currentOnNumberPress by rememberUpdatedState(onNumberPress)
+    val currentOnSymbolPress by rememberUpdatedState(onSymbolPress)
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
@@ -1208,10 +1397,6 @@ private fun NumberKey(
         modifier = modifier
             .height(height)
             .semantics { contentDescription = "Number $number, long press for $symbol" }
-            .shadow(if (isPressed) 0.dp else 1.dp, keyShape, clip = false)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(keyShape)
-            .background(if (isPressed) colors.keyPressed else colors.keyBg)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
@@ -1221,7 +1406,7 @@ private fun NumberKey(
 
                         val longPressJob = coroutineScope.launch {
                             delay(500)
-                            onSymbolPress(symbol)
+                            currentOnSymbolPress(symbol)
                             if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         }
 
@@ -1231,7 +1416,7 @@ private fun NumberKey(
                             isPressed = false
                             if (longPressJob.isActive) {
                                 longPressJob.cancel()
-                                onNumberPress(number)
+                                currentOnNumberPress(number)
                             }
                         }
                     }
@@ -1239,7 +1424,16 @@ private fun NumberKey(
             },
         contentAlignment = Alignment.Center
     ) {
-        Box(modifier = Modifier.fillMaxSize().padding(4.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = KeyVisualPaddingH)
+                .shadow(if (isPressed) 0.dp else 1.dp, keyShape, clip = false)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .clip(keyShape)
+                .background(if (isPressed) colors.keyPressed else colors.keyBg)
+                .padding(4.dp)
+        ) {
             Text(
                 text = number.toString(),
                 color = colors.keyText,
@@ -1269,129 +1463,148 @@ private fun EmojiPanel(
     onDismiss: () -> Unit
 ) {
     var selectedCategory by remember { mutableIntStateOf(0) }
+    val recents = remember { mutableStateListOf<String>() }
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
     val hapticOn = LocalHapticEnabled.current
     val soundOn = LocalSoundEnabled.current
+    val currentCategory = EmojiData.categories.getOrNull(selectedCategory)
+    val currentEmojis = if (selectedCategory == 0 && recents.isNotEmpty()) {
+        recents
+    } else {
+        currentCategory?.emojis.orEmpty()
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(colors.keyboardBg)
     ) {
-        // Category tabs (scrollable row of icons)
+        // Compact Samsung-style category rail.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(38.dp)
+                .height(44.dp)
                 .background(colors.suggestionBg)
-                .padding(horizontal = 2.dp),
+                .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Back to keyboard button
             Box(
                 modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .height(36.dp)
+                    .width(54.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.specialKeyBg)
                     .clickable { onBackToKeyboard() },
                 contentAlignment = Alignment.Center
             ) {
-                Text("ABC", color = colors.suggestionHighlight, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("ABC", color = colors.suggestionHighlight, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
 
-            // Category icons in a scrollable row
             LazyRow(
                 modifier = Modifier
                     .weight(1f)
-                    .height(38.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .height(40.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 itemsIndexed(EmojiData.categories) { index, category ->
                     Box(
                         modifier = Modifier
                             .size(38.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(
                                 if (index == selectedCategory)
-                                    colors.suggestionHighlight.copy(alpha = 0.3f)
+                                    colors.suggestionHighlight.copy(alpha = 0.85f)
                                 else Color.Transparent
                             )
                             .clickable { selectedCategory = index },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(category.icon, fontSize = 18.sp)
+                        Text(
+                            category.icon,
+                            color = if (category.isTextIcon) {
+                                if (index == selectedCategory) Color.White else colors.subText
+                            } else {
+                                Color.Unspecified
+                            },
+                            fontSize = if (category.isTextIcon) 16.sp else 20.sp,
+                            fontWeight = if (category.isTextIcon) FontWeight.Bold else FontWeight.Normal
+                        )
                     }
                 }
             }
 
-            // Dismiss button
             Box(
                 modifier = Modifier
                     .size(38.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .clickable { onDismiss() },
                 contentAlignment = Alignment.Center
             ) {
-                Text("\u2304", color = colors.subText, fontSize = 18.sp)
+                Text("\u25BE", color = colors.subText, fontSize = 22.sp)
             }
         }
 
-        // Category name label
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(20.dp)
-                .background(colors.keyboardBg),
-            contentAlignment = Alignment.CenterStart
-        ) {
-            Text(
-                text = EmojiData.categories.getOrNull(selectedCategory)?.name ?: "",
-                color = colors.subText,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(start = 8.dp)
-            )
-        }
-
-        // Emoji grid
-        val currentEmojis = EmojiData.categories.getOrNull(selectedCategory)?.emojis ?: emptyList()
         LazyVerticalGrid(
-            columns = GridCells.Fixed(7),
+            columns = GridCells.Fixed(8),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(220.dp)
-                .padding(horizontal = 4.dp),
-            contentPadding = PaddingValues(2.dp)
+                .height(282.dp)
+                .padding(horizontal = 6.dp),
+            contentPadding = PaddingValues(top = 6.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             items(currentEmojis.size) { index ->
+                val emoji = currentEmojis[index]
                 Box(
                     modifier = Modifier
                         .aspectRatio(1f)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable {
                             if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
-                            onEmojiClick(currentEmojis[index])
+                            recents.remove(emoji)
+                            recents.add(0, emoji)
+                            while (recents.size > 40) recents.removeAt(recents.lastIndex)
+                            onEmojiClick(emoji)
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(currentEmojis[index], fontSize = 24.sp)
+                    Text(emoji, fontSize = 27.sp)
                 }
             }
         }
 
-        // Bottom row: backspace
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(42.dp)
+                .height(48.dp)
                 .background(colors.keyboardBg)
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.End,
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            KeyButton(
+                label = "ABC",
+                modifier = Modifier.width(74.dp),
+                height = 40.dp,
+                bgColor = colors.specialKeyBg,
+                fontSize = 15,
+                onClick = onBackToKeyboard
+            )
+            Text(
+                text = currentCategory?.name.orEmpty(),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 12.dp),
+                color = colors.subText,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             BackspaceKey(
-                modifier = Modifier.width(56.dp),
+                modifier = Modifier.width(64.dp),
                 onBackspace = onBackspace,
                 onBackspaceWord = onBackspace
             )

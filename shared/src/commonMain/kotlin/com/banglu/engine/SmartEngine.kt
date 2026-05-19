@@ -62,6 +62,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     val narrowingEngine: ProgressiveNarrowingEngine
     private var viterbiDecoder: ViterbiDecoder? = null
     private var disambiguationMap: Map<String, String>? = null
+    private var corpusPhoneticIndex: MutableMap<String, List<String>> = mutableMapOf()
     private var initialized = false
 
     // ======================== LRU Word Cache ========================
@@ -142,6 +143,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "=" to "=",
             "+" to "+",
         )
+
+        private val STABLE_COMPOSITION_FRAGMENTS = setOf(
+            "a", "aa", "i", "ii", "u", "uu", "e", "oi", "o", "ou",
+            "k", "kh", "g", "gh", "ng",
+            "c", "ch", "chh", "j", "jh",
+            "t", "th", "d", "dh", "n",
+            "p", "ph", "f", "b", "bh", "m",
+            "r", "l", "sh", "s", "h", "y", "w", "v"
+        )
     }
 
     init {
@@ -182,11 +192,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             validator.loadWords(words)
             sectionEngine.initialize(validator)
             disambiguator.addKnownWords(words)
+            buildCorpusPhoneticIndex(words)
         }
 
         // Load frequency data
         loader?.loadFrequencyMap()?.let { freqs ->
             validator.loadFrequencies(freqs)
+            sortCorpusPhoneticIndex()
         }
 
         // Load disambiguation map
@@ -210,6 +222,79 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         clearCache()
+    }
+
+    private fun buildCorpusPhoneticIndex(words: List<String>) {
+        val buckets = mutableMapOf<String, MutableList<String>>()
+        val seenByKey = mutableMapOf<String, MutableSet<String>>()
+        val bengaliOnly = Regex("^[\\u0980-\\u09FF]+$")
+        val romanOnly = Regex("^[a-z]+$")
+
+        for (rawWord in words) {
+            val word = rawWord.trim()
+            if (word.length !in 2..18) continue
+            if (!bengaliOnly.matches(word)) continue
+            if (word.endsWith("্")) continue
+
+            val phonetic = ReverseTransliterator.reverseWord(word).lowercase()
+            for (alias in corpusPhoneticAliases(phonetic)) {
+                if (alias.length !in 2..24 || !romanOnly.matches(alias)) continue
+
+                val seen = seenByKey.getOrPut(alias) { mutableSetOf() }
+                if (!seen.add(word)) continue
+                buckets.getOrPut(alias) { mutableListOf() }.add(word)
+            }
+        }
+
+        corpusPhoneticIndex = buckets.mapValues { it.value.toList() }.toMutableMap()
+        sortCorpusPhoneticIndex()
+    }
+
+    private fun corpusPhoneticAliases(phonetic: String): List<String> {
+        val aliases = linkedSetOf(phonetic)
+
+        // User-facing lowercase scheme: c is often intended for ছ, while ch
+        // remains available for চ and legacy inputs. The reverse transliterator
+        // emits ছ as chh, so add c-aliases for every real corpus word containing ছ.
+        if (phonetic.contains("chh")) {
+            aliases.add(phonetic.replace("chh", "c"))
+        }
+
+        return aliases.toList()
+    }
+
+    private fun sortCorpusPhoneticIndex() {
+        if (corpusPhoneticIndex.isEmpty()) return
+
+        corpusPhoneticIndex = corpusPhoneticIndex.mapValues { (_, words) ->
+            words.sortedWith(
+                compareByDescending<String> { validator.getFrequency(it) }
+                    .thenBy { it.length }
+                    .thenBy { it }
+            ).take(16)
+        }.toMutableMap()
+    }
+
+    private fun tryCorpusPhoneticLookup(key: String): ConversionResult? {
+        // Keep one/two-key composing defaults stable: t→ত, ta→তা.
+        if (key.length < 3 || corpusPhoneticIndex.isEmpty()) return null
+
+        val matches = corpusPhoneticIndex[key].orEmpty()
+        if (matches.isEmpty()) return null
+
+        val alternatives = matches
+            .drop(1)
+            .take(config.maxSuggestions - 1)
+            .mapIndexed { index, bengali ->
+                Alternative(bengali, maxOf(0.72, 0.92 - index * 0.04))
+            }
+
+        return ConversionResult(
+            bengali = matches.first(),
+            confidence = 0.96,
+            source = ResolutionSource.DICTIONARY,
+            alternatives = alternatives
+        )
     }
 
     // ======================== SINGLE WORD CONVERSION (7-LAYER PIPELINE) ========================
@@ -251,10 +336,28 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Skip when uppercase forcers are present (except chandrabindu-only N)
         if (!hasCaseMarkers || hasOnlyChandrabinduMarkers) {
             convertByDictionary(key)?.let { result ->
+                tryCorpusPhoneticLookup(key)?.let { corpusResult ->
+                    val dictFreq = validator.getFrequency(result.bengali)
+                    val corpusFreq = validator.getFrequency(corpusResult.bengali)
+                    val corpusClearlyBetter = corpusFreq > dictFreq + 5 || result.confidence < 0.90
+                    if (corpusClearlyBetter) {
+                        cacheResult(cacheKey, corpusResult); return corpusResult
+                    }
+                }
+
                 val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
                 if (ranked.confidence >= config.autoAcceptThreshold) {
                     cacheResult(cacheKey, ranked); return ranked
                 }
+                cacheResult(cacheKey, ranked); return ranked
+            }
+
+            tryCorpusPhoneticLookup(key)?.let { result ->
+                cacheResult(cacheKey, result); return result
+            }
+
+            tryProductiveSuffixConversion(key)?.let { result ->
+                val ranked = applyCandidateLatticeRanking(key, result)
                 cacheResult(cacheKey, ranked); return ranked
             }
 
@@ -370,6 +473,51 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         cacheResult(cacheKey, result)
         return result
     }
+
+    /**
+     * Conservative conversion for live IME composing text.
+     *
+     * This intentionally avoids recovery/fuzzy/section/root layers because a
+     * user's current buffer is usually incomplete while typing. Those aggressive
+     * layers are still used by convertWord() when the word is committed.
+     */
+    fun convertForComposing(input: String): ConversionResult {
+        val trimmed = input.trim()
+        val key = trimmed.lowercase()
+        if (key.isEmpty()) return ConversionResult("", 0.0, ResolutionSource.RULE)
+
+        val hasCaseMarkers = trimmed.any { it.isUpperCase() }
+        if (hasCaseMarkers) {
+            return convertByPatterns(trimmed)
+        }
+
+        val pattern = convertByPatterns(key)
+        if (STABLE_COMPOSITION_FRAGMENTS.contains(key)) {
+            return pattern.copy(alternatives = emptyList())
+        }
+
+        // For completed-looking exact dictionary words, show the smart primary
+        // in the editor. For incomplete prefixes, keep the literal pattern text
+        // stable and let the suggestion row show smart candidates.
+        val dictionaryResult = if (key.length >= 4) convertByDictionary(key) else null
+        if (dictionaryResult != null && dictionaryResult.confidence >= 0.88) {
+            return applyCandidateLatticeRanking(key, dictionaryResult)
+        }
+
+        val corpusResult = tryCorpusPhoneticLookup(key)
+        if (corpusResult != null && corpusResult.confidence >= 0.94) {
+            return corpusResult.copy(alternatives = emptyList())
+        }
+
+        val sectionResult = if (sectionEngine.isReady() && key.length >= 3) convertBySection(key) else null
+        if (sectionResult != null && sectionResult.confidence >= 0.95) {
+            return sectionResult.copy(alternatives = emptyList())
+        }
+
+        return ConversionResult(trimmed, 0.40, ResolutionSource.RULE, emptyList())
+    }
+
+    fun getCompositionPreview(input: String): String = convertForComposing(input).bengali
 
     // ======================== MULTI-WORD CONVERSION ========================
 
@@ -507,6 +655,47 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         for (alt in primary.alternatives) {
             if (seen.add(alt.bengali)) {
                 suggestions.add(SmartSuggestion(alt.bengali, alt.confidence, "alternative", key, "tier0"))
+            }
+            for (variant in getYaOrthographicVariants(alt.bengali)) {
+                if (seen.add(variant)) {
+                    suggestions.add(
+                        SmartSuggestion(
+                            bengali = variant,
+                            confidence = (alt.confidence * 0.98).coerceAtLeast(0.60),
+                            source = "orthographic_variant",
+                            phonetic = key,
+                            tier = "tier0_orthographic"
+                        )
+                    )
+                }
+            }
+        }
+
+        for (variant in getYaOrthographicVariants(primary.bengali)) {
+            if (seen.add(variant)) {
+                suggestions.add(
+                    SmartSuggestion(
+                        bengali = variant,
+                        confidence = 0.93,
+                        source = "orthographic_variant",
+                        phonetic = key,
+                        tier = "tier0_orthographic"
+                    )
+                )
+            }
+        }
+
+        for (bengali in corpusPhoneticIndex[key].orEmpty().take(maxResults)) {
+            if (seen.add(bengali)) {
+                suggestions.add(
+                    SmartSuggestion(
+                        bengali = bengali,
+                        confidence = maxOf(0.72, 0.94 - suggestions.size * 0.03),
+                        source = "corpus_phonetic",
+                        phonetic = key,
+                        tier = "tier0_corpus"
+                    )
+                )
             }
         }
 
@@ -678,9 +867,21 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Global filter: remove hyphenated garbage from 480K dictionary
         return boosted
             .filter { !it.bengali.contains("-") }
-            .filter { hasSuggestionPhoneticFit(key, it.bengali, primary.bengali) }
+            .filter { it.source == "orthographic_variant" || hasSuggestionPhoneticFit(key, it.bengali, primary.bengali) }
             .sortedByDescending { it.confidence }
             .take(limit)
+    }
+
+    private fun getYaOrthographicVariants(bengali: String): List<String> {
+        if (bengali.isEmpty()) return emptyList()
+
+        val variants = linkedSetOf<String>()
+        if (bengali.contains("য")) variants.add(bengali.replace("য", "জ"))
+        if (bengali.contains("জ")) variants.add(bengali.replace("জ", "য"))
+        if (bengali.contains("য়")) variants.add(bengali.replace("য়", "য়"))
+        if (bengali.contains("য়")) variants.add(bengali.replace("য়", "য়"))
+        variants.remove(bengali)
+        return variants.toList()
     }
 
     private fun hasSuggestionPhoneticFit(key: String, bengali: String, primary: String): Boolean {
@@ -904,6 +1105,21 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         val best = ranked[0]
         val alternatives = ranked.drop(1).map { Alternative(it.bengali, it.confidence) }
+        if (best.bengali.endsWith("্")) {
+            val literal = convertByPatterns(key)
+            if (literal.bengali.isNotEmpty() && !literal.bengali.endsWith("্")) {
+                return ConversionResult(
+                    bengali = literal.bengali,
+                    confidence = minOf(best.confidence, 0.93),
+                    source = ResolutionSource.RULE,
+                    alternatives = mergeAlternatives(
+                        listOf(Alternative(best.bengali, minOf(best.confidence, 0.82))) + alternatives,
+                        literal.alternatives,
+                        literal.bengali
+                    )
+                )
+            }
+        }
         return ConversionResult(best.bengali, best.confidence, ResolutionSource.DICTIONARY, alternatives)
     }
 
@@ -1661,7 +1877,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             if (rest.startsWith(token)) return token
         }
 
-        for (token in listOf("th", "dh", "sh", "chh", "ch", "kh", "gh", "jh", "ph", "bh", "rh", "ng", "oi", "oy", "ou", "ow", "ee", "ii", "uu", "oo", "aa")) {
+        for (token in listOf("th", "dh", "sh", "chh", "ch", "kh", "gh", "jh", "ph", "bh", "rh", "ng", "oi", "oy", "ai", "ou", "ow", "ee", "ii", "uu", "oo", "aa")) {
             if (rest.startsWith(token)) return token
         }
 
@@ -1767,6 +1983,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     TokenExpansion("ওয়", 0.78),
                     TokenExpansion("ওই", 0.50, false),
                     TokenExpansion("ঐ", 0.35, false)
+                )
+            }
+        }
+        if (token == "ai") {
+            return if (afterConsonant) {
+                listOf(
+                    TokenExpansion("াই", 0.82),
+                    TokenExpansion("ই", 0.44, false)
+                )
+            } else {
+                listOf(
+                    TokenExpansion("আই", 0.82),
+                    TokenExpansion("ই", 0.38, false)
                 )
             }
         }
@@ -1876,7 +2105,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     private fun applyCandidateLatticeRanking(key: String, result: ConversionResult): ConversionResult {
-        if (key.length < 4 || result.source == ResolutionSource.ENGLISH_PASSTHROUGH) return result
+        if (result.source == ResolutionSource.ENGLISH_PASSTHROUGH) return result
 
         val exactMatches = dictionary.lookup(key)
         val exactMatchRank = mutableMapOf<String, Pair<Int, Int>>()
@@ -1899,7 +2128,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         fun candidatePriority(word: String): Int {
             val exact = exactMatchRank[word]
             if (exact != null) {
-                return 1000 + exact.first * 3 - exact.second
+                val corpusFrequency = if (validator.isLoaded()) validator.getFrequency(word) else 0
+                return if (key.length < 4) {
+                    1000 + corpusFrequency * 4 + exact.first - exact.second
+                } else {
+                    1000 + exact.first * 3 - exact.second
+                }
             }
 
             if (dictionary.getPhoneticForBengali(word) != null) return 500
@@ -1919,9 +2153,21 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val rankedPool = (exactCandidates + lattice)
             .distinctBy { it.bengali }
         val currentIsExact = exactMatchRank.containsKey(result.bengali)
+        val currentKnown = isKnown(result.bengali)
+        val currentPriority = candidatePriority(result.bengali)
+        val currentIsValidated = validator.isLoaded() && validator.isValid(result.bengali)
+        val currentPhoneticFit = phoneticFitScore(key, result.bengali)
+        val currentCorpusFrequency = if (validator.isLoaded()) validator.getFrequency(result.bengali) else 0
         val known = rankedPool.filter {
             if (currentIsExact) {
                 exactMatchRank.containsKey(it.bengali)
+            } else if (key.length < 4) {
+                val candidateFrequency = if (validator.isLoaded()) validator.getFrequency(it.bengali) else 0
+                val gap = if (key.length <= 2) 12 else 3
+                isKnown(it.bengali) &&
+                    validator.hasFrequencyData() &&
+                    candidateFrequency > currentCorpusFrequency + gap &&
+                    phoneticFitScore(key, it.bengali) >= maxOf(0.30, currentPhoneticFit - 0.05)
             } else {
                 isKnown(it.bengali) &&
                     (exactMatchRank.containsKey(it.bengali) || hasConsonantAmbiguityDifference(result.bengali, it.bengali))
@@ -1934,22 +2180,35 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             return result.copy(alternatives = mergeAlternatives(result.alternatives, extras, result.bengali))
         }
 
-        val currentKnown = isKnown(result.bengali)
-        val currentPriority = candidatePriority(result.bengali)
-        val currentIsValidated = validator.isLoaded() && validator.isValid(result.bengali)
         val best = known.maxWithOrNull(
             compareBy<CandidatePath> { candidatePriority(it.bengali) }
+                .thenBy { phoneticFitBucket(phoneticFitScore(key, it.bengali)) }
                 .thenBy { it.score }
         ) ?: return result
 
-        if (!currentIsExact && currentIsValidated && !exactMatchRank.containsKey(best.bengali)) {
+        val bestPhoneticFit = phoneticFitScore(key, best.bengali)
+        val bestCorpusFrequency = if (validator.isLoaded()) validator.getFrequency(best.bengali) else 0
+        val shortCorpusPromotion = key.length < 4 &&
+            validator.hasFrequencyData() &&
+            bestCorpusFrequency > currentCorpusFrequency + (if (key.length <= 2) 12 else 3) &&
+            bestPhoneticFit >= maxOf(0.30, currentPhoneticFit - 0.05)
+        if (
+            !shortCorpusPromotion &&
+            !currentIsExact &&
+            currentIsValidated &&
+            !exactMatchRank.containsKey(best.bengali) &&
+            bestPhoneticFit < currentPhoneticFit + 0.12
+        ) {
             val extras = lattice.take(config.maxSuggestions + 2).map {
                 Alternative(it.bengali, it.score.coerceIn(0.30, 0.90))
             }
             return result.copy(alternatives = mergeAlternatives(result.alternatives, extras, result.bengali))
         }
 
-        val shouldPromote = !currentKnown || candidatePriority(best.bengali) > currentPriority + 1
+        val shouldPromote = !currentKnown ||
+            shortCorpusPromotion ||
+            candidatePriority(best.bengali) > currentPriority + 1 ||
+            bestPhoneticFit >= currentPhoneticFit + 0.12
 
         val extras = lattice.take(config.maxSuggestions + 2).map {
             Alternative(it.bengali, it.score.coerceIn(0.30, 0.90))
@@ -1970,6 +2229,64 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     private fun shouldApplyEarlyCandidateLattice(key: String): Boolean {
         return key.contains("oi") || key.contains("oy")
+    }
+
+    private data class ProductiveSuffix(val phonetic: String, val bengali: String)
+
+    private fun tryProductiveSuffixConversion(key: String): ConversionResult? {
+        val suffixes = listOf(
+            ProductiveSuffix("take", "টাকে"),
+            ProductiveSuffix("tate", "টাতে"),
+            ProductiveSuffix("tao", "টাও"),
+            ProductiveSuffix("tar", "টার"),
+            ProductiveSuffix("tai", "টাই"),
+            ProductiveSuffix("tei", "তেই"),
+            ProductiveSuffix("tuku", "টুকু")
+        )
+
+        for (suffix in suffixes) {
+            if (!key.endsWith(suffix.phonetic) || key.length <= suffix.phonetic.length) continue
+
+            val stemKey = key.dropLast(suffix.phonetic.length)
+            val stemResult = convertByDictionary(stemKey) ?: convertByPatterns(stemKey)
+            var stem = stemResult.bengali
+            if (stem.isEmpty()) continue
+
+            if (stem.endsWith("ো") && suffix.bengali.startsWith("ট")) {
+                stem = stem.dropLast(1)
+            }
+
+            val bengali = stem + suffix.bengali
+            val literal = convertByPatterns(key)
+            val alternatives = (listOf(Alternative(literal.bengali, literal.confidence.coerceAtMost(0.82))) + literal.alternatives)
+                .filter { it.bengali != bengali }
+
+            return ConversionResult(
+                bengali = bengali,
+                confidence = 0.91,
+                source = ResolutionSource.RULE,
+                alternatives = alternatives
+            )
+        }
+
+        return null
+    }
+
+    private fun phoneticFitBucket(score: Double): Int = (score * 100).toInt()
+
+    private fun phoneticFitScore(key: String, bengali: String): Double {
+        if (key.isEmpty() || bengali.isEmpty()) return 0.0
+
+        val dictionaryPhonetic = dictionary.getPhoneticForBengali(bengali)
+        val reversePhonetic = ReverseTransliterator.reverseWord(bengali)
+        val dictionaryScore = dictionaryPhonetic?.let { PhoneticOverlapScorer.score(key, it).score } ?: 0.0
+        val reverseScore = if (reversePhonetic.isNotEmpty()) PhoneticOverlapScorer.score(key, reversePhonetic).score else 0.0
+        val best = maxOf(dictionaryScore, reverseScore)
+        return if (reversePhonetic.isNotEmpty() && !hasCompatibleVowelPath(key, reversePhonetic)) {
+            best * 0.55
+        } else {
+            best
+        }
     }
 
     private fun mergeAlternatives(
@@ -2244,7 +2561,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     )
 
     private val consonantMap = mapOf(
-        'k' to "ক", 'g' to "গ", 'c' to "চ", 'j' to "জ",
+        'k' to "ক", 'g' to "গ", 'c' to "ছ", 'j' to "জ",
         't' to "ত", 'd' to "দ", 'p' to "প", 'b' to "ব",
         'f' to "ফ", 'm' to "ম", 'r' to "র", 'l' to "ল",
         's' to "স", 'h' to "হ", 'v' to "ভ", 'w' to "ও",

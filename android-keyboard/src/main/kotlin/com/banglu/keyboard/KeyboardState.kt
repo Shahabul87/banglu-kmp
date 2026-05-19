@@ -14,6 +14,15 @@ enum class ShiftState {
     CAPS_LOCK   // Uppercase until toggled off
 }
 
+enum class VoiceInputState {
+    IDLE,
+    LISTENING,
+    PROCESSING,
+    PERMISSION_REQUIRED,
+    UNAVAILABLE,
+    ERROR
+}
+
 enum class ThemeMode {
     LIGHT,
     DARK,

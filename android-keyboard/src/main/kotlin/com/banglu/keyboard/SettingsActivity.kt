@@ -61,8 +61,16 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
     var autoCapitalize by remember { mutableStateOf(prefs.getBoolean("auto_capitalize", true)) }
     var doubleSpacePeriod by remember { mutableStateOf(prefs.getBoolean("double_space_period", true)) }
     var suggestions by remember { mutableStateOf(prefs.getBoolean("suggestions", true)) }
-    var hapticFeedback by remember { mutableStateOf(prefs.getBoolean("haptic_feedback", true)) }
-    var soundFeedback by remember { mutableStateOf(prefs.getBoolean("sound_feedback", true)) }
+    var keyFeedbackMode by remember {
+        mutableStateOf(
+            prefs.getString("key_feedback_mode", null)
+                ?: when {
+                    prefs.getBoolean("sound_feedback", true) -> "sound"
+                    prefs.getBoolean("haptic_feedback", true) -> "vibration"
+                    else -> "silent"
+                }
+        )
+    }
     var keyPreview by remember { mutableStateOf(prefs.getBoolean("key_preview", true)) }
     var numberRow by remember { mutableStateOf(prefs.getBoolean("number_row", true)) }
     var themeMode by remember { mutableStateOf(prefs.getString("theme", "auto") ?: "auto") }
@@ -156,13 +164,24 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
             // ── Feedback Section ──
             item { BrandSectionHeader("ফিডব্যাক", "Feedback") }
             item {
-                BrandSwitch("হ্যাপটিক ফিডব্যাক", "কী চাপলে কম্পন", hapticFeedback) {
-                    hapticFeedback = it; saveBoolean("haptic_feedback", it)
-                }
-            }
-            item {
-                BrandSwitch("সাউন্ড", "কী চাপলে ক্লিক শব্দ", soundFeedback) {
-                    soundFeedback = it; saveBoolean("sound_feedback", it)
+                BrandListSetting(
+                    "কী ফিডব্যাক",
+                    when (keyFeedbackMode) {
+                        "silent" -> "সাইলেন্ট"
+                        "vibration" -> "ভাইব্রেশন"
+                        else -> "সাউন্ড"
+                    },
+                    listOf(
+                        "silent" to "সাইলেন্ট",
+                        "vibration" to "ভাইব্রেশন",
+                        "sound" to "সাউন্ড"
+                    ),
+                    keyFeedbackMode
+                ) {
+                    keyFeedbackMode = it
+                    saveString("key_feedback_mode", it)
+                    saveBoolean("haptic_feedback", it == "vibration")
+                    saveBoolean("sound_feedback", it == "sound")
                 }
             }
             item {
@@ -214,7 +233,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                         .clickable {
                             prefs.edit().clear().apply()
                             autoCapitalize = true; doubleSpacePeriod = true; suggestions = true
-                            hapticFeedback = true; soundFeedback = true; keyPreview = true
+                            keyFeedbackMode = "sound"; keyPreview = true
                             numberRow = true; themeMode = "auto"; defaultMode = "banglu"; keyboardHeight = "normal"
                         }
                         .padding(14.dp),

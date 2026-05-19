@@ -1,5 +1,6 @@
 package com.banglu.engine
 
+import com.banglu.engine.types.ResolutionSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -54,6 +55,21 @@ class CandidateLatticeTest {
 
         assertEquals("ঠান্ডা", engine.convertWord("thanda").bengali)
         assertTrue("থান্দা" in suggestions("thanda"))
+    }
+
+    @Test
+    fun composingConversionStaysConservativeUntilCommit() {
+        assertEquals("টাকা", engine.convertWord("taka").bengali)
+        assertEquals("টাকা", engine.convertForComposing("taka").bengali)
+
+        val composingPrefix = engine.convertForComposing("doro")
+        assertTrue(composingPrefix.bengali.isNotEmpty())
+        assertTrue(composingPrefix.source == ResolutionSource.RULE || composingPrefix.source == ResolutionSource.DICTIONARY)
+
+        assertEquals("দরজা", engine.convertWord("doroja").bengali)
+        val composingCompleted = engine.convertForComposing("doroja")
+        assertTrue(composingCompleted.bengali.isNotEmpty())
+        assertTrue(composingCompleted.source == ResolutionSource.RULE || composingCompleted.source == ResolutionSource.DICTIONARY)
     }
 
     @Test
@@ -188,6 +204,26 @@ class CandidateLatticeTest {
             "ডোরযা"
         ).forEach { expected ->
             assertTrue(expected in candidates, "Expected $expected in $candidates")
+        }
+    }
+
+    @Test
+    fun promotesStrongerTypedPathMatchesOverWeakerValidLookingVariants() {
+        val cases = listOf(
+            "etotai" to "এতটাই",
+            "konotai" to "কোনটাই",
+            "somoyotai" to "সময়টাই",
+            "eitai" to "এইটাই",
+            "etai" to "এটাই",
+            "setai" to "সেটাই",
+            "otai" to "ওটাই"
+        )
+
+        for ((input, expected) in cases) {
+            val result = engine.convertWord(input).bengali
+            val candidates = suggestions(input)
+            assertEquals(expected, result, "candidates=$candidates")
+            assertEquals(expected, candidates.first(), "candidates=$candidates")
         }
     }
 
