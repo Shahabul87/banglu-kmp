@@ -642,7 +642,16 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // ── Tier 0: Primary conversion (matching web engine exactly) ──
         val primary = convertWord(key)
         if (primary.bengali.isNotEmpty() && seen.add(primary.bengali)) {
-            suggestions.add(SmartSuggestion(primary.bengali, 1.0, "primary", key, "tier0"))
+            val primaryIsExactDictionary = dictionary.lookup(key).any { it.bengali == primary.bengali }
+            suggestions.add(
+                SmartSuggestion(
+                    primary.bengali,
+                    1.0,
+                    if (primaryIsExactDictionary) "dictionary_exact" else "primary",
+                    key,
+                    "tier0"
+                )
+            )
         }
 
         for (alt in generateAmbiguousCharAlternatives(primary.bengali)) {
@@ -867,9 +876,44 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Global filter: remove hyphenated garbage from 480K dictionary
         return boosted
             .filter { !it.bengali.contains("-") }
-            .filter { it.source == "orthographic_variant" || hasSuggestionPhoneticFit(key, it.bengali, primary.bengali) }
+            .filter { isCleanSuggestion(key, it, primary.bengali) }
             .sortedByDescending { it.confidence }
             .take(limit)
+    }
+
+    private fun isCleanSuggestion(key: String, suggestion: SmartSuggestion, primary: String): Boolean {
+        if (suggestion.bengali.isEmpty()) return false
+        if (Regex("[A-Za-z]").containsMatchIn(suggestion.bengali)) return false
+        if (suggestion.source == "orthographic_variant") return true
+        if (
+            key.length < 3 &&
+            suggestion.source in setOf("dictionary_prefix", "dictionary_fuzzy", "progressive_narrowing", "root_dictionary")
+        ) {
+            return false
+        }
+
+        val isPrimary = suggestion.bengali == primary
+        val isRealWord = if (validator.isLoaded()) {
+            validator.isValid(suggestion.bengali)
+        } else {
+            disambiguator.isKnownWord(suggestion.bengali)
+        }
+
+        if (suggestion.source == "dictionary_exact") return true
+        if (key.contains("ss") && !suggestion.bengali.contains("্")) return false
+
+        if (suggestion.source == "candidate_lattice") {
+            val reversePhonetic = ReverseTransliterator.reverseWord(suggestion.bengali)
+            if (!isPrimary && !isRealWord && hasSuspiciousGeneratedConjunct(suggestion.bengali)) return false
+            return suggestion.confidence >= 0.30 && !hasGeneratedVowelDrift(key, reversePhonetic)
+        }
+
+        if (!isPrimary && !isRealWord) {
+            if (hasSuspiciousGeneratedConjunct(suggestion.bengali)) return false
+            return hasGeneratedSuggestionPhoneticFit(key, suggestion.bengali, primary)
+        }
+
+        return hasSuggestionPhoneticFit(key, suggestion.bengali, primary)
     }
 
     private fun getYaOrthographicVariants(bengali: String): List<String> {
@@ -885,7 +929,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     private fun hasSuggestionPhoneticFit(key: String, bengali: String, primary: String): Boolean {
-        if (key.isEmpty() || bengali.isEmpty() || bengali == primary) return true
+        if (key.isEmpty() || bengali.isEmpty()) return false
+        if (bengali == primary && key.length < 5) return true
 
         val dictionaryPhonetic = dictionary.getPhoneticForBengali(bengali)
         val reversePhonetic = ReverseTransliterator.reverseWord(bengali)
@@ -897,12 +942,43 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             PhoneticOverlapScorer.score(key, reversePhonetic).score
         } else 0.0
 
+        if (dictionaryScore >= 0.90) return true
+        if (key.length >= 5 && reversePhonetic.length < key.length) return false
+
         return if (dictionaryScore >= threshold) {
             reverseScore >= reverseThreshold && hasCompatibleVowelPath(key, reversePhonetic)
         } else {
             reverseScore >= threshold && hasCompatibleVowelPath(key, reversePhonetic)
         }
     }
+
+    private fun hasGeneratedSuggestionPhoneticFit(key: String, bengali: String, primary: String): Boolean {
+        if (key.isEmpty() || bengali.isEmpty() || bengali == primary) return true
+        if (key.length <= 3) return hasSuggestionPhoneticFit(key, bengali, primary)
+
+        val reversePhonetic = ReverseTransliterator.reverseWord(bengali)
+        if (reversePhonetic.isEmpty()) return false
+
+        val reverseScore = PhoneticOverlapScorer.score(key, reversePhonetic).score
+        val threshold = if (key.length >= 6) 0.68 else 0.64
+
+        if (hasGeneratedVowelDrift(key, reversePhonetic)) return false
+
+        return reverseScore >= threshold && hasCompatibleVowelPath(key, reversePhonetic)
+    }
+
+    private fun hasGeneratedVowelDrift(key: String, phonetic: String): Boolean {
+        val keyVowels = vowelPath(key)
+        val candidateVowels = vowelPath(phonetic)
+
+        if (candidateVowels.length > keyVowels.length) return true
+
+        return key.length >= 5 && key.endsWith("oi") && phonetic.endsWith("oy")
+    }
+
+    private fun hasSuspiciousGeneratedConjunct(bengali: String): Boolean =
+        Regex("([কখগঘঙচছজঝঞটঠডঢণতথদধনপফবভমযরলশষসহড়ঢ়য়])্\\1").containsMatchIn(bengali) ||
+            Regex("[সশষ]্[সশষ]").containsMatchIn(bengali)
 
     private fun hasCompatibleVowelPath(key: String, phonetic: String): Boolean {
         if (key.length < 5) return true

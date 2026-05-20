@@ -3,6 +3,7 @@ package com.banglu.engine
 import com.banglu.engine.types.ResolutionSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class CandidateLatticeTest {
@@ -184,6 +185,27 @@ class CandidateLatticeTest {
         assertTrue("বরিসাল" in candidates)
         assertTrue("বরীশাল" in candidates)
         assertTrue("বুষাল" !in candidates, "Unexpected noisy candidate in $candidates")
+    }
+
+    @Test
+    fun filtersGeneratedGarbageWhenRealWordIsKnown() {
+        val candidates = suggestions("obossoi")
+
+        assertEquals("অবশ্যই", candidates.first(), "candidates=$candidates")
+        assertFalse("অবস্যে" in candidates, "Unexpected generated candidate in $candidates")
+        assertFalse("অবোসওই" in candidates, "Unexpected generated candidate in $candidates")
+        assertFalse("অবোসয়" in candidates, "Unexpected generated candidate in $candidates")
+        assertFalse("অবোসওয়" in candidates, "Unexpected generated candidate in $candidates")
+        assertTrue(candidates.none { it.any { ch -> ch in 'a'..'z' || ch in 'A'..'Z' } }, "Mixed-script candidate in $candidates")
+        assertFalse("অবস্সৈ" in candidates, "Unexpected generated candidate in $candidates")
+        assertFalse("অবশ্সৈ" in candidates, "Unexpected generated candidate in $candidates")
+    }
+
+    @Test
+    fun doesNotCollapsePartialSsIntoS() {
+        assertFalse("অবশ" in suggestions("oboss"), "Unexpected partial ss collapse")
+        assertFalse("অবশো" in suggestions("obosso"), "Unexpected partial ss collapse")
+        assertEquals("অবশ্যই", suggestions("obossoi").first())
     }
 
     @Test

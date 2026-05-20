@@ -264,7 +264,8 @@ class SmartDictionary {
             result = result.replace("tt", "t")
             result = result.replace("dd", "d")
             result = result.replace("pp", "p")
-            result = result.replace("ss", "s")
+            // Do not collapse ss→s globally. It creates false partial matches like
+            // oboss→obos→অবশ while the user is heading toward obossoi→অবশ্যই.
             result = result.replace("ll", "l")
             result = result.replace("mm", "m")
             result = result.replace("nn", "n")
