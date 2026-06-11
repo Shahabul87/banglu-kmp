@@ -230,7 +230,7 @@
   {
     "input": "uttro",
     "expected": "উত্ত্র",
-    "category": "typo-correction",
+    "category": "commit-gate-floor",
     "priority": "P0"
   },
   {
@@ -254,7 +254,7 @@
   {
     "input": "sheshprojonto",
     "expected": "শেশ্প্রজন্ত",
-    "category": "layer6-recovery",
+    "category": "commit-gate-floor",
     "priority": "P0"
   },
   {
@@ -380,7 +380,7 @@
   {
     "input": "bariwalader",
     "expected": "বারিওয়ালাদের",
-    "category": "root-decomposition",
+    "category": "commit-gate-floor",
     "priority": "P1"
   },
   {
@@ -506,7 +506,7 @@
   {
     "input": "technology",
     "expected": "তেচ্নলগ্য",
-    "category": "english-detection",
+    "category": "commit-gate-floor",
     "priority": "P1"
   },
   {
@@ -632,7 +632,7 @@
   {
     "input": "nishshobd",
     "expected": "নিশ্শব্দ",
-    "category": "ai-disambiguation",
+    "category": "commit-gate-floor",
     "priority": "P1"
   },
   {
@@ -1382,7 +1382,7 @@
   {
     "input": "abc",
     "expected": "আব্ছ",
-    "category": "edge-cases",
+    "category": "commit-gate-floor",
     "priority": "P2"
   },
   {

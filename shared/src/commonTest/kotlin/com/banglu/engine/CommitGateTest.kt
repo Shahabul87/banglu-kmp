@@ -31,16 +31,40 @@ class CommitGateTest {
 
     @Test
     fun gateAlternativesAreDictionaryClosed() {
-        val result = gatedEngine().convertWord("rafsan")
+        val e = gatedEngine()
+        val result = e.convertWord("rafsan")
         assertTrue(result.alternatives.all {
-            it.bengali in listOf("আমি", "তুমি", "ভাত", "খাই")
-        }, "non-dictionary alternative leaked: ${result.alternatives}")
+            e.isGateApprovedForTest(it.bengali)
+        }, "non-gate-approved alternative leaked: ${result.alternatives}")
     }
 
     @Test
     fun composingFallbackIsGatedForCompleteLookingWords() {
         val result = gatedEngine().convertForComposing("rafsan")
         assertEquals(CleanTransliterator.transliterate("rafsan"), result.bengali)
+    }
+
+    @Test
+    fun gateStaysDisarmedWithoutValidator() {
+        val e = SmartEngine()
+        e.initializeSync()  // seed only — validator never loaded
+        val result = e.convertWord("rafsan")
+        assertTrue(result.source != ResolutionSource.CLEAN_TRANSLITERATION,
+            "gate fired in legacy mode: ${result.source}")
+    }
+
+    @Test
+    fun patternTailOutputInValidatorPassesGate() {
+        val e = SmartEngine()
+        e.initializeSync()
+        // Load the floor transliteration into the validator so the gate's
+        // validator.isValid branch approves the primary output directly.
+        val floor = CleanTransliterator.transliterate("rafsan")
+        e.loadValidatorWords(listOf(floor))
+        val result = e.convertWord("rafsan")
+        // The editor primary must always be gate-approved (validator OR seed/dict).
+        assertTrue(e.isGateApprovedForTest(result.bengali),
+            "editor primary '${result.bengali}' is not gate-approved")
     }
 
     @Test

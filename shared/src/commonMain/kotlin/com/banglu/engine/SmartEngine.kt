@@ -412,7 +412,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     /** Test seam: load validator words directly (production uses initialize(loader)). */
-    fun loadValidatorWords(words: List<String>) {
+    internal fun loadValidatorWords(words: List<String>) {
         validator.loadWords(words)
         clearCache()
     }
@@ -3894,6 +3894,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         )
     }
 
+    /**
+     * Test seam: true when [bengali] is gate-approved — i.e., present in the 480K
+     * validator OR in the seed/user dictionary. Pins the real contract that every
+     * editor primary and every surfaced alternative must be a real or seed word.
+     */
+    internal fun isGateApprovedForTest(bengali: String): Boolean =
+        validator.isValid(bengali) || dictionary.containsBengali(bengali)
+
     private fun applyBengaliRecovery(result: ConversionResult): ConversionResult? {
         val bengali = result.bengali
 
@@ -4034,6 +4042,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     /**
      * Add a custom word to the dictionary.
+     *
+     * Only the single-key [phonetic] entry is evicted from [wordCache]. Callers
+     * adding words after initialization must call [clearCache] so any
+     * commit-gated entries re-evaluate with the updated dictionary.
+     * (SmartEngineAdapter paths that bulk-load words at startup already do this.)
      */
     fun addWord(phonetic: String, bengali: String, frequency: Int) {
         val key = phonetic.lowercase().trim()
