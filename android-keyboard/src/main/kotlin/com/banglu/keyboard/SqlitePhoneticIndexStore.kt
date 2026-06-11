@@ -29,7 +29,7 @@ class SqlitePhoneticIndexStore(
         private const val TAG = "BangluPhoneticIndex"
 
         /** Upper-bound sentinel for prefix range queries (highest Unicode scalar in BMP). */
-        private const val KEY_UPPER_BOUND = '�'
+        private const val KEY_UPPER_BOUND = '￿'
     }
 
     private val db: SQLiteDatabase? = run {
