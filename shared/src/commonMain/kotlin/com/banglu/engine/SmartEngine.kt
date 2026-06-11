@@ -14,6 +14,7 @@ import com.banglu.engine.dictionary.SmartDictionary
 import com.banglu.engine.disambiguation.DisambiguationScorer
 import com.banglu.engine.disambiguation.SwapType
 import com.banglu.engine.platform.DictionaryLoader
+import com.banglu.engine.platform.PhoneticIndexStore
 import com.banglu.engine.platform.PlatformStorage
 import com.banglu.engine.rules.ConjunctResolver
 import com.banglu.engine.rules.ConjunctTable
@@ -67,7 +68,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private var viterbiDecoder: ViterbiDecoder? = null
     private var disambiguationMap: Map<String, String>? = null
     private var corpusPhoneticIndex: MutableMap<String, List<String>> = mutableMapOf()
+    private var phoneticIndex: PhoneticIndexStore? = null
     private var initialized = false
+
+    /** Engine v3: attach the precompiled phonetic index (replaces the runtime corpus index). */
+    fun setPhoneticIndex(store: PhoneticIndexStore?) {
+        phoneticIndex = store
+        clearCache()
+    }
 
     // ======================== LRU Word Cache ========================
 
@@ -400,13 +408,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             validator.loadWords(words)
             sectionEngine.initialize(validator)
             disambiguator.addKnownWords(words)
-            buildCorpusPhoneticIndex(words)
+            if (phoneticIndex == null) buildCorpusPhoneticIndex(words)
         }
 
         // Load frequency data
         loader?.loadFrequencyMap()?.let { freqs ->
             validator.loadFrequencies(freqs)
-            sortCorpusPhoneticIndex()
+            if (phoneticIndex == null) sortCorpusPhoneticIndex()
         }
 
         // Load disambiguation map
@@ -485,7 +493,22 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     private fun tryCorpusPhoneticLookup(key: String): ConversionResult? {
         // Keep one/two-key composing defaults stable: t→ত, ta→তা.
-        if (key.length < 3 || corpusPhoneticIndex.isEmpty()) return null
+        if (key.length < 3) return null
+
+        // Engine v3: precompiled phonetic index (sqlite), replaces the runtime corpus index.
+        phoneticIndex?.let { store ->
+            val hits = store.lookupExact(key).ifEmpty {
+                val normalized = normalizeIndexQuery(key)
+                if (normalized != key) store.lookupExact(normalized) else emptyList()
+            }
+            if (hits.isEmpty()) return null
+            val alternatives = hits.drop(1).take(config.maxSuggestions - 1)
+                .mapIndexed { index, hit -> Alternative(hit.bengali, maxOf(0.72, 0.92 - index * 0.04)) }
+            return ConversionResult(hits.first().bengali, 0.96, ResolutionSource.DICTIONARY, alternatives)
+        }
+
+        // Legacy path (no store attached): runtime-built corpus index
+        if (corpusPhoneticIndex.isEmpty()) return null
 
         val matches = corpusPhoneticIndex[key].orEmpty()
         if (matches.isEmpty()) return null
@@ -504,6 +527,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             alternatives = alternatives
         )
     }
+
+    /**
+     * Query-side typing-habit normalization for index lookups. The compiled
+     * index stores canonical keys plus collapsed aliases (chh→c, ii→i, uu→u);
+     * users may also type ee/oo for long vowels — collapse those here.
+     */
+    private fun normalizeIndexQuery(key: String): String =
+        key.replace("ee", "i").replace("oo", "u")
 
     // ======================== SINGLE WORD CONVERSION (7-LAYER PIPELINE) ========================
 
@@ -529,6 +560,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             val shouldInvalidate = validator.isLoaded()
                 && cached.source != ResolutionSource.DICTIONARY
                 && cached.source != ResolutionSource.ENGLISH_PASSTHROUGH
+                && cached.source != ResolutionSource.ENGLISH_LEXICON
                 && !validator.isValid(cached.bengali)
             if (!shouldInvalidate) return cached
             // Stale cache — re-run conversion with loaded validator
@@ -581,11 +613,20 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             tryCuratedEnglishVariant(key, trimmed)?.let { result ->
                 cacheResult(cacheKey, result); return result
             }
+            tryEnglishLexicon(key, trimmed)?.let { result ->
+                cacheResult(cacheKey, result); return result
+            }
             val result = ConversionResult(trimmed, 1.0, ResolutionSource.ENGLISH_PASSTHROUGH)
             cacheResult(cacheKey, result); return result
         }
 
         tryCorpusPhoneticLookup(key)?.let { result ->
+            cacheResult(cacheKey, result); return result
+        }
+
+        // Lexicon words are English even when EnglishDetector doesn't know them.
+        // Placed AFTER the corpus index so real Bengali words win ambiguous romanizations.
+        tryEnglishLexicon(key, trimmed)?.let { result ->
             cacheResult(cacheKey, result); return result
         }
 
@@ -1599,6 +1640,21 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             confidence = 0.995,
             source = ResolutionSource.DICTIONARY,
             alternatives = alternatives
+        )
+    }
+
+    /**
+     * Engine v3: generated English lexicon (CMUdict-derived, 27,745 loanwords)
+     * from the precompiled index. Curated seed entries must keep beating this:
+     * tryCuratedEnglishVariant is always consulted first in convertWord.
+     */
+    private fun tryEnglishLexicon(key: String, rawInput: String): ConversionResult? {
+        val bengali = phoneticIndex?.lookupEnglish(key) ?: return null
+        return ConversionResult(
+            bengali = bengali,
+            confidence = 0.97,
+            source = ResolutionSource.ENGLISH_LEXICON,
+            alternatives = listOf(Alternative(rawInput, 0.95))
         )
     }
 
