@@ -17,6 +17,7 @@ import com.banglu.engine.platform.DictionaryLoader
 import com.banglu.engine.platform.PhoneticIndexHit
 import com.banglu.engine.platform.PhoneticIndexStore
 import com.banglu.engine.platform.PlatformStorage
+import com.banglu.engine.rules.CleanTransliterator
 import com.banglu.engine.rules.ConjunctResolver
 import com.banglu.engine.rules.ConjunctTable
 import com.banglu.engine.rules.NasalResolver
@@ -410,6 +411,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         initialized = true
     }
 
+    /** Test seam: load validator words directly (production uses initialize(loader)). */
+    fun loadValidatorWords(words: List<String>) {
+        validator.loadWords(words)
+        clearCache()
+    }
+
     /**
      * Async initialization: loads extended dictionaries, 480K word list,
      * frequency data, disambiguation map, bigram model, and learned words.
@@ -621,6 +628,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 && cached.source != ResolutionSource.DICTIONARY
                 && cached.source != ResolutionSource.ENGLISH_PASSTHROUGH
                 && cached.source != ResolutionSource.ENGLISH_LEXICON
+                // Gated OOV floor results are produced only AFTER the validator
+                // loads and are intentionally not validator words — never stale.
+                && cached.source != ResolutionSource.CLEAN_TRANSLITERATION
                 && !validator.isValid(cached.bengali)
             if (!shouldInvalidate) return cached
             // Stale cache — re-run conversion with loaded validator
@@ -745,7 +755,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Gate: only fire on longer inputs (>= 6 chars) where pattern engine output is less trustworthy
         if (key.length >= 6 && validator.isLoaded() && !validator.isValid(result.bengali) && result.bengali.length >= 3) {
             applyBengaliRecovery(result)?.let { recovered ->
-                cacheResult(cacheKey, recovered); return recovered
+                val gated = applyCommitGate(key, recovered)
+                cacheResult(cacheKey, gated); return gated
             }
         }
 
@@ -764,8 +775,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                             Alternative(result.bengali, result.confidence)
                         ) + result.alternatives
                     )
-                    cacheResult(cacheKey, correctedResult)
-                    return correctedResult
+                    val gated = applyCommitGate(key, correctedResult)
+                    cacheResult(cacheKey, gated)
+                    return gated
                 }
             }
 
@@ -780,12 +792,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                         Alternative(result.bengali, result.confidence)
                     ) + result.alternatives
                 )
-                cacheResult(cacheKey, fuzzyResult)
-                return fuzzyResult
+                val gated = applyCommitGate(key, fuzzyResult)
+                cacheResult(cacheKey, gated)
+                return gated
             }
         }
 
         result = applyCandidateLatticeRanking(key, result)
+        result = applyCommitGate(key, result)
 
         cacheResult(cacheKey, result)
         return result
@@ -845,10 +859,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // V2 parity: the live editor should still show the rule-composed Bangla
         // token. Suggestions/dictionary layers can promote smarter completed words,
         // but the fallback must not be raw Latin while the user is typing.
-        return pattern.copy(
+        val fallback = pattern.copy(
             confidence = minOf(pattern.confidence, 0.84),
             alternatives = emptyList()
         )
+        // Short fragments are usually incomplete words mid-typing — keep them live.
+        if (key.length < 4) return fallback
+        return applyCommitGate(key, fallback).copy(alternatives = emptyList())
     }
 
     fun getCompositionPreview(input: String): String = convertForComposing(input).bengali
@@ -3840,6 +3857,43 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * For longer inputs, similarity matters MORE and frequency matters LESS
      * (user typed enough characters to disambiguate — trust the input).
      */
+    /** Engine v3 commit gate (spec 3.3): is this result allowed as editor primary? */
+    private fun isGateApproved(result: ConversionResult): Boolean = when {
+        result.bengali.isEmpty() -> true
+        result.source == ResolutionSource.ENGLISH_PASSTHROUGH -> true
+        result.source == ResolutionSource.ENGLISH_LEXICON -> true
+        result.source == ResolutionSource.CLEAN_TRANSLITERATION -> true
+        validator.isValid(result.bengali) -> true
+        dictionary.containsBengali(result.bengali) -> true   // seed + learned/user words
+        else -> false
+    }
+
+    /**
+     * Engine v3 commit gate: the editor primary must ALWAYS be a real dictionary
+     * word, an English-lexicon entry, a user/seed word, or the clean deterministic
+     * transliteration — never an ambiguity-swapped or invented Bengali string.
+     * Armed only when the 480K validator is loaded; seed-only engines (JVM unit
+     * tests, pre-init) keep legacy pattern-tail behavior.
+     */
+    private fun applyCommitGate(key: String, result: ConversionResult): ConversionResult {
+        if (!validator.isLoaded()) return result          // gate armed only with real dictionary
+        // CleanTransliterator contract: digits/punctuation must be handled by the
+        // caller. Tokens with non-letter characters (e.g. "123", "k,,") are never
+        // ambiguity-swapped Bengali inventions — keep the pattern-engine output.
+        if (key.any { it !in 'a'..'z' }) return result
+        if (isGateApproved(result)) return result
+        val clean = CleanTransliterator.transliterate(key)
+        val dictionaryClosedAlternatives = result.alternatives
+            .filter { validator.isValid(it.bengali) || dictionary.containsBengali(it.bengali) }
+            .take(3)
+        return ConversionResult(
+            bengali = clean,
+            confidence = 0.60,
+            source = ResolutionSource.CLEAN_TRANSLITERATION,
+            alternatives = dictionaryClosedAlternatives
+        )
+    }
+
     private fun applyBengaliRecovery(result: ConversionResult): ConversionResult? {
         val bengali = result.bengali
 

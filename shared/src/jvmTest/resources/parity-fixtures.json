@@ -229,7 +229,7 @@
   },
   {
     "input": "uttro",
-    "expected": "উট্রো",
+    "expected": "উত্ত্র",
     "category": "typo-correction",
     "priority": "P0"
   },
@@ -253,7 +253,7 @@
   },
   {
     "input": "sheshprojonto",
-    "expected": "শেষ্পরজন্তো",
+    "expected": "শেশ্প্রজন্ত",
     "category": "layer6-recovery",
     "priority": "P0"
   },
@@ -379,7 +379,7 @@
   },
   {
     "input": "bariwalader",
-    "expected": "বাঋওআলাদের",
+    "expected": "বারিওয়ালাদের",
     "category": "root-decomposition",
     "priority": "P1"
   },
@@ -505,7 +505,7 @@
   },
   {
     "input": "technology",
-    "expected": "তেচনলজ্ঞ",
+    "expected": "তেচ্নলগ্য",
     "category": "english-detection",
     "priority": "P1"
   },
@@ -631,7 +631,7 @@
   },
   {
     "input": "nishshobd",
-    "expected": "নিষষব্দ",
+    "expected": "নিশ্শব্দ",
     "category": "ai-disambiguation",
     "priority": "P1"
   },
@@ -1381,7 +1381,7 @@
   },
   {
     "input": "abc",
-    "expected": "আবছ",
+    "expected": "আব্ছ",
     "category": "edge-cases",
     "priority": "P2"
   },

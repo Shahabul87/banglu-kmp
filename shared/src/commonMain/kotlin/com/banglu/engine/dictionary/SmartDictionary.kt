@@ -198,6 +198,12 @@ class SmartDictionary {
         return bengaliToPhonetic[bengali]
     }
 
+    /** True if [bengali] is a seed/extended/learned entry (Engine v3 commit gate). */
+    fun containsBengali(bengali: String): Boolean {
+        ensureInitialized()
+        return bengaliToPhonetic.containsKey(bengali)
+    }
+
     /**
      * Get dictionary statistics.
      */
