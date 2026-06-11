@@ -207,6 +207,20 @@ not lower it.
 | dictionary.sqlite size | **104 MB** (was 77 MB; 115 MB before word_id normalization) | ≤105 MB | PASS — `phonetic_index` stores `word_id` (join to `words`), not Bengali text |
 | Unmapped index rows after normalization | 0 | — | every row joins to a word |
 
+### Regression baseline (Phase 2 deletion gate)
+
+Recorded 2026-06-11 from `./gradlew :shared:jvmTest --rerun` (aggregated from `shared/build/test-results/jvmTest/*.xml`):
+
+- **Total: 359 tests, 0 failures, 0 skipped** (`:dictionary-compiler:test`: 27 tests, separate module). Any Phase 2 deletion PR must keep this suite green.
+- Acceptance suite (`EngineV3AcceptanceTest`, 5 tests encoding spec §4 scenarios):
+  - `irregularVariantsAllReachTheSameWord` — accha/assa/acca → আচ্ছা
+  - `mixedEnglishBengaliSentence` — scooter → স্কুটার, play → প্লে, "ami scooter" parses mixed
+  - `editorNeverShowsInventedStrings` — alien input ("kkkkx") commits CLEAN_TRANSLITERATION, never a pattern guess
+  - `namesGetReadableTransliterationAndRawStaysReachable` — "rafsan" → readable Bengali floor, no roman residue
+  - `tierBWordsResolveOnExactMatchOnly` — Tier B index entry resolves on its exact key
+- Suggestion-quality benchmark (`SuggestionQualityBenchmarkTest`, 5 tests, all green): 74-case common-word set — 100% exact conversion, 100% top-3 suggestion presence, exact-dictionary-before-composer ranking invariant, latency budgets met (budgets: <10 ms/op conversion over 1,480 ops, <20 ms/op suggestions over 740 ops; full-test wall times 0.024 s and 0.297 s respectively, JUnit XML). It asserts pass/fail rather than printing a score; the baseline observation is "0 misses on all 74 cases".
+- Tier note: all 563,998 compiled index rows are currently **Tier A** — the frequency file covers the full corpus, so the tier criterion `freq > 0` marks everything suggestible. A frequency-threshold parameter is needed when prefix-suggestions land (recorded for Phase 2).
+
 ## 10. Decisions log
 
 | Decision | Choice | Date |
