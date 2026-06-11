@@ -67,6 +67,7 @@ fun main(args: Array<String>) {
         // 3. Insert words with frequencies
         println("Inserting words...")
         val insertWord = connection.prepareStatement("INSERT INTO words (bengali, frequency) VALUES (?, ?)")
+        val wordIdByBengali = HashMap<String, Int>(bengaliWords.size * 2)
         var count = 0
         for (wordElement in bengaliWords) {
             val word = wordElement.jsonPrimitive.content
@@ -75,6 +76,8 @@ fun main(args: Array<String>) {
             insertWord.setInt(2, freq)
             insertWord.addBatch()
             count++
+            // id == insertion ordinal (AUTOINCREMENT starts at 1)
+            wordIdByBengali.putIfAbsent(word, count)
             if (count % 10000 == 0) {
                 insertWord.executeBatch()
                 print("\r  Inserted $count words...")
@@ -94,12 +97,19 @@ fun main(args: Array<String>) {
         println("  Dropped keys: ${report.droppedKeys}, words with no rows: ${report.wordsWithNoRows}")
 
         val insertIndex = connection.prepareStatement(
-            "INSERT INTO phonetic_index (key, bengali, frequency, tier) VALUES (?, ?, ?, ?)"
+            "INSERT INTO phonetic_index (key, word_id, frequency, tier) VALUES (?, ?, ?, ?)"
         )
         var indexCount = 0
+        var unmappedCount = 0
         for (row in indexRows) {
+            val wordId = wordIdByBengali[row.bengali]
+                ?: wordIdByBengali[row.bengali.trim()]
+            if (wordId == null) {
+                unmappedCount++
+                continue
+            }
             insertIndex.setString(1, row.key)
-            insertIndex.setString(2, row.bengali)
+            insertIndex.setInt(2, wordId)
             insertIndex.setInt(3, row.frequency)
             insertIndex.setInt(4, row.tier)
             insertIndex.addBatch()
@@ -107,6 +117,9 @@ fun main(args: Array<String>) {
         }
         insertIndex.executeBatch()
         println("  Inserted $indexCount phonetic index rows")
+        if (unmappedCount > 0) {
+            println("  WARNING: $unmappedCount phonetic index rows had no matching word_id (unmapped)")
+        }
 
         // 3c. Build English lexicon (Engine v3)
         val dataDir = sequenceOf(File("data"), File("dictionary-compiler/data")).firstOrNull { it.isDirectory }
@@ -267,6 +280,7 @@ fun main(args: Array<String>) {
             "total_unigrams" to totalUnigrams.toString(),
             "total_bigrams" to totalBigrams.toString(),
             "phonetic_index_count" to indexCount.toString(),
+            "phonetic_unmapped_rows" to unmappedCount.toString(),
             "phonetic_roundtrip_coverage" to "%.2f".format(java.util.Locale.ROOT, report.coveragePercent),
             "phonetic_dropped_keys" to report.droppedKeys.toString(),
             "phonetic_words_no_rows" to report.wordsWithNoRows.toString(),
@@ -360,7 +374,7 @@ private fun createTables(connection: Connection) {
         execute("""
             CREATE TABLE phonetic_index (
                 key TEXT NOT NULL,
-                bengali TEXT NOT NULL,
+                word_id INTEGER NOT NULL,
                 frequency INTEGER DEFAULT 0,
                 tier INTEGER NOT NULL DEFAULT 1
             )
