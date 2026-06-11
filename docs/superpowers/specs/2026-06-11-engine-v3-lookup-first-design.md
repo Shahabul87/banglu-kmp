@@ -194,7 +194,20 @@ not lower it.
 - Sentence-level rewriting or transformer/ML models — the bigram model is the
   only context signal in v3.
 
-## 9. Decisions log
+## 9. Phase 1 measurements (recorded 2026-06-11, compiler run over real corpus)
+
+| Metric | Value | Gate | Verdict |
+|---|---|---|---|
+| Corpus words | 484,996 (480,058 index-eligible after length/script filters) | — | — |
+| Phonetic index rows | 563,998 (~1.17 keys/word) | — | — |
+| Round-trip coverage | **38.7%** (185,746/480,058) | informational | Deterministic floor reproduces ~39% of words exactly; the index (not round-trip) drives conversion, but this number sizes the future variant-mining backlog |
+| Words with zero index keys | 15,811 (3.3%, visarga-class & >24-char keys) | no silent caps | Counted + recorded in metadata (`phonetic_words_no_rows`); follow-up: extend ReverseTransliterator visarga mapping |
+| Dropped keys | 18,579 | — | recorded (`phonetic_dropped_keys`) |
+| English lexicon entries | 27,745 (2 unconvertible) | — | scooter→স্কুটার, internet→ইন্টারনেট verified |
+| dictionary.sqlite size | **104 MB** (was 77 MB; 115 MB before word_id normalization) | ≤105 MB | PASS — `phonetic_index` stores `word_id` (join to `words`), not Bengali text |
+| Unmapped index rows after normalization | 0 | — | every row joins to a word |
+
+## 10. Decisions log
 
 | Decision | Choice | Date |
 |---|---|---|
