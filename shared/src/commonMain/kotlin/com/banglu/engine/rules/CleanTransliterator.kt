@@ -101,9 +101,16 @@ object CleanTransliterator {
                 val c = CONSONANTS[unit]
                 if (c != null) {
                     if (unit == "y" && prevWasConsonant) {
-                        // ya-phala: hasanta + য (U+09AF), not হাসান্ত + য় (U+09DF)
+                        // ya-phala: hasanta + য (U+09AF), not হসন্ত + য় (U+09DF)
                         out.append(HASANTA).append("য")
                         prevWasConsonant = true
+                    } else if (unit == "w" && c == "ও") {
+                        // bare w (not followed by vowel) emits the independent vowel ও.
+                        // Independent vowels must never be hasanta-joined on either side.
+                        // Do NOT prepend hasanta, and reset prevWasConsonant so a following
+                        // vowel emits its independent form rather than a kar.
+                        out.append(c)
+                        prevWasConsonant = false
                     } else {
                         if (prevWasConsonant && c != ANUSVARA) out.append(HASANTA)
                         out.append(c)

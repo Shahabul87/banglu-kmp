@@ -44,6 +44,12 @@ class CleanTransliteratorTest {
         val out = t("abcdefghijklmnopqrstuvwxyz")
         assertEquals(out, t("abcdefghijklmnopqrstuvwxyz"))
         assertTrue(out.none { it in 'a'..'z' }, "residual latin in $out")
+        // Invariant: hasanta must never be adjacent to an independent vowel letter
+        val independentVowels = "অআইঈউঊঋএঐওঔ"
+        out.zipWithNext().forEach { (a, b) ->
+            assertTrue(!(a == '্' && b in independentVowels) && !(a in independentVowels && b == '্'),
+                "hasanta adjacent to independent vowel in $out")
+        }
     }
 
     // ── Fix 1: w + vowel → ওয় glide unit ────────────────────────────────────
@@ -61,6 +67,20 @@ class CleanTransliteratorTest {
         // Trace: h→হ(pWC=true), a→া(pWC=false), w(a follows,pWC=false)→ওয়(no hasanta,pWC=true), a→া(pWC=false)
         // = হাওয়া ✓
         assertEquals("হাওয়া", t("hawa"))
+    }
+
+    // ── Fix: bare w (no following vowel) emits ও — never hasanta-joined ────────
+
+    @Test
+    fun wNotFollowedByVowel() {
+        // newton: n→ন, e→ে (kar), w(next='t', not vowel)→ও (no hasanta, pWC=false),
+        //         t→ত (pWC was false, no hasanta), o→"" (inherent), n→ন
+        // = নেওতন
+        assertEquals("নেওতন", t("newton"))
+
+        // ww: first w→ও (pWC=false), second w→ও (pWC still false, no hasanta)
+        // = ওও
+        assertEquals("ওও", t("ww"))
     }
 
     // ── Fix 2: post-consonant y → ya-phala (্য not ্য়) ─────────────────────
