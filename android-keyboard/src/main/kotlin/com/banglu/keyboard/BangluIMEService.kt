@@ -148,6 +148,7 @@ class BangluIMEService : InputMethodService(),
     private var lastAutoCorrectPhonetic = ""
     private val recentEmojis = mutableStateListOf<String>()
     private var loadedDictionaryLiteMode: Boolean? = null
+    private var phoneticIndexStore: SqlitePhoneticIndexStore? = null
     private var recentEmojisLoaded = false
     private var clipboardHistoryLoaded = false
     private var sessionBangluKeyCount = 0
@@ -583,6 +584,7 @@ class BangluIMEService : InputMethodService(),
                 val dictionaryLoader = createDictionaryLoader()
                 log("onCreate: Loading learned words...")
                 SmartEngineAdapter.initialize(storage, loader = dictionaryLoader)
+                attachPhoneticIndexStore()
                 loadedDictionaryLiteMode = shouldUseLiteDictionary()
                 log("onCreate: Learned words loaded")
             } catch (t: Throwable) {
@@ -605,12 +607,31 @@ class BangluIMEService : InputMethodService(),
                     AndroidStorage(applicationContext),
                     loader = createDictionaryLoader()
                 )
+                attachPhoneticIndexStore()
                 loadedDictionaryLiteMode = liteMode
                 log("reloadUserLearning: active profile preferences loaded")
             } catch (t: Throwable) {
                 if (BuildConfig.DEBUG) Log.e(TAG, "reloadUserLearning: failed", t)
             }
         }
+    }
+
+    /**
+     * Engine v3: attach the sqlite phonetic index store. MUST run AFTER
+     * SmartEngineAdapter.initialize() completes so (a) the db file is guaranteed
+     * copied from assets and (b) the frequency map is loaded, keeping dict-vs-corpus
+     * ranking on consistent frequencies. The engine's initialize-time runtime corpus
+     * index has already been built at that point; setPhoneticIndex(store) frees it
+     * (acceptable transient cost for now — see Task 8 review notes).
+     *
+     * Called from both engine-init paths (onCreate and reloadUserLearningAsync),
+     * so the previous connection is closed first to avoid leaks on re-init.
+     */
+    private fun attachPhoneticIndexStore() {
+        phoneticIndexStore?.close()
+        phoneticIndexStore = SqlitePhoneticIndexStore(File(filesDir, "dictionary.sqlite"))
+            .takeIf { it.isAvailable }
+        SmartEngineAdapter.setPhoneticIndex(phoneticIndexStore)
     }
 
     private fun createDictionaryLoader(): AndroidDictionaryLoader {
@@ -814,6 +835,11 @@ class BangluIMEService : InputMethodService(),
         previousUncaughtExceptionHandler?.let { Thread.setDefaultUncaughtExceptionHandler(it) }
         previousUncaughtExceptionHandler = null
         SmartEngineAdapter.configurePersistenceScope(null)
+        // Engine v3: close the sqlite connection only — do NOT setPhoneticIndex(null)
+        // (null-detach leaves corpus lookups empty; see SmartEngine.setPhoneticIndex KDoc).
+        // Queries after close fail soft to empty lists, which is safe during teardown.
+        phoneticIndexStore?.close()
+        phoneticIndexStore = null
         releaseSpeechRecognizer()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         serviceScope.cancel()

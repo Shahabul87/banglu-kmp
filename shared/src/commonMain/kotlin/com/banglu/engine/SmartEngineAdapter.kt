@@ -85,6 +85,15 @@ object SmartEngineAdapter {
     }
 
     /**
+     * Engine v3: attach the precompiled phonetic index store (Android: sqlite-backed).
+     * Call AFTER [initialize] so dictionary frequencies and the db file are ready;
+     * see [SmartEngine.setPhoneticIndex] for null-detach semantics.
+     */
+    fun setPhoneticIndex(store: com.banglu.engine.platform.PhoneticIndexStore?) {
+        getEngine().setPhoneticIndex(store)
+    }
+
+    /**
      * Convert a single phonetic word to Bengali text.
      *
      * @param word English phonetic input (e.g., "ami")
