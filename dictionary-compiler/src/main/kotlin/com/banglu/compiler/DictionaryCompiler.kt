@@ -90,7 +90,7 @@ fun main(args: Array<String>) {
         val indexRows = PhoneticIndexBuilder.build(wordList, freqMap)
         val report = PhoneticIndexBuilder.lastReport
         println("  Rows: ${report.totalRows}, round-trip coverage: " +
-            "${"%.1f".format(report.coveragePercent)}% (${report.roundTripOk}/${report.totalWords})")
+            "${"%.1f".format(java.util.Locale.ROOT, report.coveragePercent)}% (${report.roundTripOk}/${report.totalWords})")
         println("  Dropped keys: ${report.droppedKeys}, words with no rows: ${report.wordsWithNoRows}")
 
         val insertIndex = connection.prepareStatement(
@@ -267,7 +267,7 @@ fun main(args: Array<String>) {
             "total_unigrams" to totalUnigrams.toString(),
             "total_bigrams" to totalBigrams.toString(),
             "phonetic_index_count" to indexCount.toString(),
-            "phonetic_roundtrip_coverage" to "%.2f".format(report.coveragePercent),
+            "phonetic_roundtrip_coverage" to "%.2f".format(java.util.Locale.ROOT, report.coveragePercent),
             "phonetic_dropped_keys" to report.droppedKeys.toString(),
             "phonetic_words_no_rows" to report.wordsWithNoRows.toString(),
             "english_lexicon_count" to englishCount.toString(),
@@ -365,7 +365,7 @@ private fun createTables(connection: Connection) {
                 tier INTEGER NOT NULL DEFAULT 1
             )
         """)
-        execute("CREATE INDEX idx_phonetic_index_key ON phonetic_index(key)")
+        execute("CREATE INDEX idx_phonetic_index_key ON phonetic_index(key, tier)")
 
         execute("""
             CREATE TABLE english_lexicon (
