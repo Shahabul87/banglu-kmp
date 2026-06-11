@@ -14,6 +14,7 @@ import com.banglu.engine.dictionary.SmartDictionary
 import com.banglu.engine.disambiguation.DisambiguationScorer
 import com.banglu.engine.disambiguation.SwapType
 import com.banglu.engine.platform.DictionaryLoader
+import com.banglu.engine.platform.PhoneticIndexHit
 import com.banglu.engine.platform.PhoneticIndexStore
 import com.banglu.engine.platform.PlatformStorage
 import com.banglu.engine.rules.ConjunctResolver
@@ -71,9 +72,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private var phoneticIndex: PhoneticIndexStore? = null
     private var initialized = false
 
-    /** Engine v3: attach the precompiled phonetic index (replaces the runtime corpus index). */
+    /**
+     * Engine v3: attach the precompiled phonetic index (replaces the runtime corpus index).
+     *
+     * Attaching a store frees the runtime-built corpus map. Note: attaching null
+     * AFTER store-mode initialization leaves corpus lookups empty until the engine
+     * is re-initialized (buildCorpusPhoneticIndex is skipped in store mode); this
+     * is acceptable because detaching a store is only done in tests.
+     */
     fun setPhoneticIndex(store: PhoneticIndexStore?) {
         phoneticIndex = store
+        if (store != null) corpusPhoneticIndex = mutableMapOf()
         clearCache()
     }
 
@@ -82,6 +91,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private val wordCache = object : LinkedHashMap<String, ConversionResult>(256, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ConversionResult>?): Boolean {
             return size > MAX_CACHE
+        }
+    }
+
+    /**
+     * LRU memo over [PhoneticIndexStore.lookupExact]. The composing preview and
+     * the suggestion strip both query the same key on every keystroke; this
+     * dedupes the double store read. Cleared in [clearCache] (and therefore on
+     * [setPhoneticIndex]).
+     */
+    private val storeLookupMemo = object : LinkedHashMap<String, List<PhoneticIndexHit>>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<PhoneticIndexHit>>?): Boolean {
+            return size > MAX_STORE_MEMO
         }
     }
 
@@ -125,6 +146,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     companion object {
         const val MAX_CACHE = 2000
+        private const val MAX_STORE_MEMO = 128
         private const val MAX_SUGGESTION_CANDIDATES = 40
 
         /** Bengali digits ০-৯ */
@@ -491,15 +513,53 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }.toMutableMap()
     }
 
+    /**
+     * Single memoized entry point for all [PhoneticIndexStore.lookupExact] reads.
+     * Returns an empty list when no store is attached.
+     */
+    private fun storeLookup(key: String): List<PhoneticIndexHit> {
+        val store = phoneticIndex ?: return emptyList()
+        storeLookupMemo[key]?.let { return it }
+        val hits = store.lookupExact(key)
+        storeLookupMemo[key] = hits
+        return hits
+    }
+
+    /**
+     * Suggestible (Tier A) corpus words for [key], frequency-descending.
+     * Store mode reads the precompiled index; legacy mode reads the
+     * runtime-built corpus map (already sorted frequency-descending).
+     */
+    private fun corpusWordsFor(key: String): List<String> =
+        if (phoneticIndex != null) {
+            storeLookup(key).filter { it.tier == PhoneticIndexHit.TIER_A }.map { it.bengali }
+        } else {
+            corpusPhoneticIndex[key].orEmpty()
+        }
+
+    /**
+     * Frequency of [bengali] in the attached store for [key] (0 when no store,
+     * or no such entry). Mirrors tryCorpusPhoneticLookup's normalized-key
+     * fallback so hits found via ee→i/oo→u collapse rank with their real
+     * frequency. Cheap: backed by the [storeLookupMemo].
+     */
+    private fun storeFrequencyOf(key: String, bengali: String): Int {
+        if (phoneticIndex == null) return 0
+        storeLookup(key).firstOrNull { it.bengali == bengali }?.let { return it.frequency }
+        val normalized = normalizeIndexQuery(key)
+        if (normalized == key) return 0
+        return storeLookup(normalized).firstOrNull { it.bengali == bengali }?.frequency ?: 0
+    }
+
     private fun tryCorpusPhoneticLookup(key: String): ConversionResult? {
         // Keep one/two-key composing defaults stable: t→ত, ta→তা.
         if (key.length < 3) return null
 
         // Engine v3: precompiled phonetic index (sqlite), replaces the runtime corpus index.
-        phoneticIndex?.let { store ->
-            val hits = store.lookupExact(key).ifEmpty {
+        phoneticIndex?.let {
+            val hits = storeLookup(key).ifEmpty {
                 val normalized = normalizeIndexQuery(key)
-                if (normalized != key) store.lookupExact(normalized) else emptyList()
+                if (normalized != key) storeLookup(normalized) else emptyList()
             }
             if (hits.isEmpty()) return null
             val alternatives = hits.drop(1).take(config.maxSuggestions - 1)
@@ -595,7 +655,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         convertByDictionary(key)?.let { result ->
             tryCorpusPhoneticLookup(key)?.let { corpusResult ->
                 val dictFreq = validator.getFrequency(result.bengali)
-                val corpusFreq = validator.getFrequency(corpusResult.bengali)
+                // Store words live outside the 480K validator: without the store
+                // frequency they would always score 0 here and could never win.
+                val corpusFreq = maxOf(
+                    validator.getFrequency(corpusResult.bengali),
+                    storeFrequencyOf(key, corpusResult.bengali)
+                )
                 val corpusClearlyBetter = corpusFreq > dictFreq + 5 || result.confidence < 0.90
                 if (corpusClearlyBetter) {
                     cacheResult(cacheKey, corpusResult); return corpusResult
@@ -977,7 +1042,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
-        for (bengali in corpusPhoneticIndex[key].orEmpty().take(maxResults)) {
+        for (bengali in corpusWordsFor(key).take(maxResults)) {
             if (seen.add(bengali)) {
                 suggestions.add(
                     SmartSuggestion(
@@ -4027,6 +4092,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      */
     fun clearCache() {
         wordCache.clear()
+        storeLookupMemo.clear()
     }
 
     /**
