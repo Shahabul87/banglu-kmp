@@ -91,7 +91,7 @@ object PhoneticIndexBuilder {
      * - `uu → u`   : ূ / ঊ (emitted as "uu"; users omit the doubled vowel)
      *
      * Additionally, all three rules are applied in sequence to produce a
-     * fully-collapsed combined alias (e.g. "chhotrii" → "chotri"), so words
+     * fully-collapsed combined alias (e.g. "chhotrii" → "cotri"), so words
      * containing both ছ and a long vowel are reachable via the key users type.
      * The [linkedSetOf] deduplicates when the composed result equals an
      * existing alias.

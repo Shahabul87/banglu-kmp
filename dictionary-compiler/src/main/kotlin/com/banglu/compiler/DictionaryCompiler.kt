@@ -83,6 +83,56 @@ fun main(args: Array<String>) {
         insertWord.executeBatch()
         println("\r  Inserted $count words total")
 
+        // 3b. Build precompiled phonetic index (Engine v3)
+        println("Building phonetic index...")
+        val wordList = bengaliWords.map { it.jsonPrimitive.content }
+        val freqMap = frequencies.entries.associate { (w, f) -> w to f.jsonPrimitive.int }
+        val indexRows = PhoneticIndexBuilder.build(wordList, freqMap)
+        val report = PhoneticIndexBuilder.lastReport
+        println("  Rows: ${report.totalRows}, round-trip coverage: " +
+            "${"%.1f".format(report.coveragePercent)}% (${report.roundTripOk}/${report.totalWords})")
+        println("  Dropped keys: ${report.droppedKeys}, words with no rows: ${report.wordsWithNoRows}")
+
+        val insertIndex = connection.prepareStatement(
+            "INSERT INTO phonetic_index (key, bengali, frequency, tier) VALUES (?, ?, ?, ?)"
+        )
+        var indexCount = 0
+        for (row in indexRows) {
+            insertIndex.setString(1, row.key)
+            insertIndex.setString(2, row.bengali)
+            insertIndex.setInt(3, row.frequency)
+            insertIndex.setInt(4, row.tier)
+            insertIndex.addBatch()
+            if (++indexCount % 50000 == 0) insertIndex.executeBatch()
+        }
+        insertIndex.executeBatch()
+        println("  Inserted $indexCount phonetic index rows")
+
+        // 3c. Build English lexicon (Engine v3)
+        val dataDir = sequenceOf(File("data"), File("dictionary-compiler/data")).firstOrNull { it.isDirectory }
+        val cmudictFile = dataDir?.let { File(it, "cmudict.dict") }
+        val freqListFile = dataDir?.let { File(it, "en_50k.txt") }
+        var englishCount = 0
+        if (cmudictFile != null && cmudictFile.exists() && freqListFile != null && freqListFile.exists()) {
+            println("Building English lexicon...")
+            val topWords = EnglishLexiconBuilder.parseTopWords(freqListFile.readLines())
+            val englishEntries = EnglishLexiconBuilder.build(cmudictFile.readLines(), topWords)
+            val insertEnglish = connection.prepareStatement(
+                "INSERT OR IGNORE INTO english_lexicon (key, bengali) VALUES (?, ?)"
+            )
+            for (entry in englishEntries) {
+                insertEnglish.setString(1, entry.key)
+                insertEnglish.setString(2, entry.bengali)
+                insertEnglish.addBatch()
+            }
+            insertEnglish.executeBatch()
+            englishCount = englishEntries.size
+            println("  Inserted $englishCount english lexicon entries " +
+                "(${EnglishLexiconBuilder.lastSkippedUnconvertible} unconvertible skipped)")
+        } else {
+            println("Skipping english lexicon (data files not found: ${dataDir?.absolutePath ?: "no data dir found"})")
+        }
+
         // 4. Load and insert disambiguation map
         val disambigFile = File(inputDir, "disambiguation-map.json")
         println("Reading ${disambigFile.name}...")
@@ -206,7 +256,7 @@ fun main(args: Array<String>) {
         // 7. Insert metadata
         val insertMeta = connection.prepareStatement("INSERT INTO metadata (key, value) VALUES (?, ?)")
         val metadataEntries = mapOf(
-            "version" to "3.2.0",
+            "version" to "3.3.0",
             "word_count" to count.toString(),
             "disambiguation_count" to mappings.size.toString(),
             "extended_entry_count" to extendedEntryCount.toString(),
@@ -216,6 +266,11 @@ fun main(args: Array<String>) {
             "bigram_pair_count" to bigramCount.toString(),
             "total_unigrams" to totalUnigrams.toString(),
             "total_bigrams" to totalBigrams.toString(),
+            "phonetic_index_count" to indexCount.toString(),
+            "phonetic_roundtrip_coverage" to "%.2f".format(report.coveragePercent),
+            "phonetic_dropped_keys" to report.droppedKeys.toString(),
+            "phonetic_words_no_rows" to report.wordsWithNoRows.toString(),
+            "english_lexicon_count" to englishCount.toString(),
             "compiled_at" to java.time.Instant.now().toString(),
             "source" to "banglu-web/public/"
         )
@@ -301,6 +356,23 @@ private fun createTables(connection: Connection) {
             )
         """)
         execute("CREATE INDEX idx_bigram_pairs_previous ON bigram_pairs(previous_word)")
+
+        execute("""
+            CREATE TABLE phonetic_index (
+                key TEXT NOT NULL,
+                bengali TEXT NOT NULL,
+                frequency INTEGER DEFAULT 0,
+                tier INTEGER NOT NULL DEFAULT 1
+            )
+        """)
+        execute("CREATE INDEX idx_phonetic_index_key ON phonetic_index(key)")
+
+        execute("""
+            CREATE TABLE english_lexicon (
+                key TEXT PRIMARY KEY,
+                bengali TEXT NOT NULL
+            )
+        """)
 
         execute("""
             CREATE TABLE metadata (
