@@ -3,8 +3,13 @@ package com.banglu.engine.platform
 data class PhoneticIndexHit(
     val bengali: String,
     val frequency: Int,
-    val tier: Int // 0 = Tier A (suggestible), 1 = Tier B (exact-match only)
-)
+    val tier: Int // TIER_A (suggestible) or TIER_B (exact-match only)
+) {
+    companion object {
+        const val TIER_A = 0
+        const val TIER_B = 1
+    }
+}
 
 /**
  * Query interface over the precompiled phonetic index (Engine v3 spec 3.2).
@@ -13,10 +18,16 @@ data class PhoneticIndexHit(
  * Tests/JVM: in-memory maps.
  */
 interface PhoneticIndexStore {
-    /** All words whose canonical/variant key equals [key], frequency-descending. */
+    /**
+     * Words whose canonical/variant key equals [key], frequency-descending.
+     * Implementations may cap the result size (at least 16 entries guaranteed when more exist).
+     */
     fun lookupExact(key: String): List<PhoneticIndexHit>
 
-    /** Tier A words whose key starts with [prefix], frequency-descending. */
+    /**
+     * Tier A words whose key starts with [prefix], frequency-descending.
+     * [limit] must be >= 0; implementations return at most [limit] hits.
+     */
     fun lookupPrefix(prefix: String, limit: Int): List<PhoneticIndexHit>
 
     /** Bengali rendering for an English word key, or null. */

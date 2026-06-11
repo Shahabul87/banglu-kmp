@@ -12,14 +12,16 @@ class InMemoryPhoneticIndexStore(
     override fun lookupExact(key: String): List<PhoneticIndexHit> =
         byKey[key].orEmpty()
 
-    override fun lookupPrefix(prefix: String, limit: Int): List<PhoneticIndexHit> =
-        byKey.asSequence()
+    override fun lookupPrefix(prefix: String, limit: Int): List<PhoneticIndexHit> {
+        if (limit <= 0) return emptyList()
+        return byKey.asSequence()
             .filter { it.key.startsWith(prefix) }
             .flatMap { it.value }
-            .filter { it.tier == 0 }
+            .filter { it.tier == PhoneticIndexHit.TIER_A }
             .sortedByDescending { it.frequency }
             .take(limit)
             .toList()
+    }
 
     override fun lookupEnglish(key: String): String? = english[key]
 }
