@@ -5,6 +5,34 @@ import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
 
+private val engineComposedVerbSuffixes = listOf(
+    "teci",
+    "techi",
+    "tecina",
+    "techina",
+    "tece",
+    "teche",
+    "teco",
+    "techo",
+    "tecen",
+    "techen",
+    "tecilam",
+    "techilam",
+    "tecile",
+    "techile",
+    "tecilo",
+    "techilo",
+    "tecilen",
+    "techilen",
+)
+
+private fun isEngineComposedVerbVariant(phonetic: String): Boolean {
+    val key = phonetic.lowercase().trim()
+    return engineComposedVerbSuffixes.any { suffix ->
+        key.length > suffix.length + 1 && key.endsWith(suffix)
+    }
+}
+
 fun main(args: Array<String>) {
     val inputDir = args.getOrNull(0) ?: error("Usage: DictionaryCompiler <input-dir> <output-path>")
     val outputPath = args.getOrNull(1) ?: error("Usage: DictionaryCompiler <input-dir> <output-path>")
@@ -71,12 +99,123 @@ fun main(args: Array<String>) {
         insertDisambig.executeBatch()
         println("  Inserted ${mappings.size} disambiguation entries")
 
-        // 5. Insert metadata
+        // 5. Load and insert extended phonetic dictionary
+        val extendedFile = File(inputDir, "dictionary-extended.json")
+        var extendedEntryCount = 0
+        var extendedPhoneticCount = 0
+        var prunedEngineVerbPhoneticCount = 0
+        if (extendedFile.exists()) {
+            println("Reading ${extendedFile.name}...")
+            val extendedJson = Json.parseToJsonElement(extendedFile.readText()).jsonArray
+            println("  Found ${extendedJson.size} extended entries")
+
+            val insertExtended = connection.prepareStatement(
+                "INSERT INTO extended_dictionary (id, bengali, frequency, category) VALUES (?, ?, ?, ?)"
+            )
+            val insertExtendedPhonetic = connection.prepareStatement(
+                "INSERT INTO extended_phonetics (phonetic, entry_id) VALUES (?, ?)"
+            )
+
+            var entryId = 0
+            for (entryElement in extendedJson) {
+                val entry = entryElement.jsonObject
+                val bengali = entry["bengali"]?.jsonPrimitive?.contentOrNull ?: continue
+                val phonetics = entry["phonetics"]?.jsonArray ?: continue
+                val frequency = entry["frequency"]?.jsonPrimitive?.intOrNull ?: 0
+                val category = entry["category"]?.jsonPrimitive?.contentOrNull ?: "unknown"
+
+                entryId++
+                insertExtended.setInt(1, entryId)
+                insertExtended.setString(2, bengali)
+                insertExtended.setInt(3, frequency)
+                insertExtended.setString(4, category)
+                insertExtended.addBatch()
+                extendedEntryCount++
+
+                for (phoneticElement in phonetics) {
+                    val phonetic = phoneticElement.jsonPrimitive.content.lowercase().trim()
+                    if (phonetic.isEmpty()) continue
+                    if (isEngineComposedVerbVariant(phonetic)) {
+                        prunedEngineVerbPhoneticCount++
+                        continue
+                    }
+                    insertExtendedPhonetic.setString(1, phonetic)
+                    insertExtendedPhonetic.setInt(2, entryId)
+                    insertExtendedPhonetic.addBatch()
+                    extendedPhoneticCount++
+                }
+
+                if (entryId % 10000 == 0) {
+                    insertExtended.executeBatch()
+                    insertExtendedPhonetic.executeBatch()
+                    print("\r  Inserted $entryId extended entries...")
+                }
+            }
+            insertExtended.executeBatch()
+            insertExtendedPhonetic.executeBatch()
+            println("\r  Inserted $extendedEntryCount extended entries, $extendedPhoneticCount phonetics")
+            println("  Pruned $prunedEngineVerbPhoneticCount engine-composed verb phonetics")
+        } else {
+            println("Skipping dictionary-extended.json (not found)")
+        }
+
+        // 6. Load and insert bigram model
+        val bigramFile = File(inputDir, "bigram-model.json")
+        var unigramCount = 0
+        var bigramCount = 0
+        var totalUnigrams = 0
+        var totalBigrams = 0
+        if (bigramFile.exists()) {
+            println("Reading ${bigramFile.name}...")
+            val bigramJson = Json.parseToJsonElement(bigramFile.readText()).jsonObject
+            val unigrams = bigramJson["unigrams"]!!.jsonObject
+            val bigrams = bigramJson["bigrams"]!!.jsonObject
+            totalUnigrams = bigramJson["totalUnigrams"]?.jsonPrimitive?.intOrNull ?: 0
+            totalBigrams = bigramJson["totalBigrams"]?.jsonPrimitive?.intOrNull ?: 0
+            println("  Found ${unigrams.size} unigrams and ${bigrams.size} bigrams")
+
+            val insertUnigram = connection.prepareStatement(
+                "INSERT INTO bigram_unigrams (word, count) VALUES (?, ?)"
+            )
+            for ((word, countElement) in unigrams) {
+                insertUnigram.setString(1, word)
+                insertUnigram.setInt(2, countElement.jsonPrimitive.int)
+                insertUnigram.addBatch()
+                unigramCount++
+            }
+            insertUnigram.executeBatch()
+
+            val insertBigram = connection.prepareStatement(
+                "INSERT INTO bigram_pairs (previous_word, next_word, count) VALUES (?, ?, ?)"
+            )
+            for ((key, countElement) in bigrams) {
+                val parts = key.split('\t', limit = 2)
+                if (parts.size != 2) continue
+                insertBigram.setString(1, parts[0])
+                insertBigram.setString(2, parts[1])
+                insertBigram.setInt(3, countElement.jsonPrimitive.int)
+                insertBigram.addBatch()
+                bigramCount++
+            }
+            insertBigram.executeBatch()
+            println("  Inserted $unigramCount unigrams and $bigramCount bigrams")
+        } else {
+            println("Skipping bigram-model.json (not found)")
+        }
+
+        // 7. Insert metadata
         val insertMeta = connection.prepareStatement("INSERT INTO metadata (key, value) VALUES (?, ?)")
         val metadataEntries = mapOf(
-            "version" to "3.1.0",
+            "version" to "3.2.0",
             "word_count" to count.toString(),
             "disambiguation_count" to mappings.size.toString(),
+            "extended_entry_count" to extendedEntryCount.toString(),
+            "extended_phonetic_count" to extendedPhoneticCount.toString(),
+            "pruned_engine_verb_phonetic_count" to prunedEngineVerbPhoneticCount.toString(),
+            "bigram_unigram_count" to unigramCount.toString(),
+            "bigram_pair_count" to bigramCount.toString(),
+            "total_unigrams" to totalUnigrams.toString(),
+            "total_bigrams" to totalBigrams.toString(),
             "compiled_at" to java.time.Instant.now().toString(),
             "source" to "banglu-web/public/"
         )
@@ -96,6 +235,8 @@ fun main(args: Array<String>) {
         println("  Size: ${fileSize / 1024 / 1024} MB")
         println("  Words: $count")
         println("  Disambiguations: ${mappings.size}")
+        println("  Extended entries: $extendedEntryCount")
+        println("  Bigram pairs: $bigramCount")
 
     } catch (e: Exception) {
         connection.rollback()
@@ -123,6 +264,43 @@ private fun createTables(connection: Connection) {
                 correct_form TEXT NOT NULL
             )
         """)
+
+        execute("""
+            CREATE TABLE extended_dictionary (
+                id INTEGER PRIMARY KEY,
+                bengali TEXT NOT NULL,
+                frequency INTEGER DEFAULT 0,
+                category TEXT DEFAULT 'unknown'
+            )
+        """)
+        execute("CREATE INDEX idx_extended_dictionary_bengali ON extended_dictionary(bengali)")
+
+        execute("""
+            CREATE TABLE extended_phonetics (
+                phonetic TEXT NOT NULL,
+                entry_id INTEGER NOT NULL,
+                FOREIGN KEY(entry_id) REFERENCES extended_dictionary(id)
+            )
+        """)
+        execute("CREATE INDEX idx_extended_phonetics_phonetic ON extended_phonetics(phonetic)")
+        execute("CREATE INDEX idx_extended_phonetics_entry ON extended_phonetics(entry_id)")
+
+        execute("""
+            CREATE TABLE bigram_unigrams (
+                word TEXT PRIMARY KEY,
+                count INTEGER NOT NULL
+            )
+        """)
+
+        execute("""
+            CREATE TABLE bigram_pairs (
+                previous_word TEXT NOT NULL,
+                next_word TEXT NOT NULL,
+                count INTEGER NOT NULL,
+                PRIMARY KEY(previous_word, next_word)
+            )
+        """)
+        execute("CREATE INDEX idx_bigram_pairs_previous ON bigram_pairs(previous_word)")
 
         execute("""
             CREATE TABLE metadata (

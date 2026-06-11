@@ -60,12 +60,25 @@ object DisambiguationScorer {
     }
 
     private fun scoreNatvaVidhan(current: String, candidate: String, swapIndex: Int): DisambiguationSignal {
+        val candidateChar = candidate.getOrNull(swapIndex)
         val precedingContext = candidate.substring(0, swapIndex)
         val triggers = NatvaVidhan.shouldBeRetroflex(precedingContext)
-        return if (triggers) {
-            DisambiguationSignal("natva_vidhan", 15)
-        } else {
-            DisambiguationSignal("natva_vidhan", -5)
+
+        return when (candidateChar) {
+            'ণ' -> if (triggers) {
+                DisambiguationSignal("natva_vidhan", 15)
+            } else {
+                DisambiguationSignal("natva_vidhan", -5)
+            }
+            'ন' -> if (triggers) {
+                // Natva is a useful Sanskrit-derived rule, but it overfires on common
+                // Arabic/Persian names such as রহমান. Penalize dental ন mildly so
+                // dictionary frequency and explicit variants can still rescue it.
+                DisambiguationSignal("natva_vidhan", -5)
+            } else {
+                DisambiguationSignal("natva_vidhan", 5)
+            }
+            else -> DisambiguationSignal("natva_vidhan", 0)
         }
     }
 

@@ -17,3 +17,4 @@ rootProject.name = "banglu-kmp"
 include(":shared")
 include(":dictionary-compiler")
 include(":android-keyboard")
+include(":android_account")

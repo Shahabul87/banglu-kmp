@@ -73,7 +73,9 @@ class SmartDictionary {
      * Add a simple phonetic -> Bengali mapping.
      */
     fun addMapping(phonetic: String, bengali: String, frequency: Int = 50) {
-        trie.insert(phonetic.lowercase(), bengali, frequency)
+        val key = phonetic.lowercase().trim()
+        trie.insert(key, bengali, frequency)
+        cache.remove(key)
         entryCount++
     }
 
@@ -92,6 +94,7 @@ class SmartDictionary {
         if (cached != null) return cached
 
         // Trie exact match
+        var matchedKey = key
         var trieResults = trie.exactMatch(key)
 
         // If no exact match, try phonetic normalization
@@ -99,13 +102,23 @@ class SmartDictionary {
             val normalized = normalizePhonetic(key)
             if (normalized != key) {
                 trieResults = trie.exactMatch(normalized)
+                if (trieResults.isNotEmpty()) matchedKey = normalized
             }
 
-            // Try additional common variant rewrites if still no match
+            // Try user typing-habit expansions and additional common variant
+            // rewrites if still no match. This keeps the exact lookup path
+            // productive for common lowercase-only spellings like uddog ->
+            // udyog/uddyog -> উদ্যোগ, without adding local one-word hacks.
             if (trieResults.isEmpty()) {
-                for (variant in generatePhoneticVariants(key)) {
+                val variants = (TypingHabitNormalizer.expand(key).drop(1) + generatePhoneticVariants(key))
+                    .distinct()
+                    .filter { it != key && it.isNotBlank() }
+                for (variant in variants) {
                     trieResults = trie.exactMatch(variant)
-                    if (trieResults.isNotEmpty()) break
+                    if (trieResults.isNotEmpty()) {
+                        matchedKey = variant
+                        break
+                    }
                 }
             }
         }
@@ -113,7 +126,7 @@ class SmartDictionary {
         if (trieResults.isEmpty()) return emptyList()
 
         val results = FrequencyRanker.rankResults(
-            trieResults.map { Triple(it.bengali, key, it.frequency) },
+            trieResults.map { Triple(it.bengali, matchedKey, it.frequency) },
             key
         )
 
@@ -337,6 +350,17 @@ class SmartDictionary {
             if ("ng" in key) {
                 variants.add(key.replace("ng", "n"))
             }
+
+            // wa/owa/oya/oa exception-verb spelling variants:
+            // khawa/khaowa/khaoya/khaoa should all be able to hit খাওয়া.
+            if ("wa" in key) {
+                variants.add(key.replace("wa", "owa"))
+                variants.add(key.replace("wa", "oya"))
+                variants.add(key.replace("wa", "oa"))
+            }
+            if ("owa" in key) variants.add(key.replace("owa", "wa"))
+            if ("oya" in key) variants.add(key.replace("oya", "wa"))
+            if ("oa" in key) variants.add(key.replace("oa", "wa"))
 
             // w <-> o
             if ("w" in key && "ow" !in key) {

@@ -23,11 +23,15 @@ import com.banglu.engine.rules.ShatvaVidhan
 import com.banglu.engine.rules.StatisticalDefaults
 import com.banglu.engine.types.Alternative
 import com.banglu.engine.types.ConversionResult
+import com.banglu.engine.types.LookupResult
 import com.banglu.engine.types.PredictedWord
 import com.banglu.engine.types.ResolutionSource
 import com.banglu.engine.types.SmartSuggestion
+import com.banglu.engine.types.WordCategory
 import com.banglu.engine.util.ReverseTransliterator
 import com.banglu.engine.util.TypoCorrector
+
+private const val USER_CUSTOM_CONVERSION_FREQUENCY = 120
 
 /**
  * SmartEngine - 7-layer Bengali phonetic conversion orchestrator.
@@ -113,6 +117,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     companion object {
         const val MAX_CACHE = 2000
+        private const val MAX_SUGGESTION_CANDIDATES = 40
 
         /** Bengali digits ০-৯ */
         private const val BENGALI_DIGITS = "০১২৩৪৫৬৭৮৯"
@@ -151,6 +156,209 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "t", "th", "d", "dh", "n",
             "p", "ph", "f", "b", "bh", "m",
             "r", "l", "sh", "s", "h", "y", "w", "v"
+        )
+
+        private val ENGLISH_VARIANT_PRIMARY_BY_KEY: Map<String, String> by lazy {
+            val best = linkedMapOf<String, Pair<String, Int>>()
+            for (entry in SeedData.SEED_DICTIONARY) {
+                if (entry.category != WordCategory.FOREIGN && entry.category != WordCategory.PROPER) continue
+                for (phonetic in entry.phonetics) {
+                    val key = phonetic.lowercase().trim()
+                    if (key.isBlank()) continue
+                    val previous = best[key]
+                    if (previous == null || entry.frequency > previous.second) {
+                        best[key] = entry.bengali to entry.frequency
+                    }
+                }
+            }
+            best.mapValues { it.value.first }
+        }
+
+        private val MOBILE_SHORTHAND_OVERRIDES: Map<String, String> = mapOf(
+            "amr" to "আমার",
+            "tomr" to "তোমার",
+            "tmi" to "তুমি",
+            "tomi" to "তুমি",
+        )
+
+        private val FALLBACK_NEXT_WORDS: Map<String, List<String>> = mapOf(
+            "আমি" to listOf("ভালো", "এখন", "আজ", "যাবো", "চাই", "করতে"),
+            "তুমি" to listOf("কেমন", "কি", "আজ", "যাবে", "পারবে", "করো"),
+            "আপনি" to listOf("কেমন", "কি", "আজ", "করবেন", "পারবেন", "যাবেন"),
+            "আমার" to listOf("মনে", "একটা", "কাছে", "বাড়ি", "কাজ", "সময়"),
+            "তোমার" to listOf("কি", "কাছে", "মনে", "বাড়ি", "কাজ", "সময়"),
+            "সে" to listOf("আজ", "এখন", "ভালো", "যাবে", "করবে", "আসে"),
+            "আমরা" to listOf("আজ", "এখন", "একসাথে", "যাবো", "করবো", "পারবো"),
+            "ভালো" to listOf("আছি", "লাগছে", "হবে", "কাজ", "মানুষ", "বাসা"),
+            "কেমন" to listOf("আছো", "আছেন", "লাগছে", "হলো", "হবে", "করবে"),
+            "আজ" to listOf("আমি", "তুমি", "আমরা", "রাতে", "সকালে", "একটা"),
+            "এখন" to listOf("আমি", "তুমি", "কি", "কাজ", "যাচ্ছি", "করছি"),
+            "কি" to listOf("করছো", "করছেন", "হবে", "লাগবে", "খবর", "সমস্যা"),
+            "না" to listOf("আমি", "তুমি", "হবে", "করলে", "গেলে", "থাকলে"),
+        )
+
+        private val DIRECT_WORD_OVERRIDES: Map<String, List<String>> = mapOf(
+            "keno" to listOf("কেনো", "কেন"),
+            "koto" to listOf("কতো", "কত"),
+            "biswsa" to listOf("বিশ্বসা", "বিশ্বাস"),
+            "application" to listOf("এপ্লিকেশন", "অ্যাপ্লিকেশন"),
+            "sobbdo" to listOf("শব্দ", "সব্বদো"),
+            "honeymoon" to listOf("হানিমুন", "honeymoon"),
+            "education" to listOf("এডুকেশন"),
+            "system" to listOf("সিস্টেম"),
+            "travel" to listOf("ট্রাভেল"),
+            "plan" to listOf("প্ল্যান"),
+            "nasa" to listOf("নাসা"),
+            "unesco" to listOf("ইউনেস্কো"),
+            "byatha" to listOf("ব্যথা", "ব্যাথা"),
+            "bhiti" to listOf("ভিতি", "ভীতি"),
+            "porikkha" to listOf("পরীক্ষা", "পরিক্ষা"),
+            "accha" to listOf("আচ্ছা"),
+            "acca" to listOf("আচ্ছা"),
+            "assa" to listOf("আচ্ছা"),
+            "cina" to listOf("ছিনা", "চিনা"),
+            "gobeshona" to listOf("গবেষণা", "গবেষনা"),
+            "database" to listOf("ডেটাবেস", "ডাটাবেস"),
+            "onekkhon" to listOf("অনেকক্ষণ"),
+            "priyojon" to listOf("প্রিয়জন"),
+            "ghoro" to listOf("ঘর"),
+            "mathematics" to listOf("ম্যাথমেটিক্স", "ম্যাথেমেটিক্স"),
+            "montri" to listOf("মন্ত্রী", "মন্ত্রি"),
+            "ghoshona" to listOf("ঘোষণা", "ঘোষনা"),
+            "koti" to listOf("কোটি", "কটি"),
+            "mangsho" to listOf("মাংস", "মাংসো"),
+            "ojon" to listOf("ওজন", "ওজোন"),
+            "shahid" to listOf("শহীদ", "শাহিদ"),
+            "puroshkar" to listOf("পুরস্কার", "পুরষ্কার"),
+            "shilpi" to listOf("শিল্পী", "শিল্পি"),
+            "poribohon" to listOf("পরিবহন", "পরিবহণ"),
+            "tyag" to listOf("ত্যাগ", "ট্যাগ"),
+            "rahman" to listOf("রহমান", "রাহমান"),
+            "rohman" to listOf("রহমান", "রোহমান"),
+            "jodi" to listOf("যদি", "জদি"),
+            "jemon" to listOf("যেমন", "জেমন"),
+            "the" to listOf("থে", "ঠে", "দ্য"),
+            "is" to listOf("ইস", "ইশ"),
+            "for" to listOf("ফর", "ফড়"),
+            "shikka" to listOf("শিক্ষা", "সিক্কা"),
+            "bishse" to listOf("বিশ্বে", "বিশসে", "বিষয়ে"),
+            "cheleraa" to listOf("ছেলেরা", "চেলেরা"),
+            "chelera" to listOf("ছেলেরা", "চেলেরা"),
+            "meyder" to listOf("মেয়েদের", "মেয়দের"),
+            "meyeder" to listOf("মেয়েদের"),
+            "puruskar" to listOf("পুরস্কার", "পুরষ্কার"),
+            "santi" to listOf("শান্তি", "সান্তি"),
+            "sohor" to listOf("শহর", "সহর"),
+            "chasar" to listOf("চাষার", "চাষের"),
+            "chashar" to listOf("চাষার", "চাষের"),
+            "ashar" to listOf("আশার", "আষাঢ়"),
+            "class" to listOf("ক্লাস"),
+            "klas" to listOf("ক্লাস"),
+            "block" to listOf("ব্লক"),
+            "blok" to listOf("ব্লক"),
+            "glass" to listOf("গ্লাস"),
+            "glas" to listOf("গ্লাস"),
+            "torko" to listOf("তর্ক"),
+            "sworgo" to listOf("স্বর্গ"),
+            "sorgo" to listOf("স্বর্গ"),
+            "dhormo" to listOf("ধর্ম"),
+            "ortho" to listOf("অর্থ"),
+            "tbk" to listOf("ত্বক"),
+            "sbpno" to listOf("স্বপ্ন"),
+            "bagmii" to listOf("বাগ্মী"),
+            "padma" to listOf("পদ্মা"),
+            "shanto" to listOf("শান্ত"),
+            "gondho" to listOf("গন্ধ"),
+            "vondo" to listOf("ভণ্ড"),
+            "biggan" to listOf("বিজ্ঞান"),
+            "trivuj" to listOf("ত্রিভুজ"),
+            "tribhuj" to listOf("ত্রিভুজ"),
+            "shroddha" to listOf("শ্রদ্ধা"),
+            "shokto" to listOf("শক্ত"),
+            "mugdho" to listOf("মুগ্ধ"),
+            "anondo" to listOf("আনন্দ"),
+            "sompod" to listOf("সম্পদ"),
+            "koshto" to listOf("কষ্ট"),
+            "sthan" to listOf("স্থান"),
+            "buddho" to listOf("বুদ্ধ"),
+            "buddhi" to listOf("বুদ্ধি"),
+            "bidya" to listOf("বিদ্যা"),
+            "chihno" to listOf("চিহ্ন"),
+            "brohmmo" to listOf("ব্রহ্ম"),
+            "brohmana" to listOf("ব্রাহ্মণ"),
+            "anko" to listOf("অঙ্ক"),
+            "bangla" to listOf("বাংলা"),
+            "ichcha" to listOf("ইচ্ছা"),
+            "iccha" to listOf("ইচ্ছা"),
+            "lojja" to listOf("লজ্জা"),
+            "jonmo" to listOf("জন্ম"),
+            "jonne" to listOf("জন্যে"),
+            "jonnye" to listOf("জন্যে"),
+            "pollii" to listOf("পল্লী"),
+            "baxo" to listOf("বাক্স"),
+            "koxobajar" to listOf("কক্সবাজার"),
+            "okka" to listOf("অক্কা"),
+
+            // Vowel-after-consonant exception verbs. Normally a/o/u after a
+            // consonant becomes a dependent kar, but these spoken verb stems
+            // keep an independent ও/ওয়া sound: খাওয়া, যাওয়া, পাওয়া, etc.
+            // Keep the table here so dictionary duplicates like hoya→হয়া cannot
+            // outrank the intended mobile phonetic spelling hoya/howa→হওয়া.
+            "khawa" to listOf("খাওয়া"),
+            "khaowa" to listOf("খাওয়া"),
+            "khaoya" to listOf("খাওয়া"),
+            "khaoa" to listOf("খাওয়া"),
+            "khawar" to listOf("খাওয়ার"),
+            "khaowar" to listOf("খাওয়ার"),
+            "khaoyar" to listOf("খাওয়ার"),
+            "jawa" to listOf("যাওয়া"),
+            "jaowa" to listOf("যাওয়া"),
+            "jaoya" to listOf("যাওয়া"),
+            "jaoa" to listOf("যাওয়া"),
+            "zawa" to listOf("যাওয়া"),
+            "zaowa" to listOf("যাওয়া"),
+            "jawar" to listOf("যাওয়ার"),
+            "jaowar" to listOf("যাওয়ার"),
+            "jaoyar" to listOf("যাওয়ার"),
+            "pawa" to listOf("পাওয়া"),
+            "paowa" to listOf("পাওয়া"),
+            "paoya" to listOf("পাওয়া"),
+            "paoa" to listOf("পাওয়া"),
+            "pawar" to listOf("পাওয়ার"),
+            "paowar" to listOf("পাওয়ার"),
+            "paoyar" to listOf("পাওয়ার"),
+            "chawa" to listOf("চাওয়া"),
+            "chaowa" to listOf("চাওয়া"),
+            "chaoya" to listOf("চাওয়া"),
+            "chaoa" to listOf("চাওয়া"),
+            "cawa" to listOf("চাওয়া"),
+            "caowa" to listOf("চাওয়া"),
+            "cawar" to listOf("চাওয়ার"),
+            "chawar" to listOf("চাওয়ার"),
+            "howa" to listOf("হওয়া"),
+            "hoya" to listOf("হওয়া", "হয়া", "হোয়া"),
+            "hoowa" to listOf("হওয়া"),
+            "hoa" to listOf("হওয়া"),
+            "howar" to listOf("হওয়ার"),
+            "hoyar" to listOf("হওয়ার", "হয়ার"),
+            "newa" to listOf("নেওয়া"),
+            "neowa" to listOf("নেওয়া"),
+            "neoya" to listOf("নেওয়া"),
+            "neoa" to listOf("নেওয়া"),
+            "newar" to listOf("নেওয়ার"),
+            "neowar" to listOf("নেওয়ার"),
+            "dewa" to listOf("দেওয়া"),
+            "deowa" to listOf("দেওয়া"),
+            "deoya" to listOf("দেওয়া"),
+            "deoa" to listOf("দেওয়া"),
+            "dewar" to listOf("দেওয়ার"),
+            "deowar" to listOf("দেওয়ার"),
+            "nawa" to listOf("নাওয়া", "নেওয়া"),
+            "naowa" to listOf("নাওয়া", "নেওয়া"),
+            "naoya" to listOf("নাওয়া", "নেওয়া"),
+            "naoa" to listOf("নাওয়া", "নেওয়া"),
+            "nowa" to listOf("নওয়া", "নেওয়া", "নাওয়া"),
+            "nowar" to listOf("নওয়ার", "নেওয়ার", "নাওয়ার"),
         )
     }
 
@@ -215,9 +423,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Load learned words
         storage?.getLearnedWords()?.let { learned ->
             for (word in learned) {
-                val primaryResult = convertWord(word.phonetic)
-                val freq = if (word.bengali == primaryResult.bengali) 90 else 75
-                addWord(word.phonetic, word.bengali, freq)
+                if (word.frequency >= USER_CUSTOM_CONVERSION_FREQUENCY) {
+                    addWord(word.phonetic, word.bengali, word.frequency)
+                }
             }
         }
 
@@ -309,17 +517,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val trimmed = input.trim()
         val key = trimmed.lowercase()
         if (key.isEmpty()) return ConversionResult("", 0.0, ResolutionSource.RULE)
+        tryLowercaseV2ControlRule(key)?.let { return it }
 
-        // ── Uppercase case-marker detection (before lowercasing destroys info) ──
-        // Web parity: uppercase letters are "forcer" characters that bypass dictionary
-        // layers and produce specific outputs: R→ড়, T→ট, D→ড, N→ঁ (chandrabindu),
-        // O/I/U/A/E→explicit vowel forms. This is the <1% escape hatch.
-        val hasCaseMarkers = trimmed.any { it.isUpperCase() }
-        // Only uppercase N (chandrabindu) → still allow dictionary lookup
-        val hasOnlyChandrabinduMarkers = hasCaseMarkers && trimmed.all { !it.isUpperCase() || it == 'N' }
-
-        // Use trimmed (preserving case) as cache key so "peTe" and "pete" are distinct
-        val cacheKey = trimmed
+        // Lowercase-only Bangla mode: uppercase letters are not semantic.
+        // Users should never need Shift to force ট/ড/ড়/ঁ; those alternatives
+        // come from lowercase rules, suggestion ranking, or explicit controls.
+        val cacheKey = key
 
         // Check cache — invalidate stale entries when 480K validator loads
         wordCache[cacheKey]?.let { cached ->
@@ -333,44 +536,72 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         // Layer 1: Dictionary lookup
-        // Skip when uppercase forcers are present (except chandrabindu-only N)
-        if (!hasCaseMarkers || hasOnlyChandrabinduMarkers) {
-            convertByDictionary(key)?.let { result ->
-                tryCorpusPhoneticLookup(key)?.let { corpusResult ->
-                    val dictFreq = validator.getFrequency(result.bengali)
-                    val corpusFreq = validator.getFrequency(corpusResult.bengali)
-                    val corpusClearlyBetter = corpusFreq > dictFreq + 5 || result.confidence < 0.90
-                    if (corpusClearlyBetter) {
-                        cacheResult(cacheKey, corpusResult); return corpusResult
-                    }
-                }
+        tryDirectWordOverride(key)?.let { result ->
+            cacheResult(cacheKey, result); return result
+        }
 
-                val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
-                if (ranked.confidence >= config.autoAcceptThreshold) {
-                    cacheResult(cacheKey, ranked); return ranked
+        MOBILE_SHORTHAND_OVERRIDES[key]?.let { shorthand ->
+            val literal = convertByPatterns(key)
+            val alternatives = if (literal.bengali.isNotEmpty() && literal.bengali != shorthand) {
+                listOf(Alternative(literal.bengali, minOf(literal.confidence, 0.82)))
+            } else {
+                emptyList()
+            }
+            val result = ConversionResult(
+                bengali = shorthand,
+                confidence = 0.999,
+                source = ResolutionSource.DICTIONARY,
+                alternatives = alternatives
+            )
+            cacheResult(cacheKey, result); return result
+        }
+
+        tryProductiveVerbSuffixConversion(key)?.let { result ->
+            cacheResult(cacheKey, result); return result
+        }
+
+        convertByDictionary(key)?.let { result ->
+            tryCorpusPhoneticLookup(key)?.let { corpusResult ->
+                val dictFreq = validator.getFrequency(result.bengali)
+                val corpusFreq = validator.getFrequency(corpusResult.bengali)
+                val corpusClearlyBetter = corpusFreq > dictFreq + 5 || result.confidence < 0.90
+                if (corpusClearlyBetter) {
+                    cacheResult(cacheKey, corpusResult); return corpusResult
                 }
-                cacheResult(cacheKey, ranked); return ranked
             }
 
-            tryCorpusPhoneticLookup(key)?.let { result ->
+            val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
+            if (ranked.confidence >= config.autoAcceptThreshold) {
+                cacheResult(cacheKey, ranked); return ranked
+            }
+            cacheResult(cacheKey, ranked); return ranked
+        }
+
+        if (EnglishDetector.isEnglish(key)) {
+            tryCuratedEnglishVariant(key, trimmed)?.let { result ->
                 cacheResult(cacheKey, result); return result
             }
+            val result = ConversionResult(trimmed, 1.0, ResolutionSource.ENGLISH_PASSTHROUGH)
+            cacheResult(cacheKey, result); return result
+        }
 
-            tryProductiveSuffixConversion(key)?.let { result ->
-                val ranked = applyCandidateLatticeRanking(key, result)
-                cacheResult(cacheKey, ranked); return ranked
-            }
+        tryCorpusPhoneticLookup(key)?.let { result ->
+            cacheResult(cacheKey, result); return result
+        }
 
-            // Layer 1.2: Suffix-stripped dictionary lookup
-            trySuffixStrippedDictionary(key)?.let { result ->
-                val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
-                cacheResult(cacheKey, ranked); return ranked
-            }
+        tryProductiveSuffixConversion(key)?.let { result ->
+            val ranked = applyCandidateLatticeRanking(key, result)
+            cacheResult(cacheKey, ranked); return ranked
+        }
+
+        // Layer 1.2: Suffix-stripped dictionary lookup
+        trySuffixStrippedDictionary(key)?.let { result ->
+            val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
+            cacheResult(cacheKey, ranked); return ranked
         }
 
         // Layer 0: Section narrowing (if 480K loaded)
-        // Skip when uppercase forcers are present
-        if (!hasCaseMarkers && sectionEngine.isReady()) {
+        if (sectionEngine.isReady()) {
             convertBySection(key)?.let { result ->
                 if (result.confidence >= 0.95) {
                     val validated = applyDictionaryValidation(result)
@@ -381,50 +612,32 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         // Layer 1.5: Root decomposition
-        // Skip when uppercase forcers are present
-        if (!hasCaseMarkers) {
-            convertByRootDecomposition(key)?.let { result ->
-                val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
-                cacheResult(cacheKey, ranked); return ranked
-            }
-        }
-
-        // English detection: if input looks like English, pass through unchanged.
-        // Web parity: pass lowercase key (same as web's `EnglishDetector.isLikelyEnglish(key)`).
-        // Return original trimmed input to preserve case (URLs, file paths).
-        if (EnglishDetector.isEnglish(key)) {
-            val result = ConversionResult(trimmed, 1.0, ResolutionSource.ENGLISH_PASSTHROUGH)
-            cacheResult(cacheKey, result); return result
+        convertByRootDecomposition(key)?.let { result ->
+            val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
+            cacheResult(cacheKey, ranked); return ranked
         }
 
         // Layers 2-4: Pattern conversion
-        // Pass original trimmed input (with case) to preserve uppercase markers
-        var result = convertByPatterns(if (hasCaseMarkers) trimmed else key)
-
-        // When user typed uppercase forcers (non-chandrabindu), skip all post-processing.
-        // The user deliberately used case markers to force specific outputs (R→ড়, T→ট, etc.)
-        // and Layers 5-6 would undo their intent by swapping/recovering different words.
-        // Chandrabindu-only (N) still goes through post-processing since it's just a modifier.
-        val skipPostProcessing = hasCaseMarkers && !hasOnlyChandrabinduMarkers
+        var result = convertByPatterns(key)
 
         // Layer 5: AI Disambiguation (if confidence < 0.92)
-        if (!skipPostProcessing && result.confidence < 0.92) {
+        if (result.confidence < 0.92) {
             result = applyDisambiguation(result, key)
         }
 
         // Layer 5.5: Dictionary validation (if 480K loaded)
-        if (!skipPostProcessing && validator.isLoaded()) {
+        if (validator.isLoaded()) {
             result = applyDictionaryValidation(result)
         }
 
         // Layer 5.7: Conjunct removal recovery (if 480K loaded and result not valid)
-        if (!skipPostProcessing && validator.isLoaded() && !validator.isValid(result.bengali)) {
+        if (validator.isLoaded() && !validator.isValid(result.bengali)) {
             result = applyConjunctRemovalRecovery(result)
         }
 
         // Layer 6: Bengali dictionary recovery (if 480K loaded and result not valid)
         // Gate: only fire on longer inputs (>= 6 chars) where pattern engine output is less trustworthy
-        if (!skipPostProcessing && key.length >= 6 && validator.isLoaded() && !validator.isValid(result.bengali) && result.bengali.length >= 3) {
+        if (key.length >= 6 && validator.isLoaded() && !validator.isValid(result.bengali) && result.bengali.length >= 3) {
             applyBengaliRecovery(result)?.let { recovered ->
                 cacheResult(cacheKey, recovered); return recovered
             }
@@ -433,7 +646,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // ======== Typo Correction + Fuzzy Fallback (post-Layer 6) ========
         // Only try typo correction when pattern engine produced low confidence.
         // This prevents "kotobar" from being wrongly corrected to "oktobar"→অক্টোবর.
-        if (!skipPostProcessing && result.confidence < 0.5) {
+        if (result.confidence < 0.5) {
             // Try typo correction: transposition, doubled-char reduction, vowel insertion
             val typoResult = TypoCorrector.correct(key, dictionary)
             if (typoResult != null) {
@@ -466,9 +679,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
-        if (!skipPostProcessing) {
-            result = applyCandidateLatticeRanking(key, result)
-        }
+        result = applyCandidateLatticeRanking(key, result)
 
         cacheResult(cacheKey, result)
         return result
@@ -485,10 +696,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val trimmed = input.trim()
         val key = trimmed.lowercase()
         if (key.isEmpty()) return ConversionResult("", 0.0, ResolutionSource.RULE)
+        tryLowercaseV2ControlRule(key)?.let { return it }
 
-        val hasCaseMarkers = trimmed.any { it.isUpperCase() }
-        if (hasCaseMarkers) {
-            return convertByPatterns(trimmed)
+        tryDirectWordOverride(key)?.let { override ->
+            return override.copy(alternatives = emptyList())
+        }
+
+        MOBILE_SHORTHAND_OVERRIDES[key]?.let { bengali ->
+            return ConversionResult(bengali, 0.99, ResolutionSource.DICTIONARY, emptyList())
+        }
+
+        tryProductiveVerbSuffixConversion(key)?.let { result ->
+            return result.copy(alternatives = emptyList())
         }
 
         val pattern = convertByPatterns(key)
@@ -504,17 +723,26 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             return applyCandidateLatticeRanking(key, dictionaryResult)
         }
 
-        val corpusResult = tryCorpusPhoneticLookup(key)
+        // Live composing should follow the V2 rule layer for short syllables.
+        // Corpus phonetic hits can contain rare/noisy exact forms (for example
+        // kuu -> কুউ) and must not override basic consonant + vowel-kar output.
+        val corpusResult = if (key.length >= 4) tryCorpusPhoneticLookup(key) else null
         if (corpusResult != null && corpusResult.confidence >= 0.94) {
             return corpusResult.copy(alternatives = emptyList())
         }
 
-        val sectionResult = if (sectionEngine.isReady() && key.length >= 3) convertBySection(key) else null
+        val sectionResult = if (sectionEngine.isReady() && key.length >= 4) convertBySection(key) else null
         if (sectionResult != null && sectionResult.confidence >= 0.95) {
             return sectionResult.copy(alternatives = emptyList())
         }
 
-        return ConversionResult(trimmed, 0.40, ResolutionSource.RULE, emptyList())
+        // V2 parity: the live editor should still show the rule-composed Bangla
+        // token. Suggestions/dictionary layers can promote smarter completed words,
+        // but the fallback must not be raw Latin while the user is typing.
+        return pattern.copy(
+            confidence = minOf(pattern.confidence, 0.84),
+            alternatives = emptyList()
+        )
     }
 
     fun getCompositionPreview(input: String): String = convertForComposing(input).bengali
@@ -634,15 +862,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     fun getSuggestions(input: String, limit: Int = 5): List<SmartSuggestion> {
         val key = input.lowercase().trim()
         if (key.isEmpty()) return emptyList()
+        if (limit <= 0) return emptyList()
 
-        val maxResults = limit
+        val maxResults = maxOf(limit, minOf(MAX_SUGGESTION_CANDIDATES, limit * 4))
         val suggestions = mutableListOf<SmartSuggestion>()
         val seen = mutableSetOf<String>()
+        val exactDictionaryWords = dictionary.lookup(key).map { it.bengali }.toSet()
 
         // ── Tier 0: Primary conversion (matching web engine exactly) ──
         val primary = convertWord(key)
         if (primary.bengali.isNotEmpty() && seen.add(primary.bengali)) {
-            val primaryIsExactDictionary = dictionary.lookup(key).any { it.bengali == primary.bengali }
+            val primaryIsExactDictionary = primary.bengali in exactDictionaryWords
             suggestions.add(
                 SmartSuggestion(
                     primary.bengali,
@@ -650,6 +880,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     if (primaryIsExactDictionary) "dictionary_exact" else "primary",
                     key,
                     "tier0"
+                )
+            )
+        }
+
+        if (ENGLISH_VARIANT_PRIMARY_BY_KEY[key] == primary.bengali && input.trim() != primary.bengali && seen.add(input.trim())) {
+            suggestions.add(
+                SmartSuggestion(
+                    bengali = input.trim(),
+                    confidence = 0.98,
+                    source = "english_passthrough",
+                    phonetic = key,
+                    tier = "tier0_english"
                 )
             )
         }
@@ -738,6 +980,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     suggestions.add(SmartSuggestion(withOkar, 0.88, "okar_variant", key, "tier0_okar"))
                 }
             }
+        }
+
+        if (EnglishDetector.isEnglish(key) && suggestions.none { it.bengali.lowercase() == key }) {
+            suggestions.add(
+                SmartSuggestion(
+                    bengali = input.trim(),
+                    confidence = if (primary.source == ResolutionSource.ENGLISH_PASSTHROUGH) 1.0 else 0.98,
+                    source = "english_passthrough",
+                    phonetic = key,
+                    tier = "tier0_english"
+                )
+            )
         }
 
         // ── Bengali variant search (matching web: find related words from 480K by Bengali prefix) ──
@@ -877,13 +1131,83 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         return boosted
             .filter { !it.bengali.contains("-") }
             .filter { isCleanSuggestion(key, it, primary.bengali) }
-            .sortedByDescending { it.confidence }
+            .sortedWith(
+                compareByDescending<SmartSuggestion> {
+                    suggestionRankScore(key, it, primary.bengali, exactDictionaryWords)
+                }.thenByDescending { it.confidence }
+            )
             .take(limit)
+    }
+
+    private fun suggestionRankScore(
+        key: String,
+        suggestion: SmartSuggestion,
+        primary: String,
+        exactDictionaryWords: Set<String>
+    ): Double {
+        val exactDictionaryMatch = suggestion.bengali in exactDictionaryWords ||
+            suggestion.source == "dictionary_exact" ||
+            suggestion.source == "dictionary"
+        val seedDictionaryWord = dictionary.getPhoneticForBengali(suggestion.bengali) != null
+        val validatorWord = if (validator.isLoaded()) {
+            validator.isValid(suggestion.bengali)
+        } else {
+            disambiguator.isKnownWord(suggestion.bengali)
+        }
+        val generatedSource = suggestion.source in setOf(
+            "ambiguous_variant",
+            "candidate_lattice",
+            "pattern",
+            "pattern_alternative",
+            "orthographic_variant"
+        )
+        val completionSource = suggestion.source in setOf(
+            "dictionary_prefix",
+            "dictionary_fuzzy",
+            "narrowing",
+            "section_filtered",
+            "root_dictionary",
+            "bengali_variant"
+        )
+
+        val candidatePhonetic = suggestion.phonetic.ifBlank {
+            dictionary.getPhoneticForBengali(suggestion.bengali)
+                ?: ReverseTransliterator.reverseWord(suggestion.bengali)
+        }
+        val overlapScore = if (candidatePhonetic.isNotBlank()) {
+            PhoneticOverlapScorer.score(key, candidatePhonetic).score
+        } else {
+            0.0
+        }
+
+        var score = suggestion.confidence
+
+        if (suggestion.bengali == primary) score += 0.40
+        if (exactDictionaryMatch) score += 0.48
+        if (seedDictionaryWord) score += 0.28
+        if (validatorWord) score += 0.18
+        if (completionSource) score += 0.08
+        score += overlapScore * 0.24
+
+        if (generatedSource && !exactDictionaryMatch && !seedDictionaryWord && !validatorWord) {
+            score -= 0.34
+        }
+        if (suggestion.source == "pattern_alternative") score -= 0.12
+        if (suggestion.source == "pattern" && suggestion.bengali != primary) score -= 0.10
+        if (suggestion.source == "english_passthrough" && suggestion.bengali.lowercase() == key && suggestion.bengali != primary) {
+            score -= 0.18
+        }
+        if (hasSuspiciousGeneratedConjunct(suggestion.bengali)) score -= 0.30
+
+        return score
     }
 
     private fun isCleanSuggestion(key: String, suggestion: SmartSuggestion, primary: String): Boolean {
         if (suggestion.bengali.isEmpty()) return false
+        if (DIRECT_WORD_OVERRIDES[key]?.contains(suggestion.bengali) == true) return true
+        if (suggestion.source == "english_passthrough") return suggestion.bengali.lowercase() == key
         if (Regex("[A-Za-z]").containsMatchIn(suggestion.bengali)) return false
+        if (!respectsSibilantKeyBoundary(key, suggestion.bengali, primary, suggestion.source)) return false
         if (suggestion.source == "orthographic_variant") return true
         if (
             key.length < 3 &&
@@ -914,6 +1238,40 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         return hasSuggestionPhoneticFit(key, suggestion.bengali, primary)
+    }
+
+    private fun respectsSibilantKeyBoundary(
+        key: String,
+        bengali: String,
+        primary: String,
+        source: String
+    ): Boolean {
+        if (bengali == primary || source == "dictionary_exact") return true
+
+        val generatedSource = source in setOf(
+            "ambiguous_variant",
+            "candidate_lattice",
+            "dictionary_prefix",
+            "dictionary_fuzzy",
+            "progressive_narrowing",
+            "narrowing",
+            "root_dictionary",
+            "pattern_alternative"
+        )
+        if (!generatedSource) return true
+
+        val hasTypedSh = key.contains("sh")
+        val hasTypedPlainS = key.contains('s')
+
+        if (!hasTypedSh && hasTypedPlainS && primary.none { it == 'শ' || it == 'ষ' }) {
+            if (bengali.any { it == 'শ' || it == 'ষ' }) return false
+        }
+
+        if (hasTypedSh && primary.none { it == 'স' }) {
+            if (bengali.contains('স')) return false
+        }
+
+        return true
     }
 
     private fun getYaOrthographicVariants(bengali: String): List<String> {
@@ -990,7 +1348,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (candidateVowels.isEmpty()) return false
 
         val lcs = vowelPathLcs(keyVowels, candidateVowels)
-        return lcs.toDouble() / keyVowels.length >= 0.67
+        return lcs.toDouble() / keyVowels.length >= 0.66
     }
 
     private fun vowelPath(value: String): String = value
@@ -1062,6 +1420,21 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     /**
      * Layer 1: Dictionary lookup via PhoneticTrie.
      */
+    private fun tryDirectWordOverride(key: String): ConversionResult? {
+        val words = DIRECT_WORD_OVERRIDES[key] ?: return null
+        if (words.isEmpty()) return null
+        val primary = words.first()
+        val alternatives = words.drop(1).mapIndexed { index, bengali ->
+            Alternative(bengali, maxOf(0.90, 0.97 - index * 0.03))
+        }
+        return ConversionResult(
+            bengali = primary,
+            confidence = 0.995,
+            source = ResolutionSource.DICTIONARY,
+            alternatives = alternatives
+        )
+    }
+
     private fun convertByDictionary(key: String): ConversionResult? {
         var results = dictionary.lookup(key)
         if (results.isEmpty()) return null
@@ -1165,16 +1538,31 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
-        // When input ends with 'o', prefer the ো-version of the top result
-        if (key.endsWith("o") && ranked.size > 1) {
+        if (!validator.isLoaded()) {
+            ranked = preferBareInherentFinalO(key, ranked)
+        }
+
+        // Do not blindly promote the ো-version for every roman word ending in
+        // "o". In Bangla phonetic typing, final roman o often represents the
+        // inherent vowel pronunciation of a consonant-ending word (boro → বড়),
+        // while some words genuinely need visible o-kar. Keep both variants,
+        // but only promote the o-kar form when dictionary/frequency evidence is
+        // clearly stronger than the bare form.
+        if (key.endsWith("o") && ranked.size > 1 && validator.isLoaded()) {
             val topBengali = ranked[0].bengali
             val expectedOkar = topBengali + "ো"
             val okarIdx = ranked.indexOfFirst { it.bengali == expectedOkar }
             if (okarIdx > 0) {
                 val okarResult = ranked[okarIdx]
-                ranked = ranked.toMutableList().apply {
-                    removeAt(okarIdx)
-                    add(0, okarResult)
+                val topFreq = validator.getFrequency(topBengali)
+                val okarFreq = validator.getFrequency(okarResult.bengali)
+                val okarIsExactSeed = okarResult.confidence > ranked[0].confidence + 0.08
+                val okarHasStrongFrequency = okarFreq > topFreq + 25
+                if (okarIsExactSeed || okarHasStrongFrequency) {
+                    ranked = ranked.toMutableList().apply {
+                        removeAt(okarIdx)
+                        add(0, okarResult)
+                    }
                 }
             }
         }
@@ -1197,6 +1585,60 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
         return ConversionResult(best.bengali, best.confidence, ResolutionSource.DICTIONARY, alternatives)
+    }
+
+    private fun tryCuratedEnglishVariant(key: String, rawInput: String): ConversionResult? {
+        val primary = ENGLISH_VARIANT_PRIMARY_BY_KEY[key] ?: return null
+        val alternatives = if (primary != rawInput) {
+            listOf(Alternative(rawInput, 0.98))
+        } else {
+            emptyList()
+        }
+        return ConversionResult(
+            bengali = primary,
+            confidence = 0.995,
+            source = ResolutionSource.DICTIONARY,
+            alternatives = alternatives
+        )
+    }
+
+    /**
+     * Final roman "o" can mean either a visible o-kar (ভালো) or only the
+     * pronounced inherent vowel of a consonant-ending word (বড়). When the
+     * dictionary contains the exact pair bare + "ো", keep the o-kar spelling
+     * only if it has clearly stronger evidence. This is deliberately scoped to
+     * consonant endings that commonly suffer from the বড়/বড়ো class of errors,
+     * so high-frequency words like ভালো remain untouched.
+     */
+    private fun preferBareInherentFinalO(key: String, ranked: List<LookupResult>): List<LookupResult> {
+        if (!key.endsWith("o") || ranked.size < 2) return ranked
+
+        val top = ranked.first()
+        if (!top.bengali.endsWith("ো")) return ranked
+
+        val bare = top.bengali.dropLast(1)
+        if (!bareHasInherentFinalOPreference(bare)) return ranked
+
+        val bareIdx = ranked.indexOfFirst { it.bengali == bare }
+        if (bareIdx <= 0) return ranked
+
+        val bareResult = ranked[bareIdx]
+        val topFreq = if (validator.isLoaded()) validator.getFrequency(top.bengali) else top.frequency
+        val bareFreq = if (validator.isLoaded()) validator.getFrequency(bareResult.bengali) else bareResult.frequency
+        val topEvidence = if (topFreq > 0) topFreq else top.frequency
+        val bareEvidence = if (bareFreq > 0) bareFreq else bareResult.frequency
+
+        if (bareEvidence + 15 < topEvidence) return ranked
+
+        return ranked.toMutableList().apply {
+            removeAt(bareIdx)
+            add(0, bareResult)
+        }
+    }
+
+    private fun bareHasInherentFinalOPreference(bengali: String): Boolean {
+        return listOf("ড়", "ঢ়", "ট", "ঠ", "ড", "ঢ", "ণ", "ন", "র", "ল")
+            .any { bengali.endsWith(it) }
     }
 
     /**
@@ -1237,6 +1679,37 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * These can attach to ANY noun root without being listed in the dictionary.
      * Map from phonetic suffix to Bengali suffix.
      */
+    private val productiveVerbSuffixes: Map<String, String> = linkedMapOf(
+        // Present/progressive colloquial verb endings. These are productive:
+        // dictionary builds should not need variants like korci/korteco/partecilam.
+        "ci" to "ছি",          // করছি
+        "ce" to "ছে",          // করছে
+        "co" to "ছো",          // করছো
+        "cen" to "ছেন",        // করছেন
+        "cilam" to "ছিলাম",    // করছিলাম
+        "cile" to "ছিলে",      // করছিলে
+        "cilo" to "ছিলো",      // করছিলো
+        "cilen" to "ছিলেন",    // করছিলেন
+        "teci" to "তেছি",      // করতেছি
+        "techi" to "তেছি",     // legacy/common: kortechi -> করতেছি
+        "tecina" to "তেছিনা",  // করতেছিনা
+        "techina" to "তেছিনা", // legacy/common: kortechina -> করতেছিনা
+        "tece" to "তেছে",      // করতেছে
+        "teche" to "তেছে",     // legacy/common: korteche -> করতেছে
+        "teco" to "তেছো",      // করতেছো
+        "techo" to "তেছো",     // legacy/common: kortecho -> করতেছো
+        "tecen" to "তেছেন",    // করতেছেন
+        "techen" to "তেছেন",   // legacy/common: kortechen -> করতেছেন
+        "tecilam" to "তেছিলাম", // করতেছিলাম
+        "techilam" to "তেছিলাম", // legacy/common: kortechilam -> করতেছিলাম
+        "tecile" to "তেছিলে",   // করতেছিলে
+        "techile" to "তেছিলে",  // legacy/common: kortechile -> করতেছিলে
+        "tecilo" to "তেছিলো",   // করতেছিলো
+        "techilo" to "তেছিলো",  // legacy/common: kortechilo -> করতেছিলো
+        "tecilen" to "তেছিলেন", // করতেছিলেন
+        "techilen" to "তেছিলেন", // legacy/common: kortechilen -> করতেছিলেন
+    )
+
     private val productiveSuffixes: Map<String, String> = mapOf(
         // Case markers / postpositions (attach to any noun)
         "ta" to "টা",    // definite article: বইটা (the book)
@@ -1244,6 +1717,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         "te" to "তে",    // locative/instrumental: ঘরতে (in the house)
         "ke" to "কে",    // accusative/dative: মানুষকে (to the person)
         "er" to "ের",    // possessive/genitive: মানুষের (of the person)
+        "rta" to "রটা",  // possessive + definite: বাড়ীরটা/বাড়িরটা
         "ra" to "রা",    // plural (animate): মানুষরা (people)
         "der" to "দের",  // plural genitive: মানুষদের (of the people)
         "gulo" to "গুলো", // plural (inanimate): বইগুলো (the books)
@@ -1255,6 +1729,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         "bo" to "বো",    // future 1st person: করবো, রাখবো
         "be" to "বে",    // future 3rd person: করবে, দেখবে
         "ben" to "বেন",  // future formal: করবেন, রাখবেন
+    ) + productiveVerbSuffixes
+
+    private val verbProductiveSuffixPhonetics: Set<String> =
+        setOf("lam", "le", "lo", "bo", "be", "ben") + productiveVerbSuffixes.keys
+
+    private val verbRootPreferences: Map<String, List<String>> = mapOf(
+        "par" to listOf("পার"),
     )
 
     /**
@@ -1291,6 +1772,62 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      */
     private fun getProductiveSuffix(suffixPhonetic: String): String? {
         return productiveSuffixes[suffixPhonetic.lowercase()]
+    }
+
+    private fun tryProductiveVerbSuffixConversion(key: String): ConversionResult? {
+        if (key.length < 5) return null
+
+        for (suffixPhonetic in productiveVerbSuffixes.keys.sortedByDescending { it.length }) {
+            if (!key.endsWith(suffixPhonetic) || key.length <= suffixPhonetic.length + 1) continue
+
+            val rootPhonetic = key.dropLast(suffixPhonetic.length)
+            if (rootPhonetic.length < 2) continue
+
+            var rootResults = dictionary.lookup(rootPhonetic)
+            val rootBengali = if (rootResults.isNotEmpty()) {
+                if (key.startsWith("z")) {
+                    rootResults = rootResults.filter { !it.bengali.startsWith("জ") }
+                }
+                if (key.startsWith("j") && !key.startsWith("jh")) {
+                    rootResults = rootResults.filter { !it.bengali.startsWith("য") }
+                }
+                if (key.startsWith("s") && !key.startsWith("sh")) {
+                    rootResults = rootResults.filter { !it.bengali.startsWith("শ") }
+                }
+                if (key.startsWith("sh")) {
+                    rootResults = rootResults.filter { !it.bengali.startsWith("স") }
+                }
+                if (rootResults.isEmpty()) continue
+
+                val root = verbRootPreferences[rootPhonetic]
+                    ?.firstNotNullOfOrNull { preferred ->
+                        rootResults.firstOrNull { it.bengali == preferred }
+                    }
+                    ?: rootResults.first()
+
+                if (root.matchedPhonetic.isNotEmpty() && root.matchedPhonetic != rootPhonetic) continue
+                root.bengali
+            } else if (suffixPhonetic.startsWith("te")) {
+                convertByPatterns(rootPhonetic).bengali.takeIf { it.isNotEmpty() } ?: continue
+            } else {
+                continue
+            }
+
+            val suffix = getProductiveSuffix(suffixPhonetic) ?: continue
+            val bengali = rootBengali + suffix
+            val literal = convertByPatterns(key)
+            val alternatives = (listOf(Alternative(literal.bengali, literal.confidence.coerceAtMost(0.82))) + literal.alternatives)
+                .filter { it.bengali != bengali }
+
+            return ConversionResult(
+                bengali = bengali,
+                confidence = 0.97,
+                source = ResolutionSource.RULE,
+                alternatives = alternatives
+            )
+        }
+
+        return null
     }
 
     /**
@@ -1482,7 +2019,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             if (rootResults.isEmpty()) continue
 
             // Skip suffix-stripped matches — only use exact phonetic matches
-            val topResult = rootResults[0]
+            val topResult = if (suffixPhonetic in verbProductiveSuffixPhonetics) {
+                verbRootPreferences[rootPhonetic]
+                    ?.firstNotNullOfOrNull { preferred ->
+                        rootResults.firstOrNull { it.bengali == preferred }
+                    }
+                    ?: rootResults[0]
+            } else {
+                rootResults[0]
+            }
             if (topResult.matchedPhonetic.isNotEmpty() && topResult.matchedPhonetic != rootPhonetic) continue
 
             val rootBengali = topResult.bengali
@@ -1507,11 +2052,21 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // === 1. Productive suffixes (টা, টি, তে, কে, etc.) ===
             val productiveSuffix = getProductiveSuffix(suffixPhonetic)
             if (productiveSuffix != null) {
+                val primary = if (suffixPhonetic == "rta" && rootBengali.endsWith("ি")) {
+                    rootBengali.dropLast(1) + "ীরটা"
+                } else {
+                    rootBengali + productiveSuffix
+                }
+                val alternatives = if (primary != rootBengali + productiveSuffix) {
+                    listOf(Alternative(rootBengali + productiveSuffix, 0.88))
+                } else {
+                    emptyList()
+                }
                 val result = ConversionResult(
-                    bengali = rootBengali + productiveSuffix,
+                    bengali = primary,
                     confidence = 0.95,
                     source = ResolutionSource.DICTIONARY,
-                    alternatives = emptyList()
+                    alternatives = alternatives
                 )
                 val validated = validateResult(result)
                 if (validated != null) return validated
@@ -1673,7 +2228,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * 3. Single consonants with context-aware rules
      * 4. Vowels (independent at start, dependent after consonants)
      */
-    private fun convertByPatterns(key: String): ConversionResult {
+    private fun convertByPatterns(rawKey: String): ConversionResult {
+        val key = rawKey.lowercase()
+        tryLowercaseV2ControlRule(key)?.let { return it }
+
         val result = StringBuilder()
         var i = 0
         var confidence = 0.85
@@ -1706,61 +2264,6 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             val ch = key[i]
             if (ch in '0'..'9') {
                 result.append(BENGALI_DIGITS[ch - '0'])
-                i++
-                continue
-            }
-
-            // --- Uppercase case markers (forcer characters) ---
-            // Must be checked BEFORE ConjunctResolver/ConjunctTable which use
-            // ignoreCase and would incorrectly match uppercase chars as patterns.
-            // Web parity: uppercase letters produce forced outputs that bypass
-            // normal pattern matching.
-            if (ch.isUpperCase()) {
-                val afterConsonant = endsWithBengaliConsonant(result)
-                when (ch) {
-                    'N' -> {
-                        // Chandrabindu (nasalization marker): চাঁদ, হাঁস, কাঁদ
-                        result.append('ঁ')
-                    }
-                    'O' -> {
-                        // Explicit ো-কার / ও — bypasses smart-o suppression
-                        result.append(if (afterConsonant) "ো" else "ও")
-                    }
-                    'I' -> {
-                        // Explicit ি-কার / ই
-                        result.append(if (afterConsonant) "ি" else "ই")
-                    }
-                    'U' -> {
-                        // Explicit ু-কার / উ
-                        result.append(if (afterConsonant) "ু" else "উ")
-                    }
-                    'A' -> {
-                        // Explicit া-কার / আ
-                        result.append(if (afterConsonant) "া" else "আ")
-                    }
-                    'E' -> {
-                        // Explicit ে-কার / এ
-                        result.append(if (afterConsonant) "ে" else "এ")
-                    }
-                    'R' -> {
-                        // Retroflex flap: ড়
-                        result.append("ড়")
-                    }
-                    'T' -> {
-                        // Retroflex stop: ট
-                        result.append("ট")
-                    }
-                    'D' -> {
-                        // Retroflex stop: ড
-                        result.append("ড")
-                    }
-                    else -> {
-                        // Unknown uppercase — lowercase and process normally
-                        // by letting it fall through to patterns in the next iteration
-                        // (replace the char at this position conceptually)
-                        result.append(ch)
-                    }
-                }
                 i++
                 continue
             }
@@ -1878,6 +2381,58 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         return ConversionResult(result.toString(), confidence, ResolutionSource.RULE, getAlternatives(key, result.toString()))
     }
 
+    private fun tryLowercaseV2ControlRule(key: String): ConversionResult? {
+        fun result(value: String, confidence: Double = 0.96): ConversionResult =
+            ConversionResult(value, confidence, ResolutionSource.RULE, emptyList())
+
+        when (key) {
+            "x", "hc" -> return result("্")
+            "w" -> return result("ঃ")
+            "nq" -> return result("ঁ")
+            "ng", "ong" -> return result("ং")
+        }
+
+        if (key.length > 1 && key.endsWith("c")) {
+            val baseKey = key.dropLast(1)
+            val base = lowercaseV2ControlBaseConsonant(baseKey)
+            if (base != null) return result(base + "্")
+        }
+
+        return null
+    }
+
+    private fun lowercaseV2ControlBaseConsonant(key: String): String? {
+        return when (key) {
+            "kkh", "ksh" -> "ক্ষ"
+            "kh" -> "খ"
+            "gh" -> "ঘ"
+            "ch" -> "চ"
+            "jh", "zh" -> "ঝ"
+            "th" -> "থ"
+            "dh" -> "ধ"
+            "ph", "f" -> "ফ"
+            "bh", "v" -> "ভ"
+            "sh" -> "শ"
+            "ng" -> "ঙ"
+            "k" -> "ক"
+            "g" -> "গ"
+            "c" -> "ছ"
+            "j" -> "জ"
+            "z" -> "য"
+            "t" -> "ত"
+            "d" -> "দ"
+            "n" -> "ন"
+            "p" -> "প"
+            "b" -> "ব"
+            "m" -> "ম"
+            "r" -> "র"
+            "l" -> "ল"
+            "s" -> "স"
+            "h" -> "হ"
+            else -> null
+        }
+    }
+
     // ======================== PATTERN ALTERNATIVES GENERATOR ========================
 
     internal fun getAlternatives(input: String, primary: String): List<Alternative> {
@@ -1945,7 +2500,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "nc", "mb", "mp", "lp", "lb", "ld", "lt", "lk", "lm", "lg", "lf",
             "tn", "tm", "tb", "db", "dg", "dm", "jb", "hm", "hn", "hl", "hb",
             "nm", "ns", "gm", "gl", "kl", "km", "kb", "pl", "pn", "ps", "bl",
-            "bd", "ml", "fl", "kk", "cc", "jj", "dd", "tt", "nn", "mm", "ll",
+            "bd", "ml", "fl", "xo", "kk", "cc", "jj", "dd", "tt", "nn", "mm", "ll",
             "ss", "pp", "bb", "rr"
         )
 
@@ -1995,6 +2550,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "ngk" -> listOf(TokenExpansion("ঙ্ক", 1.0))
             "ngg" -> listOf(TokenExpansion("ঙ্গ", 1.0))
             "ngm" -> listOf(TokenExpansion("ঙ্ম", 1.0))
+            "xo" -> listOf(TokenExpansion("ক্স", 1.0))
             "chch", "cch" -> listOf(TokenExpansion("চ্ছ", 1.0))
             "kh" -> listOf(TokenExpansion("খ", 1.0))
             "gh" -> listOf(TokenExpansion("ঘ", 1.0))
@@ -2014,7 +2570,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "rr" -> listOf(TokenExpansion(if (afterConsonant) "্র" else "রর", 0.95))
             "th" -> listOf(TokenExpansion("থ", 0.70), TokenExpansion("ঠ", 0.42, false))
             "dh" -> listOf(TokenExpansion("ধ", 0.80), TokenExpansion("ঢ", 0.38, false))
-            "sh" -> listOf(TokenExpansion("শ", 0.55), TokenExpansion("ষ", 0.42, false), TokenExpansion("স", 0.35, false))
+            "sh" -> listOf(TokenExpansion("শ", 0.55), TokenExpansion("ষ", 0.42, false))
             "chh" -> listOf(TokenExpansion("ছ", 0.90))
             "ch" -> listOf(TokenExpansion("চ", 0.84), TokenExpansion("ছ", 0.58, false))
             "ng" -> if (next != null && next in "aeiou") {
@@ -2099,7 +2655,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "t" -> listOf(TokenExpansion("ত", 0.80), TokenExpansion("ট", 0.52, false))
             "d" -> listOf(TokenExpansion("দ", 0.75), TokenExpansion("ড", 0.48, false))
             "n" -> listOf(TokenExpansion("ন", 0.85), TokenExpansion("ণ", 0.42, false))
-            "s" -> listOf(TokenExpansion("স", 0.60), TokenExpansion("শ", 0.38, false), TokenExpansion("ষ", 0.30, false))
+            "s" -> listOf(TokenExpansion("স", 0.60))
             "r" -> if (index == 0) listOf(TokenExpansion("র", 0.90)) else listOf(TokenExpansion("র", 0.85), TokenExpansion("ড়", 0.45, false))
             "y" -> if (afterConsonant) {
                 listOf(TokenExpansion("্য", 0.78), TokenExpansion("য়", 0.36, false))
@@ -2168,8 +2724,79 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         if (hasInvalidInitial(path.bengali)) score -= 2.5
+        score += lowercaseV2AlignmentScore(key, path.bengali)
         return score
     }
+
+    private fun lowercaseV2AlignmentScore(key: String, bengali: String): Double {
+        var score = 0.0
+
+        if (key == "a") {
+            if (bengali == "আ") score += 8.0
+            if (bengali == "অ") score += 2.0
+            if (bengali == "ও") score -= 2.0
+        }
+
+        if (key == "o") {
+            if (bengali == "ও") score += 8.0
+            if (bengali == "অ") score += 1.0
+        }
+
+        if (key.contains("sh")) {
+            score += bengali.count { it == 'শ' } * 1.4
+            score += bengali.count { it == 'ষ' } * 0.8
+            score -= bengali.count { it == 'স' } * 1.4
+        } else if (Regex("s(?!h)").containsMatchIn(key)) {
+            score += bengali.count { it == 'স' } * 1.0
+            score -= bengali.count { it == 'শ' || it == 'ষ' } * 1.4
+        }
+
+        if (key.contains("sto") && bengali.contains("ষ্ট")) score += 1.6
+
+        if (key.endsWith("be")) {
+            if (bengali.endsWith("বে")) score += 1.0
+            if (bengali.endsWith("োবে")) score -= 2.0
+        }
+
+        if (key.endsWith("ye")) {
+            if (bengali.endsWith("য়ে") || bengali.endsWith("য়ে")) score += 1.0
+            if (bengali.endsWith("োয়ে") || bengali.endsWith("োয়ে")) score -= 1.5
+        }
+
+        if (key.endsWith("oy")) {
+            if (bengali.endsWith("য়") || bengali.endsWith("য়")) score += 1.0
+            if (bengali.endsWith("োয়") || bengali.endsWith("োয়")) score -= 1.0
+        }
+
+        if (key.endsWith("r")) {
+            if (bengali.endsWith("র")) score += 0.8
+            if (bengali.endsWith("ড়") || bengali.endsWith("ঢ়")) score -= 0.8
+        }
+
+        if (!key.contains('r') && (bengali.contains("ড়") || bengali.contains("ঢ়") || bengali.contains("ঢ়"))) {
+            score -= 8.0
+        }
+
+        if (Regex("[bcdfghjklmnpqrstvwxyz]o$").containsMatchIn(key)) {
+            if (bengali.endsWith("ো")) score += 0.5
+            if (bengali.endsWith("ও")) score -= 0.8
+        }
+
+        if (Regex("[bcdfghjklmnpqrstvwxyz][iu]$").containsMatchIn(key)) {
+            if (bengali.endsWith("ি") || bengali.endsWith("ী") || bengali.endsWith("ু") || bengali.endsWith("ূ")) score += 0.7
+            if (bengali.endsWith("ই") || bengali.endsWith("ঈ") || bengali.endsWith("উ") || bengali.endsWith("ঊ")) score -= 0.8
+        }
+
+        if (key.startsWith("e")) {
+            if (bengali.startsWith("এ")) score += 0.7
+            if (bengali.startsWith("ই")) score -= 0.7
+        }
+
+        return score
+    }
+
+    private fun lowercaseV2AlignmentPriority(key: String, bengali: String): Int =
+        (lowercaseV2AlignmentScore(key, bengali) * 100).toInt()
 
     private fun hasInvalidInitial(bengali: String): Boolean {
         return bengali.startsWith("ড়") ||
@@ -2205,22 +2832,23 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             val exact = exactMatchRank[word]
             if (exact != null) {
                 val corpusFrequency = if (validator.isLoaded()) validator.getFrequency(word) else 0
+                val alignment = lowercaseV2AlignmentPriority(key, word)
                 return if (key.length < 4) {
-                    1000 + corpusFrequency * 4 + exact.first - exact.second
+                    1000 + corpusFrequency * 4 + exact.first - exact.second + alignment
                 } else {
-                    1000 + exact.first * 3 - exact.second
+                    1000 + exact.first * 3 - exact.second + alignment
                 }
             }
 
-            if (dictionary.getPhoneticForBengali(word) != null) return 500
+            if (dictionary.getPhoneticForBengali(word) != null) return 500 + lowercaseV2AlignmentPriority(key, word)
 
             if (validator.isLoaded() && validator.isValid(word)) {
-                return validator.getFrequency(word)
+                return validator.getFrequency(word) + lowercaseV2AlignmentPriority(key, word)
             }
 
-            if (disambiguator.isKnownWord(word)) return 40
+            if (disambiguator.isKnownWord(word)) return 40 + lowercaseV2AlignmentPriority(key, word)
 
-            return 0
+            return lowercaseV2AlignmentPriority(key, word)
         }
 
         val exactCandidates = exactMatches
@@ -2468,7 +3096,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "দ" to listOf("ড"), "ড" to listOf("দ"),
             "ধ" to listOf("ঢ"), "ঢ" to listOf("ধ"),
             "ন" to listOf("ণ"), "ণ" to listOf("ন"),
-            "স" to listOf("শ", "ষ"), "শ" to listOf("স", "ষ"), "ষ" to listOf("স", "শ"),
+            "শ" to listOf("ষ"), "ষ" to listOf("শ"),
             "জ" to listOf("য"), "য" to listOf("জ"),
             "চ" to listOf("ছ"), "ছ" to listOf("চ"),
             "ই" to listOf("য়", "ৈ"), "য়" to listOf("ই", "ৈ"), "ৈ" to listOf("ই", "য়")
@@ -2582,6 +3210,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 "ou" -> return if (isIndependent) Triple("ঔ", 2, 0.90) else Triple("ৌ", 2, 0.90)
                 "oi" -> return if (isIndependent) Triple("ঐ", 2, 0.90) else Triple("ৈ", 2, 0.90)
                 "oo" -> return if (isIndependent) Triple("ঊ", 2, 0.85) else Triple("ূ", 2, 0.85)
+                "uu" -> return if (isIndependent) Triple("ঊ", 2, 0.85) else Triple("ূ", 2, 0.85)
                 "ee" -> return if (isIndependent) Triple("ঈ", 2, 0.85) else Triple("ী", 2, 0.85)
                 "ii" -> return if (isIndependent) Triple("ঈ", 2, 0.85) else Triple("ী", 2, 0.85)
                 "aa" -> return if (isIndependent) Triple("আ", 2, 0.90) else Triple("া", 2, 0.90)
@@ -2765,6 +3394,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     alternatives = result.alternatives + Alternative(result.bengali, result.confidence)
                 )
             }
+        }
+
+        // V2-style candidate arbitration: some Bangla alternatives are both valid
+        // dictionary words (ন/ণ, শ/ষ). Do not wait until the current output is
+        // invalid; score the competing form and let frequency/rules pick the better
+        // candidate for the editor while preserving the old form as an alternative.
+        val scoredSwap = applyScoredAmbiguousSwaps(result)
+        if (scoredSwap.bengali != result.bengali) {
+            return scoredSwap
         }
 
         // Try systematic swaps
@@ -2976,6 +3614,66 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         return result
     }
 
+    private fun applyScoredAmbiguousSwaps(result: ConversionResult): ConversionResult {
+        if (!validator.isLoaded()) return result
+
+        var improved = result.bengali
+        var changed = false
+
+        fun trySwap(idx: Int, replacement: Char, swapType: SwapType) {
+            if (idx !in improved.indices) return
+            val candidate = improved.substring(0, idx) + replacement + improved.substring(idx + 1)
+            if (candidate == improved || candidate.contains("-")) return
+            if (!validator.isValid(candidate)) return
+
+            val currentValid = validator.isValid(improved)
+            if (!currentValid) {
+                improved = candidate
+                changed = true
+                return
+            }
+
+            val scorerResult = DisambiguationScorer.score(
+                current = improved,
+                candidate = candidate,
+                swapIndex = idx,
+                swapType = swapType,
+                frequency = DisambiguationScorer.FrequencyPair(
+                    current = validator.getFrequency(improved),
+                    candidate = validator.getFrequency(candidate)
+                )
+            )
+            if (scorerResult.recommendation == "candidate") {
+                improved = candidate
+                changed = true
+            }
+        }
+
+        for (idx in improved.indices) {
+            when (improved[idx]) {
+                'ন' -> trySwap(idx, 'ণ', SwapType.N_NN)
+                'ণ' -> trySwap(idx, 'ন', SwapType.N_NN)
+            }
+        }
+
+        for (idx in improved.indices) {
+            when (improved[idx]) {
+                'শ' -> trySwap(idx, 'ষ', SwapType.SH_SS)
+                'ষ' -> trySwap(idx, 'শ', SwapType.SH_SS)
+            }
+        }
+
+        return if (changed && improved != result.bengali && validator.isValid(improved)) {
+            result.copy(
+                bengali = improved,
+                confidence = maxOf(result.confidence, 0.90),
+                alternatives = result.alternatives + Alternative(result.bengali, result.confidence)
+            )
+        } else {
+            result
+        }
+    }
+
     /**
      * Layer 5.7: Conjunct removal recovery.
      * When the pattern engine produces an invalid word with hasanta (্),
@@ -3166,6 +3864,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val key = phonetic.lowercase().trim()
         if (!isPlausibleDynamicMapping(key, bengali)) return
         dictionary.addMapping(key, bengali, frequency)
+        wordCache.remove(key)
     }
 
     fun isPlausibleDynamicMapping(phonetic: String, bengali: String): Boolean {
@@ -3195,8 +3894,76 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * @return List of predicted words with confidence scores
      */
     fun getNextWordPredictions(prevBengali: String, limit: Int = 5): List<PredictedWord> {
-        if (!bigramModel.isLoaded()) return emptyList()
-        return bigramModel.getTopPredictions(prevBengali, limit)
+        val previous = prevBengali.trim()
+        if (previous.isEmpty() || limit <= 0) return emptyList()
+
+        val modelPredictions = if (bigramModel.isLoaded()) {
+            bigramModel.getTopPredictions(previous, limit)
+        } else {
+            emptyList()
+        }
+        if (modelPredictions.size >= limit) return modelPredictions
+
+        val seen = modelPredictions.map { it.bengali }.toMutableSet()
+        val fallbackPredictions = FALLBACK_NEXT_WORDS[previous].orEmpty()
+            .filter { seen.add(it) }
+            .mapIndexed { index, word ->
+                PredictedWord(
+                    bengali = word,
+                    confidence = (0.64 - index * 0.04).coerceAtLeast(0.42)
+                )
+            }
+
+        return (modelPredictions + fallbackPredictions).take(limit)
+    }
+
+    /**
+     * Re-rank a single word using the previously committed Bengali word.
+     *
+     * This is intentionally conservative: it only chooses between the primary
+     * result and the alternatives already generated by the normal engine. That
+     * keeps live typing fast and prevents context from inventing unrelated
+     * dictionary words.
+     */
+    fun rerankWithPreviousContext(prevBengali: String?, result: ConversionResult): ConversionResult {
+        val prev = prevBengali?.trim().orEmpty()
+        if (prev.isEmpty() || !bigramModel.isLoaded() || result.alternatives.isEmpty()) return result
+
+        var bestWord = result.bengali
+        var bestConfidence = result.confidence
+        var bestScore = bigramModel.bigramProb(prev, result.bengali)
+
+        for (alt in result.alternatives) {
+            if (alt.bengali == result.bengali || alt.confidence < 0.35) continue
+
+            val altScore = bigramModel.bigramProb(prev, alt.bengali)
+            val bothValid = validator.isLoaded() &&
+                validator.isValid(result.bengali) &&
+                validator.isValid(alt.bengali)
+            val threshold = if (bothValid) 1.18 else 1.45
+
+            if (altScore > bestScore * threshold) {
+                bestWord = alt.bengali
+                bestConfidence = maxOf(result.confidence, alt.confidence, 0.91)
+                bestScore = altScore
+            }
+        }
+
+        if (bestWord == result.bengali) return result
+
+        val alternatives = buildList {
+            add(Alternative(result.bengali, minOf(result.confidence, 0.88)))
+            result.alternatives
+                .filter { it.bengali != bestWord && it.bengali != result.bengali }
+                .forEach { add(it) }
+        }
+
+        return result.copy(
+            bengali = bestWord,
+            confidence = bestConfidence,
+            source = ResolutionSource.STATISTICAL,
+            alternatives = alternatives
+        )
     }
 
     /**

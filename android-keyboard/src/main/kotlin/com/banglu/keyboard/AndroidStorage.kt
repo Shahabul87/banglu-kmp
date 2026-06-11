@@ -5,6 +5,13 @@ import android.content.SharedPreferences
 import com.banglu.engine.platform.CachedDictionary
 import com.banglu.engine.platform.PlatformStorage
 import com.banglu.engine.types.LearnedWord
+import kotlin.math.absoluteValue
+
+data class CustomConversion(
+    val phonetic: String,
+    val bengali: String,
+    val createdAt: Long
+)
 
 /**
  * Android-specific storage implementation using SharedPreferences.
@@ -21,17 +28,30 @@ class AndroidStorage(context: Context) : PlatformStorage {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("banglu_learning", Context.MODE_PRIVATE)
+    private val appPrefs: SharedPreferences =
+        context.getSharedPreferences("banglu_prefs", Context.MODE_PRIVATE)
 
     companion object {
         private const val KEY_LEARNED_WORDS = "learned_words"
+        private const val KEY_CUSTOM_CONVERSIONS = "custom_conversions"
         private const val KEY_DICT_VERSION = "dict_version"
         private const val SEPARATOR = "::"
         private const val MAX_LEARNED_WORDS = 500
+        private const val MAX_CUSTOM_CONVERSIONS = 300
     }
 
     override suspend fun getLearnedWords(): List<LearnedWord> {
-        val raw = prefs.getString(KEY_LEARNED_WORDS, null) ?: return emptyList()
-        return raw.lines()
+        val learnedRaw = getScopedString(KEY_LEARNED_WORDS) ?: ""
+        val customWords = getCustomConversions().map {
+            LearnedWord(
+                id = "${it.phonetic}$SEPARATOR${it.bengali}",
+                phonetic = it.phonetic,
+                bengali = it.bengali,
+                frequency = 120,
+                lastUsed = it.createdAt
+            )
+        }
+        val learnedWords = learnedRaw.lines()
             .filter { it.isNotBlank() }
             .mapNotNull { line ->
                 val parts = line.split(SEPARATOR)
@@ -41,7 +61,60 @@ class AndroidStorage(context: Context) : PlatformStorage {
                         phonetic = parts[0],
                         bengali = parts[1],
                         frequency = parts[2].toIntOrNull() ?: 1,
-                        lastUsed = System.currentTimeMillis()
+                        lastUsed = parts.getOrNull(3)?.toLongOrNull() ?: System.currentTimeMillis()
+                    )
+                } else {
+                    null
+                }
+            }
+        return (customWords + learnedWords)
+            .distinctBy { it.id }
+    }
+
+    override suspend fun saveLearnedWord(phonetic: String, bengali: String, frequency: Int) {
+        val now = System.currentTimeMillis()
+        val learned = getLearnedWords()
+            .associateBy { it.id }
+            .toMutableMap()
+        val id = "$phonetic$SEPARATOR$bengali"
+        val existing = learned[id]
+        learned[id] = LearnedWord(
+            id = id,
+            phonetic = phonetic,
+            bengali = bengali,
+            frequency = if (existing == null) frequency else maxOf(existing.frequency + 1, frequency),
+            lastUsed = now
+        )
+
+        // FIFO eviction: keep only the most recent entries
+        val lines = learned.values
+            .sortedByDescending { it.lastUsed }
+            .take(MAX_LEARNED_WORDS)
+            .map { "${it.phonetic}$SEPARATOR${it.bengali}$SEPARATOR${it.frequency}$SEPARATOR${it.lastUsed}" }
+
+        prefs.edit()
+            .putString(scopedKey(KEY_LEARNED_WORDS), lines.joinToString("\n"))
+            .apply()
+    }
+
+    override suspend fun clearLearnedWords() {
+        prefs.edit()
+            .remove(scopedKey(KEY_LEARNED_WORDS))
+            .remove(scopedKey(KEY_CUSTOM_CONVERSIONS))
+            .apply()
+    }
+
+    fun getCustomConversions(): List<CustomConversion> {
+        val raw = getScopedString(KEY_CUSTOM_CONVERSIONS) ?: return emptyList()
+        return raw.lines()
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                val parts = line.split(SEPARATOR)
+                if (parts.size >= 3) {
+                    CustomConversion(
+                        phonetic = parts[0],
+                        bengali = parts[1],
+                        createdAt = parts[2].toLongOrNull() ?: System.currentTimeMillis()
                     )
                 } else {
                     null
@@ -49,26 +122,31 @@ class AndroidStorage(context: Context) : PlatformStorage {
             }
     }
 
-    override suspend fun saveLearnedWord(phonetic: String, bengali: String, frequency: Int) {
-        val existing = prefs.getString(KEY_LEARNED_WORDS, "") ?: ""
-        val line = "$phonetic$SEPARATOR$bengali$SEPARATOR$frequency"
-        if (existing.contains(line)) return
-
-        val lines = existing.lines().filter { it.isNotBlank() }.toMutableList()
-        lines.add(line)
-
-        // FIFO eviction: keep only the most recent entries
-        while (lines.size > MAX_LEARNED_WORDS) {
-            lines.removeFirst()
-        }
-
-        prefs.edit()
-            .putString(KEY_LEARNED_WORDS, lines.joinToString("\n") + "\n")
-            .apply()
+    fun saveCustomConversion(phonetic: String, bengali: String) {
+        val key = phonetic.lowercase().trim()
+        val value = bengali.trim()
+        if (key.isEmpty() || value.isEmpty()) return
+        val now = System.currentTimeMillis()
+        val conversions = getCustomConversions()
+            .filterNot { it.phonetic == key }
+            .toMutableList()
+        conversions.add(0, CustomConversion(key, value, now))
+        persistCustomConversions(conversions.take(MAX_CUSTOM_CONVERSIONS))
     }
 
-    override suspend fun clearLearnedWords() {
-        prefs.edit().remove(KEY_LEARNED_WORDS).apply()
+    fun deleteCustomConversion(phonetic: String, bengali: String) {
+        persistCustomConversions(
+            getCustomConversions().filterNot {
+                it.phonetic == phonetic && it.bengali == bengali
+            }
+        )
+    }
+
+    private fun persistCustomConversions(conversions: List<CustomConversion>) {
+        val lines = conversions.map { "${it.phonetic}$SEPARATOR${it.bengali}$SEPARATOR${it.createdAt}" }
+        prefs.edit()
+            .putString(scopedKey(KEY_CUSTOM_CONVERSIONS), lines.joinToString("\n"))
+            .apply()
     }
 
     override suspend fun getDictionaryVersion(): String? {
@@ -89,5 +167,21 @@ class AndroidStorage(context: Context) : PlatformStorage {
     override suspend fun getCachedDictionary(currentVersion: String): CachedDictionary? {
         // Dictionary is loaded directly from SQLite, not from a cache layer.
         return null
+    }
+
+    private fun getScopedString(baseKey: String): String? {
+        val scoped = prefs.getString(scopedKey(baseKey), null)
+        if (scoped != null) return scoped
+        return if (activeUserId() == "anonymous") prefs.getString(baseKey, null) else null
+    }
+
+    private fun scopedKey(baseKey: String): String = "${baseKey}_${activeUserId()}"
+
+    private fun activeUserId(): String {
+        val explicit = appPrefs.getString("auth_user_id", null)?.trim().orEmpty()
+        if (explicit.isNotEmpty()) return explicit
+        val email = appPrefs.getString("auth_email", null)?.trim().orEmpty()
+        if (email.isNotEmpty()) return "user_${email.lowercase().hashCode().absoluteValue}"
+        return "anonymous"
     }
 }

@@ -58,6 +58,7 @@ object EnglishDirectData {
             e("হার্ডওয়্যার", aliasesFor("hardware"), 76, WordCategory.FOREIGN),
             e("অ্যাপ", aliasesFor("app"), 76, WordCategory.FOREIGN),
             e("অ্যাপ্লিকেশন", aliasesFor("application"), 76, WordCategory.FOREIGN),
+            e("এপ্লিকেশন", aliasesFor("application"), 74, WordCategory.FOREIGN),
             e("ব্রাউজার", aliasesFor("browser"), 76, WordCategory.FOREIGN),
             e("ওয়েবসাইট", aliasesFor("website"), 76, WordCategory.FOREIGN),
             e("ওয়েবপেজ", aliasesFor("webpage"), 76, WordCategory.FOREIGN),
@@ -685,6 +686,7 @@ object EnglishDirectData {
             e("এপিসোড", aliasesFor("episode"), 76, WordCategory.FOREIGN),
             e("সিরিজ", aliasesFor("series"), 76, WordCategory.FOREIGN),
             e("অ্যানিমেশন", aliasesFor("animation"), 76, WordCategory.FOREIGN),
+            e("হানিমুন", aliasesFor("honeymoon"), 76, WordCategory.FOREIGN),
             e("শার্ট", aliasesFor("shirt"), 76, WordCategory.FOREIGN),
             e("টি-শার্ট", aliasesFor("t shirt"), 76, WordCategory.FOREIGN),
             e("প্যান্ট", aliasesFor("pant"), 76, WordCategory.FOREIGN),
@@ -747,7 +749,51 @@ object EnglishDirectData {
             e("প্লে", aliasesFor("play"), 76, WordCategory.FOREIGN),
             e("পজ", aliasesFor("pause"), 76, WordCategory.FOREIGN),
             e("ফরওয়ার্ড", aliasesFor("forward"), 76, WordCategory.FOREIGN),
-            e("রিওয়াইন্ড", aliasesFor("rewind"), 76, WordCategory.FOREIGN)
+            e("রিওয়াইন্ড", aliasesFor("rewind"), 76, WordCategory.FOREIGN),
+
+            // High-salience Bengali-English loanwords used directly in everyday speech.
+            // These entries intentionally beat English pass-through for lowercase typing,
+            // while EnglishDetector still keeps the raw English form available as a suggestion.
+            e("প্রাকটিস", aliasesFor("practice"), 94, WordCategory.FOREIGN),
+            e("প্র্যাকটিস", aliasesFor("practise"), 88, WordCategory.FOREIGN),
+            e("ডিসকাশন", aliasesFor("discussion"), 92, WordCategory.FOREIGN),
+            e("কমপ্লেইন", aliasesFor("complain"), 92, WordCategory.FOREIGN),
+            e("কনফিউজ", aliasesFor("confuse"), 92, WordCategory.FOREIGN),
+            e("জাস্টিফাই", aliasesFor("justify"), 92, WordCategory.FOREIGN),
+            e("অ্যাকটিভ", aliasesFor("active"), 92, WordCategory.FOREIGN),
+            e("এক্সিডেন্ট", aliasesFor("accident"), 92, WordCategory.FOREIGN),
+            e("কনটেন্ট", aliasesFor("content"), 92, WordCategory.FOREIGN),
+            e("ইনবক্স", aliasesFor("inbox"), 92, WordCategory.FOREIGN),
+            e("লাইভ", aliasesFor("live"), 92, WordCategory.FOREIGN),
+            e("স্ট্যাটাস", aliasesFor("status"), 92, WordCategory.FOREIGN),
+            e("হোস্টেল", aliasesFor("hostel"), 92, WordCategory.FOREIGN),
+            e("ডিকশনারি", aliasesFor("dictionary"), 92, WordCategory.FOREIGN),
+            e("ব্রেড", aliasesFor("bread"), 92, WordCategory.FOREIGN),
+            e("বাটার", aliasesFor("butter"), 92, WordCategory.FOREIGN),
+            e("চিজ", aliasesFor("cheese"), 92, WordCategory.FOREIGN),
+            e("ডিনার", aliasesFor("dinner"), 92, WordCategory.FOREIGN),
+            e("পকেট", aliasesFor("pocket"), 92, WordCategory.FOREIGN),
+            e("স্কার্ট", aliasesFor("skirt"), 92, WordCategory.FOREIGN),
+            e("টপ", aliasesForAll("top", "tops"), 92, WordCategory.FOREIGN),
+            e("টি-শার্ট", aliasesForAll("t shirt", "t-shirt", "tshirt", "tee shirt"), 92, WordCategory.FOREIGN),
+            e("প্যান্ট", aliasesForAll("pant", "pants"), 92, WordCategory.FOREIGN),
+            e("স্টেশন", aliasesFor("station"), 92, WordCategory.FOREIGN),
+            e("এয়ারপোর্ট", aliasesFor("airport"), 92, WordCategory.FOREIGN),
+            e("রিসোর্ট", aliasesFor("resort"), 92, WordCategory.FOREIGN),
+            e("লিটার", aliasesForAll("liter", "litre"), 92, WordCategory.FOREIGN),
+            e("মিটার", aliasesForAll("meter", "metre"), 92, WordCategory.FOREIGN),
+            e("পারসেন্ট", aliasesForAll("percent", "percentage"), 92, WordCategory.FOREIGN),
+            e("নম্বর", aliasesFor("number"), 92, WordCategory.FOREIGN),
+            e("প্যাকেট", aliasesFor("packet"), 92, WordCategory.FOREIGN),
+            e("মিনিট", aliasesFor("minute"), 92, WordCategory.FOREIGN),
+            e("ক্লাব", aliasesFor("club"), 92, WordCategory.FOREIGN),
+            e("পার্টি", aliasesFor("party"), 92, WordCategory.FOREIGN),
+            e("পলিটিক্স", aliasesFor("politics"), 92, WordCategory.FOREIGN),
+            e("সাইকেল", aliasesFor("cycle"), 92, WordCategory.FOREIGN),
+            e("কেজি", aliasesFor("kg"), 92, WordCategory.FOREIGN),
+            e("কিলো", aliasesFor("kilo"), 92, WordCategory.FOREIGN),
+            e("পিৎজা", aliasesFor("pitsa"), 88, WordCategory.FOREIGN),
+            e("গুগল", aliasesFor("google"), 92, WordCategory.FOREIGN)
         )
     }
 
@@ -767,4 +813,7 @@ object EnglishDirectData {
         val hyphenless = lower.replace('-', ' ')
         return listOf(lower, compact, hyphenless).filter { it.isNotEmpty() }.distinct()
     }
+
+    private fun aliasesForAll(vararg roman: String): List<String> =
+        roman.flatMap { aliasesFor(it) }.distinct()
 }

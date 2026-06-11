@@ -3,9 +3,9 @@ package com.banglu.engine.ai
 /**
  * English Word Detector — Prevents mangled transliteration of English words.
  *
- * When Bengali users type English words in their text (computer, possible, keyboard),
+ * When Bengali users type English words in Bangla mode (computer, possible, keyboard),
  * the phonetic engine would produce garbled Bengali output. This detector identifies
- * common English words and passes them through unchanged.
+ * common English words so the engine can route them to an English-pronunciation layer.
  *
  * Detection methods:
  * 1. Known English word set (~500 common words used in Bengali text)
@@ -59,6 +59,7 @@ object EnglishDetector {
         "company", "business", "market", "product", "service", "customer",
         "report", "presentation", "schedule", "deadline", "budget",
         "salary", "payment", "invoice", "receipt", "bill",
+        "portfolio", "investment", "finance", "economy", "stock", "loan", "insurance",
         "interview", "resume", "job", "career", "promotion",
         "training", "workshop", "seminar", "conference",
 
@@ -73,6 +74,8 @@ object EnglishDetector {
         "bus", "train", "car", "bike", "taxi", "uber", "rickshaw",
         "flight", "airport", "station", "ticket", "booking",
         "road", "highway", "bridge", "parking",
+        "honeymoon", "wedding", "anniversary", "tour", "travel", "trip",
+        "vacation", "holiday", "resort", "beach", "honeymooners",
 
         // --- Food (English names used in Bengali) ---
         "pizza", "burger", "sandwich", "pasta", "noodles", "cake", "chocolate",
@@ -118,7 +121,16 @@ object EnglishDetector {
         "computers", "phones", "messages", "emails", "files", "photos",
         "videos", "updates", "options", "settings", "features", "changes",
         "problems", "solutions", "results", "reports", "documents",
-        "keyboards", "meetings", "projects", "payments", "orders"
+        "keyboards", "meetings", "projects", "payments", "orders",
+
+        // --- Bengali-English loanword bases: Bengali pronunciation should be primary,
+        //     but the raw English token must remain available as an alternate suggestion.
+        "practice", "practise", "discussion", "complain", "confuse", "justify",
+        "accident", "content", "inbox", "status", "hostel", "dictionary",
+        "bread", "butter", "cheese", "dinner", "pocket", "skirt", "tops",
+        "scooter", "liter", "litre", "meter", "metre", "percent", "percentage",
+        "packet", "minute", "club", "party", "politics", "cycle", "kg", "kilo",
+        "tshirt"
     )
 
     // ── Regex patterns that strongly suggest English text ───────────────
@@ -141,7 +153,7 @@ object EnglishDetector {
     // ── Consonant cluster regex for Bengali phonetic guard ─────────────
 
     private val ALL_ALPHA = Regex("^[a-z]*$", RegexOption.IGNORE_CASE)
-    private val FOUR_PLUS_CONSONANTS = Regex("[bcdfgjklmnpqrstvwxyz]{4,}", RegexOption.IGNORE_CASE)
+    private val FOUR_PLUS_CONSONANTS = Regex("[bcdfghjklmnpqrstvwxyz]{4,}", RegexOption.IGNORE_CASE)
 
     /**
      * Check if a word is likely English (should not be transliterated).
@@ -157,24 +169,29 @@ object EnglishDetector {
         val lower = word.lowercase()
 
         // 1. Check known English words
-        if (lower in ENGLISH_WORDS) return true
+        if (isKnownEnglishWord(lower)) return true
 
         // 2. Check English patterns (use original word for case-sensitive patterns)
-        for (pattern in ENGLISH_PATTERNS) {
-            if (pattern.containsMatchIn(word)) return true
-        }
+        if (isStrongEnglishPattern(word)) return true
 
         // 3. Heuristic: words ending in common English suffixes
         //    Only when the word does NOT look like valid Bengali phonetic input
-        if (lower.length > 5) {
-            for (suffix in ENGLISH_SUFFIXES) {
-                if (lower.endsWith(suffix) && !looksLikeBengaliPhonetic(lower)) {
-                    return true
-                }
-            }
-        }
+        if (isHeuristicEnglishWord(lower)) return true
 
         return false
+    }
+
+    fun isKnownEnglishWord(word: String): Boolean = word.lowercase() in ENGLISH_WORDS
+
+    fun isStrongEnglishPattern(word: String): Boolean =
+        ENGLISH_PATTERNS.any { it.containsMatchIn(word) }
+
+    fun isHeuristicEnglishWord(word: String): Boolean {
+        val lower = word.lowercase()
+        if (lower.length <= 5) return false
+        return ENGLISH_SUFFIXES.any { suffix ->
+            lower.endsWith(suffix) && !looksLikeBengaliPhonetic(lower)
+        }
     }
 
     /**

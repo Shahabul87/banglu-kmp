@@ -5,7 +5,8 @@ enum class KeyboardMode {
     ENGLISH,    // Direct English passthrough
     SYMBOLS_1,  // Symbols page 1
     SYMBOLS_2,  // Symbols page 2
-    EMOJI       // Emoji picker panel
+    EMOJI,      // Emoji picker panel
+    CLIPBOARD   // Local clipboard history panel
 }
 
 enum class ShiftState {
@@ -18,6 +19,7 @@ enum class VoiceInputState {
     IDLE,
     LISTENING,
     PROCESSING,
+    STOPPED,
     PERMISSION_REQUIRED,
     UNAVAILABLE,
     ERROR

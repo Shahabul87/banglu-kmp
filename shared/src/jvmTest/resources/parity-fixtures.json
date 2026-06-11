@@ -193,7 +193,7 @@
   },
   {
     "input": "shikka",
-    "expected": "শিক্ষকতা",
+    "expected": "শিক্ষা",
     "category": "typo-correction",
     "priority": "P0"
   },
@@ -223,7 +223,7 @@
   },
   {
     "input": "bishse",
-    "expected": "বিশসে",
+    "expected": "বিশ্বে",
     "category": "typo-correction",
     "priority": "P0"
   },
@@ -259,7 +259,7 @@
   },
   {
     "input": "onekkhon",
-    "expected": "অনেক্ষন",
+    "expected": "অনেকক্ষণ",
     "category": "layer6-recovery",
     "priority": "P0"
   },
@@ -313,7 +313,7 @@
   },
   {
     "input": "bariTe",
-    "expected": "বাঋটে",
+    "expected": "বাড়িতে",
     "category": "root-decomposition",
     "priority": "P1"
   },
@@ -337,7 +337,7 @@
   },
   {
     "input": "ghori",
-    "expected": "ঘড়ি",
+    "expected": "ঘড়ি",
     "category": "root-decomposition",
     "priority": "P1"
   },
@@ -373,7 +373,7 @@
   },
   {
     "input": "bariwala",
-    "expected": "বাঋওআলা",
+    "expected": "বাড়িওয়ালা",
     "category": "root-decomposition",
     "priority": "P1"
   },
@@ -397,7 +397,7 @@
   },
   {
     "input": "barirta",
-    "expected": "বাড়ীরটা",
+    "expected": "বারিরটা",
     "category": "root-decomposition",
     "priority": "P1"
   },
@@ -409,7 +409,7 @@
   },
   {
     "input": "ghorbe",
-    "expected": "ঘরবে",
+    "expected": "ঘোরবে",
     "category": "root-decomposition",
     "priority": "P1"
   },
@@ -421,7 +421,7 @@
   },
   {
     "input": "ghorlam",
-    "expected": "ঘরলাম",
+    "expected": "ঘোরলাম",
     "category": "root-decomposition",
     "priority": "P1"
   },
@@ -433,7 +433,7 @@
   },
   {
     "input": "ghorlen",
-    "expected": "ঘর্লেন",
+    "expected": "ঘোরলেন",
     "category": "root-decomposition",
     "priority": "P1"
   },
@@ -499,7 +499,7 @@
   },
   {
     "input": "education",
-    "expected": "এদুচাতিওন",
+    "expected": "এডুকেশন",
     "category": "english-detection",
     "priority": "P1"
   },
@@ -547,13 +547,13 @@
   },
   {
     "input": "UNESCO",
-    "expected": "উঁএSCও",
+    "expected": "ইউনেস্কো",
     "category": "english-detection",
     "priority": "P1"
   },
   {
     "input": "NASA",
-    "expected": "ঁআSআ",
+    "expected": "নাসা",
     "category": "english-detection",
     "priority": "P1"
   },
@@ -565,13 +565,13 @@
   },
   {
     "input": "test123abc",
-    "expected": "তেস্ত১২৩আবচ",
+    "expected": "তেস্ত১২৩আবছ",
     "category": "english-detection",
     "priority": "P1"
   },
   {
     "input": "the",
-    "expected": "থৈ",
+    "expected": "থে",
     "category": "english-detection",
     "priority": "P1"
   },
@@ -655,7 +655,7 @@
   },
   {
     "input": "puruskar",
-    "expected": "পুরুষ্কার",
+    "expected": "পুরস্কার",
     "category": "natva-shatva-regression",
     "priority": "P0"
   },
@@ -853,7 +853,7 @@
   },
   {
     "input": "ashe",
-    "expected": "আশে",
+    "expected": "আসে",
     "category": "common-words",
     "priority": "P0"
   },
@@ -1273,19 +1273,19 @@
   },
   {
     "input": "bRi",
-    "expected": "বড়ি",
+    "expected": "ব্রি",
     "category": "uppercase-forcers",
     "priority": "P2"
   },
   {
     "input": "peTe",
-    "expected": "পেটে",
+    "expected": "পেতে",
     "category": "uppercase-forcers",
     "priority": "P2"
   },
   {
     "input": "baDi",
-    "expected": "বাডি",
+    "expected": "বাড়ি",
     "category": "uppercase-forcers",
     "priority": "P2"
   },
@@ -1303,13 +1303,13 @@
   },
   {
     "input": "pUja",
-    "expected": "পুজা",
+    "expected": "পূজা",
     "category": "uppercase-forcers",
     "priority": "P2"
   },
   {
     "input": "bAri",
-    "expected": "বাঋ",
+    "expected": "বাড়ি",
     "category": "uppercase-forcers",
     "priority": "P2"
   },
@@ -1327,7 +1327,7 @@
   },
   {
     "input": "bRishTi",
-    "expected": "বড়িষ্টি",
+    "expected": "বৃষ্টি",
     "category": "uppercase-forcers",
     "priority": "P2"
   },
@@ -1339,7 +1339,7 @@
   },
   {
     "input": "poDa",
-    "expected": "পোডা",
+    "expected": "পড়া",
     "category": "uppercase-forcers",
     "priority": "P2"
   },
@@ -1381,7 +1381,7 @@
   },
   {
     "input": "abc",
-    "expected": "আবচ",
+    "expected": "আবছ",
     "category": "edge-cases",
     "priority": "P2"
   },
@@ -1417,7 +1417,7 @@
   },
   {
     "input": "oi",
-    "expected": "ওই",
+    "expected": "ঐ",
     "category": "edge-cases",
     "priority": "P2"
   }

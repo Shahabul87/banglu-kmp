@@ -1,8 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <queries>
+        <!-- Required on Android 11+ so SpeechRecognizer availability checks can see installed recognizers. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
 
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Keep hardware features optional to preserve the old Play device reach. -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -24,7 +36,7 @@
         android:anyDensity="true" />
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
@@ -49,7 +61,9 @@
             android:name=".MainActivity"
             android:label="@string/app_name"
             android:exported="true"
-            android:theme="@style/Theme.BangluKeyboard">
+            android:process=":ui"
+            android:theme="@style/Theme.BangluKeyboard"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -60,7 +74,38 @@
         <activity
             android:name=".SettingsActivity"
             android:label="@string/settings_title"
-            android:exported="false" />
+            android:exported="false"
+            android:process=":ui" />
+
+        <!-- Voice permission / disclosure Activity -->
+        <activity
+            android:name=".VoicePermissionActivity"
+            android:label="Voice typing permission"
+            android:exported="false"
+            android:process=":ui"
+            android:theme="@style/Theme.BangluKeyboard" />
+
+        <!-- Tutorial Activity -->
+        <activity
+            android:name=".TutorialActivity"
+            android:label="Banglu Guide"
+            android:exported="false"
+            android:process=":ui" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            tools:node="remove" />
 
     </application>
 </manifest>

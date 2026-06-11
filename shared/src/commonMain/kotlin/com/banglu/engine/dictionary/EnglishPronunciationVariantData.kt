@@ -1,0 +1,230 @@
+package com.banglu.engine.dictionary
+
+import com.banglu.engine.types.SmartDictionaryEntry
+import com.banglu.engine.types.WordCategory
+
+/**
+ * High-priority exact variants for everyday English spellings used inside Bangla.
+ *
+ * These are not loose transliteration rules. Each entry is a curated spelling
+ * variant so common English words in Bangla mode commit as Bengali-script
+ * pronunciation, while unknown English still falls back to raw pass-through.
+ */
+object EnglishPronunciationVariantData {
+    val ENTRIES: List<SmartDictionaryEntry> by lazy {
+        listOf(
+            // Core mixed-speech verbs and actions
+            e("প্রাকটিস", aliasesForAll("practice", "practise"), 98),
+            e("ডিসকাশন", aliasesFor("discussion"), 97),
+            e("কমপ্লেইন", aliasesFor("complain"), 97),
+            e("কনফিউজ", aliasesFor("confuse"), 97),
+            e("জাস্টিফাই", aliasesFor("justify"), 96),
+            e("ম্যানেজ", aliasesFor("manage"), 96),
+            e("ক্যানসেল", aliasesFor("cancel"), 96),
+            e("রিমুভ", aliasesFor("remove"), 96),
+            e("আপডেট", aliasesFor("update"), 96),
+            e("ডাউনলোড", aliasesFor("download"), 96),
+            e("আপলোড", aliasesFor("upload"), 96),
+            e("ইনস্টল", aliasesFor("install"), 96),
+            e("ডিলিট", aliasesFor("delete"), 96),
+            e("সেভ", aliasesFor("save"), 96),
+            e("শেয়ার", aliasesFor("share"), 96),
+            e("সার্চ", aliasesFor("search"), 96),
+            e("সাবমিট", aliasesFor("submit"), 95),
+            e("কনফার্ম", aliasesFor("confirm"), 95),
+            e("এপ্লিকেশন", aliasesFor("application"), 98),
+            e("ফলো", aliasesFor("follow"), 95),
+            e("ব্লক", aliasesFor("block"), 95),
+            e("রিপোর্ট", aliasesFor("report"), 95),
+            e("চেক", aliasesFor("check"), 95),
+            e("ফিক্স", aliasesFor("fix"), 95),
+            e("ক্লিক", aliasesFor("click"), 95),
+            e("স্ক্রল", aliasesFor("scroll"), 95),
+            e("প্লে", aliasesFor("play"), 94),
+            e("স্টপ", aliasesFor("stop"), 94),
+            e("স্টার্ট", aliasesFor("start"), 94),
+            e("ওপেন", aliasesFor("open"), 94),
+            e("ক্লোজ", aliasesFor("close"), 94),
+
+            // Everyday English words that users type by spelling, not Bangla phonetics
+            e("পসিবল", aliasesFor("possible"), 97),
+            e("ইমপসিবল", aliasesFor("impossible"), 95),
+            e("ইমপোর্ট্যান্ট", aliasesFor("important"), 96),
+            e("অ্যাভেইলেবল", aliasesFor("available"), 96),
+            e("কারেক্ট", aliasesFor("correct"), 95),
+            e("রং", aliasesFor("wrong"), 94),
+            e("সিম্পল", aliasesFor("simple"), 95),
+            e("কমপ্লেক্স", aliasesFor("complex"), 94),
+            e("কমপ্লিট", aliasesFor("complete"), 95),
+            e("পারফেক্ট", aliasesFor("perfect"), 95),
+            e("স্পেশাল", aliasesFor("special"), 95),
+            e("ডিফারেন্ট", aliasesFor("different"), 95),
+            e("ইজি", aliasesFor("easy"), 95),
+            e("ডিফিকাল্ট", aliasesFor("difficult"), 94),
+            e("ফাস্ট", aliasesFor("fast"), 95),
+            e("স্লো", aliasesFor("slow"), 95),
+            e("নেক্সট", aliasesFor("next"), 96),
+            e("প্রিভিয়াস", aliasesFor("previous"), 95),
+            e("কারেন্ট", aliasesFor("current"), 95),
+            e("ফাইনাল", aliasesFor("final"), 95),
+            e("বেসিক", aliasesFor("basic"), 94),
+            e("অ্যাডভান্সড", aliasesFor("advanced"), 94),
+            e("প্রিমিয়াম", aliasesFor("premium"), 94),
+            e("প্রো", aliasesFor("pro"), 94),
+            e("অ্যাকটিভ", aliasesFor("active"), 96),
+            e("ইনঅ্যাকটিভ", aliasesFor("inactive"), 94),
+            e("এনেবলড", aliasesFor("enabled"), 94),
+            e("ডিসেবলড", aliasesFor("disabled"), 94),
+            e("ভ্যালিড", aliasesFor("valid"), 94),
+            e("ইনভ্যালিড", aliasesFor("invalid"), 94),
+            e("রিকোয়ার্ড", aliasesFor("required"), 94),
+            e("অপশনাল", aliasesFor("optional"), 94),
+            e("সাকসেসফুল", aliasesFor("successful"), 94),
+            e("ফেইলড", aliasesFor("failed"), 94),
+            e("পেন্ডিং", aliasesFor("pending"), 94),
+
+            // Digital, social, and phone terms
+            e("মোবাইল", aliasesFor("mobile"), 98),
+            e("ফোন", aliasesFor("phone"), 98),
+            e("কল", aliasesFor("call"), 97),
+            e("মেসেজ", aliasesFor("message"), 97),
+            e("টেক্সট", aliasesFor("text"), 96),
+            e("চ্যাট", aliasesFor("chat"), 96),
+            e("ভয়েস", aliasesFor("voice"), 96),
+            e("ভিডিও", aliasesFor("video"), 97),
+            e("অডিও", aliasesFor("audio"), 96),
+            e("ফটো", aliasesFor("photo"), 96),
+            e("ইমেজ", aliasesFor("image"), 95),
+            e("কনটেন্ট", aliasesFor("content"), 97),
+            e("লিংক", aliasesFor("link"), 97),
+            e("পোস্ট", aliasesFor("post"), 97),
+            e("কমেন্ট", aliasesFor("comment"), 97),
+            e("রিপ্লাই", aliasesFor("reply"), 95),
+            e("লাইক", aliasesFor("like"), 97),
+            e("লাভ", aliasesFor("love"), 94),
+            e("ইনবক্স", aliasesFor("inbox"), 97),
+            e("লাইভ", aliasesFor("live"), 96),
+            e("স্ট্যাটাস", aliasesFor("status"), 97),
+            e("নোটিফিকেশন", aliasesFor("notification"), 95),
+            e("অ্যালার্ট", aliasesFor("alert"), 94),
+            e("ওয়ার্নিং", aliasesFor("warning"), 94),
+            e("ইনফো", aliasesFor("info"), 94),
+            e("ডিটেইল", aliasesFor("detail"), 94),
+            e("ডিটেইলস", aliasesFor("details"), 94),
+            e("অ্যাকাউন্ট", aliasesFor("account"), 96),
+            e("প্রোফাইল", aliasesFor("profile"), 96),
+            e("পাসওয়ার্ড", aliasesFor("password"), 96),
+            e("ইউজারনেম", aliasesFor("username"), 94),
+            e("লগইন", aliasesFor("login"), 96),
+            e("লগআউট", aliasesFor("logout"), 95),
+
+            // Work, education, travel, commerce
+            e("অফিস", aliasesFor("office"), 98),
+            e("মিটিং", aliasesFor("meeting"), 97),
+            e("প্রজেক্ট", aliasesFor("project"), 97),
+            e("টিম", aliasesFor("team"), 96),
+            e("ম্যানেজার", aliasesFor("manager"), 96),
+            e("বস", aliasesFor("boss"), 95),
+            e("কোম্পানি", aliasesFor("company"), 96),
+            e("বিজনেস", aliasesFor("business"), 96),
+            e("মার্কেট", aliasesFor("market"), 96),
+            e("প্রোডাক্ট", aliasesFor("product"), 95),
+            e("সার্ভিস", aliasesFor("service"), 95),
+            e("কাস্টমার", aliasesFor("customer"), 95),
+            e("শিডিউল", aliasesFor("schedule"), 94),
+            e("ডেডলাইন", aliasesFor("deadline"), 94),
+            e("বাজেট", aliasesFor("budget"), 94),
+            e("স্যালারি", aliasesFor("salary"), 94),
+            e("পেমেন্ট", aliasesFor("payment"), 95),
+            e("ইনভয়েস", aliasesFor("invoice"), 94),
+            e("রিসিট", aliasesFor("receipt"), 94),
+            e("বিল", aliasesFor("bill"), 94),
+            e("স্কুল", aliasesFor("school"), 98),
+            e("কলেজ", aliasesFor("college"), 98),
+            e("ইউনিভার্সিটি", aliasesFor("university"), 96),
+            e("স্টুডেন্ট", aliasesFor("student"), 96),
+            e("টিচার", aliasesFor("teacher"), 96),
+            e("ক্লাস", aliasesFor("class"), 96),
+            e("কোর্স", aliasesFor("course"), 95),
+            e("এক্সাম", aliasesFor("exam"), 95),
+            e("রেজাল্ট", aliasesFor("result"), 96),
+            e("সার্টিফিকেট", aliasesFor("certificate"), 95),
+            e("অ্যাসাইনমেন্ট", aliasesFor("assignment"), 94),
+            e("হোমওয়ার্ক", aliasesFor("homework"), 94),
+            e("রিসার্চ", aliasesFor("research"), 94),
+            e("বাস", aliasesFor("bus"), 97),
+            e("ট্রেন", aliasesFor("train"), 97),
+            e("কার", aliasesFor("car"), 96),
+            e("বাইক", aliasesFor("bike"), 96),
+            e("স্কুটার", aliasesFor("scooter"), 97),
+            e("ট্যাক্সি", aliasesFor("taxi"), 95),
+            e("ফ্লাইট", aliasesFor("flight"), 95),
+            e("এয়ারপোর্ট", aliasesFor("airport"), 96),
+            e("স্টেশন", aliasesFor("station"), 96),
+            e("টিকিট", aliasesFor("ticket"), 95),
+            e("বুকিং", aliasesFor("booking"), 95),
+            e("পার্কিং", aliasesFor("parking"), 94),
+
+            // Health, food, clothing, polite/social
+            e("ডাক্তার", aliasesFor("doctor"), 98),
+            e("হাসপাতাল", aliasesFor("hospital"), 98),
+            e("ক্লিনিক", aliasesFor("clinic"), 96),
+            e("মেডিসিন", aliasesFor("medicine"), 96),
+            e("ইনজেকশন", aliasesFor("injection"), 95),
+            e("সার্জারি", aliasesFor("surgery"), 95),
+            e("ট্রিটমেন্ট", aliasesFor("treatment"), 94),
+            e("ফিভার", aliasesFor("fever"), 94),
+            e("কফ", aliasesFor("cough"), 94),
+            e("ভ্যাকসিন", aliasesFor("vaccine"), 95),
+            e("পিজ্জা", aliasesFor("pizza"), 96),
+            e("বার্গার", aliasesFor("burger"), 96),
+            e("স্যান্ডউইচ", aliasesFor("sandwich"), 96),
+            e("পাস্তা", aliasesFor("pasta"), 94),
+            e("নুডলস", aliasesFor("noodles"), 94),
+            e("কেক", aliasesFor("cake"), 95),
+            e("চকলেট", aliasesFor("chocolate"), 95),
+            e("কফি", aliasesFor("coffee"), 96),
+            e("ব্রেড", aliasesFor("bread"), 95),
+            e("বাটার", aliasesFor("butter"), 95),
+            e("রেস্টুরেন্ট", aliasesFor("restaurant"), 95),
+            e("মেনু", aliasesFor("menu"), 95),
+            e("অর্ডার", aliasesFor("order"), 95),
+            e("ডেলিভারি", aliasesFor("delivery"), 95),
+            e("শার্ট", aliasesFor("shirt"), 96),
+            e("টি-শার্ট", aliasesForAll("t shirt", "t-shirt", "tshirt", "tee shirt"), 96),
+            e("প্যান্ট", aliasesForAll("pant", "pants"), 96),
+            e("জিন্স", aliasesFor("jeans"), 96),
+            e("জ্যাকেট", aliasesFor("jacket"), 94),
+            e("পকেট", aliasesFor("pocket"), 95),
+            e("হ্যালো", aliasesFor("hello"), 96),
+            e("থ্যাংকস", aliasesFor("thanks"), 96),
+            e("থ্যাংক", aliasesFor("thank"), 94),
+            e("সরি", aliasesFor("sorry"), 95),
+            e("প্লিজ", aliasesFor("please"), 95),
+            e("ওকে", aliasesForAll("ok", "okay"), 96),
+            e("ইয়েস", aliasesFor("yes"), 94),
+            e("নো", aliasesFor("no"), 94),
+            e("ওয়েলকাম", aliasesFor("welcome"), 94)
+        )
+    }
+
+    private fun e(
+        bengali: String,
+        phonetics: List<String>,
+        frequency: Int,
+        category: WordCategory = WordCategory.FOREIGN
+    ) = SmartDictionaryEntry(bengali, phonetics, frequency, category)
+
+    private fun aliasesFor(roman: String): List<String> {
+        val lower = roman.lowercase()
+            .replace(Regex("[^a-z0-9\\s-]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        val compact = lower.replace(Regex("[\\s-]+"), "")
+        val hyphenless = lower.replace('-', ' ')
+        return listOf(lower, compact, hyphenless).filter { it.isNotEmpty() }.distinct()
+    }
+
+    private fun aliasesForAll(vararg roman: String): List<String> =
+        roman.flatMap { aliasesFor(it) }.distinct()
+}

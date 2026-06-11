@@ -57,7 +57,10 @@ object ConjunctResolver {
 
         // ========== ক্ষ conjunct ==========
         ConjunctMapEntry("kkh", "ক্ষ"),      // শিক্ষা, ক্ষমা
-        ConjunctMapEntry("ksh", "ক্ষ")       // Alternative for ক্ষ
+        ConjunctMapEntry("ksh", "ক্ষ"),      // Alternative for ক্ষ
+
+        // ========== V2 lowercase explicit clusters ==========
+        ConjunctMapEntry("xo", "ক্স")        // বাক্স, কক্সবাজার
     )
 
     /**

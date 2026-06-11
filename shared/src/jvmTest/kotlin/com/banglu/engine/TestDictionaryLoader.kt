@@ -3,6 +3,7 @@ package com.banglu.engine
 import com.banglu.engine.platform.DictionaryLoader
 import com.banglu.engine.types.BigramModelData
 import com.banglu.engine.types.SmartDictionaryEntry
+import com.banglu.engine.types.WordCategory
 import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
@@ -99,12 +100,125 @@ class TestDictionaryLoader(
     }
 
     override suspend fun loadExtendedDictionary(): List<SmartDictionaryEntry>? {
-        // Extended phonetic entries are not in the SQLite database.
-        return null
+        return withConnection { conn ->
+            if (!conn.hasTable("extended_dictionary") || !conn.hasTable("extended_phonetics")) {
+                return@withConnection null
+            }
+
+            val entries = mutableMapOf<Int, MutableExtendedEntry>()
+            conn.createStatement().use { stmt ->
+                stmt.executeQuery(
+                    "SELECT id, bengali, frequency, category FROM extended_dictionary"
+                ).use { rs ->
+                    while (rs.next()) {
+                        val id = rs.getInt("id")
+                        entries[id] = MutableExtendedEntry(
+                            bengali = rs.getString("bengali"),
+                            frequency = rs.getInt("frequency"),
+                            category = parseWordCategory(rs.getString("category")),
+                        )
+                    }
+                }
+            }
+
+            conn.createStatement().use { stmt ->
+                stmt.executeQuery("SELECT phonetic, entry_id FROM extended_phonetics").use { rs ->
+                    while (rs.next()) {
+                        entries[rs.getInt("entry_id")]
+                            ?.phonetics
+                            ?.add(rs.getString("phonetic"))
+                    }
+                }
+            }
+
+            val result = entries.values.mapNotNull { entry ->
+                if (entry.phonetics.isEmpty()) return@mapNotNull null
+                SmartDictionaryEntry(
+                    bengali = entry.bengali,
+                    phonetics = entry.phonetics.distinct(),
+                    frequency = entry.frequency,
+                    category = entry.category,
+                )
+            }
+
+            println("TestDictionaryLoader: Loaded ${result.size} extended dictionary entries")
+            result.ifEmpty { null }
+        }
     }
 
     override suspend fun loadBigramModel(): BigramModelData? {
-        // Bigram model is not in the SQLite database.
-        return null
+        return withConnection { conn ->
+            if (!conn.hasTable("bigram_unigrams") || !conn.hasTable("bigram_pairs")) {
+                return@withConnection null
+            }
+
+            val unigrams = mutableMapOf<String, Int>()
+            conn.createStatement().use { stmt ->
+                stmt.executeQuery("SELECT word, count FROM bigram_unigrams").use { rs ->
+                    while (rs.next()) {
+                        unigrams[rs.getString("word")] = rs.getInt("count")
+                    }
+                }
+            }
+
+            val bigrams = mutableMapOf<String, Int>()
+            conn.createStatement().use { stmt ->
+                stmt.executeQuery("SELECT previous_word, next_word, count FROM bigram_pairs").use { rs ->
+                    while (rs.next()) {
+                        bigrams["${rs.getString("previous_word")}\t${rs.getString("next_word")}"] =
+                            rs.getInt("count")
+                    }
+                }
+            }
+
+            println(
+                "TestDictionaryLoader: Loaded ${unigrams.size} unigram entries and " +
+                    "${bigrams.size} bigram entries"
+            )
+
+            if (unigrams.isEmpty() && bigrams.isEmpty()) {
+                null
+            } else {
+                BigramModelData(
+                    unigrams = unigrams,
+                    bigrams = bigrams,
+                    totalUnigrams = conn.loadMetadataInt("total_unigrams") ?: unigrams.values.sum(),
+                    totalBigrams = conn.loadMetadataInt("total_bigrams") ?: bigrams.values.sum(),
+                )
+            }
+        }
     }
+
+    private fun Connection.hasTable(tableName: String): Boolean {
+        prepareStatement(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1"
+        ).use { stmt ->
+            stmt.setString(1, tableName)
+            stmt.executeQuery().use { rs ->
+                return rs.next()
+            }
+        }
+    }
+
+    private fun Connection.loadMetadataInt(key: String): Int? {
+        prepareStatement("SELECT value FROM metadata WHERE key = ? LIMIT 1").use { stmt ->
+            stmt.setString(1, key)
+            stmt.executeQuery().use { rs ->
+                return if (rs.next()) rs.getString(1).toIntOrNull() else null
+            }
+        }
+    }
+
+    private fun parseWordCategory(raw: String?): WordCategory =
+        raw
+            ?.takeIf { it.isNotBlank() }
+            ?.let { runCatching { WordCategory.valueOf(it) }.getOrNull() }
+            ?: WordCategory.UNKNOWN
+
+    private data class MutableExtendedEntry(
+        val bengali: String,
+        val frequency: Int,
+        val category: WordCategory,
+        val phonetics: MutableList<String> = mutableListOf(),
+    )
 }

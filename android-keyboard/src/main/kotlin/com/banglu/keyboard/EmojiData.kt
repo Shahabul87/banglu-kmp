@@ -8,6 +8,80 @@ object EmojiData {
         val isTextIcon: Boolean = false
     )
 
+    data class TextSticker(
+        val text: String,
+        val aliases: List<String>
+    )
+
+    data class GifSticker(
+        val text: String,
+        val assetName: String,
+        val fallbackText: String,
+        val aliases: List<String>
+    )
+
+    val textStickers = listOf(
+        TextSticker("ধন্যবাদ 🙏", listOf("thanks", "thank you", "dhonnobad", "ধন্যবাদ")),
+        TextSticker("ভালো আছি 😊", listOf("bhalo", "fine", "ভালো")),
+        TextSticker("আসসালামু আলাইকুম", listOf("salam", "assalamu", "আসসালামু")),
+        TextSticker("ওয়ালাইকুম সালাম", listOf("walaikum", "salam", "সালাম")),
+        TextSticker("শুভ সকাল ☀️", listOf("morning", "sokal", "সকাল")),
+        TextSticker("শুভ রাত 🌙", listOf("night", "raat", "রাত")),
+        TextSticker("অনেক ভালো লাগলো ❤️", listOf("love", "valo", "bhalo", "bhalobasha", "ভালোবাসা")),
+        TextSticker("ইনশাআল্লাহ", listOf("inshallah", "ইনশাআল্লাহ")),
+        TextSticker("আলহামদুলিল্লাহ", listOf("alhamdulillah", "আলহামদুলিল্লাহ")),
+        TextSticker("ঠিক আছে ✅", listOf("ok", "okay", "thik", "ঠিক")),
+        TextSticker("পরে কথা বলি", listOf("later", "pore", "কথা")),
+        TextSticker("আমি আসছি", listOf("coming", "aschi", "আসছি")),
+        TextSticker("কোথায় আছো?", listOf("where", "kothay", "কোথায়")),
+        TextSticker("কি করছো?", listOf("what", "korcho", "করছো")),
+        TextSticker("দুঃখিত", listOf("sorry", "dukkhito", "দুঃখিত")),
+        TextSticker("অভিনন্দন 🎉", listOf("congrats", "congratulations", "অভিনন্দন")),
+        TextSticker("শুভ জন্মদিন 🎂", listOf("birthday", "jonmodin", "জন্মদিন")),
+        TextSticker("সাবধানে থেকো", listOf("safe", "sabdhane", "সাবধানে")),
+        TextSticker("খুব সুন্দর!", listOf("nice", "sundor", "সুন্দর")),
+        TextSticker("হাহাহা 😂", listOf("haha", "hasi", "hashi", "laugh", "হাসি"))
+    )
+
+    val gifStickers = listOf(
+        GifSticker("হাসির GIF 😂", "laugh", "হাহাহা 😂", listOf("gif", "haha", "hasi", "hashi", "laugh", "হাসি")),
+        GifSticker("ধন্যবাদ GIF 🙏", "thanks", "ধন্যবাদ 🙏", listOf("gif", "thanks", "dhonnobad", "ধন্যবাদ")),
+        GifSticker("ভালোবাসা GIF ❤️", "love", "ভালোবাসা ❤️", listOf("gif", "love", "valo", "bhalo", "bhalobasha", "ভালোবাসা")),
+        GifSticker("রাগ GIF 😡", "angry", "রাগ লাগছে 😡", listOf("gif", "angry", "rag", "raag", "রাগ")),
+        GifSticker("দুঃখ GIF 😢", "sad", "মন খারাপ 😢", listOf("gif", "sad", "dukkho", "dukho", "mon kharap", "দুঃখ")),
+        GifSticker("অভিনন্দন GIF 🎉", "congrats", "অভিনন্দন 🎉", listOf("gif", "congrats", "ovinondon", "obhinondon", "অভিনন্দন")),
+        GifSticker("শুভ জন্মদিন GIF 🎂", "birthday", "শুভ জন্মদিন 🎂", listOf("gif", "birthday", "jonmodin", "জন্মদিন")),
+        GifSticker("ওকে GIF ✅", "ok", "ঠিক আছে ✅", listOf("gif", "ok", "okay", "thik", "ঠিক")),
+        GifSticker("ওয়াও GIF 🤩", "wow", "ওয়াও 🤩", listOf("gif", "wow", "অসাধারণ")),
+        GifSticker("ফায়ার GIF 🔥", "fire", "দারুণ 🔥", listOf("gif", "fire", "দারুণ"))
+    )
+
+    private val aliases = mapOf(
+        "হাসি" to listOf("\uD83D\uDE02", "\uD83D\uDE0A", "\uD83D\uDE00", "\uD83E\uDD23"),
+        "hasi" to listOf("\uD83D\uDE02", "\uD83D\uDE0A", "\uD83D\uDE00", "\uD83E\uDD23"),
+        "hashi" to listOf("\uD83D\uDE02", "\uD83D\uDE0A", "\uD83D\uDE00", "\uD83E\uDD23"),
+        "ভালোবাসা" to listOf("\u2764\uFE0F", "\uD83D\uDE0D", "\uD83D\uDE18", "\uD83E\uDD70"),
+        "bhalobasha" to listOf("\u2764\uFE0F", "\uD83D\uDE0D", "\uD83D\uDE18", "\uD83E\uDD70"),
+        "valobasha" to listOf("\u2764\uFE0F", "\uD83D\uDE0D", "\uD83D\uDE18", "\uD83E\uDD70"),
+        "হার্ট" to listOf("\u2764\uFE0F", "\uD83D\uDC96", "\uD83D\uDC94"),
+        "দুঃখ" to listOf("\uD83D\uDE22", "\uD83D\uDE2D", "\uD83D\uDE14"),
+        "রাগ" to listOf("\uD83D\uDE21", "\uD83D\uDE20", "\uD83E\uDD2C"),
+        "rag" to listOf("\uD83D\uDE21", "\uD83D\uDE20", "\uD83E\uDD2C"),
+        "raag" to listOf("\uD83D\uDE21", "\uD83D\uDE20", "\uD83E\uDD2C"),
+        "ধন্যবাদ" to listOf("\uD83D\uDE4F", "\uD83E\uDD32", "\uD83E\uDD1D"),
+        "ok" to listOf("\uD83D\uDC4C", "\u2705", "\uD83D\uDC4D"),
+        "okay" to listOf("\uD83D\uDC4C", "\u2705", "\uD83D\uDC4D"),
+        "love" to listOf("\u2764\uFE0F", "\uD83D\uDE0D", "\uD83D\uDE18", "\uD83E\uDD70"),
+        "laugh" to listOf("\uD83D\uDE02", "\uD83E\uDD23", "\uD83D\uDE04"),
+        "sad" to listOf("\uD83D\uDE22", "\uD83D\uDE2D", "\uD83D\uDE14"),
+        "angry" to listOf("\uD83D\uDE21", "\uD83D\uDE20", "\uD83E\uDD2C"),
+        "thanks" to listOf("\uD83D\uDE4F", "\uD83E\uDD32", "\uD83E\uDD1D"),
+        "fire" to listOf("\uD83D\uDD25"),
+        "birthday" to listOf("\uD83C\uDF82", "\uD83C\uDF89", "\uD83C\uDF81"),
+        "food" to listOf("\uD83C\uDF55", "\u2615", "\uD83C\uDF54"),
+        "money" to listOf("\uD83D\uDCB0", "\uD83D\uDCB3", "\uD83D\uDCB8")
+    )
+
     val categories = listOf(
         EmojiCategory("Frequent", "...", listOf(
             "\uD83D\uDE02","\u2764\uFE0F","\uD83D\uDE0D","\uD83E\uDD23","\uD83D\uDE0A","\uD83D\uDE4F","\uD83D\uDE18","\uD83D\uDE2D",
@@ -19,6 +93,8 @@ object EmojiData {
             "\uD83D\uDE34","\uD83E\uDD75","\uD83E\uDD76","\uD83E\uDD73","\uD83E\uDD2C","\uD83D\uDC80","\uD83D\uDCA9","\uD83E\uDD21",
             "\uD83C\uDF55","\u2615","\uD83C\uDF54","\uD83C\uDF1F","\uD83C\uDF08","\uD83D\uDCA1","\uD83D\uDD14","\uD83D\uDCB0"
         ), isTextIcon = true),
+        EmojiCategory("Stickers", "ST", textStickers.map { it.text }, isTextIcon = true),
+        EmojiCategory("GIF", "GIF", gifStickers.map { it.text }, isTextIcon = true),
         EmojiCategory("Smileys", "\uD83D\uDE0A", listOf(
             "\uD83D\uDE00","\uD83D\uDE03","\uD83D\uDE04","\uD83D\uDE01","\uD83D\uDE06","\uD83D\uDE05","\uD83E\uDD23","\uD83D\uDE02","\uD83D\uDE42","\uD83D\uDE43",
             "\uD83D\uDE09","\uD83D\uDE0A","\uD83D\uDE07","\uD83E\uDD70","\uD83D\uDE0D","\uD83E\uDD29","\uD83D\uDE18","\uD83D\uDE17","\uD83D\uDE1A","\uD83D\uDE19",
@@ -104,4 +180,49 @@ object EmojiData {
             "\uD83C\uDDF2\uD83C\uDDFE","\uD83C\uDDF8\uD83C\uDDEC","\uD83C\uDDF9\uD83C\uDDED","\uD83C\uDDFB\uD83C\uDDF3","\uD83C\uDDEE\uD83C\uDDE9","\uD83C\uDDF5\uD83C\uDDED","\uD83C\uDDF3\uD83C\uDDEC","\uD83C\uDDEA\uD83C\uDDEC","\uD83C\uDDFF\uD83C\uDDE6","\uD83C\uDDF0\uD83C\uDDEA"
         ))
     )
+
+    fun search(query: String, limit: Int = 96): List<String> {
+        val key = query.trim().lowercase()
+        if (key.isEmpty()) return emptyList()
+
+        val results = linkedSetOf<String>()
+        textStickers
+            .filter { sticker ->
+                sticker.text.lowercase().contains(key) ||
+                    sticker.aliases.any { alias -> alias.lowercase().contains(key) || key.contains(alias.lowercase()) }
+            }
+            .forEach { results.add(it.text) }
+
+        gifStickers
+            .filter { sticker ->
+                sticker.text.lowercase().contains(key) ||
+                    sticker.aliases.any { alias -> alias.lowercase().contains(key) || key.contains(alias.lowercase()) }
+            }
+            .forEach { results.add(it.text) }
+
+        aliases
+            .filterKeys { alias -> alias.lowercase().contains(key) || key.contains(alias.lowercase()) }
+            .values
+            .flatten()
+            .forEach { results.add(it) }
+
+        categories
+            .filter { it.name.lowercase().contains(key) }
+            .flatMap { it.emojis }
+            .forEach { results.add(it) }
+
+        if (results.isEmpty()) {
+            categories.flatMap { it.emojis }
+                .filter { it == query.trim() }
+                .forEach { results.add(it) }
+        }
+
+        return results.take(limit)
+    }
+
+    fun isTextSticker(value: String): Boolean = textStickers.any { it.text == value }
+
+    fun isGifSticker(value: String): Boolean = gifStickers.any { it.text == value }
+
+    fun gifStickerFor(value: String): GifSticker? = gifStickers.firstOrNull { it.text == value }
 }

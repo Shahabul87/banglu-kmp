@@ -176,17 +176,14 @@ class SmartEngineTest {
     }
 
     @Test
-    fun testConvertWordCaseMarkers() {
+    fun testConvertWordUppercaseNormalizesToLowercase() {
         val engine = createEngine()
-        // With uppercase case markers, "AMI" is NOT equivalent to "ami".
-        // A→আ (independent vowel), M→pass-through (unrecognized uppercase), I→ই (independent)
-        val result = engine.convertWord("AMI")
-        assertEquals("আMই", result.bengali, "AMI: A→আ, M→M (pass-through), I→ই")
-
-        // "Ami" should produce same as "ami" since only A is a recognized marker
-        val mixed = engine.convertWord("Ami")
         val lower = engine.convertWord("ami")
-        assertEquals(lower.bengali, mixed.bengali, "Ami should match ami: A→আ, mi→মি")
+        val mixed = engine.convertWord("Ami")
+        val upper = engine.convertWord("AMI")
+
+        assertEquals(lower.bengali, mixed.bengali, "Ami should match ami")
+        assertEquals(lower.bengali, upper.bengali, "AMI should match ami")
     }
 
     @Test

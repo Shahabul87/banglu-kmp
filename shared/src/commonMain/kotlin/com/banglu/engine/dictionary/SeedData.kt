@@ -63,6 +63,7 @@ object SeedData {
             addAll(SeedDataFreqSync1.ENTRIES)
             addAll(SeedDataSync6.ENTRIES)
             addAll(EnglishDirectData.ENTRIES)
+            addAll(EnglishPronunciationVariantData.ENTRIES)
         }
     }
 
@@ -736,7 +737,7 @@ object SeedData {
             e("সবচেয়ে", listOf("shobcheye", "sobcheye", "shobcheyey", "sobcheyey", "shobchheye", "sobchheye", "shobchheyey", "sobchheyey"), 72, WordCategory.TADBHAVA),
             e("মাত্র", listOf("matro", "matrou", "matra", "matraa"), 70, WordCategory.TATSAMA),
             e("বাচ্চা", listOf("bachcha", "bacca", "bachchaa", "baccaa", "bachhchha", "bachhchhaa", "baccha", "bacchaa", "bacchha", "bacchhaa", "bacha"), 80, WordCategory.TADBHAVA),
-            e("আচ্ছা", listOf("accha", "achcha", "acchaa", "achchaa", "acchha", "achhchha", "acchhaa", "achhchhaa"), 80, WordCategory.TADBHAVA),
+            e("আচ্ছা", listOf("accha", "acca", "assa", "achcha", "acchaa", "achchaa", "accaa", "assaa", "acchha", "achhchha", "acchhaa", "achhchhaa"), 80, WordCategory.TADBHAVA),
             e("কাচ্চা", listOf("kachcha", "kacca", "kachchaa", "kaccaa", "kachhchha", "kachhchhaa"), 40, WordCategory.TADBHAVA),
             e("সচ্চরিত্র", listOf("shochoritro", "sochoritro", "shochoriitro", "shochoritrou", "shochhoritro", "sochoritrou", "sochhoritro", "shochoriitrou", "shochhoriitro"), 30, WordCategory.TATSAMA),
             e("কুত্তা", listOf("kutta", "kutta", "kuttaa", "kuutta"), 60, WordCategory.TADBHAVA),
@@ -764,6 +765,7 @@ object SeedData {
             e("বৈশাখ", listOf("boishakh", "baishakh", "boisakh", "boyshakh", "baisakh", "boishak"), 75, WordCategory.TATSAMA),
             e("জ্যৈষ্ঠ", listOf("joishto", "jyaistha", "zoishto", "jyaisthaa", "zyaistha", "joisto", "joishtou", "joyshto", "zoisto", "zoishtou", "zoyshto", "joisshtho", "joishshto", "joyeshtho", "joishthho"), 45, WordCategory.TATSAMA),
             e("আষাঢ়", listOf("asharh", "asadh", "asarh", "ashadh", "ashar"), 45, WordCategory.TATSAMA),
+            e("ভদ্র", listOf("bhodro", "bhadra", "bhodrou", "vodro", "vhodro"), 65, WordCategory.TATSAMA),
             e("ভাদ্র", listOf("bhadro", "bhadra", "vadro", "bhadraa", "vadra", "bhadrou", "vadrou"), 40, WordCategory.TATSAMA),
             e("আশ্বিন", listOf("ashwin", "ashbin", "ashwiin", "ashbiin", "aswin", "asbin", "aswiin", "asbiin", "ashshin", "ashshiin"), 40, WordCategory.TATSAMA),
             e("কার্তিক", listOf("kartik", "kartiik"), 40, WordCategory.TATSAMA),

@@ -26,6 +26,9 @@ object PhoneticVariantGenerator {
         AlternationPair("ou", "o", "VOWEL"),
         AlternationPair("oi", "oy", "VOWEL"),
         AlternationPair("ii", "i", "VOWEL"),
+        AlternationPair("owa", "wa", "VOWEL_EXCEPTION"),
+        AlternationPair("oya", "wa", "VOWEL_EXCEPTION"),
+        AlternationPair("oa", "wa", "VOWEL_EXCEPTION"),
         // Consonant alternations
         AlternationPair("sh", "s", "CONSONANT"),
         AlternationPair("chh", "c", "CONSONANT"),

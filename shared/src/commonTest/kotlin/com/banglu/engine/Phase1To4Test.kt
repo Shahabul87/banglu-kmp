@@ -13,11 +13,9 @@ class Phase1To4Test {
     
     @Test
     fun testGetNextWordPredictions() {
-        // Predictions depend on bigram model being loaded (async)
-        // In seed-only mode, should return empty without crashing
         val predictions = engine.getNextWordPredictions("আমি", 5)
-        // May be empty in seed-only mode — just verify no crash
-        assertTrue(predictions.size >= 0)
+        assertTrue(predictions.isNotEmpty(), "Common words should have fallback next-word predictions")
+        assertEquals("ভালো", predictions.first().bengali)
     }
 
     @Test
@@ -25,7 +23,8 @@ class Phase1To4Test {
         SmartEngineAdapter.reset()
         SmartEngineAdapter.initializeSync()
         val predictions = SmartEngineAdapter.getNextWordPredictions("আমি", 5)
-        assertTrue(predictions.size >= 0) // No crash
+        assertTrue(predictions.isNotEmpty(), "Adapter should expose fallback next-word predictions")
+        assertEquals("ভালো", predictions.first().bengali)
     }
 
     // === Engine Conversion Stability (all phases depend on this) ===

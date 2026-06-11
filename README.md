@@ -13,11 +13,14 @@ Kotlin Multiplatform Bengali phonetic typing engine, Android IME keyboard, and i
 ## Build
 
 ```bash
-# Run shared engine tests
-./gradlew :shared:allTests
+# Run shared engine tests and Android IME privacy boundary checks
+./gradlew :android-keyboard:verifyImePrivacyBoundary :shared:allTests
 
-# Build Android release AAB
-./gradlew :android-keyboard:bundleRelease
+# Validate Android release artifacts before launch
+./scripts/validate_android_release.sh
+
+# Optional real-device smoke during release validation
+RUN_DEVICE_SMOKE=1 ./scripts/validate_android_release.sh
 ```
 
 ## Related

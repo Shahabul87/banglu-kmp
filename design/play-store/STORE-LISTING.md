@@ -40,12 +40,12 @@ Switch between Bengali and English with one tap. No need to change keyboards!
 • English mode: Direct typing like any standard keyboard
 • Seamless switching with the EN/BN button
 
-**🔒 100% Private**
-• NO internet permission — works completely offline
-• NO keystroke logging
-• NO data collection or analytics
+**🔒 Privacy-First**
+• Core phonetic typing works on your device
+• NO keystroke logging for ads or analytics
 • NO ads — ever
-• All processing happens on YOUR device
+• Optional voice typing uses your Android speech provider
+• Optional account sync keeps your custom dictionary available across devices
 
 **📱 Works Everywhere**
 Type Bengali in WhatsApp, Facebook, Messenger, Chrome, Gmail, Notes — any app!
@@ -60,8 +60,8 @@ khabar → খাবার | dhonnobad → ধন্যবাদ
 ---
 
 ## What's New (Release Notes)
-Version 1.0.0
-• 7-layer AI phonetic engine
+Current release
+• 7-layer phonetic engine
 • 485,000-word Bengali dictionary
 • Samsung-style dark keyboard
 • Bengali/English dual mode

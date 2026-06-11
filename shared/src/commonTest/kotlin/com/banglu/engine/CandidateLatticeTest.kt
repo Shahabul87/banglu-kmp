@@ -182,7 +182,7 @@ class CandidateLatticeTest {
         val candidates = suggestions("borishal")
         assertEquals("বরিশাল", engine.convertWord("borishal").bengali)
         assertEquals("বরিশাল", candidates.first())
-        assertTrue("বরিসাল" in candidates)
+        assertTrue("বরিসাল" !in candidates, "Plain s should not be generated from sh in $candidates")
         assertTrue("বরীশাল" in candidates)
         assertTrue("বুষাল" !in candidates, "Unexpected noisy candidate in $candidates")
     }
@@ -265,7 +265,7 @@ class CandidateLatticeTest {
             "karan" to "কারণ",
             "rang" to "রং",
             "bangla" to "বাংলা",
-            "basha" to "বাসা",
+            "basa" to "বাসা",
             "bhasha" to "ভাষা",
             "bish" to "বিষ",
             "desh" to "দেশ",
@@ -341,7 +341,7 @@ class CandidateLatticeTest {
             Triple("rang", "রং", "final nasal"),
 
             // s / sh / ষ family
-            Triple("basha", "বাসা", "s dental"),
+            Triple("basa", "বাসা", "s dental"),
             Triple("bhasha", "ভাষা", "ষ spelling"),
             Triple("bish", "বিষ", "ষ final"),
             Triple("desh", "দেশ", "শ final"),

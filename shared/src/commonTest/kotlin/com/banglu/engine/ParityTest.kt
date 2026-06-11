@@ -201,17 +201,14 @@ class ParityTest {
     }
 
     @Test
-    fun testUppercaseCaseMarkers() {
-        // With uppercase case markers, uppercase letters are "forcer" characters:
-        // A→আ/া, M→pass-through (unrecognized), I→ই/ি, etc.
-        // So "AMI" and "ami" produce DIFFERENT output (web parity).
+    fun testUppercaseNormalizesToLowercase() {
+        // Lowercase-only Bangla mode: Shift is not a conversion control.
+        // Accidental or physical-keyboard uppercase should behave like lowercase.
         val lower = engine.convertWord("ami").bengali
         val mixed = engine.convertWord("Ami").bengali
-        // "Ami" should match "ami" — only A is uppercase (→আ), rest is lowercase
-        assertEquals(lower, mixed, "Ami should match ami: A→আ then lowercase mi→মি")
-        // "AMI" has unrecognized M as uppercase → pass-through
         val upper = engine.convertWord("AMI").bengali
-        assertTrue(upper != lower, "AMI should differ from ami due to uppercase M pass-through: $upper vs $lower")
+        assertEquals(lower, mixed, "Ami should match ami")
+        assertEquals(lower, upper, "AMI should match ami")
     }
 
     @Test

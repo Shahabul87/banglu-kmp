@@ -1,29 +1,39 @@
 package com.banglu.keyboard
 
+import android.app.Activity
 import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.text.Editable
+import android.text.InputType
+import android.text.TextWatcher
+import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.*
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -31,34 +41,64 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.banglu.engine.SmartEngineAdapter
+import androidx.compose.ui.viewinterop.AndroidView
+import com.banglu.engine.SmartEngine
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Banglu Brand Palette — Warm, Earthy, Bengali Premium
-// ══════════════════════════════════════════════════════════════════════════════
+// iOS-inspired Banglu palette: airy surfaces, readable ink, Bengali blue accent.
+private var Primary = Color(0xFF0A84FF)
+private var Success = Color(0xFF34C759)
+private var Secondary = Color(0xFF8E8E93)
+private var Coral = Color(0xFFFF7A59)
+private var CoralLight = Color(0xFFFFA48F)
+private var WarmBlack = Color(0xFFF6F7FB)
+private var WarmDark = Color(0xFFEFF3F8)
+private var WarmCard = Color(0xFFFFFFFF)
+private var WarmCardBorder = Color(0xFFE4E8F0)
+private var TextMuted = Color(0xFF6B7280)
+private var TextLight = Color(0xFF111827)
+private var Green = Color(0xFF34C759)
 
-private val Gold = Color(0xFFD4A540)
-private val GoldLight = Color(0xFFE8C878)
-private val GoldDim = Color(0xFF8B7035)
-private val Coral = Color(0xFFC4604A)
-private val CoralLight = Color(0xFFD4786A)
-private val WarmBlack = Color(0xFF110E08)
-private val WarmDark = Color(0xFF1A1510)
-private val WarmCard = Color(0xFF231E18)
-private val WarmCardBorder = Color(0xFF3A3028)
-private val TextMuted = Color(0xFFA0907A)
-private val TextLight = Color(0xFFD4C8B0)
-private val Green = Color(0xFF5CB85C)
-private val GreenDim = Color(0xFF2D5A2D)
+private fun applyHomePalette(dark: Boolean) {
+    if (dark) {
+        Primary = Color(0xFF64D2FF)
+        Success = Color(0xFF30D158)
+        Secondary = Color(0xFF98989D)
+        Coral = Color(0xFFFF7A59)
+        CoralLight = Color(0xFFFFA48F)
+        WarmBlack = Color(0xFF080D16)
+        WarmDark = Color(0xFF111827)
+        WarmCard = Color(0xFF182235)
+        WarmCardBorder = Color(0xFF27364F)
+        TextMuted = Color(0xFFA8B3C7)
+        TextLight = Color(0xFFF8FAFC)
+        Green = Color(0xFF30D158)
+    } else {
+        Primary = Color(0xFF0A84FF)
+        Success = Color(0xFF34C759)
+        Secondary = Color(0xFF8E8E93)
+        Coral = Color(0xFFFF7A59)
+        CoralLight = Color(0xFFFFA48F)
+        WarmBlack = Color(0xFFF6F7FB)
+        WarmDark = Color(0xFFEFF3F8)
+        WarmCard = Color(0xFFFFFFFF)
+        WarmCardBorder = Color(0xFFE4E8F0)
+        TextMuted = Color(0xFF6B7280)
+        TextLight = Color(0xFF111827)
+        Green = Color(0xFF34C759)
+    }
+}
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -71,11 +111,23 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         @Suppress("DEPRECATION")
-        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.statusBarColor = android.graphics.Color.rgb(248, 250, 255)
         @Suppress("DEPRECATION")
-        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.rgb(246, 247, 251)
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.insetsController?.setSystemBarsAppearance(
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                    android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                    android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            )
+        }
 
-        setContent { BangluHomeScreen() }
+        setBangluContent { BangluHomeScreen() }
 
         if (
             intent?.getBooleanExtra(EXTRA_REQUEST_VOICE_PERMISSION, false) == true &&
@@ -89,14 +141,54 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun BangluHomeScreen() {
     val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("banglu_prefs", Context.MODE_PRIVATE) }
+    val themeMode = prefs.getString("theme", "dark") ?: "dark"
+    val systemDark = isSystemInDarkTheme()
+    val darkTheme = themeMode == "dark" || themeMode == "amoled" || (themeMode == "auto" && systemDark)
+    applyHomePalette(darkTheme)
+    SideEffect {
+        val activity = context as? Activity ?: return@SideEffect
+        @Suppress("DEPRECATION")
+        activity.window.statusBarColor = if (darkTheme) android.graphics.Color.rgb(8, 13, 22) else android.graphics.Color.rgb(248, 250, 255)
+        @Suppress("DEPRECATION")
+        activity.window.navigationBarColor = if (darkTheme) android.graphics.Color.rgb(8, 13, 22) else android.graphics.Color.rgb(246, 247, 251)
+        @Suppress("DEPRECATION")
+        activity.window.decorView.systemUiVisibility = if (darkTheme) {
+            0
+        } else {
+            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val mask = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            activity.window.insetsController?.setSystemBarsAppearance(if (darkTheme) 0 else mask, mask)
+        }
+    }
+    var onboardingSeen by remember { mutableStateOf(prefs.getBoolean("onboarding_seen", false)) }
+    if (!onboardingSeen) {
+        BangluAnimatedOnboarding(
+            darkTheme = darkTheme,
+            onFinish = {
+                prefs.edit().putBoolean("onboarding_seen", true).apply()
+                onboardingSeen = true
+            }
+        )
+        return
+    }
+
     var demoInput by remember { mutableStateOf("ami") }
     var isEnabled by remember { mutableStateOf(isKeyboardEnabled(context)) }
     var isDefault by remember { mutableStateOf(isKeyboardDefault(context)) }
     var visible by remember { mutableStateOf(false) }
+    val homeListState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val demoEngine = remember {
+        SmartEngine().apply { initializeSync() }
+    }
 
     val currentContext = rememberUpdatedState(context)
     LaunchedEffect(Unit) {
-        SmartEngineAdapter.initializeSync()
         visible = true
         while (isActive) {
             delay(2000)
@@ -106,16 +198,17 @@ fun BangluHomeScreen() {
     }
 
     val demoOutput = remember(demoInput) {
-        if (demoInput.isNotEmpty()) try { SmartEngineAdapter.convert(demoInput) } catch (_: Exception) { "" } else ""
+        if (demoInput.isNotEmpty()) try { demoEngine.convertWord(demoInput).bengali } catch (_: Exception) { "" } else ""
     }
 
-    // Gradient background with warm atmosphere
+    // Soft iOS-style setup background.
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(WarmBlack, WarmDark, WarmBlack),
+                    colors = if (darkTheme) listOf(Color(0xFF080D16), WarmBlack, WarmDark)
+                    else listOf(Color(0xFFF8FAFF), WarmBlack, WarmDark),
                     startY = 0f,
                     endY = 3000f
                 )
@@ -129,7 +222,7 @@ fun BangluHomeScreen() {
                 .offset(y = 120.dp)
                 .drawBehind {
                     drawLine(
-                        color = Gold.copy(alpha = 0.3f),
+                        color = Primary.copy(alpha = 0.12f),
                         start = Offset(0f, 0f),
                         end = Offset(size.width, 0f),
                         strokeWidth = 2f,
@@ -139,6 +232,7 @@ fun BangluHomeScreen() {
         )
 
         LazyColumn(
+            state = homeListState,
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
@@ -146,55 +240,31 @@ fun BangluHomeScreen() {
             contentPadding = PaddingValues(horizontal = 28.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // ── Status Badge ──
+            // ── Header Navigation ──
             item {
-                AnimatedVisibility(visible, enter = fadeIn(tween(600)) + slideInVertically(tween(600)) { -40 }) {
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(GreenDim.copy(alpha = 0.4f))
-                            .border(1.dp, Green.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Pulsing green dot
-                        val pulseAlpha by rememberInfiniteTransition(label = "pulse").animateFloat(
-                            initialValue = 0.5f, targetValue = 1f,
-                            animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Reverse),
-                            label = "pulseAlpha"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .alpha(pulseAlpha)
-                                .background(Green)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text("বাংলাদেশের #১ ফোনেটিক ইঞ্জিন", color = TextLight, fontSize = 13.sp)
-                    }
+                AnimatedVisibility(visible, enter = fadeIn(tween(500)) + slideInVertically(tween(500)) { -30 }) {
+                    HomeHeaderNav(context)
                 }
             }
 
-            // ── Brand Title ──
+            // ── Hero Message ──
             item {
                 AnimatedVisibility(visible, enter = fadeIn(tween(800, 200)) + slideInVertically(tween(700, 200)) { 60 }) {
-                    Column {
-                        // Large বাংলু with golden gradient feel
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
-                            text = "বাংলু",
-                            fontSize = 64.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Gold,
-                            letterSpacing = 2.sp,
-                            modifier = Modifier.padding(bottom = 4.dp)
+                            "ইংরেজি টাইপ করুন,",
+                            color = TextLight,
+                            fontSize = 28.sp,
+                            lineHeight = 34.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
-
-                        // Tagline
-                        Row {
-                            Text("ইংরেজি টাইপ করুন, ", color = TextLight, fontSize = 18.sp)
-                            Text("বাংলা পান", color = GoldLight, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        }
+                        Text(
+                            "বাংলা পান",
+                            color = Success,
+                            fontSize = 31.sp,
+                            lineHeight = 38.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
@@ -203,10 +273,10 @@ fun BangluHomeScreen() {
             item {
                 AnimatedVisibility(visible, enter = fadeIn(tween(600, 400))) {
                     Text(
-                        "মাটির মতো গভীর, নদীর মতো স্বচ্ছন্দ — বাংলু দিয়ে বাংলা টাইপ করুন যেন কথা বলছেন। শুধু ইংরেজিতে লিখুন, বাকিটা আমাদের।",
+                        "ছোট হাতের ইংরেজিতে লিখুন, বাংলু আপনাকে পরিষ্কার বাংলা, voice typing, emoji এবং smart suggestion দিয়ে সাহায্য করবে।",
                         color = TextMuted,
-                        fontSize = 14.sp,
-                        lineHeight = 24.sp,
+                        fontSize = 17.sp,
+                        lineHeight = 28.sp,
                         fontStyle = FontStyle.Italic
                     )
                 }
@@ -217,7 +287,7 @@ fun BangluHomeScreen() {
                 AnimatedVisibility(visible, enter = fadeIn(tween(800, 500)) + slideInVertically(tween(700, 500)) { 80 }) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(28.dp),
                         colors = CardDefaults.cardColors(containerColor = WarmCard),
                         border = BorderStroke(1.dp, WarmCardBorder)
                     ) {
@@ -227,26 +297,67 @@ fun BangluHomeScreen() {
                                 modifier = Modifier
                                     .size(20.dp)
                                     .drawBehind {
-                                        drawLine(Gold.copy(0.4f), Offset(0f, size.height), Offset(0f, 0f), 1.5f)
-                                        drawLine(Gold.copy(0.4f), Offset(0f, 0f), Offset(size.width, 0f), 1.5f)
+                                        drawLine(Primary.copy(0.28f), Offset(0f, size.height), Offset(0f, 0f), 1.5f)
+                                        drawLine(Primary.copy(0.28f), Offset(0f, 0f), Offset(size.width, 0f), 1.5f)
                                     }
                             )
 
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("ENGLISH INPUT", color = TextMuted, fontSize = 11.sp, letterSpacing = 3.sp)
+                            Text("ENGLISH INPUT", color = TextMuted, fontSize = 13.sp, letterSpacing = 3.sp)
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            OutlinedTextField(
-                                value = demoInput,
-                                onValueChange = { demoInput = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                textStyle = TextStyle(color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Medium),
-                                singleLine = true,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Gold.copy(alpha = 0.5f),
-                                    unfocusedBorderColor = WarmCardBorder,
-                                    cursorColor = Gold
-                                )
+                            AndroidView(
+                                modifier = Modifier.fillMaxWidth().height(72.dp),
+                                factory = { viewContext ->
+                                    EditText(viewContext).apply {
+                                        isFocusableInTouchMode = true
+                                        setSingleLine(true)
+                                        setText(demoInput)
+                                        setSelection(text.length)
+                                        textSize = 26f
+                                        typeface = Typeface.DEFAULT_BOLD
+                                        includeFontPadding = false
+                                        gravity = android.view.Gravity.CENTER_VERTICAL
+                                        setPadding(44, 0, 44, 0)
+                                        inputType = InputType.TYPE_CLASS_TEXT or
+                                            InputType.TYPE_TEXT_VARIATION_NORMAL or
+                                            InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                                        imeOptions = EditorInfo.IME_ACTION_DONE or
+                                            EditorInfo.IME_FLAG_NO_EXTRACT_UI
+                                        addTextChangedListener(object : TextWatcher {
+                                            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                                            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                                            override fun afterTextChanged(s: Editable?) {
+                                                val value = s?.toString().orEmpty()
+                                                if (value != demoInput) demoInput = value
+                                            }
+                                        })
+                                        setOnFocusChangeListener { _, hasFocus ->
+                                            if (hasFocus) {
+                                                scope.launch {
+                                                    homeListState.animateScrollToItem(3)
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                update = { editText ->
+                                    editText.setTextColor(TextLight.toArgb())
+                                    editText.setHintTextColor(TextMuted.toArgb())
+                                    editText.background = GradientDrawable().apply {
+                                        shape = GradientDrawable.RECTANGLE
+                                        cornerRadius = 12.dp.value * editText.resources.displayMetrics.density
+                                        setColor(Color.Transparent.toArgb())
+                                        setStroke(
+                                            (1.2f * editText.resources.displayMetrics.density).toInt().coerceAtLeast(1),
+                                            WarmCardBorder.toArgb()
+                                        )
+                                    }
+                                    if (editText.text.toString() != demoInput) {
+                                        editText.setText(demoInput)
+                                        editText.setSelection(editText.text.length)
+                                    }
+                                }
                             )
 
                             // Animated arrow
@@ -256,26 +367,26 @@ fun BangluHomeScreen() {
                                 label = "arrowAlpha"
                             )
                             Text(
-                                "↓", color = Gold.copy(alpha = arrowAlpha), fontSize = 28.sp,
+                                "↓", color = Primary.copy(alpha = arrowAlpha), fontSize = 28.sp,
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                                 textAlign = TextAlign.Center
                             )
 
-                            Text("বাংলা OUTPUT", color = TextMuted, fontSize = 11.sp, letterSpacing = 3.sp)
+                            Text("বাংলা OUTPUT", color = TextMuted, fontSize = 13.sp, letterSpacing = 3.sp)
                             Spacer(modifier = Modifier.height(10.dp))
 
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(WarmBlack.copy(alpha = 0.5f))
-                                    .border(1.dp, Gold.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                                    .background(if (darkTheme) Color(0xFF101A2A) else Color(0xFFF3F7FF))
+                                    .border(1.dp, Primary.copy(alpha = 0.18f), RoundedCornerShape(12.dp))
                                     .padding(20.dp)
                             ) {
                                 Text(
                                     text = demoOutput.ifEmpty { " " },
-                                    color = Gold,
-                                    fontSize = 32.sp,
+                                    color = Primary,
+                                    fontSize = 38.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -287,8 +398,8 @@ fun BangluHomeScreen() {
                                     .size(20.dp)
                                     .align(Alignment.End)
                                     .drawBehind {
-                                        drawLine(Gold.copy(0.4f), Offset(size.width, 0f), Offset(size.width, size.height), 1.5f)
-                                        drawLine(Gold.copy(0.4f), Offset(0f, size.height), Offset(size.width, size.height), 1.5f)
+                                        drawLine(Primary.copy(0.28f), Offset(size.width, 0f), Offset(size.width, size.height), 1.5f)
+                                        drawLine(Primary.copy(0.28f), Offset(0f, size.height), Offset(size.width, size.height), 1.5f)
                                     }
                             )
                         }
@@ -335,9 +446,18 @@ fun BangluHomeScreen() {
                             onClick = { context.startActivity(Intent(context, SettingsActivity::class.java)) },
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, Gold.copy(alpha = 0.35f))
+                            border = BorderStroke(1.dp, Primary.copy(alpha = 0.22f))
                         ) {
-                            Text("⚙ সেটিংস", color = Gold.copy(alpha = 0.8f), fontSize = 15.sp)
+                            Text("⚙ সেটিংস", color = Primary, fontSize = 17.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = { context.startActivity(Intent(context, TutorialActivity::class.java)) },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, Green.copy(alpha = 0.25f))
+                        ) {
+                            Text("📘 ব্যবহার শেখা", color = Green, fontSize = 17.sp)
                         }
                     }
                 }
@@ -354,7 +474,7 @@ fun BangluHomeScreen() {
                             .height(1.dp)
                             .drawBehind {
                                 drawLine(
-                                    Gold.copy(alpha = 0.15f),
+                                    Primary.copy(alpha = 0.10f),
                                     Offset(0f, 0f), Offset(size.width, 0f),
                                     strokeWidth = 1f,
                                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
@@ -380,26 +500,366 @@ fun BangluHomeScreen() {
     }
 }
 
+private data class OnboardingFeature(
+    val marker: String,
+    val title: String,
+    val body: String,
+    val examples: List<Pair<String, String>>,
+    val accent: Color
+)
+
+private val onboardingFeatures = listOf(
+    OnboardingFeature(
+        marker = "a",
+        title = "Lowercase-only Bangla",
+        body = "Shift ছাড়াই ছোট হাতের ইংরেজি দিয়ে বাংলা লিখুন। Engine শব্দ, dictionary এবং user preference দেখে সঠিক output বেছে নেয়।",
+        examples = listOf("ami" to "আমি", "taka" to "টাকা", "doroja" to "দরজা"),
+        accent = Color(0xFF64D2FF)
+    ),
+    OnboardingFeature(
+        marker = "ত",
+        title = "Smart ambiguous suggestion",
+        body = "তা/টা, দ/ড, থ/ঠ টাইপের confusing sound engine candidate হিসেবে রাখে। সেরা শব্দ editor-এ, বাকি variant suggestion-এ যায়।",
+        examples = listOf("tak" to "তাক / টাক", "dan" to "দান / ডান", "pore" to "পরে / পড়ে"),
+        accent = Color(0xFF30D158)
+    ),
+    OnboardingFeature(
+        marker = "c",
+        title = "Banglu phonetic mapping",
+        body = "নতুন rule পরিষ্কার: c = ছ, ch = চ। Tutorial-এ vowel, kar, conjunct, fola, number এবং punctuation mapping রাখা হয়েছে।",
+        examples = listOf("caya" to "ছায়া", "chabi" to "চাবি", "shikkha" to "শিক্ষা"),
+        accent = Color(0xFFFF7A59)
+    ),
+    OnboardingFeature(
+        marker = "ম",
+        title = "Bengali voice typing",
+        body = "Mic চাপলেই Bangla dictation editor-এ যায়। pause অনুযায়ী কমা/দাঁড়ি, long sentence handling, cancel এবং delete flow polish করা হয়েছে।",
+        examples = listOf("আমি আসব pause" to "আমি আসব।", "কমা" to ",", "দাঁড়ি" to "।"),
+        accent = Color(0xFFBF5AF2)
+    ),
+    OnboardingFeature(
+        marker = "অ",
+        title = "Emoji, privacy, dark UI",
+        body = "Expression panel, controlled learning, font size control, dark-first premium theme এবং low-latency keyboard experience একসাথে রাখা হয়েছে।",
+        examples = listOf("হাসি" to "emoji suggestion", "learning" to "user controlled", "dark" to "default theme"),
+        accent = Color(0xFFFF9F0A)
+    )
+)
+
+@Composable
+private fun BangluAnimatedOnboarding(darkTheme: Boolean, onFinish: () -> Unit) {
+    var visible by remember { mutableStateOf(false) }
+    var page by remember { mutableStateOf(0) }
+    val transition = rememberInfiniteTransition(label = "onboardingFloat")
+    val floatY by transition.animateFloat(
+        initialValue = -8f,
+        targetValue = 8f,
+        animationSpec = infiniteRepeatable(tween(1800), RepeatMode.Reverse),
+        label = "floatY"
+    )
+    val glowAlpha by transition.animateFloat(
+        initialValue = 0.16f,
+        targetValue = 0.38f,
+        animationSpec = infiniteRepeatable(tween(1600), RepeatMode.Reverse),
+        label = "glowAlpha"
+    )
+
+    LaunchedEffect(Unit) {
+        visible = true
+        while (isActive) {
+            delay(2800)
+            page = (page + 1) % onboardingFeatures.size
+        }
+    }
+
+    val feature = onboardingFeatures[page]
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = if (darkTheme) {
+                        listOf(Color(0xFF050914), Color(0xFF080D16), Color(0xFF101827))
+                    } else {
+                        listOf(Color(0xFFF8FAFF), Color(0xFFEFF6FF), Color(0xFFF7FAFC))
+                    }
+                )
+            )
+    ) {
+        Box(
+            modifier = Modifier
+                .size(260.dp)
+                .offset(x = (-80).dp, y = 64.dp)
+                .clip(CircleShape)
+                .background(feature.accent.copy(alpha = glowAlpha))
+        )
+        Box(
+            modifier = Modifier
+                .size(220.dp)
+                .align(Alignment.BottomEnd)
+                .offset(x = 78.dp, y = 26.dp)
+                .clip(CircleShape)
+                .background(Primary.copy(alpha = 0.16f))
+        )
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            item {
+                AnimatedVisibility(visible, enter = fadeIn(tween(500)) + slideInVertically(tween(500)) { -30 }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Image(
+                                painter = painterResource(id = R.drawable.banglu_logo),
+                                contentDescription = "Banglu logo",
+                                modifier = Modifier.size(52.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("বাংলু", color = TextLight, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                                Text("Bangla keyboard", color = TextMuted, fontSize = 14.sp)
+                            }
+                        }
+                        TextButton(onClick = onFinish) {
+                            Text("Skip", color = Primary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+
+            item {
+                AnimatedVisibility(visible, enter = fadeIn(tween(700, 150)) + slideInVertically(tween(700, 150)) { 45 }) {
+                    Column {
+                        Text(
+                            "বাংলা লিখুন\nআরও দ্রুত",
+                            color = TextLight,
+                            fontSize = 38.sp,
+                            lineHeight = 43.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Lowercase typing, smart suggestion, voice punctuation, emoji এবং privacy-ready design এক keyboard-এ।",
+                            color = TextMuted,
+                            fontSize = 16.sp,
+                            lineHeight = 24.sp
+                        )
+                    }
+                }
+            }
+
+            item {
+                OnboardingFeatureCard(
+                    feature = feature,
+                    page = page,
+                    total = onboardingFeatures.size,
+                    floatingOffset = floatY
+                )
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    onboardingFeatures.forEachIndexed { index, _ ->
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 4.dp)
+                                .height(8.dp)
+                                .width(if (index == page) 26.dp else 8.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (index == page) feature.accent else TextMuted.copy(alpha = 0.28f))
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { page = (page + 1) % onboardingFeatures.size },
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        border = BorderStroke(1.dp, feature.accent.copy(alpha = 0.34f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = feature.accent)
+                    ) {
+                        Text("আরও দেখুন", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Button(
+                        onClick = onFinish,
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                    ) {
+                        Text("শুরু করুন", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            item {
+                Text(
+                    "Setup-এর পর যেকোনো app-এ Banglu keyboard খুলে voice, emoji, tutorial এবং smart lowercase typing ব্যবহার করতে পারবেন।",
+                    color = TextMuted,
+                    fontSize = 14.sp,
+                    lineHeight = 22.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 20.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeHeaderNav(context: Context) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(WarmCard.copy(alpha = 0.86f))
+            .border(1.dp, WarmCardBorder, RoundedCornerShape(22.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                painter = painterResource(id = R.drawable.banglu_logo),
+                contentDescription = "Banglu logo",
+                modifier = Modifier.size(38.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text("বাংলু", color = Primary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.weight(1f))
+            Text("Keyboard", color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            HeaderNavButton("প্রোফাইল", Modifier.weight(1f)) {
+                context.startActivity(
+                    Intent().setClassName(context.packageName, "com.banglu.keyboard.AccountActivity")
+                )
+            }
+            HeaderNavButton("সেটিংস", Modifier.weight(1f)) {
+                context.startActivity(Intent(context, SettingsActivity::class.java))
+            }
+            HeaderNavButton("গাইড", Modifier.weight(1f)) {
+                context.startActivity(Intent(context, TutorialActivity::class.java))
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeaderNavButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Primary.copy(alpha = 0.10f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 9.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = TextLight, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+@Composable
+private fun OnboardingFeatureCard(
+    feature: OnboardingFeature,
+    page: Int,
+    total: Int,
+    floatingOffset: Float
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = WarmCard.copy(alpha = 0.94f)),
+        border = BorderStroke(1.dp, feature.accent.copy(alpha = 0.24f))
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Box(
+                    modifier = Modifier
+                        .offset(y = floatingOffset.dp)
+                        .size(60.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(feature.accent.copy(alpha = 0.18f))
+                        .border(1.dp, feature.accent.copy(alpha = 0.28f), RoundedCornerShape(20.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(feature.marker, color = feature.accent, fontSize = 30.sp, fontWeight = FontWeight.Black)
+                }
+                Text("${page + 1}/$total", color = TextMuted, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(feature.title, color = TextLight, fontSize = 23.sp, lineHeight = 28.sp, fontWeight = FontWeight.Black)
+                Text(feature.body, color = TextMuted, fontSize = 14.sp, lineHeight = 21.sp)
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                feature.examples.take(2).forEach { (input, output) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (WarmBlack == Color(0xFF080D16)) Color(0xFF101A2A) else Color(0xFFF3F7FF))
+                            .border(1.dp, WarmCardBorder, RoundedCornerShape(16.dp))
+                            .padding(horizontal = 13.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(input, color = TextLight, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("→", color = feature.accent, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        Text(output, color = feature.accent, fontSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun SetupCTA(label: String, sublabel: String, color: Color, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().height(56.dp),
         colors = ButtonDefaults.buttonColors(containerColor = color),
-        shape = RoundedCornerShape(14.dp),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+        shape = RoundedCornerShape(16.dp),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
     ) {
-        Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(label, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
     }
-    Text(sublabel, color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+    Text(sublabel, color = TextMuted, fontSize = 14.sp, modifier = Modifier.padding(start = 4.dp))
 }
 
 @Composable
 private fun StatChip(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = GoldLight, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Text(value, color = Success, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(2.dp))
-        Text(label, color = TextMuted, fontSize = 11.sp)
+        Text(label, color = TextMuted, fontSize = 13.sp)
     }
 }
 
