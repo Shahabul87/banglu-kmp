@@ -30,7 +30,7 @@ object SmartEngineAdapter {
     private var persistenceScope: CoroutineScope? = null
 
     @Synchronized
-    private fun getEngine(): SmartEngine {
+    internal fun getEngine(): SmartEngine {
         val existing = engine
         if (existing != null) return existing
         val newEngine = SmartEngine()
@@ -201,9 +201,27 @@ object SmartEngineAdapter {
      *
      * @param phonetic The phonetic input the user typed
      * @param bengali The Bengali word the user selected
+     * @param learnAsWord When true (commit of a clean-transliterated OOV word such
+     *        as a name: rafsan -> রাফসান), also add the word to the engine
+     *        dictionary so the next conversion is dictionary-backed instead of
+     *        gate-floored.
      */
-    fun onWordSelected(phonetic: String, bengali: String) {
+    fun onWordSelected(phonetic: String, bengali: String, learnAsWord: Boolean = false) {
         rememberPreferredConversion(phonetic, bengali, baseFrequency = 94)
+        if (learnAsWord) {
+            val key = phonetic.normalizedPhonetic()
+            val cleanBengali = bengali.trim()
+            if (key.isEmpty() || cleanBengali.isBlank()) return
+            // OOV learning is implicit typing learning that mutates the personal
+            // dictionary, so it respects BOTH runtime settings — matching
+            // rememberPreferredConversion (learningEnabled) and
+            // addCustomConversion (personalDictionaryEnabled).
+            if (!learningEnabled || !personalDictionaryEnabled) return
+            getEngine().addWord(key, cleanBengali, 94)
+            // REQUIRED after addWord: commit-gated cache entries must re-evaluate.
+            getEngine().clearCache()
+            persistLearnedWord(key, cleanBengali, 94)
+        }
     }
 
     /**

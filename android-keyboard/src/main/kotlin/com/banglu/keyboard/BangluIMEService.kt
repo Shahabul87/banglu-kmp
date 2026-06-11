@@ -522,11 +522,11 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
-    private fun learnCommittedWordAsync(phonetic: String, bengali: String) {
+    private fun learnCommittedWordAsync(phonetic: String, bengali: String, learnAsWord: Boolean = false) {
         if (privateInputMode || rawCommitInputMode) return
         serviceScope.launch {
             withContext(Dispatchers.Default) {
-                SmartEngineAdapter.onWordSelected(phonetic, bengali)
+                SmartEngineAdapter.onWordSelected(phonetic, bengali, learnAsWord)
             }
         }
     }
@@ -2440,7 +2440,11 @@ class BangluIMEService : InputMethodService(),
         lastCommittedTextLength = result.bengali.length + appendText.length
         sessionBangluWordCommitCount++
         maybeOfferAutoCorrectUndo(phonetic, visibleBeforeCommit, result.bengali, appendText)
-        learnCommittedWordAsync(phonetic, result.bengali)
+        learnCommittedWordAsync(
+            phonetic,
+            result.bengali,
+            learnAsWord = result.source == ResolutionSource.CLEAN_TRANSLITERATION
+        )
         buffer = ""
         suggestions.clear()
         clearCommitCaches()
