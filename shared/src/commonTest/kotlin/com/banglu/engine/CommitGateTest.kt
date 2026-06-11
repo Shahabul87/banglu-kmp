@@ -57,12 +57,13 @@ class CommitGateTest {
     fun patternTailOutputInValidatorPassesGate() {
         val e = SmartEngine()
         e.initializeSync()
-        // Load the floor transliteration into the validator so the gate's
-        // validator.isValid branch approves the primary output directly.
+        // Both branches (validator-approval and gate-replacement) converge on the
+        // floor string here: loading `floor` into the validator ensures the
+        // validator.isValid branch approves it directly, while the gate-replacement
+        // branch would also produce the same clean-transliteration floor value.
         val floor = CleanTransliterator.transliterate("rafsan")
         e.loadValidatorWords(listOf(floor))
         val result = e.convertWord("rafsan")
-        // The editor primary must always be gate-approved (validator OR seed/dict).
         assertTrue(e.isGateApprovedForTest(result.bengali),
             "editor primary '${result.bengali}' is not gate-approved")
     }

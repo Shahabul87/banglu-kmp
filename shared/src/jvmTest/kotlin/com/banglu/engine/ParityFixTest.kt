@@ -135,6 +135,11 @@ class ParityFixTest {
         assertCategory("edge-cases")
     }
 
+    @Test
+    fun testCommitGateFloor() {
+        assertCategory("commit-gate-floor")
+    }
+
     // ── Assertion helper ────────────────────────────────────────────────
 
     /**
