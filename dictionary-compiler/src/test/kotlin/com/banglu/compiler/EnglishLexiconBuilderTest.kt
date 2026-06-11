@@ -42,12 +42,28 @@ class EnglishLexiconBuilderTest {
 
     @Test
     fun parsesTopWordsFromFrequencyLines() {
+        // limit=2 over 3 eligible words discriminates limit-then-filter vs filter-then-limit:
+        //   "the" → accepted (1st), "don't" → rejected (apostrophe), "of" → accepted (2nd = limit)
+        // Under limit-then-filter (wrong): take 2 = {the, don't}, filter = {the} — fails.
+        // Under filter-then-limit (correct): filter = {the, of}, take 2 = {the, of} — passes.
         val top = EnglishLexiconBuilder.parseTopWords(
-            lines = listOf("the 23135851162", "of 13151942776", "a 1041743", "x 999", "don't 88"),
-            limit = 3
+            lines = listOf("the 100", "don't 90", "of 80"),
+            limit = 2
         )
-        // "a" fails length>=2, "x" fails length>=2, "don't" fails a-z regex; limit applies to ACCEPTED words
-        // Accepted: {the, of} (2 words < limit of 3)
         assertEquals(setOf("the", "of"), top)
+    }
+
+    @Test
+    fun deduplicatesBaseEntriesFirstPronunciationWins() {
+        // Two CMUdict base lines for the same word — first pronunciation must win.
+        val entries = EnglishLexiconBuilder.build(
+            cmudictLines = listOf(
+                "bus B AH1 S",   // primary → বাস
+                "bus B AH0 S"    // duplicate base entry (not an alternate like "bus(2)") → must be skipped
+            ),
+            topWords = setOf("bus")
+        )
+        assertEquals(1, entries.size)
+        assertEquals("বাস", entries[0].bengali)
     }
 }

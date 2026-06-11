@@ -19,6 +19,10 @@ object EnglishLexiconBuilder {
      * Words whose ARPABET pronunciation could not be converted by [ArpabetToBengali] in the
      * most recent [build] call (i.e. [ArpabetToBengali.convert] returned null).
      * Reset to zero at the start of each [build] call.
+     *
+     * **Warning:** must be read immediately after the corresponding [build] call.
+     * This is a single-threaded build tool — concurrent builds will overwrite
+     * this field.
      */
     var lastSkippedUnconvertible: Int = 0
         private set
@@ -30,14 +34,17 @@ object EnglishLexiconBuilder {
      * CMUdict format: `word  PH ON EM ES` per line; comment lines start with `;;;`;
      * alternate pronunciations have the form `word(2) ...` and are skipped.
      *
-     * Only the first (primary) pronunciation is used for each word. Words with keys that
-     * contain non a-z characters (apostrophes, digits, parentheses) are skipped.
-     * Words whose pronunciation fails [ArpabetToBengali.convert] (null return) are skipped
-     * and counted in [lastSkippedUnconvertible].
+     * Only the first (primary) pronunciation is used for each word — explicit deduplication
+     * via a [HashSet] ensures the first CMUdict entry wins even if the file contains
+     * duplicate base entries. Words with keys that contain non a-z characters (apostrophes,
+     * digits, parentheses) are skipped. Words whose pronunciation fails
+     * [ArpabetToBengali.convert] (null return) are skipped and counted in
+     * [lastSkippedUnconvertible].
      */
     fun build(cmudictLines: List<String>, topWords: Set<String>): List<EnglishLexiconEntry> {
+        lastSkippedUnconvertible = 0
         val entries = ArrayList<EnglishLexiconEntry>()
-        var skipped = 0
+        val seen = HashSet<String>()
         for (line in cmudictLines) {
             if (line.startsWith(";;;")) continue
             val parts = line.trim().split(Regex("\\s+"))
@@ -49,14 +56,15 @@ object EnglishLexiconBuilder {
             if (!KEY_RE.matches(word)) continue
             // Skip words not in the top-frequency set
             if (word !in topWords) continue
+            // First pronunciation wins; skip subsequent duplicate base entries
+            if (!seen.add(word)) continue
             val bengali = ArpabetToBengali.convert(parts.drop(1))
             if (bengali == null) {
-                skipped++
+                lastSkippedUnconvertible++
                 continue
             }
             entries.add(EnglishLexiconEntry(word, bengali))
         }
-        lastSkippedUnconvertible = skipped
         return entries
     }
 
@@ -67,14 +75,15 @@ object EnglishLexiconBuilder {
      * Acceptance criteria:
      *   - Word must match `^[a-z]+$` (all lowercase ASCII letters; no apostrophes, hyphens,
      *     digits, or uppercase variants after lowercasing)
-     *   - Word must be at least 2 characters long
+     *   - Word must be at least 2 characters long. Single-character English keys ("a", "i")
+     *     collide with Bengali phonetic vowel typing (a→আ, i→ই) and must never shadow them.
      *
      * [limit] caps the number of **accepted** words (i.e. `take(limit)` is applied AFTER
      * filtering out rejected entries). Words beyond the limit are ignored.
      */
     fun parseTopWords(lines: List<String>, limit: Int = 30_000): Set<String> =
         lines.asSequence()
-            .mapNotNull { it.trim().split(' ').firstOrNull()?.lowercase() }
+            .mapNotNull { it.trim().split(Regex("\\s+")).firstOrNull()?.lowercase() }
             .filter { KEY_RE.matches(it) && it.length >= 2 }
             .take(limit)
             .toSet()
