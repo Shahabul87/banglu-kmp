@@ -221,6 +221,33 @@ Recorded 2026-06-11 from `./gradlew :shared:jvmTest --rerun` (aggregated from `s
 - Suggestion-quality benchmark (`SuggestionQualityBenchmarkTest`, 5 tests, all green): 74-case common-word set — 100% exact conversion, 100% top-3 suggestion presence, exact-dictionary-before-composer ranking invariant, latency budgets met (budgets: <10 ms/op conversion over 1,480 ops, <20 ms/op suggestions over 740 ops; full-test wall times 0.024 s and 0.297 s respectively, JUnit XML). It asserts pass/fail rather than printing a score; the baseline observation is "0 misses on all 74 cases".
 - Tier note: all 563,998 compiled index rows are currently **Tier A** — the frequency file covers the full corpus, so the tier criterion `freq > 0` marks everything suggestible. A frequency-threshold parameter is needed when prefix-suggestions land (recorded for Phase 2).
 
+### Phase 2 backlog (recorded at Phase 1 final review, 2026-06-11)
+
+1. **`irregular_variants` table not yet built** — assa/acca/accha-class behavior
+   currently rides on the legacy `DIRECT_WORD_OVERRIDES` code in SmartEngine,
+   contradicting §4's "data not code" wording. Phase 2 must migrate those
+   200+ overrides into the compiled table (already in the Phase 2 step list)
+   and the acceptance test `irregularVariantsAllReachTheSameWord` then
+   exercises the index path end-to-end.
+2. **Tiering is vacuous in the shipped asset** — all 563,998 index rows are
+   Tier A because `word-frequency.json` covers the full corpus and the tier
+   criterion is `freq > 0`. Add a frequency-threshold compiler parameter
+   before prefix-suggestions (`lookupPrefix`, currently dead API) land.
+3. **Engine mutation thread-safety** — trie inserts from async OOV learning
+   race with main-thread reads (pre-existing exposure, widened by learning);
+   serialize engine mutation (Mutex or single-thread dispatcher).
+4. **OOV word graduation** — learned names persist at freq 94 (< 120 reload
+   threshold); output survives restarts via the preference layer, but consider
+   commit-count-based promotion to durable dictionary entries.
+5. **Suggestion-tap learning** — tapping a clean-transliteration suggestion
+   does not trigger learning (SmartSuggestion lacks ResolutionSource).
+6. **english_lexicon unconvertible count** — persist
+   `EnglishLexiconBuilder.lastSkippedUnconvertible` into compiler metadata so
+   the "2 unconvertible" figure is re-verifiable from the asset.
+7. **Visarga keys** — 15,811 words (du:kh-class) have zero index keys because
+   ReverseTransliterator emits `:` for ঃ; extend the romanization or add a
+   visarga-aware alias rule.
+
 ## 10. Decisions log
 
 | Decision | Choice | Date |
