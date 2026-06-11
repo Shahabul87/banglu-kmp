@@ -583,8 +583,13 @@ class BangluIMEService : InputMethodService(),
                 val storage = AndroidStorage(applicationContext)
                 val dictionaryLoader = createDictionaryLoader()
                 log("onCreate: Loading learned words...")
+                // Pre-initialize attach: if the db file already exists (warm start), attach
+                // the store NOW so SmartEngine skips buildCorpusPhoneticIndex during initialize().
+                val preAttached = attachPhoneticIndexStore(dictionaryLoader, preInitialize = true)
                 SmartEngineAdapter.initialize(storage, loader = dictionaryLoader)
-                attachPhoneticIndexStore()
+                // Post-initialize attach: only needed on first install when the db file was
+                // copied by the loader's first run above (preAttached == false).
+                if (!preAttached) attachPhoneticIndexStore(dictionaryLoader, preInitialize = false)
                 loadedDictionaryLiteMode = shouldUseLiteDictionary()
                 log("onCreate: Learned words loaded")
             } catch (t: Throwable) {
@@ -603,11 +608,14 @@ class BangluIMEService : InputMethodService(),
                     SmartEngineAdapter.initializeSync()
                     loadedDictionaryLiteMode = null
                 }
+                val dictionaryLoader = createDictionaryLoader()
+                // Pre-initialize attach: skip corpus-index build when db already present.
+                val preAttached = attachPhoneticIndexStore(dictionaryLoader, preInitialize = true)
                 SmartEngineAdapter.initialize(
                     AndroidStorage(applicationContext),
-                    loader = createDictionaryLoader()
+                    loader = dictionaryLoader
                 )
-                attachPhoneticIndexStore()
+                if (!preAttached) attachPhoneticIndexStore(dictionaryLoader, preInitialize = false)
                 loadedDictionaryLiteMode = liteMode
                 log("reloadUserLearning: active profile preferences loaded")
             } catch (t: Throwable) {
@@ -617,21 +625,64 @@ class BangluIMEService : InputMethodService(),
     }
 
     /**
-     * Engine v3: attach the sqlite phonetic index store. MUST run AFTER
-     * SmartEngineAdapter.initialize() completes so (a) the db file is guaranteed
-     * copied from assets and (b) the frequency map is loaded, keeping dict-vs-corpus
-     * ranking on consistent frequencies. The engine's initialize-time runtime corpus
-     * index has already been built at that point; setPhoneticIndex(store) frees it
-     * (acceptable transient cost for now — see Task 8 review notes).
+     * Engine v3: attach the sqlite phonetic index store.
      *
-     * Called from both engine-init paths (onCreate and reloadUserLearningAsync),
-     * so the previous connection is closed first to avoid leaks on re-init.
+     * When [preInitialize] is true this is a best-effort pre-attach: it checks whether
+     * the db file is already present (fast path, no copy needed) and attaches it BEFORE
+     * [SmartEngineAdapter.initialize] so the engine skips the ~480 K-word runtime corpus
+     * index build (SmartEngine checks `phoneticIndex == null` at load time).
+     *
+     * When [preInitialize] is false (post-initialize fallback) the loader's first
+     * [initialize] call will have already triggered the asset copy, so the file is
+     * expected to exist now.
+     *
+     * In both cases:
+     * - The new store is probed first. Only when it [isAvailable] is the old store
+     *   closed and replaced. If the new store fails but an old available store is still
+     *   attached, the old one is kept (logged).
+     * - A warm-up [lookupExact] is fired on [Dispatchers.IO] after a successful attach
+     *   to pre-fault the SQLite page cache.
+     *
+     * [loader.ensureDatabaseFile] is called inside [withContext(Dispatchers.IO)] because
+     * it may perform a ~104 MB asset copy on first install.
+     *
+     * @return true if a store was successfully attached (new or kept), false otherwise.
      */
-    private fun attachPhoneticIndexStore() {
+    private suspend fun attachPhoneticIndexStore(
+        loader: AndroidDictionaryLoader,
+        preInitialize: Boolean
+    ): Boolean {
+        val dbFile = withContext(Dispatchers.IO) { loader.ensureDatabaseFile() }
+        if (preInitialize && dbFile == null) {
+            // First install: db not yet present; skip pre-attach.
+            return false
+        }
+        if (dbFile == null) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "attachPhoneticIndexStore: db file unavailable")
+            return phoneticIndexStore?.isAvailable == true  // keep existing if available
+        }
+
+        val newStore = SqlitePhoneticIndexStore(dbFile)
+        if (!newStore.isAvailable) {
+            newStore.close()
+            val kept = phoneticIndexStore?.isAvailable == true
+            if (kept) {
+                if (BuildConfig.DEBUG) Log.w(TAG, "attachPhoneticIndexStore: new store failed; keeping existing")
+            }
+            return kept
+        }
+
+        // New store is good — close old connection and replace.
         phoneticIndexStore?.close()
-        phoneticIndexStore = SqlitePhoneticIndexStore(File(filesDir, "dictionary.sqlite"))
-            .takeIf { it.isAvailable }
-        SmartEngineAdapter.setPhoneticIndex(phoneticIndexStore)
+        phoneticIndexStore = newStore
+        SmartEngineAdapter.setPhoneticIndex(newStore)
+
+        // Warm-up: pre-fault index pages so the first real keystroke is fast.
+        serviceScope.launch(Dispatchers.IO) {
+            newStore.lookupExact("ami")
+        }
+
+        return true
     }
 
     private fun createDictionaryLoader(): AndroidDictionaryLoader {

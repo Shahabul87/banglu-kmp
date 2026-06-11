@@ -15,28 +15,62 @@ import java.io.File
  * - phonetic_index(key, word_id, frequency, tier) with idx_phonetic_index_key(key, tier)
  * - words(id, bengali, frequency) — Bengali text lives here, joined by word_id
  * - english_lexicon(key PRIMARY KEY, bengali)
+ *
+ * @param dbFile         The SQLite database file to open (must contain phonetic_index table).
+ * @param requiredVersion The metadata version string that must match; mismatch closes the
+ *                        connection immediately and makes [isAvailable] false (fail-soft).
  */
-class SqlitePhoneticIndexStore(dbFile: File) : PhoneticIndexStore {
+class SqlitePhoneticIndexStore(
+    dbFile: File,
+    private val requiredVersion: String = AndroidDictionaryLoader.REQUIRED_DB_VERSION
+) : PhoneticIndexStore {
 
     companion object {
         private const val TAG = "BangluPhoneticIndex"
+
+        /** Upper-bound sentinel for prefix range queries (highest Unicode scalar in BMP). */
+        private const val KEY_UPPER_BOUND = '�'
     }
 
-    private val db: SQLiteDatabase? = try {
-        if (!dbFile.exists()) null
-        else SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
-            .takeIf { database ->
-                database.rawQuery(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name='phonetic_index'",
-                    null
-                ).use { c -> c.moveToFirst() }.also { ok -> if (!ok) database.close() }
+    private val db: SQLiteDatabase? = run {
+        if (!dbFile.exists()) return@run null
+        var opened: SQLiteDatabase? = null
+        try {
+            opened = SQLiteDatabase.openDatabase(
+                dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY
+            )
+            // Verify the phonetic_index table exists.
+            val hasTable = opened.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='phonetic_index'",
+                null
+            ).use { c -> c.moveToFirst() }
+            if (!hasTable) {
+                opened.close()
+                return@run null
             }
-    } catch (e: Exception) {
-        if (BuildConfig.DEBUG) Log.e(TAG, "Failed to open phonetic index", e)
-        null
+            // Verify the db version matches what we expect.
+            val dbVersion = try {
+                opened.rawQuery(
+                    "SELECT value FROM metadata WHERE key='version' LIMIT 1", null
+                ).use { c -> if (c.moveToFirst()) c.getString(0) else null }
+            } catch (_: Exception) { null }
+            if (dbVersion != requiredVersion) {
+                if (BuildConfig.DEBUG) Log.w(
+                    TAG,
+                    "Version mismatch: expected $requiredVersion, got $dbVersion — phonetic index unavailable"
+                )
+                opened.close()
+                return@run null
+            }
+            opened
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.e(TAG, "Failed to open phonetic index", e)
+            try { opened?.close() } catch (_: Exception) { /* ignore */ }
+            null
+        }
     }
 
-    /** True when the db opened and contains the phonetic_index table. */
+    /** True when the db opened, contains phonetic_index, and has the expected version. */
     val isAvailable: Boolean get() = db != null
 
     override fun lookupExact(key: String): List<PhoneticIndexHit> = query(
@@ -51,9 +85,9 @@ class SqlitePhoneticIndexStore(dbFile: File) : PhoneticIndexStore {
         return query(
             """SELECT w.bengali, p.frequency, p.tier FROM phonetic_index p
                JOIN words w ON w.id = p.word_id
-               WHERE p.key >= ? AND p.key < ? AND p.tier = ${PhoneticIndexHit.TIER_A}
+               WHERE p.key >= ? AND p.key < ? AND p.tier = ?
                ORDER BY p.frequency DESC LIMIT ?""",
-            arrayOf(prefix, prefix + '￿', limit.toString())
+            arrayOf(prefix, prefix + KEY_UPPER_BOUND, PhoneticIndexHit.TIER_A.toString(), limit.toString())
         )
     }
 
@@ -67,7 +101,7 @@ class SqlitePhoneticIndexStore(dbFile: File) : PhoneticIndexStore {
 
     private fun query(sql: String, args: Array<String>): List<PhoneticIndexHit> = try {
         db?.rawQuery(sql, args)?.use { c ->
-            val hits = ArrayList<PhoneticIndexHit>(c.count)
+            val hits = ArrayList<PhoneticIndexHit>()
             while (c.moveToNext()) hits.add(PhoneticIndexHit(c.getString(0), c.getInt(1), c.getInt(2)))
             hits
         } ?: emptyList()

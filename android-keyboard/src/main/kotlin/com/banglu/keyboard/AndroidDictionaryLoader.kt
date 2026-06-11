@@ -30,8 +30,24 @@ class AndroidDictionaryLoader(
 
     companion object {
         private const val TAG = "BangluDictLoader"
-        private const val DB_FILENAME = "dictionary.sqlite"
-        private const val REQUIRED_DB_VERSION = "3.3.0"
+        internal const val DB_FILENAME = "dictionary.sqlite"
+        internal const val REQUIRED_DB_VERSION = "3.3.0"
+    }
+
+    /**
+     * Ensure the database file exists in internal storage and has the correct version.
+     * Triggers the lazy copy-from-assets logic if needed.
+     *
+     * This is safe to call independently of any load-flags; it performs only the
+     * provisioning step (copy + version check) and returns the file when usable.
+     * The call does disk I/O (up to ~104 MB asset copy on first install), so it
+     * MUST be invoked from a background dispatcher (e.g. Dispatchers.IO).
+     *
+     * @return The database [File] if it exists and is the correct version, null otherwise.
+     */
+    fun ensureDatabaseFile(): File? {
+        val file = dbFile  // triggers lazy copy if needed
+        return if (file.exists()) file else null
     }
 
     /** Lazily ensure the database file exists in internal storage (copy from assets once). */

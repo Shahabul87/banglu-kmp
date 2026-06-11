@@ -2,6 +2,7 @@ package com.banglu.engine
 
 import com.banglu.engine.dictionary.EnglishPronunciationVariantData
 import com.banglu.engine.platform.DictionaryLoader
+import com.banglu.engine.platform.PhoneticIndexStore
 import com.banglu.engine.platform.PlatformStorage
 import com.banglu.engine.types.ConversionResult
 import com.banglu.engine.types.PredictedWord
@@ -86,10 +87,12 @@ object SmartEngineAdapter {
 
     /**
      * Engine v3: attach the precompiled phonetic index store (Android: sqlite-backed).
-     * Call AFTER [initialize] so dictionary frequencies and the db file are ready;
-     * see [SmartEngine.setPhoneticIndex] for null-detach semantics.
+     * Pre-attach (before [initialize]) lets the engine skip the runtime corpus-index build.
+     * Post-attach (after [initialize]) is the first-install fallback when the db file was
+     * not yet present at pre-attach time.
+     * See [SmartEngine.setPhoneticIndex] for null-detach semantics.
      */
-    fun setPhoneticIndex(store: com.banglu.engine.platform.PhoneticIndexStore?) {
+    fun setPhoneticIndex(store: PhoneticIndexStore?) {
         getEngine().setPhoneticIndex(store)
     }
 
