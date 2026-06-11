@@ -11,13 +11,14 @@ package com.banglu.engine.rules
 object CleanTransliterator {
 
     private const val HASANTA = "্"
+    private const val ANUSVARA = "ং"
 
     // Greedy longest-match consonant units (3-char before 2-char before 1-char).
     private val CONSONANTS: Map<String, String> = mapOf(
         "chh" to "ছ", "kkh" to "ক্ষ",
         "kh" to "খ", "gh" to "ঘ", "ch" to "চ", "jh" to "ঝ",
         "th" to "থ", "dh" to "ধ", "ph" to "ফ", "bh" to "ভ",
-        "sh" to "শ", "ng" to "ং", "gg" to "জ্ঞ",
+        "sh" to "শ", "ng" to ANUSVARA, "gg" to "জ্ঞ",
         "k" to "ক", "g" to "গ", "c" to "ছ", "j" to "জ", "z" to "জ",
         "t" to "ত", "d" to "দ", "n" to "ন", "p" to "প", "f" to "ফ",
         "b" to "ব", "v" to "ভ", "m" to "ম", "r" to "র", "l" to "ল",
@@ -39,6 +40,20 @@ object CleanTransliterator {
 
     private val UNIT_LENGTHS = intArrayOf(3, 2, 1)
 
+    // Letters that count as a vowel for lookahead purposes (single-char vowel starters).
+    private val VOWEL_START_CHARS = setOf('a', 'e', 'i', 'o', 'u')
+
+    /**
+     * Transliterate a Roman string to Bengali.
+     *
+     * Contract:
+     * - Input is lowercased and trimmed before processing.
+     * - Digits and punctuation MUST be handled by the caller before this call;
+     *   unmappable characters are silently dropped here.
+     * - Deterministic: same input always produces the same output.
+     * - Output is always valid, readable Bengali graphemes — never a raw
+     *   matra (kar) without a preceding consonant base, never ্+য়.
+     */
     fun transliterate(roman: String): String {
         val key = roman.lowercase().trim()
         if (key.isEmpty()) return ""
@@ -53,22 +68,60 @@ object CleanTransliterator {
                 if (pos + len > key.length) continue
                 val unit = key.substring(pos, pos + len)
 
-                CONSONANTS[unit]?.let { bengali ->
-                    if (prevWasConsonant && bengali != "ং") out.append(HASANTA)
-                    out.append(bengali)
-                    prevWasConsonant = bengali != "ং"
+                // ── Special: ng before vowel or 'g' → velar nasal ঙ ──────────
+                if (unit == "ng") {
+                    val nextChar = key.getOrNull(pos + 2)
+                    if (nextChar != null && (nextChar in VOWEL_START_CHARS || nextChar == 'g')) {
+                        // Treat ঙ as a normal consonant (joins conjuncts, takes kars)
+                        if (prevWasConsonant) out.append(HASANTA)
+                        out.append("ঙ")
+                        prevWasConsonant = true
+                        pos += 2
+                        matched = true
+                        break
+                    }
+                    // Otherwise fall through to normal consonant handling (emits ং)
+                }
+
+                // ── Special: w before a vowel letter → ওয় া glide unit ────────
+                if (unit == "w" && len == 1) {
+                    val nextChar = key.getOrNull(pos + 1)
+                    if (nextChar != null && nextChar in VOWEL_START_CHARS) {
+                        // "ওয়" acts as a consonant unit: vowel following attaches as kar to য়.
+                        // Never prepend hasanta before ওয় (it is itself vowel-consonant).
+                        out.append("ওয়")
+                        prevWasConsonant = true
+                        pos += 1
+                        matched = true
+                        break
+                    }
+                    // No following vowel: fall through to normal mapping (ও)
+                }
+
+                val c = CONSONANTS[unit]
+                if (c != null) {
+                    if (unit == "y" && prevWasConsonant) {
+                        // ya-phala: hasanta + য (U+09AF), not হাসান্ত + য় (U+09DF)
+                        out.append(HASANTA).append("য")
+                        prevWasConsonant = true
+                    } else {
+                        if (prevWasConsonant && c != ANUSVARA) out.append(HASANTA)
+                        out.append(c)
+                        prevWasConsonant = c != ANUSVARA
+                    }
                     pos += len
                     matched = true
+                    break
                 }
-                if (matched) break
 
-                VOWELS[unit]?.let { vowel ->
-                    out.append(if (prevWasConsonant) vowel.kar else vowel.independent)
+                val v = VOWELS[unit]
+                if (v != null) {
+                    out.append(if (prevWasConsonant) v.kar else v.independent)
                     prevWasConsonant = false
                     pos += len
                     matched = true
+                    break
                 }
-                if (matched) break
             }
             if (!matched) pos++ // silently drop unmappable chars (digits handled upstream)
         }
