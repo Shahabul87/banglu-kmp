@@ -77,3 +77,31 @@ overall lazy-typist experience approaches the canonical 97.9%.
 ## 4. Suggestion-strip depth (UX datum)
 When the correct word is at rank 2-10, it's at rank 2 in 58% and within rank 3 in 76% of cases.
 Top-3 is the metric that matters; rank 4+ is nearly invisible to users.
+
+---
+
+## 5. Solution round results (S1-S4, measured 2026-06-12, db 3.4.1)
+
+| Habit | Primary before → after | Top-3 before → after |
+|---|---|---|
+| H1 canonical | 97.9 → 98.1 | 99.7 → 99.8 |
+| H2 w-drop | 91.1 → 80.8* | 91.1 → 91.8 |
+| H3 y-drop | 93.8 → 89.3 | 92.7 → 95.0 |
+| H4 vowel collapse | 96.8 → 93.9 | 99.7 → 99.7 |
+| H5 h-lazy | 58.7 → **89.5** | 74.9 → **97.1** |
+| H6 double-reduce | 29.8 → **95.9** | 37.7 → **86.5+** |
+| H7 final-o | 67.4 → 65.4 | 30.9 → **88.9** |
+| H9 maximally lazy | 41.7 → **96.3** | 48.9 → **98.7** |
+| **Strip integrity** (primary in top-3) | **18.7% → 100.0%** (7,738/7,738) | |
+
+\* Residual H2/H3 primary misses are genuine Tier-A homophone collisions
+(bisher→বিষের vs বিশ্বের, mach→মাছ vs ম্যাচ) — correct word at rank 2-3;
+next round's disambiguation target, not a ranking bug.
+
+Delivered: tier-first key ranking (usage evidence beats priority beats frequency);
+priority-tiered habit-alias table (b-fola, gemination, sh→s, double-reduce, final-o, j↔z);
+three-band strip (junk never above real words); nukta dedupe (12.5k rows);
+streaming loader fixes (S22 full-mode OOM eliminated — frequencies + bigram context
+load on 256MB-heap devices for the FIRST time; PhoneticTrie 222→103MB);
+bigram junk-count guard. Suite: 446 tests green. Phone-verified:
+bishash/modhe/utor → বিশ্বাস মধ্যে উত্তর.
