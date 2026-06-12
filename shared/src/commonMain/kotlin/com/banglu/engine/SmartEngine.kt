@@ -659,7 +659,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         tryProductiveVerbSuffixConversion(key)?.let { result ->
-            cacheResult(cacheKey, result); return result
+            // Composed root+suffix string — may be an invented form; gate it.
+            val gated = applyCompositionCommitGate(key, result)
+            cacheResult(cacheKey, gated); return gated
         }
 
         convertByDictionary(key)?.let { result ->
@@ -707,13 +709,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         tryProductiveSuffixConversion(key)?.let { result ->
             val ranked = applyCandidateLatticeRanking(key, result)
-            cacheResult(cacheKey, ranked); return ranked
+            // Composed stem+টা-form string — may be an invented form; gate it.
+            val gated = applyCompositionCommitGate(key, ranked)
+            cacheResult(cacheKey, gated); return gated
         }
 
         // Layer 1.2: Suffix-stripped dictionary lookup
         trySuffixStrippedDictionary(key)?.let { result ->
             val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
-            cacheResult(cacheKey, ranked); return ranked
+            // Composed stem+inflection string — may be an invented form; gate it.
+            val gated = applyCompositionCommitGate(key, ranked)
+            cacheResult(cacheKey, gated); return gated
         }
 
         // Layer 0: Section narrowing (if 480K loaded)
@@ -722,7 +728,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 if (result.confidence >= 0.95) {
                     val validated = applyDictionaryValidation(result)
                     val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, validated) else validated
-                    cacheResult(cacheKey, ranked); return ranked
+                    // Section words come from the 480K list (gate no-op), but
+                    // validation/ranking may swap the primary — keep it closed.
+                    val gated = applyCompositionCommitGate(key, ranked)
+                    cacheResult(cacheKey, gated); return gated
                 }
             }
         }
@@ -730,7 +739,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Layer 1.5: Root decomposition
         convertByRootDecomposition(key)?.let { result ->
             val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
-            cacheResult(cacheKey, ranked); return ranked
+            // Reassembled root+suffix string — may be an invented form; gate it.
+            val gated = applyCompositionCommitGate(key, ranked)
+            cacheResult(cacheKey, gated); return gated
         }
 
         // Layers 2-4: Pattern conversion
@@ -827,7 +838,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         tryProductiveVerbSuffixConversion(key)?.let { result ->
-            return result.copy(alternatives = emptyList())
+            // Composed root+suffix string — gate like the committed path. Short
+            // fragments stay live (same key.length >= 4 guard as the fallback).
+            if (key.length < 4) return result.copy(alternatives = emptyList())
+            return applyCompositionCommitGate(key, result).copy(alternatives = emptyList())
         }
 
         val pattern = convertByPatterns(key)
@@ -3895,12 +3909,71 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     /**
+     * Bengali surface forms a composition layer is allowed to attach to a real
+     * dictionary root. Union of [productiveSuffixes] (incl. verb endings),
+     * [tryProductiveSuffixConversion]'s টা-compound table, [inflectionalSuffixes],
+     * and the dependent vowel signs used by root-decomposition cases 2-4.
+     */
+    private val approvedCompositionSuffixes: List<String> by lazy {
+        (productiveSuffixes.values +
+            listOf("টাকে", "টাতে", "টাও", "টার", "টাই", "তেই", "টুকু") +
+            inflectionalSuffixes.map { it.bengali } +
+            listOf("া", "ি", "ী", "ু", "ূ", "ে", "ৈ", "ো", "ৌ"))
+            .distinct()
+            .sortedByDescending { it.length }
+    }
+
+    /**
+     * Composition allowance: true when [bengali] parses as a real/seed dictionary
+     * root plus a whitelisted productive suffix (ট্রাম্প + ের -> ট্রাম্পের).
+     * Productive inflections of real words are legitimate Bengali even when the
+     * inflected surface form is missing from the 480K list — a blanket gate would
+     * wrongly floor them (ট্রাম্পের, ফারসের, সোশ্যালে are corpus-correct but absent
+     * from the validator). Compositions whose root is NOT a real word
+     * (স্রমদক্ষ + টার) stay unapproved and get floored.
+     */
+    private fun isApprovedComposition(bengali: String): Boolean {
+        for (suffix in approvedCompositionSuffixes) {
+            if (bengali.length <= suffix.length || !bengali.endsWith(suffix)) continue
+            // Hasanta-junction compositions (root + ্ + suffix) reduce to the root.
+            val root = bengali.dropLast(suffix.length).removeSuffix("্")
+            if (root.isEmpty()) continue
+            if (validator.isValid(root) || dictionary.containsBengali(root)) return true
+        }
+        return false
+    }
+
+    /**
+     * Commit gate for composition-layer outputs (productive-suffix gluing,
+     * suffix-stripped lookup, root decomposition, section narrowing). Same
+     * contract as [applyCommitGate] with one extra approval: a dictionary-root +
+     * whitelisted-productive-suffix composition may stand as editor primary even
+     * when the full inflection is not itself a 480K/seed word. Everything else
+     * composed (invented root, non-productive junction) floors to the clean
+     * deterministic transliteration.
+     */
+    private fun applyCompositionCommitGate(key: String, result: ConversionResult): ConversionResult {
+        if (!validator.isLoaded()) return result          // gate armed only with real dictionary
+        if (key.any { it !in 'a'..'z' }) return result    // CleanTransliterator contract (see applyCommitGate)
+        if (isGateApproved(result)) return result
+        if (isApprovedComposition(result.bengali)) return result
+        return applyCommitGate(key, result)
+    }
+
+    /**
      * Test seam: true when [bengali] is gate-approved — i.e., present in the 480K
      * validator OR in the seed/user dictionary. Pins the real contract that every
      * editor primary and every surfaced alternative must be a real or seed word.
      */
     internal fun isGateApprovedForTest(bengali: String): Boolean =
         validator.isValid(bengali) || dictionary.containsBengali(bengali)
+
+    /**
+     * Test seam for the F2 composition allowance: gate-approved OR a
+     * dictionary-root + whitelisted-productive-suffix composition.
+     */
+    internal fun isCompositionGateApprovedForTest(bengali: String): Boolean =
+        isGateApprovedForTest(bengali) || isApprovedComposition(bengali)
 
     private fun applyBengaliRecovery(result: ConversionResult): ConversionResult? {
         val bengali = result.bengali
