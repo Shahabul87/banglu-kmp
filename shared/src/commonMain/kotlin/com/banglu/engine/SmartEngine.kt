@@ -417,6 +417,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         clearCache()
     }
 
+    /** Test seam: load validator frequency data directly (production uses initialize(loader)). */
+    internal fun loadValidatorFrequencies(frequencies: Map<String, Int>) {
+        validator.loadFrequencies(frequencies)
+        clearCache()
+    }
+
     /**
      * Async initialization: loads extended dictionaries, 480K word list,
      * frequency data, disambiguation map, bigram model, and learned words.
@@ -558,9 +564,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         return storeLookup(normalized).firstOrNull { it.bengali == bengali }?.frequency ?: 0
     }
 
-    private fun tryCorpusPhoneticLookup(key: String): ConversionResult? {
-        // Keep one/two-key composing defaults stable: t→ত, ta→তা.
-        if (key.length < 3) return null
+    /**
+     * @param minKeyLength shortest key allowed to consult the index. Composing
+     * call sites keep the default 3 so one/two-key live defaults stay stable
+     * (t→ত, ta→তা); commit call sites ([convertWord]) pass 2 so short corpus
+     * words (ob→অব) resolve through the compiled store. 1-char keys are
+     * always excluded.
+     */
+    private fun tryCorpusPhoneticLookup(key: String, minKeyLength: Int = 3): ConversionResult? {
+        if (key.length < maxOf(minKeyLength, 2)) return null
 
         // Engine v3: precompiled phonetic index (sqlite), replaces the runtime corpus index.
         phoneticIndex?.let {
@@ -574,7 +586,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             return ConversionResult(hits.first().bengali, 0.96, ResolutionSource.DICTIONARY, alternatives)
         }
 
-        // Legacy path (no store attached): runtime-built corpus index
+        // Legacy path (no store attached): runtime-built corpus index keeps the
+        // original 3-char floor — its 2-char buckets are noisy 480K fragments
+        // without the compiled store's curation.
+        if (key.length < 3) return null
         if (corpusPhoneticIndex.isEmpty()) return null
 
         val matches = corpusPhoneticIndex[key].orEmpty()
@@ -665,7 +680,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         convertByDictionary(key)?.let { result ->
-            tryCorpusPhoneticLookup(key)?.let { corpusResult ->
+            tryCorpusPhoneticLookup(key, minKeyLength = 2)?.let { corpusResult ->
                 val dictFreq = validator.getFrequency(result.bengali)
                 // Store words live outside the 480K validator: without the store
                 // frequency they would always score 0 here and could never win.
@@ -673,7 +688,25 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     validator.getFrequency(corpusResult.bengali),
                     storeFrequencyOf(key, corpusResult.bengali)
                 )
-                val corpusClearlyBetter = corpusFreq > dictFreq + 5 || result.confidence < 0.90
+                // F3 exact-key weighting: when the corpus hit sits under the
+                // typed key EXACTLY (no ee/oo collapse) while the typed key
+                // EXTENDS the dictionary word's canonical phonetic (the user
+                // deliberately typed more letters than the dictionary word
+                // needs — dutii = duti + i), the exact index hit wins unless
+                // the dictionary word clearly dominates: +15 absolute AND 2x
+                // relative. dutii: exact দুটিই@47 beats variant দুটি@76
+                // (76 < 47*2). Abbreviated typing (ok vs canonical oke,
+                // ca vs cha) keeps the standard rule — ওকে/চা must not lose
+                // to rarer exact 2-char corpus keys.
+                val corpusExactKey = storeLookup(key).any { it.bengali == corpusResult.bengali }
+                val dictCanonical = dictionary.getPhoneticForBengali(result.bengali)
+                val typedExtendsDictPhonetic = dictCanonical != null &&
+                    dictCanonical != key && key.startsWith(dictCanonical)
+                val corpusClearlyBetter = if (corpusExactKey && typedExtendsDictPhonetic) {
+                    !(dictFreq > corpusFreq + 15 && dictFreq > corpusFreq * 2)
+                } else {
+                    corpusFreq > dictFreq + 5 || result.confidence < 0.90
+                }
                 if (corpusClearlyBetter) {
                     cacheResult(cacheKey, corpusResult); return corpusResult
                 }
@@ -697,7 +730,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             cacheResult(cacheKey, result); return result
         }
 
-        tryCorpusPhoneticLookup(key)?.let { result ->
+        tryCorpusPhoneticLookup(key, minKeyLength = 2)?.let { result ->
             cacheResult(cacheKey, result); return result
         }
 
@@ -763,8 +796,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         // Layer 6: Bengali dictionary recovery (if 480K loaded and result not valid)
-        // Gate: only fire on longer inputs (>= 6 chars) where pattern engine output is less trustworthy
-        if (key.length >= 6 && validator.isLoaded() && !validator.isValid(result.bengali) && result.bengali.length >= 3) {
+        // Gate: only fire on longer inputs (>= 6 chars) where pattern engine output is less trustworthy.
+        // F3: approved compositions (real root + productive suffix, e.g. farser →
+        // ফার্স+ের) are legitimate inflections absent from the 480K list — never
+        // "recover" them to a different corpus word (farser must not become ফার্স্টের).
+        if (key.length >= 6 && validator.isLoaded() && !validator.isValid(result.bengali) &&
+            result.bengali.length >= 3 && !isApprovedComposition(result.bengali)
+        ) {
             applyBengaliRecovery(result)?.let { recovered ->
                 val gated = applyCommitGate(key, recovered)
                 cacheResult(cacheKey, gated); return gated

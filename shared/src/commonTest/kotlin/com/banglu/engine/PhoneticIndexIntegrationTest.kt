@@ -3,6 +3,7 @@ package com.banglu.engine
 import com.banglu.engine.platform.InMemoryPhoneticIndexStore
 import com.banglu.engine.platform.PhoneticIndexHit
 import com.banglu.engine.types.ResolutionSource
+import com.banglu.engine.types.SmartDictionaryEntry
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -119,6 +120,91 @@ class PhoneticIndexIntegrationTest {
             )
         )
         assertEquals("পুজো", e.convertWord("pooja").bengali)
+    }
+
+    @Test
+    fun twoCharKeysReachTheIndexOnCommit() {
+        // F3 Bug 1: tryCorpusPhoneticLookup's 3-char floor kept 2-char COMMIT
+        // keys away from the index (ob → index অব@74 never consulted).
+        // Routing (seed-only engine + store): convertWord("ob") finds no seed
+        // dict entry (dictionary.lookup("ob") is empty), "ob" is not detected
+        // as English, so it reaches the direct corpus lookup, which now
+        // accepts length-2 keys on commit (minKeyLength = 2).
+        val e = SmartEngine()
+        e.initializeSync()
+        e.setPhoneticIndex(
+            InMemoryPhoneticIndexStore(
+                entries = listOf(
+                    PhoneticIndexHit("অব", 74, PhoneticIndexHit.TIER_A) to "ob"
+                )
+            )
+        )
+        val committed = e.convertWord("ob")
+        assertEquals("অব", committed.bengali)
+        // Source proves the index resolved it (pre-F3 the RULE layer happened
+        // to emit অব too, at confidence 0.75).
+        assertEquals(ResolutionSource.DICTIONARY, committed.source)
+
+        // Composing keeps its pre-F3 output: the live preview never consults
+        // the index for keys shorter than 4, so "ob" stays the pattern-layer
+        // default. Captured BEFORE the F3 change: অব, RULE, confidence 0.75.
+        val composing = e.convertForComposing("ob")
+        assertEquals("অব", composing.bengali)
+        assertEquals(ResolutionSource.RULE, composing.source)
+    }
+
+    @Test
+    fun exactIndexKeyBeatsVariantPhoneticUnlessMuchRarer() {
+        // F3 Bug 2: the index stores দুটিই@47 under the EXACT key "dutii",
+        // but the extended dictionary lists "dutii" as a generated variant of
+        // দুটি (canonical "duti"), and the dict-vs-corpus comparison ignored
+        // exactness. Routing: convertByDictionary("dutii") returns দুটি (trie
+        // hit via the variant phonetic), then the comparison sees an exact
+        // store key whose typed input EXTENDS the dictionary word's canonical
+        // phonetic (dutii = duti + i) — the exact corpus hit wins because the
+        // validator is not loaded (dictFreq 0 clears no dominance bar).
+        val e = SmartEngine()
+        e.initializeSync()
+        // Mimic the extended dictionary's variant family (seed alone has no
+        // "dutii" phonetic; without this the input would bypass the dict-vs-
+        // corpus comparison entirely and resolve via the direct corpus path).
+        e.dictionary.addEntry(SmartDictionaryEntry("দুটি", listOf("duti", "dutii"), 76))
+        e.setPhoneticIndex(
+            InMemoryPhoneticIndexStore(
+                entries = listOf(
+                    PhoneticIndexHit("দুটিই", 47, PhoneticIndexHit.TIER_A) to "dutii"
+                )
+            )
+        )
+        // Routing precondition: the dictionary side really proposes দুটি.
+        assertEquals("দুটি", e.dictionary.lookup("dutii").firstOrNull()?.bengali)
+        assertEquals("duti", e.dictionary.getPhoneticForBengali("দুটি"))
+        assertEquals("দুটিই", e.convertWord("dutii").bengali)
+    }
+
+    @Test
+    fun variantPhoneticWithStrongFrequencyAdvantageStillWins() {
+        // F3 Bug 2 counter-case: a variant-matched dictionary word with a
+        // clear frequency advantage (+15 absolute AND 2x relative) still
+        // beats the exact index key. Routing: seed নদী lists "nodii" among
+        // its phonetics (canonical "nodi", so typed "nodii" extends it);
+        // the store has নদিই@10 under the exact key "nodii"; the validator
+        // frequency seam gives নদী 40 — 40 > 10 + 15 and 40 > 10 * 2, so
+        // the dictionary word dominates and stays primary.
+        val e = SmartEngine()
+        e.initializeSync()
+        e.loadValidatorFrequencies(mapOf("নদী" to 40))
+        e.setPhoneticIndex(
+            InMemoryPhoneticIndexStore(
+                entries = listOf(
+                    PhoneticIndexHit("নদিই", 10, PhoneticIndexHit.TIER_A) to "nodii"
+                )
+            )
+        )
+        // Routing precondition: dictionary proposes নদী via the variant "nodii".
+        assertEquals("নদী", e.dictionary.lookup("nodii").firstOrNull()?.bengali)
+        assertEquals("nodi", e.dictionary.getPhoneticForBengali("নদী"))
+        assertEquals("নদী", e.convertWord("nodii").bengali)
     }
 
     @Test
