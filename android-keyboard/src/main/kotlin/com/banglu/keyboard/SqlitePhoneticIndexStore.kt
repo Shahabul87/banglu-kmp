@@ -11,8 +11,8 @@ import java.io.File
  * Open once per IME session; call close() from the service's onDestroy.
  * All methods fail soft (empty results) so a corrupt db never crashes the IME.
  *
- * Tables used (db version 3.3.1):
- * - phonetic_index(key, word_id, frequency, tier) with idx_phonetic_index_key(key, tier)
+ * Tables used (db version 3.4.0):
+ * - phonetic_index(key, word_id, frequency, tier, priority) with idx_phonetic_index_key(key, priority, tier)
  * - words(id, bengali, frequency) — Bengali text lives here, joined by word_id
  * - english_lexicon(key PRIMARY KEY, bengali)
  *
@@ -74,16 +74,16 @@ class SqlitePhoneticIndexStore(
     val isAvailable: Boolean get() = db != null
 
     override fun lookupExact(key: String): List<PhoneticIndexHit> = query(
-        """SELECT w.bengali, p.frequency, p.tier FROM phonetic_index p
+        """SELECT w.bengali, p.frequency, p.tier, p.priority FROM phonetic_index p
            JOIN words w ON w.id = p.word_id
-           WHERE p.key = ? ORDER BY p.frequency DESC LIMIT 16""",
+           WHERE p.key = ? ORDER BY p.priority ASC, p.frequency DESC LIMIT 16""",
         arrayOf(key)
     )
 
     override fun lookupPrefix(prefix: String, limit: Int): List<PhoneticIndexHit> {
         if (limit <= 0 || prefix.isEmpty()) return emptyList()
         return query(
-            """SELECT w.bengali, p.frequency, p.tier FROM phonetic_index p
+            """SELECT w.bengali, p.frequency, p.tier, p.priority FROM phonetic_index p
                JOIN words w ON w.id = p.word_id
                WHERE p.key >= ? AND p.key < ? AND p.tier = ?
                ORDER BY p.frequency DESC LIMIT ?""",
@@ -116,7 +116,9 @@ class SqlitePhoneticIndexStore(
     private fun query(sql: String, args: Array<String>): List<PhoneticIndexHit> = try {
         db?.rawQuery(sql, args)?.use { c ->
             val hits = ArrayList<PhoneticIndexHit>()
-            while (c.moveToNext()) hits.add(PhoneticIndexHit(c.getString(0), c.getInt(1), c.getInt(2)))
+            while (c.moveToNext()) {
+                hits.add(PhoneticIndexHit(c.getString(0), c.getInt(1), c.getInt(2), c.getInt(3)))
+            }
             hits
         } ?: emptyList()
     } catch (e: Exception) {

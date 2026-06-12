@@ -4004,9 +4004,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (validator.isValid(bengali)) return true
         if (validator.isLoaded()) return false
         val store = phoneticIndex ?: return false
-        containsWordMemo[bengali]?.let { return it }
-        val known = store.containsWord(bengali)
-        containsWordMemo[bengali] = known
+        // The compiled words table stores the nukta-FOLDED form only (S2);
+        // rule-layer candidates may arrive decomposed — fold before querying.
+        val folded = ReverseTransliterator.foldNukta(bengali)
+        containsWordMemo[folded]?.let { return it }
+        val known = store.containsWord(folded)
+        containsWordMemo[folded] = known
         return known
     }
 

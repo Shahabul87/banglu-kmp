@@ -8,7 +8,14 @@ class InMemoryPhoneticIndexStore(
 
     private val byKey: Map<String, List<PhoneticIndexHit>> =
         entries.groupBy({ it.second }, { it.first })
-            .mapValues { (_, hits) -> hits.sortedByDescending { it.frequency } }
+            .mapValues { (_, hits) ->
+                // Canonical owners (priority 0) beat habit-alias claimants
+                // (priority 1) regardless of frequency; frequency breaks ties.
+                hits.sortedWith(
+                    compareBy<PhoneticIndexHit> { it.priority }
+                        .thenByDescending { it.frequency }
+                )
+            }
 
     /**
      * Words table emulation: explicit [words] UNION every indexed Bengali form —

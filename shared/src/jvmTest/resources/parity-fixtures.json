@@ -313,7 +313,7 @@
   },
   {
     "input": "bariTe",
-    "expected": "বাড়িতে",
+    "expected": "বাড়িতে",
     "category": "root-decomposition",
     "priority": "P1"
   },
@@ -379,7 +379,7 @@
   },
   {
     "input": "bariwalader",
-    "expected": "বারিওয়ালাদের",
+    "expected": "বাড়িওয়ালাদের",
     "category": "commit-gate-floor",
     "priority": "P1"
   },

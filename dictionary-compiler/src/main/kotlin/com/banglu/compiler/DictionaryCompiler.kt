@@ -64,16 +64,22 @@ fun main(args: Array<String>) {
         val frequencies = freqJson["frequencies"]!!.jsonObject
         println("  Found ${frequencies.size} frequency entries")
 
-        // 3. Insert words with frequencies
+        // 3. Nukta-fold + dedupe the word list, then insert words with frequencies.
+        // The words table stores the FOLDED form only (engine-side comparisons
+        // are nukta-folded post-F1); duplicate folded forms merge (max frequency).
+        val rawWordList = bengaliWords.map { it.jsonPrimitive.content }
+        val freqMap = frequencies.entries.associate { (w, f) -> w to f.jsonPrimitive.int }
+        val foldResult = PhoneticIndexBuilder.foldAndDedupe(rawWordList, freqMap)
+        println("  Nukta fold/dedupe removed ${foldResult.mergedCount} duplicate rows " +
+            "(${rawWordList.size} -> ${foldResult.words.size} words)")
+
         println("Inserting words...")
         val insertWord = connection.prepareStatement("INSERT INTO words (bengali, frequency) VALUES (?, ?)")
-        val wordIdByBengali = HashMap<String, Int>(bengaliWords.size * 2)
+        val wordIdByBengali = HashMap<String, Int>(foldResult.words.size * 2)
         var count = 0
-        for (wordElement in bengaliWords) {
-            val word = wordElement.jsonPrimitive.content
-            val freq = frequencies[word]?.jsonPrimitive?.int ?: 0
+        for (word in foldResult.words) {
             insertWord.setString(1, word)
-            insertWord.setInt(2, freq)
+            insertWord.setInt(2, foldResult.frequencies[word] ?: 0)
             insertWord.addBatch()
             count++
             // id == insertion ordinal (AUTOINCREMENT starts at 1)
@@ -86,18 +92,32 @@ fun main(args: Array<String>) {
         insertWord.executeBatch()
         println("\r  Inserted $count words total")
 
+        // 3a. Real-usage word list (suggestion tier evidence): word<TAB>count
+        // from real Bengali web text. Membership makes a word Tier A.
+        val dataDir = sequenceOf(File("data"), File("dictionary-compiler/data")).firstOrNull { it.isDirectory }
+        val usageFile = dataDir?.let { File(it, "bengali-web-usage.tsv") }
+        val usageWords: Set<String> = if (usageFile != null && usageFile.exists()) {
+            usageFile.readLines()
+                .mapNotNull { line -> line.substringBefore('\t').trim().takeIf { it.isNotEmpty() } }
+                .toSet()
+        } else {
+            println("WARNING: bengali-web-usage.tsv not found — tiering falls back to frequency only")
+            emptySet()
+        }
+        println("  Loaded ${usageWords.size} real-usage words")
+
         // 3b. Build precompiled phonetic index (Engine v3)
         println("Building phonetic index...")
-        val wordList = bengaliWords.map { it.jsonPrimitive.content }
-        val freqMap = frequencies.entries.associate { (w, f) -> w to f.jsonPrimitive.int }
-        val indexRows = PhoneticIndexBuilder.build(wordList, freqMap)
+        val indexRows = PhoneticIndexBuilder.build(foldResult.words, foldResult.frequencies, usageWords)
         val report = PhoneticIndexBuilder.lastReport
-        println("  Rows: ${report.totalRows}, round-trip coverage: " +
+        println("  Rows: ${report.totalRows} (canonical ${report.canonicalRows}, habit-alias ${report.habitAliasRows})")
+        println("  Words: tier-A ${report.tierAWords}, tier-B ${report.tierBWords}")
+        println("  Round-trip coverage: " +
             "${"%.1f".format(java.util.Locale.ROOT, report.coveragePercent)}% (${report.roundTripOk}/${report.totalWords})")
         println("  Dropped keys: ${report.droppedKeys}, words with no rows: ${report.wordsWithNoRows}")
 
         val insertIndex = connection.prepareStatement(
-            "INSERT INTO phonetic_index (key, word_id, frequency, tier) VALUES (?, ?, ?, ?)"
+            "INSERT INTO phonetic_index (key, word_id, frequency, tier, priority) VALUES (?, ?, ?, ?, ?)"
         )
         var indexCount = 0
         var unmappedCount = 0
@@ -112,6 +132,7 @@ fun main(args: Array<String>) {
             insertIndex.setInt(2, wordId)
             insertIndex.setInt(3, row.frequency)
             insertIndex.setInt(4, row.tier)
+            insertIndex.setInt(5, row.priority)
             insertIndex.addBatch()
             if (++indexCount % 50000 == 0) insertIndex.executeBatch()
         }
@@ -122,7 +143,6 @@ fun main(args: Array<String>) {
         }
 
         // 3c. Build English lexicon (Engine v3)
-        val dataDir = sequenceOf(File("data"), File("dictionary-compiler/data")).firstOrNull { it.isDirectory }
         val cmudictFile = dataDir?.let { File(it, "cmudict.dict") }
         val freqListFile = dataDir?.let { File(it, "en_50k.txt") }
         var englishCount = 0
@@ -269,7 +289,7 @@ fun main(args: Array<String>) {
         // 7. Insert metadata
         val insertMeta = connection.prepareStatement("INSERT INTO metadata (key, value) VALUES (?, ?)")
         val metadataEntries = mapOf(
-            "version" to "3.3.3",
+            "version" to "3.4.0",
             "word_count" to count.toString(),
             "disambiguation_count" to mappings.size.toString(),
             "extended_entry_count" to extendedEntryCount.toString(),
@@ -281,6 +301,12 @@ fun main(args: Array<String>) {
             "total_bigrams" to totalBigrams.toString(),
             "phonetic_index_count" to indexCount.toString(),
             "phonetic_unmapped_rows" to unmappedCount.toString(),
+            "phonetic_canonical_rows" to report.canonicalRows.toString(),
+            "phonetic_habit_alias_rows" to report.habitAliasRows.toString(),
+            "phonetic_tier_a_words" to report.tierAWords.toString(),
+            "phonetic_tier_b_words" to report.tierBWords.toString(),
+            "nukta_merged_words" to foldResult.mergedCount.toString(),
+            "usage_word_count" to usageWords.size.toString(),
             "phonetic_roundtrip_coverage" to "%.2f".format(java.util.Locale.ROOT, report.coveragePercent),
             "phonetic_dropped_keys" to report.droppedKeys.toString(),
             "phonetic_words_no_rows" to report.wordsWithNoRows.toString(),
@@ -296,6 +322,14 @@ fun main(args: Array<String>) {
         insertMeta.executeBatch()
 
         connection.commit()
+
+        // Compact the artifact: indexes were populated by out-of-order bulk
+        // inserts, leaving B-tree pages ~2/3 full. VACUUM rebuilds them packed
+        // (must run outside a transaction).
+        println("Vacuuming...")
+        connection.autoCommit = true
+        connection.createStatement().execute("VACUUM")
+        connection.autoCommit = false
 
         // Print stats
         val fileSize = File(outputPath).length()
@@ -376,10 +410,11 @@ private fun createTables(connection: Connection) {
                 key TEXT NOT NULL,
                 word_id INTEGER NOT NULL,
                 frequency INTEGER DEFAULT 0,
-                tier INTEGER NOT NULL DEFAULT 1
+                tier INTEGER NOT NULL DEFAULT 1,
+                priority INTEGER NOT NULL DEFAULT 0
             )
         """)
-        execute("CREATE INDEX idx_phonetic_index_key ON phonetic_index(key, tier)")
+        execute("CREATE INDEX idx_phonetic_index_key ON phonetic_index(key, priority, tier)")
 
         execute("""
             CREATE TABLE english_lexicon (

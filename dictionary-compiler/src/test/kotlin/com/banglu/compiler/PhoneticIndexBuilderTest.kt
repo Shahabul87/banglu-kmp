@@ -80,8 +80,14 @@ class PhoneticIndexBuilderTest {
      * F1 corpus fix: দুঃখ used to reverse to "du:kh" (":" failed ROMAN_ONLY,
      * word got 0 rows). Visarga is now silent but geminates the following
      * consonant ("dukkh" + trailing-o alias "dukkho" — how users type it).
-     * The ungeminated "dukh" must NOT be indexed: it belongs to দুখ and
-     * would shadow that exact word (parity fixture 'dukh' -> দুখ).
+     *
+     * S2 ADAPTATION (schema/rule-driven): the ungeminated "dukh" used to be
+     * banned because it would shadow দুখ's exact key. The S2 double_reduce
+     * habit rule now legitimately produces "dukh" — but only at PRIORITY_HABIT
+     * (1), so দুখ (canonical owner of "dukh" at priority 0) still wins every
+     * lookup; দুঃখ merely becomes reachable behind it. The shadowing concern
+     * the old assertion guarded is now solved by the priority axis instead of
+     * by omission.
      */
     @Test
     fun visargaWordsGetTypeableKeys() {
@@ -92,7 +98,9 @@ class PhoneticIndexBuilderTest {
         val keys = rows.map { it.key }
         assertTrue("dukkh" in keys, "expected canonical key 'dukkh', got $keys")
         assertTrue("dukkho" in keys, "expected geminated typing key 'dukkho', got $keys")
-        assertFalse("dukh" in keys, "ungeminated 'dukh' must not shadow দুখ, got $keys")
+        // double_reduce alias exists but must never claim canonical priority.
+        val dukhRow = rows.firstOrNull { it.key == "dukh" }
+        assertEquals(1, dukhRow?.priority, "'dukh' must be a priority-1 habit alias, got $dukhRow")
     }
 
     /** F1 corpus fix: decomposed-nukta words (ড = ড + ়) must be indexed. */
@@ -178,5 +186,155 @@ class PhoneticIndexBuilderTest {
     fun coveragePercentZeroWhenNoWords() {
         PhoneticIndexBuilder.build(words = emptyList(), frequencies = emptyMap())
         assertEquals(0.0, PhoneticIndexBuilder.lastReport.coveragePercent)
+    }
+
+    // -------------------------------------------------------------------------
+    // S2: priority-tiered habit aliases, usage tier, nukta dedupe
+    // -------------------------------------------------------------------------
+
+    private fun keysOf(rows: List<PhoneticIndexRow>, word: String) =
+        rows.filter { it.bengali == word }.map { it.key }
+
+    private fun row(rows: List<PhoneticIndexRow>, word: String, key: String) =
+        rows.firstOrNull { it.bengali == word && it.key == key }
+
+    /** Canonical romanization is the unique priority-0 key; all aliases are priority 1. */
+    @Test
+    fun canonicalKeyIsUniquePriorityZero() {
+        val rows = PhoneticIndexBuilder.build(words = listOf("যদি"), frequencies = emptyMap())
+        val p0 = rows.filter { it.priority == 0 }
+        assertEquals(listOf("zodi"), p0.map { it.key }, "exactly one priority-0 row (canonical)")
+        assertTrue(rows.filter { it.key != "zodi" }.all { it.priority == 1 },
+            "all habit aliases must be priority 1, got $rows")
+    }
+
+    /**
+     * b_fola: স্বাস্থ্য canonical "swasthy" (probe-verified) — the AVRO-style
+     * convention rewrites the bo-phola "w" as "b" (sw → sb). Chains:
+     *   swasthy → b_fola → sbasthy → final_o → sbasthyo
+     *   swasthy → b_fola → sbasthy → ya_drop → sbasth → final_o → sbastho
+     * স্বাস্থ্যকর keeps the spoken-form chain (w_drop + ya_drop → sasthokor).
+     */
+    @Test
+    fun bFolaProducesAvroStyleBKeys() {
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf("স্বাস্থ্য", "স্বাস্থ্যকর"),
+            frequencies = emptyMap()
+        )
+        val sasthoKeys = keysOf(rows, "স্বাস্থ্য")
+        assertTrue("sbasthyo" in sasthoKeys, "expected b_fola key 'sbasthyo', got $sasthoKeys")
+        assertTrue("sbastho" in sasthoKeys, "expected b_fola chain key 'sbastho', got $sasthoKeys")
+        assertEquals(1, row(rows, "স্বাস্থ্য", "sbastho")?.priority)
+        assertEquals(0, row(rows, "স্বাস্থ্য", "swasthy")?.priority, "canonical stays priority 0")
+        val korKeys = keysOf(rows, "স্বাস্থ্যকর")
+        assertTrue("sasthokor" in korKeys, "expected spoken-form chain 'sasthokor', got $korKeys")
+        assertTrue("sbasthokor" in korKeys, "expected b_fola chain 'sbasthokor', got $korKeys")
+    }
+
+    /**
+     * ya_fola_gemination: জন্য canonical "jony" (probe-verified) — the single
+     * most famous Bangla typing habit doubles the consonant instead of the
+     * ya-phala. Chain: jony → final_o → jonyo → gemination → jonno.
+     * জন্যে (canonical "jonye") must be reachable as jonye AND jonne.
+     */
+    @Test
+    fun yaFolaGeminationAliases() {
+        val rows = PhoneticIndexBuilder.build(words = listOf("জন্য", "জন্যে"), frequencies = emptyMap())
+        val jonyoKeys = keysOf(rows, "জন্য")
+        assertTrue("jonno" in jonyoKeys, "expected gemination key 'jonno', got $jonyoKeys")
+        assertEquals(1, row(rows, "জন্য", "jonno")?.priority)
+        assertEquals(0, row(rows, "জন্য", "jony")?.priority, "canonical 'jony' stays priority 0")
+        val jonyeKeys = keysOf(rows, "জন্যে")
+        assertTrue("jonye" in jonyeKeys, "expected canonical 'jonye', got $jonyeKeys")
+        assertTrue("jonne" in jonyeKeys, "expected gemination key 'jonne', got $jonyeKeys")
+        assertEquals(0, row(rows, "জন্যে", "jonye")?.priority)
+        assertEquals(1, row(rows, "জন্যে", "jonne")?.priority)
+    }
+
+    /** double_reduce: উত্তর canonical "uttor" stays priority 0; lazy "utor" is priority 1. */
+    @Test
+    fun doubleReduceAliases() {
+        val rows = PhoneticIndexBuilder.build(words = listOf("উত্তর"), frequencies = emptyMap())
+        assertEquals(0, row(rows, "উত্তর", "uttor")?.priority, "canonical 'uttor', got ${keysOf(rows, "উত্তর")}")
+        assertEquals(1, row(rows, "উত্তর", "utor")?.priority, "expected habit key 'utor', got ${keysOf(rows, "উত্তর")}")
+    }
+
+    /** j_to_z: জীবন canonical "jiibon" → ii_collapse "jibon" → j_to_z "zibon" (all reachable). */
+    @Test
+    fun jToZSwapAliases() {
+        val rows = PhoneticIndexBuilder.build(words = listOf("জীবন"), frequencies = emptyMap())
+        val keys = keysOf(rows, "জীবন")
+        assertTrue("jibon" in keys, "expected ii-collapse 'jibon', got $keys")
+        assertTrue("zibon" in keys, "expected j→z swap 'zibon', got $keys")
+        assertEquals(1, row(rows, "জীবন", "zibon")?.priority)
+    }
+
+    /** h_lazy: শুরু canonical "shuru" gains lazy "suru" at priority 1 (সুরু owns it at 0). */
+    @Test
+    fun hLazyShToS() {
+        val rows = PhoneticIndexBuilder.build(words = listOf("শুরু", "সুরু"), frequencies = emptyMap())
+        assertEquals(1, row(rows, "শুরু", "suru")?.priority, "got ${keysOf(rows, "শুরু")}")
+        assertEquals(0, row(rows, "সুরু", "suru")?.priority, "got ${keysOf(rows, "সুরু")}")
+    }
+
+    /**
+     * Real-usage tiering: tier 0 (suggestible) requires web-usage membership
+     * OR corpus frequency >= 60; everything else is tier 1 (exact-match only).
+     */
+    @Test
+    fun tierComesFromUsageEvidenceOrFrequencyFloor() {
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf("আমি", "তুমি", "কলম"),
+            frequencies = mapOf("আমি" to 5, "তুমি" to 5, "কলম" to 60),
+            usageWords = setOf("আমি")
+        )
+        assertEquals(0, rows.first { it.bengali == "আমি" }.tier, "usage-listed word must be tier 0")
+        assertEquals(1, rows.first { it.bengali == "তুমি" }.tier, "freq 5, no usage → tier 1")
+        assertEquals(0, rows.first { it.bengali == "কলম" }.tier, "freq 60 floor → tier 0")
+    }
+
+    /** Usage-list matching is nukta-folded: decomposed usage entry marks the precomposed word. */
+    @Test
+    fun usageMatchingFoldsNukta() {
+        val decomposedBoro = "\u09AC\u09A1\u09BC" // ব + ড + nukta (decomposed)
+        val precomposedBoro = "বড়"      // ব + ড় (precomposed U+09DC)
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf(precomposedBoro),
+            frequencies = emptyMap(),
+            usageWords = setOf(decomposedBoro)
+        )
+        assertEquals(0, rows.first().tier, "decomposed usage entry must mark the folded word tier 0")
+    }
+
+    /**
+     * Nukta dedupe: a word whose folded form duplicates an earlier word is
+     * skipped as a separate row set; frequencies merge (max); the surviving
+     * rows carry the FOLDED Bengali form.
+     */
+    @Test
+    fun nuktaDuplicatesMergeWithMaxFrequency() {
+        val decomposedBoro = "\u09AC\u09A1\u09BC" // ব + ড + nukta (folds to precomposed)
+        val precomposedBoro = "বড়"      // ব + ড় (precomposed U+09DC)
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf(precomposedBoro, decomposedBoro),
+            frequencies = mapOf(precomposedBoro to 10, decomposedBoro to 99)
+        )
+        assertEquals(1, PhoneticIndexBuilder.lastReport.totalWords, "duplicate folded word must merge")
+        assertEquals(1, PhoneticIndexBuilder.lastReport.nuktaMerged)
+        assertEquals(setOf(precomposedBoro), rows.map { it.bengali }.toSet(), "rows carry folded form")
+        assertTrue(rows.all { it.frequency == 99 }, "merged frequency is the max, got $rows")
+    }
+
+    /** Per-word key emission is hard-capped at 32 (canonical + habit aliases). */
+    @Test
+    fun keysPerWordCappedAt32() {
+        // Conjunct-heavy word with many applicable rules (sh, w, y, doubles).
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf("বিশ্ববিদ্যালয়", "স্বাস্থ্যকর", "যুক্তরাষ্ট্র"),
+            frequencies = emptyMap()
+        )
+        for ((word, wordRows) in rows.groupBy { it.bengali }) {
+            assertTrue(wordRows.size <= 32, "$word emitted ${wordRows.size} keys (> 32)")
+        }
     }
 }

@@ -29,8 +29,12 @@ object ReverseTransliterator {
      * (ড়/ঢ়/য় are Unicode composition exclusions), but the 484K corpus
      * contains ~13.5K words encoded in the decomposed form, so every public
      * entry point must normalize before parsing.
+     *
+     * Public: the dictionary compiler reuses this exact mapping to fold the
+     * word list before keying, so the compiled `words` table and the engine's
+     * runtime comparisons agree on the precomposed form.
      */
-    private fun foldNukta(text: String): String {
+    fun foldNukta(text: String): String {
         if (!text.contains(NUKTA)) return text
         return text
             .replace("ড়", "ড়") // ড + ় -> ড়

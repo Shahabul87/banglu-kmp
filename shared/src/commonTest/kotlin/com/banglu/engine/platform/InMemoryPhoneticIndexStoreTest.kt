@@ -45,6 +45,38 @@ class InMemoryPhoneticIndexStoreTest {
         assertNull(store.lookupEnglish("zzz"))
     }
 
+    /**
+     * S2 two-axis key model: the canonical owner of a key (priority 0) beats a
+     * habit-alias claimant (priority 1) even when the alias word is far more
+     * frequent — suru → সুরু (canonical, freq 50) before শুরু (h_lazy alias,
+     * freq 500). Frequency still breaks ties within a priority band.
+     */
+    @Test
+    fun exactLookupOrdersByPriorityBeforeFrequency() {
+        val priorityStore = InMemoryPhoneticIndexStore(
+            entries = listOf(
+                PhoneticIndexHit("শুরু", 500, PhoneticIndexHit.TIER_A, PhoneticIndexHit.PRIORITY_HABIT) to "suru",
+                PhoneticIndexHit("সুরু", 50, PhoneticIndexHit.TIER_A, PhoneticIndexHit.PRIORITY_CANONICAL) to "suru",
+                PhoneticIndexHit("সুরুয়া", 10, PhoneticIndexHit.TIER_B, PhoneticIndexHit.PRIORITY_HABIT) to "suru"
+            )
+        )
+        val hits = priorityStore.lookupExact("suru")
+        assertEquals(listOf("সুরু", "শুরু", "সুরুয়া"), hits.map { it.bengali })
+        assertEquals(listOf(0, 1, 1), hits.map { it.priority })
+    }
+
+    /** Habit-alias keys still SUGGEST their word — tier filters junk, priority only orders. */
+    @Test
+    fun habitAliasHitsRemainSuggestibleWhenTierA() {
+        val store = InMemoryPhoneticIndexStore(
+            entries = listOf(
+                PhoneticIndexHit("স্বাস্থ্য", 80, PhoneticIndexHit.TIER_A, PhoneticIndexHit.PRIORITY_HABIT) to "sastho"
+            )
+        )
+        assertEquals(listOf("স্বাস্থ্য"), store.lookupPrefix("sast", limit = 5).map { it.bengali })
+        assertEquals(listOf("স্বাস্থ্য"), store.lookupExact("sastho").map { it.bengali })
+    }
+
     @Test
     fun prefixLimitTruncatesAfterSorting() {
         val limitStore = InMemoryPhoneticIndexStore(

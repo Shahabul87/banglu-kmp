@@ -3,11 +3,18 @@ package com.banglu.engine.platform
 data class PhoneticIndexHit(
     val bengali: String,
     val frequency: Int,
-    val tier: Int // TIER_A (suggestible) or TIER_B (exact-match only)
+    val tier: Int, // TIER_A (suggestible) or TIER_B (exact-match only)
+    val priority: Int = PRIORITY_CANONICAL // key axis: canonical romanization vs habit alias
 ) {
     companion object {
         const val TIER_A = 0
         const val TIER_B = 1
+
+        /** Key is the faithful romanization of the word (priority 0). */
+        const val PRIORITY_CANONICAL = 0
+
+        /** Key is a lazy-typing habit alias (priority 1) — loses to canonical owners on collision. */
+        const val PRIORITY_HABIT = 1
     }
 }
 
@@ -19,8 +26,11 @@ data class PhoneticIndexHit(
  */
 interface PhoneticIndexStore {
     /**
-     * Words whose canonical/variant key equals [key], frequency-descending.
-     * Implementations may cap the result size (at least 16 entries guaranteed when more exist).
+     * Words whose canonical/variant key equals [key], ordered by
+     * (priority ascending, frequency descending): a word that owns [key] as its
+     * canonical romanization always precedes habit-alias claimants, regardless
+     * of frequency. Implementations may cap the result size (at least 16
+     * entries guaranteed when more exist).
      */
     fun lookupExact(key: String): List<PhoneticIndexHit>
 
