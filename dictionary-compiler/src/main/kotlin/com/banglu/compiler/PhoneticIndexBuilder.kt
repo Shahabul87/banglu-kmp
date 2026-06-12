@@ -91,6 +91,16 @@ object PhoneticIndexBuilder {
     /** Word-final ya-phala after a consonant: users drop the y (লক্ষ্য "lokkhy" → "lokkh"). */
     private val YA_PHALA_FINAL = Regex("([bcdfghjklmnpqrstvwxz])y$")
 
+    /**
+     * Bo-phola (্ব) after a consonant: ReverseTransliterator emits it as "w"
+     * (স্বাস্থ্য → "swasthy", বিশ্বাস → "bishwas"), but the ব-ফলা is barely
+     * pronounced and real users almost never type it (স্বাস্থ্য="shastho",
+     * স্বপ্ন="shopno", বিশ্বাস="bishash"). Only a w PRECEDED BY A CONSONANT
+     * letter is dropped — vowel+w glides (হাওয়া-class keys) and word-initial
+     * "w" are untouched.
+     */
+    private val BO_PHOLA_W = Regex("([bcdfghjklmnpqrstvxz])w")
+
     private const val VOWELS = "aeiou"
 
     /**
@@ -103,6 +113,11 @@ object PhoneticIndexBuilder {
      * - `ii → i`   : ী / ঈ (emitted as "ii"; users omit the doubled vowel)
      * - `uu → u`   : ূ / ঊ (emitted as "uu"; users omit the doubled vowel)
      * - `z → j`    : য (emitted as "z"; users overwhelmingly type "j": যদি → "jodi")
+     * - bo-phola drop : consonant+`w` — ্ব is barely pronounced; users type
+     *   the spoken form (স্বাস্থ্যকর "swasthyokor" → "sasthyokor", বিশ্বাস
+     *   "bishwas" → "bishas"). Vowel+`w` glides and word-initial `w` are kept.
+     *   Composed with ya-phala drop this yields the natural typing
+     *   ("swasthyokor" → "sasthokor").
      * - ya-phala drop : consonant+`y` word-finally or before a vowel — users
      *   type the pronounced form (লক্ষ্য "lokkhy" → "lokkh", সন্ধ্যা
      *   "sondhya" → "sondha"). Vowel+`y` (real য় sound, e.g. "deya") is kept.
@@ -127,6 +142,7 @@ object PhoneticIndexBuilder {
         expand(aliases) { it.replace("ii", "i") }
         expand(aliases) { it.replace("uu", "u") }
         expand(aliases) { it.replace("z", "j") }
+        expand(aliases) { dropBoPhola(it) }
         expand(aliases) { dropYaPhala(it) }
         expand(aliases) { withTrailingInherentO(it) }
         return aliases.toList()
@@ -139,6 +155,21 @@ object PhoneticIndexBuilder {
 
     private fun dropYaPhala(key: String): String =
         key.replace(YA_PHALA_BEFORE_VOWEL, "$1$2").replace(YA_PHALA_FINAL, "$1")
+
+    /**
+     * Drop every bo-phola "w" (a w preceded by a consonant letter), iterating
+     * to a fixpoint so stacked w's ("kww") collapse fully. Single-pass
+     * Regex.replace skips a w that only becomes consonant-adjacent after the
+     * previous drop.
+     */
+    private fun dropBoPhola(key: String): String {
+        var current = key
+        while (true) {
+            val next = current.replace(BO_PHOLA_W, "$1")
+            if (next == current) return current
+            current = next
+        }
+    }
 
     /**
      * Append the final inherent vowel "o" when the key ends in a consonant

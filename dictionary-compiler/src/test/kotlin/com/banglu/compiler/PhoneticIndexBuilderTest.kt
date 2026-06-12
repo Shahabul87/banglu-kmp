@@ -133,6 +133,47 @@ class PhoneticIndexBuilderTest {
         assertTrue("stri" in keysOf("স্ত্রী"), "got ${keysOf("স্ত্রী")}")
     }
 
+    /**
+     * F7: general bo-phola (্ব) w-drop alias class. ReverseTransliterator
+     * emits ্ব as "w" after a consonant, but users type the spoken form.
+     *
+     * Derivation for স্বাস্থ্যকর (probe-verified canonical "swasthyokor"):
+     *   canonical    : "swasthyokor"
+     *   bo-phola drop: "sasthyokor"   (s+w → s)
+     *   ya-phala drop: "sasthokor"    (h+y+o → ho)
+     * Both drops compose via expand(), so the chain emerges automatically.
+     */
+    @Test
+    fun boPholaWordsGetWDropAliases() {
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf("স্বাস্থ্যকর", "স্বপ্ন", "বিশ্বাস"),
+            frequencies = emptyMap()
+        )
+        assertEquals(0, PhoneticIndexBuilder.lastReport.wordsWithNoRows)
+        fun keysOf(word: String) = rows.filter { it.bengali == word }.map { it.key }
+        // canonical keys still present
+        assertTrue("swasthyokor" in keysOf("স্বাস্থ্যকর"), "got ${keysOf("স্বাস্থ্যকর")}")
+        // composed collapse: w-drop + ya-phala drop
+        assertTrue("sasthokor" in keysOf("স্বাস্থ্যকর"), "got ${keysOf("স্বাস্থ্যকর")}")
+        // w-drop + trailing inherent o ("swopn" → "sopn" → "sopno")
+        assertTrue("sopno" in keysOf("স্বপ্ন"), "got ${keysOf("স্বপ্ন")}")
+        // w-drop mid-word ("bishwas" → "bishas")
+        assertTrue("bishas" in keysOf("বিশ্বাস"), "got ${keysOf("বিশ্বাস")}")
+    }
+
+    /**
+     * F7 guard: vowel+w glides must be untouched by the bo-phola drop.
+     * Probe-verified: হাওয়া reverses to "haoya" — it contains no "w" at all
+     * (ও/য় emit "o"/"y"), and no alias rule applies, so its key set is
+     * exactly the canonical key. This pins that the w-drop rule introduces
+     * no spurious variants for the হাওয়া class.
+     */
+    @Test
+    fun glideWordsUnaffectedByBoPholaDrop() {
+        val rows = PhoneticIndexBuilder.build(words = listOf("হাওয়া"), frequencies = emptyMap())
+        assertEquals(listOf("haoya"), rows.map { it.key })
+    }
+
     @Test
     fun coveragePercentZeroWhenNoWords() {
         PhoneticIndexBuilder.build(words = emptyList(), frequencies = emptyMap())
