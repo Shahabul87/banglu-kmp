@@ -958,6 +958,9 @@ class BangluIMEService : InputMethodService(),
 
     private fun onBangluKeyPress(char: Char) {
         clearVoiceUndoState()
+        // Typing must surface suggestions: an expanded toolbar would otherwise
+        // take strip precedence and silently hide them (found in live device test).
+        isToolbarExpanded.value = false
         val ic = currentInputConnection ?: return
 
         if (rawCommitInputMode) {
