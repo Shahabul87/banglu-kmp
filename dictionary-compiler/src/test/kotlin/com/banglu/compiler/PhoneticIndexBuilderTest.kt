@@ -2,6 +2,7 @@ package com.banglu.compiler
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PhoneticIndexBuilderTest {
@@ -76,18 +77,60 @@ class PhoneticIndexBuilderTest {
     }
 
     /**
-     * দুঃখ reverses to "du:kh" (probe-verified).
-     * The ":" character fails the ROMAN_ONLY filter, so every alias for this
-     * word is dropped and the word contributes 0 rows — exercising the
-     * wordsWithNoRows and droppedKeys counters.
+     * F1 corpus fix: দুঃখ used to reverse to "du:kh" (":" failed ROMAN_ONLY,
+     * word got 0 rows). Visarga is now silent but geminates the following
+     * consonant ("dukkh" + trailing-o alias "dukkho" — how users type it).
+     * The ungeminated "dukh" must NOT be indexed: it belongs to দুখ and
+     * would shadow that exact word (parity fixture 'dukh' -> দুখ).
      */
     @Test
-    fun visargaWordsCountedAsUnindexed() {
-        PhoneticIndexBuilder.build(words = listOf("দুঃখ"), frequencies = emptyMap())
+    fun visargaWordsGetTypeableKeys() {
+        val rows = PhoneticIndexBuilder.build(words = listOf("দুঃখ"), frequencies = emptyMap())
         val report = PhoneticIndexBuilder.lastReport
         assertEquals(1, report.totalWords)
-        assertEquals(1, report.wordsWithNoRows)
-        assertTrue(report.droppedKeys >= 1)
+        assertEquals(0, report.wordsWithNoRows)
+        val keys = rows.map { it.key }
+        assertTrue("dukkh" in keys, "expected canonical key 'dukkh', got $keys")
+        assertTrue("dukkho" in keys, "expected geminated typing key 'dukkho', got $keys")
+        assertFalse("dukh" in keys, "ungeminated 'dukh' must not shadow দুখ, got $keys")
+    }
+
+    /** F1 corpus fix: decomposed-nukta words (ড = ড + ়) must be indexed. */
+    @Test
+    fun decomposedNuktaWordsGetKeys() {
+        val decomposedBoro = "বড়" // ব + ড + ় (decomposed বড়)
+        val rows = PhoneticIndexBuilder.build(words = listOf(decomposedBoro), frequencies = emptyMap())
+        assertEquals(0, PhoneticIndexBuilder.lastReport.wordsWithNoRows)
+        assertTrue(rows.any { it.key == "bor" }, "expected key 'bor', got ${rows.map { it.key }}")
+    }
+
+    /** য emits canonical "z"; users overwhelmingly type "j" — alias required. */
+    @Test
+    fun zWordsGetJAlias() {
+        val rows = PhoneticIndexBuilder.build(words = listOf("যদি"), frequencies = emptyMap())
+        val keys = rows.map { it.key }
+        assertTrue("zodi" in keys, "expected canonical 'zodi', got $keys")
+        assertTrue("jodi" in keys, "expected j-alias 'jodi', got $keys")
+    }
+
+    /**
+     * F1 corpus fix: 3-consonant clusters no longer leak hasanta, and the
+     * natural typing for ya-phala / cluster-final words is among the keys.
+     */
+    @Test
+    fun clusterWordsGetNaturalTypingKeys() {
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf("যুক্তরাষ্ট্র", "লক্ষ্য", "সন্ধ্যা", "স্বাস্থ্য", "দারিদ্র্য", "স্ত্রী"),
+            frequencies = emptyMap()
+        )
+        assertEquals(0, PhoneticIndexBuilder.lastReport.wordsWithNoRows)
+        fun keysOf(word: String) = rows.filter { it.bengali == word }.map { it.key }
+        assertTrue("juktorashtro" in keysOf("যুক্তরাষ্ট্র"), "got ${keysOf("যুক্তরাষ্ট্র")}")
+        assertTrue("lokkho" in keysOf("লক্ষ্য"), "got ${keysOf("লক্ষ্য")}")
+        assertTrue("sondha" in keysOf("সন্ধ্যা"), "got ${keysOf("সন্ধ্যা")}")
+        assertTrue("swastho" in keysOf("স্বাস্থ্য"), "got ${keysOf("স্বাস্থ্য")}")
+        assertTrue("daridro" in keysOf("দারিদ্র্য"), "got ${keysOf("দারিদ্র্য")}")
+        assertTrue("stri" in keysOf("স্ত্রী"), "got ${keysOf("স্ত্রী")}")
     }
 
     @Test

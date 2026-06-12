@@ -20,6 +20,23 @@ package com.banglu.engine.util
 object ReverseTransliterator {
 
     private const val HASANTA = '\u09CD' // ্
+    private const val VISARGA = 'ঃ' // ঃ
+    private const val NUKTA = '়'   // ়
+
+    /**
+     * Fold decomposed nukta sequences (base + U+09BC) into the precomposed
+     * code points: ড+়→ড়, ঢ+়→ঢ়, য+়→য়. NFC does NOT perform this fold
+     * (ড়/ঢ়/য় are Unicode composition exclusions), but the 484K corpus
+     * contains ~13.5K words encoded in the decomposed form, so every public
+     * entry point must normalize before parsing.
+     */
+    private fun foldNukta(text: String): String {
+        if (!text.contains(NUKTA)) return text
+        return text
+            .replace("ড়", "ড়") // ড + ় -> ড়
+            .replace("ঢ়", "ঢ়") // ঢ + ় -> ঢ়
+            .replace("য়", "য়") // য + ় -> য়
+    }
 
     // ========================================================================
     // Reverse conjunct map: Bengali conjunct -> phonetic string.
@@ -33,6 +50,14 @@ object ReverseTransliterator {
         ConjunctEntry("\u09A8\u09CD\u09A6\u09CD\u09B0", "ndr"),   // ন্দ্র
         ConjunctEntry("\u09A8\u09CD\u09A4\u09CD\u09B0", "ntr"),   // ন্ত্র
         ConjunctEntry("\u099C\u09CD\u099C\u09CD\u09AC", "jjb"),   // জ্জ্ব
+        ConjunctEntry("\u09B7\u09CD\u099F\u09CD\u09B0", "shtr"),  // ষ্ট্র (যুক্তরাষ্ট্র)
+        ConjunctEntry("\u09B8\u09CD\u09A4\u09CD\u09B0", "str"),   // স্ত্র (স্ত্রী)
+        ConjunctEntry("\u09AE\u09CD\u09AA\u09CD\u09B0", "mpr"),   // ম্প্র (সম্প্রতি)
+        ConjunctEntry("\u0995\u09CD\u09B7\u09CD\u09AF", "kkhy"),  // ক্ষ্য (লক্ষ্য)
+        ConjunctEntry("\u09B8\u09CD\u09A5\u09CD\u09AF", "sthy"),  // স্থ্য (স্বাস্থ্য)
+        ConjunctEntry("\u09A8\u09CD\u09A7\u09CD\u09AF", "ndhy"),  // ন্ধ্য (সন্ধ্যা)
+        ConjunctEntry("\u09A6\u09CD\u09B0\u09CD\u09AF", "dry"),   // দ্র্য (দারিদ্র্য)
+        ConjunctEntry("\u09AC\u09CD\u09B0\u09CD\u09AF", "bry"),   // ব্র্য (ব্র্যাক)
 
         // === Sibilant-based conjuncts ===
         ConjunctEntry("\u09B7\u09CD\u09A0", "shth"),  // ষ্ঠ
@@ -145,6 +170,7 @@ object ReverseTransliterator {
         ConjunctEntry("\u09AC\u09CD\u09A6", "bd"),    // ব্দ
         ConjunctEntry("\u09AE\u09CD\u09B2", "ml"),    // ম্ল
         ConjunctEntry("\u09AB\u09CD\u09B2", "fl"),    // ফ্ল
+        ConjunctEntry("\u09AB\u09CD\u09B0", "fr"),    // ফ্র (আফ্রিকা — users type f, not ph)
 
         // Double consonants
         ConjunctEntry("\u0995\u09CD\u0995", "kk"),    // ক্ক
@@ -242,7 +268,7 @@ object ReverseTransliterator {
     private val REVERSE_MARKS: Map<String, String> = mapOf(
         "\u0981" to "N",    // ঁ (chandrabindu)
         "\u0982" to "ng",   // ং (anusvara)
-        "\u0983" to ":",    // ঃ (visarga)
+        "\u0983" to "",     // ঃ (visarga) — silent in keys; gemination handled separately
     )
 
     // ========================================================================
@@ -369,9 +395,32 @@ object ReverseTransliterator {
 
     /**
      * Reverse-transliterate a single Bengali word to phonetic English.
-     * This is the core pattern-based algorithm.
+     * This is the core pattern-based algorithm. Input is nukta-folded first
+     * so decomposed ড়/ঢ়/য় parse identically to the precomposed forms.
      */
     fun reverseWord(bengali: String): String {
+        if (bengali.isEmpty()) return ""
+        return reverseWordInternal(foldNukta(bengali))
+    }
+
+    /**
+     * Visarga gemination: in Bengali pronunciation a visarga (ঃ) before a
+     * consonant geminates it — দুঃখ is pronounced (and typed) "dukkho",
+     * never "dukho". Append the first letter of the following consonant's
+     * phonetic (ঃখ -> "k" + "kh"). The visarga itself is silent (its
+     * REVERSE_MARKS emission is ""). Emitting the geminated form as THE
+     * canonical key also prevents visarga words from shadowing exact
+     * words (দুঃখ must not be indexed under "dukh", which belongs to দুখ).
+     */
+    private fun appendVisargaGemination(bengali: String, visargaPos: Int, output: StringBuilder) {
+        val next = visargaPos + 1
+        if (next >= bengali.length) return
+        val phonetic = matchConjunctGreedy(bengali, next)?.first
+            ?: REVERSE_CONSONANTS[getEffectiveChar(bengali, next).first]
+        if (!phonetic.isNullOrEmpty()) output.append(phonetic[0])
+    }
+
+    private fun reverseWordInternal(bengali: String): String {
         if (bengali.isEmpty()) return ""
 
         val output = StringBuilder()
@@ -405,13 +454,33 @@ object ReverseTransliterator {
                 continue
             }
 
+            // --- Stray hasanta ---
+            // Reached when the head of a 3+ consonant cluster was already
+            // consumed (e.g. ষ্ট matched in ষ্ট্র) and the trailing
+            // ্ + consonant remains. Never emit the hasanta literally.
+            if (ch == HASANTA) {
+                val (nextEff, nextEffLen) = getEffectiveChar(bengali, i + 1)
+                if (nextEff == "\u09AF") {
+                    // Ya-phala continuing the cluster: ...্য -> y
+                    output.append("y")
+                    i += 1 + nextEffLen
+                    val (postPhonetic, newPos) = consumePostConsonant(bengali, i)
+                    output.append(postPhonetic)
+                    i = newPos
+                } else {
+                    // Skip; a following consonant (e.g. র in ষ্ট্র) is
+                    // handled by the next iteration. Word-final hasanta is
+                    // silently dropped.
+                    i++
+                }
+                continue
+            }
+
             // --- Special marks (standalone, not after consonant) ---
             val markPhonetic = REVERSE_MARKS[ch.toString()]
             if (markPhonetic != null) {
-                if (ch == HASANTA) {
-                    // Hasanta alone (not part of conjunct) - skip
-                    i++
-                    continue
+                if (ch == VISARGA) {
+                    appendVisargaGemination(bengali, i, output)
                 }
                 output.append(markPhonetic)
                 i++

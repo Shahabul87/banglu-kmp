@@ -59,6 +59,9 @@ object PhoneticIndexBuilder {
 
             val freq = frequencies[word] ?: 0
             val tier = if (freq > 0) TIER_A else TIER_B
+            // Visarga words are geminated by reverseWord itself (দুঃখ ->
+            // "dukkh" -> alias "dukkho"); the ungeminated key ("dukh") is
+            // intentionally NOT indexed — it belongs to the exact word দুখ.
             val aliases = aliasesFor(canonical)
             var rowsForWord = 0
             for (key in aliases) {
@@ -82,19 +85,32 @@ object PhoneticIndexBuilder {
         return rows
     }
 
+    /** Ya-phala between a consonant and a vowel: users drop the y (সন্ধ্যা "sondhya" → "sondha"). */
+    private val YA_PHALA_BEFORE_VOWEL = Regex("([bcdfghjklmnpqrstvwxz])y([aeiou])")
+
+    /** Word-final ya-phala after a consonant: users drop the y (লক্ষ্য "lokkhy" → "lokkh"). */
+    private val YA_PHALA_FINAL = Regex("([bcdfghjklmnpqrstvwxz])y$")
+
+    private const val VOWELS = "aeiou"
+
     /**
      * Typing-habit aliases for a canonical phonetic key.
      *
-     * Live rules (mirrors SmartEngine.corpusPhoneticAliases):
+     * Rules (each applied to every alias produced by the previous rules, so
+     * all combinations are generated — e.g. "chhotrii" → "cotri",
+     * "zuktorashtr" → "juktorashtro"):
      * - `chh → c`  : ছ (REVERSE_CONSONANTS emits "chh"; users type "c")
      * - `ii → i`   : ী / ঈ (emitted as "ii"; users omit the doubled vowel)
      * - `uu → u`   : ূ / ঊ (emitted as "uu"; users omit the doubled vowel)
-     *
-     * Additionally, all three rules are applied in sequence to produce a
-     * fully-collapsed combined alias (e.g. "chhotrii" → "cotri"), so words
-     * containing both ছ and a long vowel are reachable via the key users type.
-     * The [linkedSetOf] deduplicates when the composed result equals an
-     * existing alias.
+     * - `z → j`    : য (emitted as "z"; users overwhelmingly type "j": যদি → "jodi")
+     * - ya-phala drop : consonant+`y` word-finally or before a vowel — users
+     *   type the pronounced form (লক্ষ্য "lokkhy" → "lokkh", সন্ধ্যা
+     *   "sondhya" → "sondha"). Vowel+`y` (real য় sound, e.g. "deya") is kept.
+     * - trailing inherent `o` : keys ending in a consonant CLUSTER are
+     *   pronounced — and typed — with a final inherent vowel (শক্ত "shokt" →
+     *   "shokto", যুক্তরাষ্ট্র → "...shtro", "dukkh" → "dukkho"). Single
+     *   final consonants ("kom", "ghor") and final aspirate digraphs
+     *   ("mukh") / "ng" are NOT clusters and get no `o`.
      *
      * Deleted rules (dead — transliterator never emits these patterns):
      * - ~~`ee → i`~~ : transliterator never emits "ee" as a vowel unit
@@ -105,13 +121,41 @@ object PhoneticIndexBuilder {
      * by the engine, not by index aliases here.
      */
     private fun aliasesFor(canonical: String): List<String> {
-        val aliases = linkedSetOf(canonical)
-        if (canonical.contains("chh")) aliases.add(canonical.replace("chh", "c"))
-        if (canonical.contains("ii")) aliases.add(canonical.replace("ii", "i"))
-        if (canonical.contains("uu")) aliases.add(canonical.replace("uu", "u"))
-        // Fully-collapsed combined alias: apply all three rules in sequence
-        val collapsed = canonical.replace("chh", "c").replace("ii", "i").replace("uu", "u")
-        aliases.add(collapsed) // linkedSet dedupes when equal to an existing entry
+        val aliases = LinkedHashSet<String>()
+        aliases.add(canonical)
+        expand(aliases) { it.replace("chh", "c") }
+        expand(aliases) { it.replace("ii", "i") }
+        expand(aliases) { it.replace("uu", "u") }
+        expand(aliases) { it.replace("z", "j") }
+        expand(aliases) { dropYaPhala(it) }
+        expand(aliases) { withTrailingInherentO(it) }
         return aliases.toList()
+    }
+
+    /** Apply [rule] to every alias currently in [set], adding the results (dedup via set). */
+    private inline fun expand(set: LinkedHashSet<String>, rule: (String) -> String) {
+        for (key in set.toList()) set.add(rule(key))
+    }
+
+    private fun dropYaPhala(key: String): String =
+        key.replace(YA_PHALA_BEFORE_VOWEL, "$1$2").replace(YA_PHALA_FINAL, "$1")
+
+    /**
+     * Append the final inherent vowel "o" when the key ends in a consonant
+     * cluster (2+ consonant phonemes). Aspirate digraphs (kh/gh/ch/jh/th/
+     * dh/ph/bh/sh) and "ng" count as a single phoneme.
+     */
+    private fun withTrailingInherentO(key: String): String {
+        if (key.length < 3) return key
+        val last = key.last()
+        if (last in VOWELS) return key
+        val prev = key[key.length - 2]
+        val stem = when {
+            last == 'h' && prev in "kgcjtdpbs" -> key.dropLast(2) // aspirate digraph
+            last == 'g' && prev == 'n' -> key.dropLast(2)          // anusvara "ng"
+            else -> key.dropLast(1)
+        }
+        if (stem.isEmpty() || stem.last() in VOWELS) return key
+        return key + "o"
     }
 }

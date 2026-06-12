@@ -11,7 +11,7 @@ import java.io.File
  * Open once per IME session; call close() from the service's onDestroy.
  * All methods fail soft (empty results) so a corrupt db never crashes the IME.
  *
- * Tables used (db version 3.3.0):
+ * Tables used (db version 3.3.1):
  * - phonetic_index(key, word_id, frequency, tier) with idx_phonetic_index_key(key, tier)
  * - words(id, bengali, frequency) — Bengali text lives here, joined by word_id
  * - english_lexicon(key PRIMARY KEY, bengali)
