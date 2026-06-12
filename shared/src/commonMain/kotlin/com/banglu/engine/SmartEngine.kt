@@ -163,6 +163,27 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         private const val MAX_STORE_MEMO = 128
         private const val MAX_SUGGESTION_CANDIDATES = 40
 
+        /**
+         * S1/D1: worst strip rank the editor primary may hold. The primary is
+         * gate-approved by definition and the strip must never hide it.
+         */
+        private const val MAX_PRIMARY_STRIP_RANK = 3
+
+        /**
+         * S1/D3: minimum 484K-validator frequency for a stem to anchor an
+         * inflection the validator itself does not attest (see
+         * [SmartEngine.isCompositionStemTrusted]). Junk web-corpus aliases sit
+         * below it (যেলা@1, যাতি@25); real roots sit above (ফার্স@37, তৃতীয়@73).
+         */
+        private const val MIN_COMPOSITION_STEM_FREQUENCY = 30
+
+        /**
+         * Seed/learned dictionary frequency at which an entry is a deliberate
+         * user word (learnAsWord/user-dictionary convention, see
+         * [SmartEngine.isLearnedEntryTrusted] docs) — always a trusted stem.
+         */
+        private const val USER_WORD_FREQUENCY_FLOOR = 120
+
         /** Bengali digits ০-৯ */
         private const val BENGALI_DIGITS = "০১২৩৪৫৬৭৮৯"
 
@@ -1315,16 +1336,59 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         } else suggestions
 
-        // Global filter: remove hyphenated garbage from 480K dictionary
-        return boosted
-            .filter { !it.bengali.contains("-") }
-            .filter { isCleanSuggestion(key, it, primary.bengali) }
+        // Global filter: remove hyphenated garbage from 480K dictionary.
+        // Final ordering (S1/D2): dictionary membership is the LEADING sort key —
+        // a generated/variant candidate (প্রধাণ, বাংলাদেশো) may fill remaining
+        // slots but never outranks a real dictionary word (প্রধান). The primary
+        // and English passthrough/lexicon entries are legitimate non-dictionary
+        // strip entries and are exempt (rank with the dictionary tier).
+        // Sort keys are computed once per candidate, not per comparison.
+        val ordered = boosted
+            .filter {
+                it.bengali == primary.bengali ||
+                    (!it.bengali.contains("-") && isCleanSuggestion(key, it, primary.bengali))
+            }
+            .map { s ->
+                Triple(
+                    s,
+                    dictionaryMembershipRank(s, primary.bengali),
+                    suggestionRankScore(key, s, primary.bengali, exactDictionaryWords)
+                )
+            }
             .sortedWith(
-                compareByDescending<SmartSuggestion> {
-                    suggestionRankScore(key, it, primary.bengali, exactDictionaryWords)
-                }.thenByDescending { it.confidence }
+                compareByDescending<Triple<SmartSuggestion, Int, Double>> { it.second }
+                    .thenByDescending { it.third }
+                    .thenByDescending { it.first.confidence }
             )
-            .take(limit)
+            .mapTo(mutableListOf()) { it.first }
+
+        // D1 invariant, structural half: the primary normally wins on score
+        // (rank 1), but when several exact-key dictionary hits legitimately
+        // outscore it (ghoro -> ঘর behind ঘরোয়/ঘোরা/ঘড়া) it must still hold a
+        // rank no worse than 3 — the strip may never hide the editor primary.
+        if (primary.bengali.isNotEmpty()) {
+            val maxPrimaryIndex = minOf(MAX_PRIMARY_STRIP_RANK, limit) - 1
+            val primaryIndex = ordered.indexOfFirst { it.bengali == primary.bengali }
+            if (primaryIndex > maxPrimaryIndex) {
+                val promoted = ordered.removeAt(primaryIndex)
+                ordered.add(maxPrimaryIndex, promoted)
+            }
+        }
+        return ordered.take(limit)
+    }
+
+    /**
+     * Leading strip-order key (S1/D2): 1 when the candidate is a dictionary word
+     * (484K validator in full mode, sqlite store words table in lite mode, or the
+     * seed/learned user dictionary), 0 when it is a generated/variant string.
+     * Exempt by definition: the editor primary (gate-approved by construction)
+     * and English passthrough/lexicon entries (the raw-roman escape slot and
+     * curated English renderings are legitimate non-dictionary strip entries).
+     */
+    private fun dictionaryMembershipRank(suggestion: SmartSuggestion, primary: String): Int {
+        if (suggestion.bengali == primary) return 1
+        if (suggestion.source == "english_passthrough") return 1
+        return if (isKnownWord(suggestion.bengali) || dictionary.containsBengali(suggestion.bengali)) 1 else 0
     }
 
     private fun suggestionRankScore(
@@ -1392,6 +1456,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     private fun isCleanSuggestion(key: String, suggestion: SmartSuggestion, primary: String): Boolean {
         if (suggestion.bengali.isEmpty()) return false
+        // Strip invariant (S1/D1): the editor primary — convertWord's output — is
+        // gate-approved by definition (real word, approved composition, or clean
+        // floor) and must always survive to the strip. Without this exemption the
+        // hasSuggestionPhoneticFit length rule (reverse phonetic shorter than the
+        // typed key) evicted the correct primary on append-o keys: reverse of
+        // বাংলাদেশ is "bangladesh" (10 chars) < key "bangladesho" (11 chars).
+        if (suggestion.bengali == primary) return true
         if (DIRECT_WORD_OVERRIDES[key]?.contains(suggestion.bengali) == true) return true
         if (suggestion.source == "english_passthrough") return suggestion.bengali.lowercase() == key
         if (Regex("[A-Za-z]").containsMatchIn(suggestion.bengali)) return false
@@ -1404,7 +1475,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             return false
         }
 
-        val isPrimary = suggestion.bengali == primary
+        // The primary returned above — every suggestion here is non-primary.
         val isRealWord = if (validator.isLoaded()) {
             validator.isValid(suggestion.bengali)
         } else {
@@ -1416,11 +1487,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         if (suggestion.source == "candidate_lattice") {
             val reversePhonetic = ReverseTransliterator.reverseWord(suggestion.bengali)
-            if (!isPrimary && !isRealWord && hasSuspiciousGeneratedConjunct(suggestion.bengali)) return false
+            if (!isRealWord && hasSuspiciousGeneratedConjunct(suggestion.bengali)) return false
             return suggestion.confidence >= 0.30 && !hasGeneratedVowelDrift(key, reversePhonetic)
         }
 
-        if (!isPrimary && !isRealWord) {
+        if (!isRealWord) {
             if (hasSuspiciousGeneratedConjunct(suggestion.bengali)) return false
             return hasGeneratedSuggestionPhoneticFit(key, suggestion.bengali, primary)
         }
@@ -4004,6 +4075,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * (স্রমদক্ষ + টার) stay unapproved and get floored.
      */
     private fun isApprovedComposition(bengali: String): Boolean {
+        // S1/D3: a composed surface containing an invalid trailing-য় junction is
+        // never an approved composition, even when it parses as real-root +
+        // whitelisted-suffix. Aliased stem keys drop the root's trailing য়
+        // (tritiyo → তৃতীয়), so suffix layers re-append it: তৃতীয়+য় = তৃতীয়য়,
+        // আওতায়+্+য় = আওতায়্য়. Neither য়য় nor ্য় occurs in real Bengali
+        // (0 attested ্য় forms in the 484K words table; য়-conjuncts use য-ফলা).
+        if (hasInventedYaJunction(bengali)) return false
         for (suffix in approvedCompositionSuffixes) {
             if (bengali.length <= suffix.length || !bengali.endsWith(suffix)) continue
             // Hasanta-junction compositions (root + ্ + suffix) reduce to the root.
@@ -4012,6 +4090,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             if (isKnownWord(root) || dictionary.containsBengali(root)) return true
         }
         return false
+    }
+
+    /**
+     * S1/D3 junction validity: true when [bengali] contains a trailing-য়
+     * surface that real Bengali never produces — a duplicated য়য় or an
+     * explicit hasanta+য় conjunct (্য়; য় never conjuncts, য-ফলা is ্য).
+     * Handles both encodings of য়: precomposed U+09DF and য (U+09AF) + nukta
+     * (U+09BC). Only invented compositions/recoveries build these strings.
+     */
+    private fun hasInventedYaJunction(bengali: String): Boolean {
+        val normalized = bengali.replace("\u09DF", "\u09AF\u09BC") // precomposed য় -> য + nukta
+        return normalized.contains("\u09AF\u09BC\u09AF\u09BC") || // য়য়
+            normalized.contains("\u09CD\u09AF\u09BC")              // ্য়
     }
 
     /**
@@ -4352,6 +4443,22 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      *
      * Prefers longer stems and higher-frequency matches when multiple candidates match.
      */
+    /**
+     * S1/D3 stem-quality oracle for UNVALIDATED suffix compositions: when the
+     * composed inflection is absent from the 484K validator, only well-attested
+     * stems may anchor it. A stem is trusted when its corpus frequency clears
+     * [MIN_COMPOSITION_STEM_FREQUENCY] (তৃতীয়@73, জাতি@71 pass; junk aliases
+     * যাতি@25, যেলা@1 fail) or when it is a user/learned dictionary entry
+     * ([seedFrequency] >= [USER_WORD_FREQUENCY_FLOOR], the learnAsWord
+     * convention — রাফসান@120 composes রাফসানের). Inert without frequency data
+     * (tiny test validators, seed-only mode): behavior is unchanged there.
+     */
+    private fun isCompositionStemTrusted(stemBengali: String, seedFrequency: Int): Boolean {
+        if (!validator.isLoaded() || !validator.hasFrequencyData()) return true
+        if (validator.getFrequency(stemBengali) >= MIN_COMPOSITION_STEM_FREQUENCY) return true
+        return seedFrequency >= USER_WORD_FREQUENCY_FLOOR
+    }
+
     internal fun trySuffixStrippedDictionary(key: String): ConversionResult? {
         var bestResult: ConversionResult? = null
         var bestStemLength = 0
@@ -4396,7 +4503,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                             val combined = bengaliStem + suffix.bengali
                             val isExact = best.matchedPhonetic.isEmpty() || best.matchedPhonetic == candidate
                             val isValid = validator.isLoaded() && validator.isValid(combined)
-                            if (isValid || (isExact && best.confidence >= 0.85)) {
+                            // S1/D3: aliased stem keys can resolve to a word that
+                            // already carries the trailing য় the suffix re-appends
+                            // (tritiyo → তৃতীয়, then +য় = তৃতীয়য়). Never compose an
+                            // invalid য় junction the validator does not attest.
+                            if (!isValid && hasInventedYaJunction(combined)) continue
+                            // S1/D3: an UNVALIDATED inflection may only be composed
+                            // from a well-attested stem — junk corpus entries reached
+                            // through ambiguity-aliased keys (zati → যাতি@25,
+                            // zela → যেলা@1) otherwise mint invented DICTIONARY-source
+                            // words (যাতির, যেলায়).
+                            val stemTrusted = isValid || isCompositionStemTrusted(best.bengali, best.frequency)
+                            if (isValid || (isExact && best.confidence >= 0.85 && stemTrusted)) {
                                 bestResult = ConversionResult(
                                     bengali = combined,
                                     confidence = best.confidence * if (candidate == stem) 0.95 else 0.90,

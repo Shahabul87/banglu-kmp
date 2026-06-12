@@ -148,6 +148,52 @@ class CommitGateTest {
     }
 
     @Test
+    fun trailingYaDuplicationNeverEscapesTheGate() {
+        // S1/D3 fixture: the seed maps the aliased stem key "tritiyo" to তৃতীয়
+        // (already য়-final). Pre-fix, trySuffixStrippedDictionary re-appended the
+        // য় suffix of "tritiyoy" onto it and committed the invented তৃতীয়য় with
+        // source DICTIONARY. With the validator armed containing তৃতীয়, the
+        // engine must never return তৃতীয়য়.
+        val seedOnly = SmartEngine()
+        seedOnly.initializeSync()
+        val tritiyo = seedOnly.convertWord("tritiyo").bengali
+        assertEquals("তৃতীয়", tritiyo, "fixture: seed stem tritiyo -> তৃতীয়")
+
+        val e = SmartEngine()
+        e.initializeSync()
+        e.loadValidatorWords(listOf("আমি", tritiyo))
+        val result = e.convertWord("tritiyoy")
+        // Build the invented string in BOTH য় encodings (precomposed U+09DF and
+        // য+nukta) so the comparison cannot pass on an encoding mismatch.
+        val invented = setOf(tritiyo + "য়", tritiyo + "য়")
+        assertTrue(
+            result.bengali !in invented,
+            "invented trailing-য় duplication escaped the gate as " +
+                "${result.bengali} (source=${result.source})"
+        )
+        // Whatever is committed must be gate-legal: a real/approved word or the
+        // deterministic clean floor — never a DICTIONARY-claimed invention.
+        assertTrue(
+            result.source == ResolutionSource.CLEAN_TRANSLITERATION ||
+                e.isCompositionGateApprovedForTest(result.bengali),
+            "editor primary '${result.bengali}' (source=${result.source}) is not gate-legal"
+        )
+    }
+
+    @Test
+    fun legitimateTrailingYaInflectionStillConverts() {
+        // S1/D3 regression guard: closing the য়-junction leak must not break
+        // real য়-final words — aotay must still convert to আওতায়.
+        val e = SmartEngine()
+        e.initializeSync()
+        val aotay = CleanTransliterator.transliterate("aotay")
+        e.loadValidatorWords(listOf("আমি", aotay))
+        val result = e.convertWord("aotay")
+        assertEquals(aotay, result.bengali, "আওতায় no longer converts from aotay")
+        assertTrue(e.isGateApprovedForTest(result.bengali))
+    }
+
+    @Test
     fun legitimateInflectionsSurviveTheGate() {
         // Fixture reasoning: "kothata" = seed root "kotha" (কথা) + productive "ta"
         // (টা); convertByRootDecomposition case 1 composes কথাটা.
