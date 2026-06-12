@@ -701,7 +701,9 @@ class BangluIMEService : InputMethodService(),
         val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
         val lowRamDevice = activityManager?.isLowRamDevice == true
         val memoryClass = activityManager?.memoryClass ?: Int.MAX_VALUE
-        return liteModeEnabled.value || lowRamDevice || memoryClass <= 256
+        // < 256 (not <=): modern flagships (S22/Pixel class) report exactly 256m
+        // heapgrowthlimit and must qualify for full mode.
+        return liteModeEnabled.value || lowRamDevice || memoryClass < 256
     }
 
     override fun onCreateInputView(): View {
