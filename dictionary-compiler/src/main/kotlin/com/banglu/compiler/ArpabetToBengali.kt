@@ -251,7 +251,7 @@ object ArpabetToBengali {
                         // stays open (পারসেন্ট, অবজারভেশন, ইন্টারনেট)
                         prev == "ER" && prevWasStressed -> true
                         prev == "P" && p == "L" -> true            // প্ল: কমপ্লিট, ডিসপ্লে, এমপ্লয়ি
-                        prev == "NG" && p == "G" -> true           // ঙ্গ: ইঙ্গ্লিশ
+                        prev == "NG" && p == "G" -> true           // ঙ্গ: ইঙ্গলিশ
                         nextPhoneme == "Y" -> true                 // cluster before ি glide: কম্পিউটার
                         // Homorganic nasal clusters join even mid-word:
                         prev == "N" && (p == "T" || p == "D") -> true   // অ্যান্টেনা, ইন্টারনেট, ব্লেন্ডার
@@ -333,7 +333,7 @@ object ArpabetToBengali {
 
             // AO — Bengali borrowing convention:
             //   - After W                       -> া        (water ওয়াটার, warning ওয়ার্নিং)
-            //   - Word-initial / post-vowel     -> অ        (order অর্ডার, install ইনস্টল? no — অস্ট্রেলিয়া)
+            //   - Word-initial / post-vowel     -> অ        (order অর্ডার, Australia অস্ট্রেলিয়া)
             //   - Before R after B/P            -> ো        (board বোর্ড, port পোর্ট)
             //   - After consonant, otherwise    -> inherent (call কল, blog ব্লগ, fork ফর্ক, format ফরম্যাট)
             if (p == "AO") {

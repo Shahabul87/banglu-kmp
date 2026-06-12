@@ -221,6 +221,59 @@ Recorded 2026-06-11 from `./gradlew :shared:jvmTest --rerun` (aggregated from `s
 - Suggestion-quality benchmark (`SuggestionQualityBenchmarkTest`, 5 tests, all green): 74-case common-word set — 100% exact conversion, 100% top-3 suggestion presence, exact-dictionary-before-composer ranking invariant, latency budgets met (budgets: <10 ms/op conversion over 1,480 ops, <20 ms/op suggestions over 740 ops; full-test wall times 0.024 s and 0.297 s respectively, JUnit XML). It asserts pass/fail rather than printing a score; the baseline observation is "0 misses on all 74 cases".
 - Tier note: all 563,998 compiled index rows are currently **Tier A** — the frequency file covers the full corpus, so the tier criterion `freq > 0` marks everything suggestible. A frequency-threshold parameter is needed when prefix-suggestions land (recorded for Phase 2).
 
+### Corpus-fix round (F1-F5b, 2026-06-11)
+
+Real-world corpus re-measurement (542 unique Bengali words from /tmp/banglu_corpus.txt,
+keys derived via `ReverseTransliterator.reverseWord`, nukta-canonicalized comparison,
+full setup: 484,996-word dictionary + phonetic index + english lexicon + words-set store).
+
+| Metric | Before (db 3.3.0) | After (db 3.3.2) |
+|---|---|---|
+| Corpus primary accuracy | 96.8% (510/527 typeable) | **97.2% (527/542)** |
+| Corpus top-3 accuracy | 99.1% (522/527) | **99.4% (539/542)** |
+| Untypeable keys (cluster/visarga) | 15 of 542 | **0** |
+| Index words with no rows | 15,811 | **35** |
+| Dropped index keys | 18,579 | **62** |
+| Index rows | 563,998 | 669,123 |
+| English curated agreement | 28.5% | **55.1%** |
+| dictionary.sqlite version | 3.3.0 | 3.3.2 |
+
+Gate fixes shipped alongside the key/index recompile:
+
+- **Composition gating (F2)** — multi-chunk compositions must be dictionary words or
+  approved compositions; pattern guesses (শ্রমদক্ষটার-class) no longer escape as primaries;
+  the deterministic floor takes over (shromodokkhotar → শ্রমদক্ষতার, CLEAN_TRANSLITERATION).
+- **Lite-mode arming via store (F5)** — the commit gate arms whenever a phonetic index
+  store is attached, even before the full word list loads, closing the first-install window.
+- **Learned-word sanitation (F5b)** — sub-custom (<120 freq) learned entries are honored
+  only when the gate oracle trusts them (real word / clean floor / approved composition);
+  garbage learned by pre-gate builds is skipped on load (never deleted).
+
+Fixed misses by task: অব, দুটিই (F3 exact-match arbitration); all 15 former untypeable
+words — আফ্রিকা, দারিদ্র্য, দুঃখজনক, ব্র্যাকের, যুক্তরাষ্ট্র(ের), রাষ্ট্রকে/রাষ্ট্রীয়/রাষ্ট্রের, লক্ষ্যে,
+সন্ধ্যায়, সম্প্রতি, সাম্প্রতিক, স্বতঃস্ফূর্ত, স্বাস্থ্য — now PRIMARY (F1 cluster/visarga key generation);
+শ্রমদক্ষতার TOP3→PRIMARY (F2 composition gating let the correct floor through).
+
+Remaining misses (3, all dictionary gaps — the word is absent from the 484K corpus):
+
+- এডটেক (`edotek`) → এদিকটাতে (DICTIONARY) — fuzzy dictionary hit outranks the floor;
+  loanword "edtech" not in corpus or english lexicon.
+- ভ্যান্স (`bhyans`) → ভ্যানস (DICTIONARY) — near-form without the ন্স conjunct; proper
+  noun (Vance) absent from corpus.
+- যোগাযোগমাধ্যমে (`zogazogomadhyome`) → জগাজগমাধ্যমে (CLEAN_TRANSLITERATION) — compound
+  absent from corpus; deterministic floor maps z→জ (the য-form needs dictionary knowledge).
+  Floor output unchanged from the before-run; quality acceptable for an OOV floor.
+
+Known regression (1): জন (`jon`) PRIMARY→TOP3 — F1's ya-phala variant keys give জন্য an
+exact `jon` key, and জন্য (freq 94) outranks জন (freq 84) in exact-match arbitration;
+জন remains in top-3. Candidate Phase 2 fix: exact-romanization hits should outrank
+variant-key hits at equal tier.
+
+Gate-escape re-check (the 5 former escapes): swasthyo → স্বাস্থ্য, lokkhye → লক্ষ্যে,
+daridryo → দারিদ্র্য, sondhay → সন্ধ্যায় (all DICTIONARY); sromodokkhotar → স্রমদক্ষতার
+(CLEAN_TRANSLITERATION, approved deterministic floor — the s-spelling cannot reach the
+শ্র dictionary form). No non-dictionary primaries except approved floors.
+
 ### Phase 2 backlog (recorded at Phase 1 final review, 2026-06-11)
 
 1. **`irregular_variants` table not yet built** — assa/acca/accha-class behavior
