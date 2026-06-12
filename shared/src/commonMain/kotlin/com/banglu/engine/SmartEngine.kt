@@ -4048,6 +4048,40 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     internal fun isCompositionGateApprovedForTest(bengali: String): Boolean =
         isGateApprovedForTest(bengali) || isApprovedComposition(bengali)
 
+    /**
+     * F5b learned-word sanitation oracle: should a persisted learned entry
+     * (normalized [phonetic] key -> [bengali]) be honored at load time?
+     *
+     * Pre-gate builds learned garbage commits (kkkkx -> ক্কক্কক্স,
+     * smartwatch -> স্মার্তওআতচ) that would override the commit gate through the
+     * adapter preference maps. An entry is trusted iff it is something the gate
+     * itself could approve today:
+     * 1. [isKnownWord] — validator/store words-table membership ONLY. The
+     *    seed/user [dictionary] is deliberately NOT consulted here: the load
+     *    paths themselves add learned words to the dictionary, so
+     *    containsBengali would self-approve the very garbage being filtered.
+     * 2. Clean-floor equivalence — the entry equals the deterministic
+     *    [CleanTransliterator] output of its own key. Legit learnAsWord names
+     *    (rafsan -> রাফসান) ARE the floor; pre-gate inventions are not.
+     * 3. [isApprovedComposition] — real-root + productive-suffix inflection.
+     *
+     * Keys containing non a-z characters are never gate-relevant (the gate
+     * skips them — see [applyCommitGate]) so they are always trusted.
+     * Fail-open: with neither the 484K validator loaded nor the sqlite store
+     * attached there is no word-membership oracle — trust everything; the next
+     * initialize/attach re-evaluates. Pure read: callers SKIP untrusted entries
+     * on load but never delete them from storage (reversible, no data loss).
+     * Custom user-dictionary entries (frequency >= 120) are exempted by the
+     * caller and never reach this check.
+     */
+    internal fun isLearnedEntryTrusted(phonetic: String, bengali: String): Boolean {
+        if (phonetic.any { it !in 'a'..'z' }) return true
+        if (!validator.isLoaded() && phoneticIndex == null) return true
+        if (isKnownWord(bengali)) return true
+        if (bengali == CleanTransliterator.transliterate(phonetic)) return true
+        return isApprovedComposition(bengali)
+    }
+
     private fun applyBengaliRecovery(result: ConversionResult): ConversionResult? {
         val bengali = result.bengali
 

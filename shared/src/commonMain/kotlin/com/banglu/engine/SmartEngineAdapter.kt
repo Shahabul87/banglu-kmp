@@ -71,10 +71,25 @@ object SmartEngineAdapter {
                         compareBy<com.banglu.engine.types.LearnedWord> { it.frequency }
                             .thenBy { it.lastUsed }
                     )
-                val learnedBest = words.maxWithOrNull(
-                    compareBy<com.banglu.engine.types.LearnedWord> { it.frequency }
-                        .thenBy { it.lastUsed }
-                )
+                // F5b sanitation: sub-custom (<120) learned entries are honored
+                // only when the engine's gate oracle trusts them — real word,
+                // clean floor of their own key, or approved composition. This
+                // stops garbage learned by pre-gate builds (kkkkx -> ক্কক্কক্স)
+                // from overriding the commit gate via selectedPreferenceMap.
+                // Custom entries (>= CUSTOM_CONVERSION_FREQUENCY) are
+                // user-authored — always exempt. Untrusted entries are SKIPPED
+                // on load, never deleted from storage (reversible, no data
+                // loss); without a validator/store oracle the check fails open
+                // and keeps everything (the gate is dormant then anyway).
+                val learnedBest = words
+                    .filter {
+                        it.frequency >= CUSTOM_CONVERSION_FREQUENCY ||
+                            eng.isLearnedEntryTrusted(phonetic, it.bengali.trim())
+                    }
+                    .maxWithOrNull(
+                        compareBy<com.banglu.engine.types.LearnedWord> { it.frequency }
+                            .thenBy { it.lastUsed }
+                    )
                 if (customBest != null) {
                     customPreferenceMap[phonetic] = customBest.bengali
                 } else if (learnedBest != null) {
@@ -269,6 +284,16 @@ object SmartEngineAdapter {
         }
     }
 
+    /**
+     * In-session preferences are deliberately NOT run through the F5b
+     * sanitation oracle: a tapped suggestion is the user's explicit choice
+     * right now, and post-F2/F5 every surfaced candidate is gate-approved,
+     * floor, or approved-composition by construction. The one exception is a
+     * raw English passthrough tap (bengali == latin text) — that too is the
+     * user's explicit choice and must be honored this session. On the NEXT
+     * initialize, the persisted entry is re-evaluated by
+     * [SmartEngine.isLearnedEntryTrusted] like everything else.
+     */
     private fun rememberPreferredConversion(phonetic: String, bengali: String, baseFrequency: Int) {
         val key = phonetic.normalizedPhonetic()
         val cleanBengali = bengali.trim()
