@@ -46,13 +46,14 @@ class InMemoryPhoneticIndexStoreTest {
     }
 
     /**
-     * S2 two-axis key model: the canonical owner of a key (priority 0) beats a
-     * habit-alias claimant (priority 1) even when the alias word is far more
-     * frequent — suru → সুরু (canonical, freq 50) before শুরু (h_lazy alias,
-     * freq 500). Frequency still breaks ties within a priority band.
+     * S2/S4 key model: WITHIN a tier the canonical owner of a key (priority 0)
+     * beats a habit-alias claimant (priority 1) even when the alias word is far
+     * more frequent — suru → সুরু (canonical, freq 50) before শুরু (h_lazy
+     * alias, freq 500) when both are Tier A. Frequency still breaks ties
+     * within a priority band, and Tier B sorts after Tier A regardless.
      */
     @Test
-    fun exactLookupOrdersByPriorityBeforeFrequency() {
+    fun exactLookupOrdersByPriorityBeforeFrequencyWithinTier() {
         val priorityStore = InMemoryPhoneticIndexStore(
             entries = listOf(
                 PhoneticIndexHit("শুরু", 500, PhoneticIndexHit.TIER_A, PhoneticIndexHit.PRIORITY_HABIT) to "suru",
@@ -63,6 +64,27 @@ class InMemoryPhoneticIndexStoreTest {
         val hits = priorityStore.lookupExact("suru")
         assertEquals(listOf("সুরু", "শুরু", "সুরুয়া"), hits.map { it.bengali })
         assertEquals(listOf(0, 1, 1), hits.map { it.priority })
+    }
+
+    /**
+     * S4/C1 tier-first ranking: a Tier-B junk word that canonically owns a key
+     * must NOT hijack it from a Tier-A real-usage word reached via a habit
+     * alias — bishas → বিশ্বাস (Tier A, alias, freq 79) before বিষাস (Tier B,
+     * canonical owner, freq 1). This is the S3 regression class that crashed
+     * H2/H3/H4 under priority-first ordering.
+     */
+    @Test
+    fun exactLookupOrdersByTierBeforePriority() {
+        val tierStore = InMemoryPhoneticIndexStore(
+            entries = listOf(
+                PhoneticIndexHit("বিষাস", 1, PhoneticIndexHit.TIER_B, PhoneticIndexHit.PRIORITY_CANONICAL) to "bishas",
+                PhoneticIndexHit("বিশ্বাস", 79, PhoneticIndexHit.TIER_A, PhoneticIndexHit.PRIORITY_HABIT) to "bishas",
+                PhoneticIndexHit("বিশ্বাস্য", 24, PhoneticIndexHit.TIER_B, PhoneticIndexHit.PRIORITY_HABIT) to "bishas"
+            )
+        )
+        val hits = tierStore.lookupExact("bishas")
+        assertEquals(listOf("বিশ্বাস", "বিষাস", "বিশ্বাস্য"), hits.map { it.bengali })
+        assertEquals(listOf(PhoneticIndexHit.TIER_A, PhoneticIndexHit.TIER_B, PhoneticIndexHit.TIER_B), hits.map { it.tier })
     }
 
     /** Habit-alias keys still SUGGEST their word — tier filters junk, priority only orders. */

@@ -11,11 +11,40 @@ import com.banglu.engine.types.TrieEntry
  */
 class PhoneticTrie {
 
-    private class TrieNode(
-        val children: MutableMap<Char, TrieNode> = mutableMapOf(),
-        val entries: MutableList<TrieEntry> = mutableListOf(),
+    /**
+     * Compact node (S4/C2): children live in two parallel arrays (CharArray +
+     * node array, linear scan — fan-out is tiny) and [entries] is allocated
+     * lazily only on terminal nodes. The previous LinkedHashMap<Char, TrieNode>
+     * + eager ArrayList per node cost ~150-250 bytes of pure overhead across
+     * the >1M nodes of the 130K-entry extended dictionary (~200MB resident on
+     * JVM measurements) — the single largest reason full-mode load exhausted a
+     * 256MB device heap.
+     */
+    private class TrieNode {
+        var childChars: CharArray = EMPTY_CHARS
+        var childNodes: Array<TrieNode?> = EMPTY_NODES
+        var entries: MutableList<TrieEntry>? = null
         var isTerminal: Boolean = false
-    )
+
+        fun child(char: Char): TrieNode? {
+            val chars = childChars
+            for (i in chars.indices) {
+                if (chars[i] == char) return childNodes[i]
+            }
+            return null
+        }
+
+        fun addChild(char: Char, node: TrieNode) {
+            val n = childChars.size
+            childChars = childChars.copyOf(n + 1).also { it[n] = char }
+            childNodes = childNodes.copyOf(n + 1).also { it[n] = node }
+        }
+
+        companion object {
+            val EMPTY_CHARS = CharArray(0)
+            val EMPTY_NODES = arrayOfNulls<TrieNode>(0)
+        }
+    }
 
     private var root: TrieNode = TrieNode()
     private var nodeCount: Int = 1
@@ -32,25 +61,29 @@ class PhoneticTrie {
         var node = root
 
         for (char in key) {
-            if (char !in node.children) {
-                node.children[char] = TrieNode()
+            var child = node.child(char)
+            if (child == null) {
+                child = TrieNode()
+                node.addChild(char, child)
                 nodeCount++
             }
-            node = node.children[char]!!
+            node = child
         }
 
+        val entries = node.entries ?: mutableListOf<TrieEntry>().also { node.entries = it }
+
         // Check for duplicate Bengali word at this node
-        val existingIndex = node.entries.indexOfFirst { it.bengali == bengali }
+        val existingIndex = entries.indexOfFirst { it.bengali == bengali }
         if (existingIndex >= 0) {
-            val existing = node.entries[existingIndex]
+            val existing = entries[existingIndex]
             // Update frequency if higher
             if (frequency > existing.frequency) {
-                node.entries[existingIndex] = existing.copy(frequency = frequency)
+                entries[existingIndex] = existing.copy(frequency = frequency)
             }
             return
         }
 
-        node.entries.add(TrieEntry(bengali = bengali, frequency = frequency))
+        entries.add(TrieEntry(bengali = bengali, frequency = frequency))
         node.isTerminal = true
         keyCount++
     }
@@ -66,13 +99,13 @@ class PhoneticTrie {
         var node = root
 
         for (char in key) {
-            node = node.children[char] ?: return emptyList()
+            node = node.child(char) ?: return emptyList()
         }
 
         if (!node.isTerminal) return emptyList()
 
         // Return sorted by frequency descending
-        return node.entries.sortedByDescending { it.frequency }
+        return node.entries.orEmpty().sortedByDescending { it.frequency }
     }
 
     /**
@@ -87,7 +120,7 @@ class PhoneticTrie {
 
         // Navigate to the prefix node
         for (char in key) {
-            node = node.children[char] ?: return emptyList()
+            node = node.child(char) ?: return emptyList()
         }
 
         // Collect all entries under this prefix
@@ -113,7 +146,7 @@ class PhoneticTrie {
         if (results.size >= limit) return
 
         if (node.isTerminal) {
-            for (entry in node.entries) {
+            for (entry in node.entries.orEmpty()) {
                 if (results.size >= limit) return
                 results.add(
                     PrefixResult(
@@ -125,9 +158,11 @@ class PhoneticTrie {
             }
         }
 
-        for ((char, childNode) in node.children) {
+        val chars = node.childChars
+        val nodes = node.childNodes
+        for (i in chars.indices) {
             if (results.size >= limit) return
-            collectEntries(childNode, currentKey + char, results, limit)
+            collectEntries(nodes[i]!!, currentKey + chars[i], results, limit)
         }
     }
 
@@ -139,7 +174,7 @@ class PhoneticTrie {
         var node = root
 
         for (char in key) {
-            node = node.children[char] ?: return false
+            node = node.child(char) ?: return false
         }
 
         return true
@@ -171,7 +206,7 @@ class PhoneticTrie {
         if (anchorFirst && key.isNotEmpty()) {
             // Only traverse the branch matching the first character
             val firstChar = key[0]
-            val firstNode = root.children[firstChar]
+            val firstNode = root.child(firstChar)
             if (firstNode != null) {
                 fuzzySearch(firstNode, firstChar.toString(), key, 1, maxDistance, results, collectLimit)
             }
@@ -198,7 +233,7 @@ class PhoneticTrie {
         // If we've consumed the entire target
         if (targetIndex == target.length) {
             if (node.isTerminal) {
-                for (entry in node.entries) {
+                for (entry in node.entries.orEmpty()) {
                     if (results.size >= limit) return
                     results.add(
                         PrefixResult(
@@ -211,9 +246,11 @@ class PhoneticTrie {
             }
             // Allow extra characters at the end (deletion errors in target)
             if (remainingDistance > 0) {
-                for ((char, childNode) in node.children) {
+                val chars = node.childChars
+                val nodes = node.childNodes
+                for (i in chars.indices) {
                     fuzzySearch(
-                        childNode, currentKey + char, target, targetIndex,
+                        nodes[i]!!, currentKey + chars[i], target, targetIndex,
                         remainingDistance - 1, results, limit
                     )
                 }
@@ -224,7 +261,7 @@ class PhoneticTrie {
         val targetChar = target[targetIndex]
 
         // Exact match - no distance cost
-        val exactChild = node.children[targetChar]
+        val exactChild = node.child(targetChar)
         if (exactChild != null) {
             fuzzySearch(
                 exactChild, currentKey + targetChar, target,
@@ -235,10 +272,12 @@ class PhoneticTrie {
         if (remainingDistance <= 0) return
 
         // Substitution: try all other children
-        for ((char, childNode) in node.children) {
-            if (char != targetChar) {
+        val chars = node.childChars
+        val nodes = node.childNodes
+        for (i in chars.indices) {
+            if (chars[i] != targetChar) {
                 fuzzySearch(
-                    childNode, currentKey + char, target,
+                    nodes[i]!!, currentKey + chars[i], target,
                     targetIndex + 1, remainingDistance - 1, results, limit
                 )
             }
@@ -248,9 +287,9 @@ class PhoneticTrie {
         fuzzySearch(node, currentKey, target, targetIndex + 1, remainingDistance - 1, results, limit)
 
         // Insertion: consume a trie character without advancing target
-        for ((char, childNode) in node.children) {
+        for (i in chars.indices) {
             fuzzySearch(
-                childNode, currentKey + char, target,
+                nodes[i]!!, currentKey + chars[i], target,
                 targetIndex, remainingDistance - 1, results, limit
             )
         }

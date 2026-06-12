@@ -42,6 +42,14 @@ class BigramModel {
         loaded = true
     }
 
+    /**
+     * Raw observed count for the (word1, word2) pair — the context-evidence
+     * oracle for promotion decisions (S4): [bigramProb]'s unigram
+     * interpolation always returns SOMETHING, so callers that flip a primary
+     * word must check that the pair was actually observed in the corpus.
+     */
+    fun bigramCount(word1: String, word2: String): Int = bigrams["$word1\t$word2"] ?: 0
+
     fun unigramProb(word: String): Double {
         val count = unigrams[word] ?: 0
         val vocabSize = maxOf(unigrams.size, 1)

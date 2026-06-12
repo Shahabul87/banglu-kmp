@@ -467,16 +467,22 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     suspend fun initialize(storage: PlatformStorage? = null, loader: DictionaryLoader? = null) {
         if (!initialized) initializeSync()
 
-        // Load extended dictionary if available
-        loader?.loadExtendedDictionary()?.let { entries ->
-            dictionary.addEntries(entries)
-        }
+        // S4/C2 load order: the 480K word list + frequency map come FIRST —
+        // their loaders materialize transient full-size copies (cursor strings,
+        // the interface's Map) that need heap headroom, while their resident
+        // cost is small (one sorted array + one IntArray). The extended
+        // dictionary trie — by far the largest RESIDENT structure — is built
+        // LAST. The previous trie-first order left a 256MB device heap with
+        // <1MB free by the time the frequency cursor started reading, OOMing
+        // full-mode load.
 
         // Load 480K word list
         loader?.loadFullDictionary()?.let { words ->
             validator.loadWords(words)
             sectionEngine.initialize(validator)
-            disambiguator.addKnownWords(words)
+            // S4/C2: membership oracle, NOT a second 472K-entry HashSet copy —
+            // the duplicate set OOMed 256MB-heap devices during full-mode load.
+            disambiguator.setExtendedMembership(validator::isValid)
             if (phoneticIndex == null) buildCorpusPhoneticIndex(words)
         }
 
@@ -484,6 +490,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         loader?.loadFrequencyMap()?.let { freqs ->
             validator.loadFrequencies(freqs)
             if (phoneticIndex == null) sortCorpusPhoneticIndex()
+        }
+
+        // Load extended dictionary if available
+        loader?.loadExtendedDictionary()?.let { entries ->
+            dictionary.addEntries(entries)
         }
 
         // Load disambiguation map
@@ -1007,6 +1018,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 var bestBengali = currResult.bengali
 
                 for (alt in currResult.alternatives) {
+                    // S4: promotion requires real observed bigram evidence —
+                    // see rerankWithPreviousContext (junk unigram counts must
+                    // not flip a correct primary).
+                    if (bigramModel.bigramCount(prevBengali, alt.bengali) == 0) continue
+
                     val altScore = bigramModel.bigramProb(prevBengali, alt.bengali)
 
                     val bothValid = validator.isLoaded() &&
@@ -1337,13 +1353,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         } else suggestions
 
         // Global filter: remove hyphenated garbage from 480K dictionary.
-        // Final ordering (S1/D2): dictionary membership is the LEADING sort key —
-        // a generated/variant candidate (প্রধাণ, বাংলাদেশো) may fill remaining
-        // slots but never outranks a real dictionary word (প্রধান). The primary
-        // and English passthrough/lexicon entries are legitimate non-dictionary
-        // strip entries and are exempt (rank with the dictionary tier).
+        // Final ordering (S1/D2, refined S4/C3): the LEADING sort key is a
+        // three-band usage rank — (0) primary, Tier-A dictionary words, and
+        // English entries; (1) Tier-B dictionary words (exact-typed rare words
+        // stay reachable, below every real-usage word); (2) generated/variant
+        // non-dictionary candidates. Within a band the existing score orders.
         // Sort keys are computed once per candidate, not per comparison.
-        val ordered = boosted
+        val banded = boosted
             .filter {
                 it.bengali == primary.bengali ||
                     (!it.bengali.contains("-") && isCleanSuggestion(key, it, primary.bengali))
@@ -1351,12 +1367,25 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             .map { s ->
                 Triple(
                     s,
-                    dictionaryMembershipRank(s, primary.bengali),
+                    suggestionStripBand(key, s, primary.bengali, exactDictionaryWords),
                     suggestionRankScore(key, s, primary.bengali, exactDictionaryWords)
                 )
             }
+
+        // S4/C3 hard-drop: when a real Tier-A word is available beyond the
+        // primary, generated non-dictionary candidates without phonetic fit are
+        // dropped entirely — the strip should fill with real words, not
+        // inventions (hoy must never pad the strip with হয).
+        val hasBandZeroBeyondPrimary = banded.any {
+            it.second == 0 && it.first.bengali != primary.bengali
+        }
+        val ordered = banded
+            .filterNot { (s, band, _) ->
+                band == 2 && hasBandZeroBeyondPrimary &&
+                    !hasStripBandTwoPhoneticFit(key, s.bengali, primary.bengali)
+            }
             .sortedWith(
-                compareByDescending<Triple<SmartSuggestion, Int, Double>> { it.second }
+                compareBy<Triple<SmartSuggestion, Int, Double>> { it.second }
                     .thenByDescending { it.third }
                     .thenByDescending { it.first.confidence }
             )
@@ -1378,17 +1407,82 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     /**
-     * Leading strip-order key (S1/D2): 1 when the candidate is a dictionary word
-     * (484K validator in full mode, sqlite store words table in lite mode, or the
-     * seed/learned user dictionary), 0 when it is a generated/variant string.
-     * Exempt by definition: the editor primary (gate-approved by construction)
-     * and English passthrough/lexicon entries (the raw-roman escape slot and
-     * curated English renderings are legitimate non-dictionary strip entries).
+     * Leading strip-order key (S1/D2, refined S4/C3) — three bands, lower wins:
+     *
+     *   0 — primary (gate-approved by construction), English passthrough/lexicon
+     *       entries, Tier-A (real-usage) dictionary words, and seed/learned/
+     *       extended phonetic-dictionary entries absent from the words table.
+     *   1 — Tier-B words-table words: exact-typed rare words stay reachable but
+     *       never above a real-usage word (kore must not surface করউকা@1 above
+     *       Tier-A completions).
+     *   2 — generated/variant strings that are not dictionary words at all.
+     *
+     * Words-table membership is checked FIRST: many junk-tier corpus rows
+     * (করউকা, কঠন, ভালক) also appear in the extended phonetic dictionary, and
+     * a containsBengali shortcut would wrongly lift them to band 0.
      */
-    private fun dictionaryMembershipRank(suggestion: SmartSuggestion, primary: String): Int {
-        if (suggestion.bengali == primary) return 1
-        if (suggestion.source == "english_passthrough") return 1
-        return if (isKnownWord(suggestion.bengali) || dictionary.containsBengali(suggestion.bengali)) 1 else 0
+    private fun suggestionStripBand(
+        key: String,
+        suggestion: SmartSuggestion,
+        primary: String,
+        exactDictionaryWords: Set<String>
+    ): Int {
+        if (suggestion.bengali == primary) return 0
+        if (suggestion.source == "english_passthrough") return 0
+        if (isKnownWord(suggestion.bengali)) {
+            return if (wordUsageTier(key, suggestion.bengali) == PhoneticIndexHit.TIER_A) 0 else 1
+        }
+        // Not a words-table word: seed/learned/extended dictionary entries are
+        // still real curated entries — band 0 — but ONLY when this key actually
+        // reaches them (exact lookup hit, or their registered phonetic aligns
+        // with what was typed). A generated variant of the primary that merely
+        // collides with an unrelated seed entry (hoy's হয, registered under
+        // "hoz") earns no membership credit from the collision — band 2.
+        if (suggestion.bengali in exactDictionaryWords) return 0
+        if (dictionary.containsBengali(suggestion.bengali)) {
+            val registered = dictionary.getPhoneticForBengali(suggestion.bengali)
+            if (registered != null && (registered.startsWith(key) || key.startsWith(registered))) return 0
+        }
+        return 2
+    }
+
+    /**
+     * S4/C3 usage tier of a dictionary word for strip banding. Resolution order:
+     * hits under the typed key (memoized store read the strip already performed),
+     * its normalized form, then the word's own canonical reverse-transliterated
+     * key. A dictionary word with no resolvable index row defaults to Tier B —
+     * it has no real-usage evidence. Without an attached store there is no tier
+     * signal at all: every dictionary word ranks Tier A (legacy single-band
+     * behavior for seed-only/JVM-validator setups).
+     */
+    private fun wordUsageTier(key: String, bengali: String): Int {
+        if (phoneticIndex == null) return PhoneticIndexHit.TIER_A
+        storeLookup(key).firstOrNull { it.bengali == bengali }?.let { return it.tier }
+        val normalized = normalizeIndexQuery(key)
+        if (normalized != key) {
+            storeLookup(normalized).firstOrNull { it.bengali == bengali }?.let { return it.tier }
+        }
+        val canonical = ReverseTransliterator.reverseWord(bengali).lowercase()
+        if (canonical.isNotEmpty() && canonical != key && canonical != normalized) {
+            storeLookup(canonical).firstOrNull { it.bengali == bengali }?.let { return it.tier }
+        }
+        return PhoneticIndexHit.TIER_B
+    }
+
+    /**
+     * Phonetic-fit oracle for the S4/C3 band-2 hard-drop. Reuses the strict
+     * generated-candidate fit thresholds WITHOUT the short-key leniency
+     * delegation: a band-2 candidate only earns a slot next to real Tier-A
+     * words when its reverse transliteration genuinely matches the typed key.
+     */
+    private fun hasStripBandTwoPhoneticFit(key: String, bengali: String, primary: String): Boolean {
+        if (key.isEmpty() || bengali.isEmpty() || bengali == primary) return true
+        val reversePhonetic = ReverseTransliterator.reverseWord(bengali)
+        if (reversePhonetic.isEmpty()) return false
+        if (hasGeneratedVowelDrift(key, reversePhonetic)) return false
+        val reverseScore = PhoneticOverlapScorer.score(key, reversePhonetic).score
+        val threshold = if (key.length >= 6) 0.68 else 0.64
+        return reverseScore >= threshold && hasCompatibleVowelPath(key, reversePhonetic)
     }
 
     private fun suggestionRankScore(
@@ -4397,6 +4491,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         for (alt in result.alternatives) {
             if (alt.bengali == result.bengali || alt.confidence < 0.35) continue
+            // S4: context may only promote an alternative on REAL bigram
+            // evidence. bigramProb interpolates unigram frequency, and the
+            // unigram table carries the same junk-corpus counts as the words
+            // table (উতর@80 vs উত্তর@40) — without this guard, "modhe utor"
+            // flipped the correct উত্তর primary back to উতর on commit.
+            if (bigramModel.bigramCount(prev, alt.bengali) == 0) continue
 
             val altScore = bigramModel.bigramProb(prev, alt.bengali)
             val bothValid = validator.isLoaded() &&

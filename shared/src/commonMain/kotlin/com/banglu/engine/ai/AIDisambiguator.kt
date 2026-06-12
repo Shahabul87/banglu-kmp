@@ -8,6 +8,7 @@ data class DisambiguationResult(
 
 class AIDisambiguator {
     private val knownWords = mutableSetOf<String>()
+    private var extendedMembership: ((String) -> Boolean)? = null
     private val bigramFreq = mutableMapOf<String, Int>()
     private var totalBigrams = 0
     private var initialized = false
@@ -62,11 +63,26 @@ class AIDisambiguator {
         knownWords.addAll(words)
     }
 
+    /**
+     * S4/C2 zero-copy membership: attach an oracle (the 480K validator) instead
+     * of duplicating the full word list into [knownWords]. The previous
+     * addKnownWords(472K) built a second word-list-sized HashSet (~20MB of
+     * node overhead) on a 256MB device heap already within a few MB of its
+     * limit. [knownWords] keeps only the small seed set; the oracle answers
+     * everything else.
+     */
+    fun setExtendedMembership(oracle: (String) -> Boolean) {
+        extendedMembership = oracle
+    }
+
+    private fun isKnown(word: String): Boolean =
+        knownWords.contains(word) || extendedMembership?.invoke(word) == true
+
     fun disambiguate(bengali: String, confidence: Double): DisambiguationResult? {
         if (!initialized || bengali.length < 2) return null
         if (confidence >= 0.92) return null  // Already high confidence
 
-        val isOriginalKnown = knownWords.contains(bengali)
+        val isOriginalKnown = isKnown(bengali)
         val originalScore = if (isOriginalKnown) scoreCandidate(bengali) else -1.0
 
         val candidates = generateCandidates(bengali)
@@ -75,12 +91,12 @@ class AIDisambiguator {
 
         for (candidate in candidates) {
             if (candidate == bengali) continue
-            if (!knownWords.contains(candidate)) continue
+            if (!isKnown(candidate)) continue
             val score = scoreCandidate(candidate)
 
             if (isOriginalKnown) {
                 // Both are known words - lower threshold when candidate is also a valid word
-                val threshold = if (knownWords.contains(candidate)) 1.2 else 1.3
+                val threshold = if (isKnown(candidate)) 1.2 else 1.3
                 if (score > bestScore * threshold + 10) {
                     bestScore = score
                     bestCandidate = candidate
@@ -98,7 +114,7 @@ class AIDisambiguator {
         } else null
     }
 
-    fun isKnownWord(word: String): Boolean = word in knownWords
+    fun isKnownWord(word: String): Boolean = isKnown(word)
 
     fun generateCandidates(bengali: String): Set<String> {
         val candidates = mutableSetOf<String>()
@@ -106,7 +122,7 @@ class AIDisambiguator {
         // Pass 1: Single swaps
         applySingleSwaps(bengali, candidates)
         // Early exit if any known word found
-        if (candidates.any { knownWords.contains(it) }) return candidates
+        if (candidates.any { isKnown(it) }) return candidates
 
         // Pass 2: Double swaps
         val pass1 = candidates.toSet()
@@ -114,7 +130,7 @@ class AIDisambiguator {
             if (candidates.size >= MAX_CANDIDATES) break
             applySingleSwaps(c, candidates)
         }
-        if (candidates.any { it !in pass1 && knownWords.contains(it) }) return candidates
+        if (candidates.any { it !in pass1 && isKnown(it) }) return candidates
 
         // Pass 3: Triple swaps (short words only)
         if (bengali.length <= 8) {
@@ -141,13 +157,13 @@ class AIDisambiguator {
 
     private fun scoreCandidate(candidate: String): Double {
         var score = 0.0
-        if (knownWords.contains(candidate)) score += 100.0
+        if (isKnown(candidate)) score += 100.0
 
         // Compound word detection
         for (len in 3 until candidate.length) {
             for (start in 0..candidate.length - len) {
                 val sub = candidate.substring(start, start + len)
-                if (knownWords.contains(sub)) score += len * 1.5
+                if (isKnown(sub)) score += len * 1.5
             }
         }
 

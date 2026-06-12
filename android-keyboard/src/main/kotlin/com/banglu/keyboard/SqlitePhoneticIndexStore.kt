@@ -11,8 +11,8 @@ import java.io.File
  * Open once per IME session; call close() from the service's onDestroy.
  * All methods fail soft (empty results) so a corrupt db never crashes the IME.
  *
- * Tables used (db version 3.4.0):
- * - phonetic_index(key, word_id, frequency, tier, priority) with idx_phonetic_index_key(key, priority, tier)
+ * Tables used (db version 3.4.1):
+ * - phonetic_index(key, word_id, frequency, tier, priority) with idx_phonetic_index_key(key, tier, priority)
  * - words(id, bengali, frequency) — Bengali text lives here, joined by word_id
  * - english_lexicon(key PRIMARY KEY, bengali)
  *
@@ -73,10 +73,16 @@ class SqlitePhoneticIndexStore(
     /** True when the db opened, contains phonetic_index, and has the expected version. */
     val isAvailable: Boolean get() = db != null
 
+    /**
+     * S4/C1 tier-first key ranking: (tier ASC, priority ASC, frequency DESC).
+     * A Tier-A (real-usage) word beats a Tier-B junk word even when the junk
+     * word canonically owns the key (bishas → বিশ্বাস before বিষাস); within a
+     * tier, canonical (priority 0) beats habit alias; frequency breaks ties.
+     */
     override fun lookupExact(key: String): List<PhoneticIndexHit> = query(
         """SELECT w.bengali, p.frequency, p.tier, p.priority FROM phonetic_index p
            JOIN words w ON w.id = p.word_id
-           WHERE p.key = ? ORDER BY p.priority ASC, p.frequency DESC LIMIT 16""",
+           WHERE p.key = ? ORDER BY p.tier ASC, p.priority ASC, p.frequency DESC LIMIT 16""",
         arrayOf(key)
     )
 
@@ -86,7 +92,7 @@ class SqlitePhoneticIndexStore(
             """SELECT w.bengali, p.frequency, p.tier, p.priority FROM phonetic_index p
                JOIN words w ON w.id = p.word_id
                WHERE p.key >= ? AND p.key < ? AND p.tier = ?
-               ORDER BY p.frequency DESC LIMIT ?""",
+               ORDER BY p.tier ASC, p.priority ASC, p.frequency DESC LIMIT ?""",
             arrayOf(prefix, prefix + KEY_UPPER_BOUND, PhoneticIndexHit.TIER_A.toString(), limit.toString())
         )
     }

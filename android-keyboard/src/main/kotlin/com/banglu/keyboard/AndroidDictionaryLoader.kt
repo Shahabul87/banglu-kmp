@@ -31,7 +31,7 @@ class AndroidDictionaryLoader(
     companion object {
         private const val TAG = "BangluDictLoader"
         internal const val DB_FILENAME = "dictionary.sqlite"
-        internal const val REQUIRED_DB_VERSION = "3.4.0"
+        internal const val REQUIRED_DB_VERSION = "3.4.1"
     }
 
     /**
@@ -153,7 +153,12 @@ class AndroidDictionaryLoader(
     } else withDatabase { db ->
         val freqs = mutableMapOf<String, Int>()
         try {
-            db.rawQuery("SELECT bengali, frequency FROM words WHERE frequency > 0", null).use { cursor ->
+            // S4/C2: frequency > 1, not > 0 — 328K of 472K rows carry the
+            // corpus-tail placeholder frequency 1 (real signal starts at 10),
+            // and 1-vs-0 crosses no ranking threshold anywhere in the engine.
+            // Materializing those rows tripled the map and OOMed the 256MB
+            // device heap during full-mode load.
+            db.rawQuery("SELECT bengali, frequency FROM words WHERE frequency > 1", null).use { cursor ->
                 while (cursor.moveToNext()) {
                     freqs[cursor.getString(0)] = cursor.getInt(1)
                 }

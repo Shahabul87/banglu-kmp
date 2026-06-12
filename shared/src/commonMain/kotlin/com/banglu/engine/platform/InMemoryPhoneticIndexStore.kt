@@ -9,10 +9,13 @@ class InMemoryPhoneticIndexStore(
     private val byKey: Map<String, List<PhoneticIndexHit>> =
         entries.groupBy({ it.second }, { it.first })
             .mapValues { (_, hits) ->
-                // Canonical owners (priority 0) beat habit-alias claimants
-                // (priority 1) regardless of frequency; frequency breaks ties.
+                // S4/C1 tier-first key ranking: a Tier-A (real-usage) word beats
+                // a Tier-B junk word even when the junk word canonically owns the
+                // key; within a tier, canonical owners (priority 0) beat
+                // habit-alias claimants (priority 1); frequency breaks ties.
                 hits.sortedWith(
-                    compareBy<PhoneticIndexHit> { it.priority }
+                    compareBy<PhoneticIndexHit> { it.tier }
+                        .thenBy { it.priority }
                         .thenByDescending { it.frequency }
                 )
             }
@@ -33,7 +36,10 @@ class InMemoryPhoneticIndexStore(
             .filter { it.key.startsWith(prefix) }
             .flatMap { it.value }
             .filter { it.tier == PhoneticIndexHit.TIER_A }
-            .sortedByDescending { it.frequency }
+            .sortedWith(
+                compareBy<PhoneticIndexHit> { it.priority }
+                    .thenByDescending { it.frequency }
+            )
             .take(limit)
             .toList()
     }

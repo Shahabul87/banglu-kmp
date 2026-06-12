@@ -76,7 +76,9 @@ class TestDictionaryLoader(
     override suspend fun loadFrequencyMap(): Map<String, Int>? = withConnection { conn ->
         val freqs = mutableMapOf<String, Int>()
         conn.createStatement().use { stmt ->
-            stmt.executeQuery("SELECT bengali, frequency FROM words WHERE frequency > 0").use { rs ->
+            // Mirrors AndroidDictionaryLoader (S4/C2): skip the 328K
+            // corpus-tail placeholder rows (frequency == 1).
+            stmt.executeQuery("SELECT bengali, frequency FROM words WHERE frequency > 1").use { rs ->
                 while (rs.next()) {
                     freqs[rs.getString(1)] = rs.getInt(2)
                 }

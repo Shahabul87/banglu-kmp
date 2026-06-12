@@ -289,7 +289,7 @@ fun main(args: Array<String>) {
         // 7. Insert metadata
         val insertMeta = connection.prepareStatement("INSERT INTO metadata (key, value) VALUES (?, ?)")
         val metadataEntries = mapOf(
-            "version" to "3.4.0",
+            "version" to "3.4.1",
             "word_count" to count.toString(),
             "disambiguation_count" to mappings.size.toString(),
             "extended_entry_count" to extendedEntryCount.toString(),
@@ -414,7 +414,9 @@ private fun createTables(connection: Connection) {
                 priority INTEGER NOT NULL DEFAULT 0
             )
         """)
-        execute("CREATE INDEX idx_phonetic_index_key ON phonetic_index(key, priority, tier)")
+        // S4/C1: tier-first key ranking — the covering index matches the
+        // engine's ORDER BY (tier ASC, priority ASC, frequency DESC) prefix.
+        execute("CREATE INDEX idx_phonetic_index_key ON phonetic_index(key, tier, priority)")
 
         execute("""
             CREATE TABLE english_lexicon (
