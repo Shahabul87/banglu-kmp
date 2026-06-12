@@ -99,6 +99,20 @@ class SqlitePhoneticIndexStore(
         null
     }
 
+    /**
+     * Lite-mode commit gate support: word membership straight from the words
+     * table (idx_words_bengali → O(log n) point lookup). Fail-soft false so a
+     * corrupt db floors OOV output rather than crashing the IME; the engine
+     * memoizes results so repeated gate evaluations of one word hit sqlite once.
+     */
+    override fun containsWord(bengali: String): Boolean = try {
+        db?.rawQuery("SELECT 1 FROM words WHERE bengali = ? LIMIT 1", arrayOf(bengali))
+            ?.use { c -> c.moveToFirst() } ?: false
+    } catch (e: Exception) {
+        if (BuildConfig.DEBUG) Log.e(TAG, "containsWord lookup failed", e)
+        false
+    }
+
     private fun query(sql: String, args: Array<String>): List<PhoneticIndexHit> = try {
         db?.rawQuery(sql, args)?.use { c ->
             val hits = ArrayList<PhoneticIndexHit>()

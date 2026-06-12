@@ -107,6 +107,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
     }
 
+    /**
+     * LRU memo over [PhoneticIndexStore.containsWord] for the lite-mode commit
+     * gate (validator not loaded, sqlite store attached). The gate can probe the
+     * same Bengali string several times per commit (primary + alternatives +
+     * composition roots); this bounds it to one indexed sqlite query per word.
+     * Cleared in [clearCache] (and therefore on [setPhoneticIndex]).
+     */
+    private val containsWordMemo = object : LinkedHashMap<String, Boolean>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean {
+            return size > MAX_STORE_MEMO
+        }
+    }
+
     private data class InflectionalSuffix(val phonetic: String, val bengali: String)
 
     private data class CandidatePath(
@@ -3909,13 +3922,30 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * For longer inputs, similarity matters MORE and frequency matters LESS
      * (user typed enough characters to disambiguate — trust the input).
      */
+    /**
+     * Word-membership check backing the commit gate. Full mode (484K validator
+     * loaded): RAM-speed validator lookup ONLY — the sqlite store is never
+     * consulted, so full-mode latency is unchanged. Lite mode (validator never
+     * loaded, sqlite store attached): one indexed words-table query per word,
+     * memoized in [containsWordMemo].
+     */
+    private fun isKnownWord(bengali: String): Boolean {
+        if (validator.isValid(bengali)) return true
+        if (validator.isLoaded()) return false
+        val store = phoneticIndex ?: return false
+        containsWordMemo[bengali]?.let { return it }
+        val known = store.containsWord(bengali)
+        containsWordMemo[bengali] = known
+        return known
+    }
+
     /** Engine v3 commit gate (spec 3.3): is this result allowed as editor primary? */
     private fun isGateApproved(result: ConversionResult): Boolean = when {
         result.bengali.isEmpty() -> true
         result.source == ResolutionSource.ENGLISH_PASSTHROUGH -> true
         result.source == ResolutionSource.ENGLISH_LEXICON -> true
         result.source == ResolutionSource.CLEAN_TRANSLITERATION -> true
-        validator.isValid(result.bengali) -> true
+        isKnownWord(result.bengali) -> true
         dictionary.containsBengali(result.bengali) -> true   // seed + learned/user words
         else -> false
     }
@@ -3924,11 +3954,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * Engine v3 commit gate: the editor primary must ALWAYS be a real dictionary
      * word, an English-lexicon entry, a user/seed word, or the clean deterministic
      * transliteration — never an ambiguity-swapped or invented Bengali string.
-     * Armed only when the 480K validator is loaded; seed-only engines (JVM unit
-     * tests, pre-init) keep legacy pattern-tail behavior.
+     * Armed when the 484K validator is loaded (full mode) OR the sqlite phonetic
+     * index store is attached (lite mode — word membership comes from the on-disk
+     * words table via [isKnownWord]). Seed-only engines (JVM unit tests, pre-init)
+     * keep legacy pattern-tail behavior.
      */
     private fun applyCommitGate(key: String, result: ConversionResult): ConversionResult {
-        if (!validator.isLoaded()) return result          // gate armed only with real dictionary
+        val canValidate = validator.isLoaded() || phoneticIndex != null
+        if (!canValidate) return result                   // gate armed only with real dictionary
         // CleanTransliterator contract: digits/punctuation must be handled by the
         // caller. Tokens with non-letter characters (e.g. "123", "k,,") are never
         // ambiguity-swapped Bengali inventions — keep the pattern-engine output.
@@ -3936,7 +3969,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (isGateApproved(result)) return result
         val clean = CleanTransliterator.transliterate(key)
         val dictionaryClosedAlternatives = result.alternatives
-            .filter { validator.isValid(it.bengali) || dictionary.containsBengali(it.bengali) }
+            .filter { isKnownWord(it.bengali) || dictionary.containsBengali(it.bengali) }
             .take(3)
         return ConversionResult(
             bengali = clean,
@@ -3976,7 +4009,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // Hasanta-junction compositions (root + ্ + suffix) reduce to the root.
             val root = bengali.dropLast(suffix.length).removeSuffix("্")
             if (root.isEmpty()) continue
-            if (validator.isValid(root) || dictionary.containsBengali(root)) return true
+            if (isKnownWord(root) || dictionary.containsBengali(root)) return true
         }
         return false
     }
@@ -3991,7 +4024,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * deterministic transliteration.
      */
     private fun applyCompositionCommitGate(key: String, result: ConversionResult): ConversionResult {
-        if (!validator.isLoaded()) return result          // gate armed only with real dictionary
+        val canValidate = validator.isLoaded() || phoneticIndex != null
+        if (!canValidate) return result                   // gate armed only with real dictionary
         if (key.any { it !in 'a'..'z' }) return result    // CleanTransliterator contract (see applyCommitGate)
         if (isGateApproved(result)) return result
         if (isApprovedComposition(result.bengali)) return result
@@ -4000,11 +4034,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     /**
      * Test seam: true when [bengali] is gate-approved — i.e., present in the 480K
-     * validator OR in the seed/user dictionary. Pins the real contract that every
-     * editor primary and every surfaced alternative must be a real or seed word.
+     * validator (full mode), the sqlite store's words table (lite mode), OR the
+     * seed/user dictionary. Pins the real contract that every editor primary and
+     * every surfaced alternative must be a real or seed word.
      */
     internal fun isGateApprovedForTest(bengali: String): Boolean =
-        validator.isValid(bengali) || dictionary.containsBengali(bengali)
+        isKnownWord(bengali) || dictionary.containsBengali(bengali)
 
     /**
      * Test seam for the F2 composition allowance: gate-approved OR a
@@ -4271,6 +4306,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     fun clearCache() {
         wordCache.clear()
         storeLookupMemo.clear()
+        containsWordMemo.clear()
     }
 
     /**

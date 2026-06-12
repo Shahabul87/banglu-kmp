@@ -1,5 +1,7 @@
 package com.banglu.engine
 
+import com.banglu.engine.platform.InMemoryPhoneticIndexStore
+import com.banglu.engine.platform.PhoneticIndexHit
 import com.banglu.engine.rules.CleanTransliterator
 import com.banglu.engine.types.ResolutionSource
 import kotlin.test.Test
@@ -99,6 +101,50 @@ class CommitGateTest {
         assertEquals(floor, result.bengali, "invented composition escaped the commit gate")
         assertTrue(e.isGateApprovedForTest(result.bengali),
             "editor primary '${result.bengali}' is not gate-approved")
+    }
+
+    @Test
+    fun gateArmsInLiteModeViaStore() {
+        // F5: lite mode = validator never loaded, sqlite store attached. The
+        // gate must arm off the store's words table: ungated pattern garbage
+        // (kkkkx) floors to the clean transliteration, while a store word
+        // reached through the index passes untouched.
+        val e = SmartEngine()
+        e.initializeSync()  // validator never loaded — lite mode
+        e.setPhoneticIndex(
+            InMemoryPhoneticIndexStore(
+                entries = listOf(
+                    PhoneticIndexHit("আমি", 100, PhoneticIndexHit.TIER_A) to "ami"
+                ),
+                words = setOf("আমি")
+            )
+        )
+        val garbage = e.convertWord("kkkkx")
+        assertEquals(CleanTransliterator.transliterate("kkkkx"), garbage.bengali,
+            "lite-mode gate did not floor pattern garbage")
+        assertEquals(ResolutionSource.CLEAN_TRANSLITERATION, garbage.source)
+
+        val known = e.convertWord("ami")
+        assertEquals("আমি", known.bengali, "store word blocked by the lite-mode gate")
+    }
+
+    @Test
+    fun storeWordsApprovedAsGatePrimary() {
+        // A word that exists ONLY in the store (not seed, not validator) must
+        // resolve via the index AND be gate-approved as the editor primary.
+        val e = SmartEngine()
+        e.initializeSync()  // validator never loaded — lite mode
+        e.setPhoneticIndex(
+            InMemoryPhoneticIndexStore(
+                entries = listOf(
+                    PhoneticIndexHit("পরীক্ষাগার", 40, PhoneticIndexHit.TIER_A) to "porikkhagar"
+                )
+            )
+        )
+        val result = e.convertWord("porikkhagar")
+        assertEquals("পরীক্ষাগার", result.bengali)
+        assertTrue(e.isGateApprovedForTest(result.bengali),
+            "store-only word 'পরীক্ষাগার' is not gate-approved in lite mode")
     }
 
     @Test

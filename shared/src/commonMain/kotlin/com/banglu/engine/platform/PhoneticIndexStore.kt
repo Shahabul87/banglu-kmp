@@ -32,4 +32,7 @@ interface PhoneticIndexStore {
 
     /** Bengali rendering for an English word key, or null. */
     fun lookupEnglish(key: String): String?
+
+    /** True if [bengali] is a word in the compiled dictionary (words table). */
+    fun containsWord(bengali: String): Boolean
 }

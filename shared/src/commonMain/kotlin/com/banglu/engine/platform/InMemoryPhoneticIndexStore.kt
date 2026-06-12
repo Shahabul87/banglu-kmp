@@ -2,12 +2,20 @@ package com.banglu.engine.platform
 
 class InMemoryPhoneticIndexStore(
     entries: List<Pair<PhoneticIndexHit, String>>, // hit to key
-    private val english: Map<String, String> = emptyMap()
+    private val english: Map<String, String> = emptyMap(),
+    words: Set<String> = emptySet()
 ) : PhoneticIndexStore {
 
     private val byKey: Map<String, List<PhoneticIndexHit>> =
         entries.groupBy({ it.second }, { it.first })
             .mapValues { (_, hits) -> hits.sortedByDescending { it.frequency } }
+
+    /**
+     * Words table emulation: explicit [words] UNION every indexed Bengali form —
+     * every indexed word is by definition a dictionary word in the compiled db.
+     */
+    private val dictionaryWords: Set<String> =
+        words + entries.map { it.first.bengali }
 
     override fun lookupExact(key: String): List<PhoneticIndexHit> =
         byKey[key].orEmpty()
@@ -24,4 +32,6 @@ class InMemoryPhoneticIndexStore(
     }
 
     override fun lookupEnglish(key: String): String? = english[key]
+
+    override fun containsWord(bengali: String): Boolean = bengali in dictionaryWords
 }
