@@ -118,7 +118,21 @@ the user's own learned-word history. Suite: 418 JVM tests green.
 Remaining y_drop misses are mostly the study transform stripping final -্য into typings
 real users don't produce (jon for জন্য); real-habit subclasses are covered.
 
-## 6. Register caveat (honest measurement note)
+## 6. Round S10 — fragment sanity (residual ri-kar previews)
+
+The commit gate now rejects gate-approved-but-key-unfaithful results: a real word
+that does not own the typed key cannot become primary while canonical continuations
+prove the input is a mid-word fragment (poriko → পৃথক class, produced by the
+validation/disambiguation/root layers past every earlier gate). Composing-trace leak:
+7.1% (start) → 5.0% (S7) → **0.8%** (6/800; the survivors are exact-alias contests
+like trin → তৃণ vs ত্রিনিদাদ where both readings are legitimate). Cost: canonical
+primary −0.1pt. Phone-verified: poriko strips to পরিক | পরিকল্পনা | পরিকল্পিত.
+Also this round: db 3.7.0 vocabulary expansion — 4,369 news-anchored words
+(names, modern spellings, compounds: অবাস্তবায়নযোগ্য, নিত্যপণ্যে, ট্রাম্পের) with a
+fresh-article blind test at 98.6% primary / 99.6% top-3, and the context-aware
+composing preview (টেস্ট + mach previews ম্যাচ inline, matching chip and commit).
+
+## 7. Register caveat (honest measurement note)
 
 Of 3,786 majority-form failures, 1,906 are cases where the engine's choice IS the modern
 (bnwiki) majority and only the literature corpus disagrees (কোরিয়া vs করিয়া, হয়ে-class সাধু
