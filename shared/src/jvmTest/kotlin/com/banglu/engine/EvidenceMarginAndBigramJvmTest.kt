@@ -72,6 +72,25 @@ class EvidenceMarginAndBigramJvmTest {
         assertEquals("তৈরি", engine.convertForComposing("toiri", "আমরা").bengali)
     }
 
+    // ── S10: fragment sanity — no ri-kar flash from fuzzy layer ─────────
+
+    @Test
+    fun fragments_neverFlashRiKarFromFuzzyMatches() {
+        // Primary/composed text must never be a ri-kar stretch of a plain-ri
+        // fragment. The strip may still OFFER ৃ continuations where they are
+        // legitimate (prokri → প্রকৃতি typed "prokriti" is a real habit), but
+        // a রি continuation must stay within the top 3.
+        for (frag in listOf("poriko", "prokri", "porisheb", "korich", "tribhu")) {
+            val p = engine.convertWord(frag).bengali
+            assertTrue('ৃ' !in p, "fragment '$frag' primary must not be a ri-kar stretch, got $p")
+            val top3 = engine.getSuggestions(frag, 4).map { it.bengali }.take(3)
+            assertTrue(
+                top3.any { 'ৃ' !in it && it.isNotEmpty() },
+                "fragment '$frag' top-3 must keep a রি reading, got $top3"
+            )
+        }
+    }
+
     // ── regressions ─────────────────────────────────────────────────────
 
     @Test

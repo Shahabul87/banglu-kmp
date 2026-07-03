@@ -591,6 +591,23 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     /**
+     * S10 fragment sanity (residual ri-kar previews, study §5 follow-up): the
+     * dictionary layer's fuzzy path can claim a mid-word fragment with a word
+     * that does not own the typed key at all (poriko → পৃথক@0.85 while the
+     * user is typing পরিকল্পনা). The discriminator between a fragment and a
+     * completed typo: fragments have canonical continuations in the store.
+     * When the match is unfaithful (< 0.90, word does not own the key) AND
+     * canonical continuations exist, skip the layer — the pipeline floors to
+     * the faithful pattern conversion and the strip fills with continuations.
+     */
+    private fun isUnfaithfulFragmentMatch(key: String, result: ConversionResult): Boolean {
+        if (result.confidence >= 0.90) return false
+        val store = phoneticIndex ?: return false
+        if (storeLookup(key).any { it.bengali == result.bengali }) return false
+        return store.lookupPrefix(key, 4).any { it.priority == PhoneticIndexHit.PRIORITY_CANONICAL }
+    }
+
+    /**
      * S9: append tier-A store hits for [key] as low-confidence alternatives
      * (deduped, capped) so downstream context reranking sees every real
      * homophone of the typed key, whichever layer produced the primary.
@@ -787,7 +804,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             cacheResult(cacheKey, gated); return gated
         }
 
-        convertByDictionary(key)?.let { result ->
+        val dictionaryLayer = convertByDictionary(key)?.takeUnless { isUnfaithfulFragmentMatch(key, it) }
+        dictionaryLayer?.let { result ->
             tryCorpusPhoneticLookup(key, minKeyLength = 2)?.let { corpusResult ->
                 val dictFreq = validator.getFrequency(result.bengali)
                 // Store words live outside the 480K validator: without the store
@@ -893,8 +911,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
-        // Layer 1.5: Root decomposition
-        convertByRootDecomposition(key)?.let { result ->
+        // Layer 1.5: Root decomposition. S10 fragment sanity applies here too:
+        // root matching stretches mid-word fragments to unrelated roots
+        // (poriko → পৃথক while the user types পরিকল্পনা) — skip when the match
+        // doesn't own the key and canonical continuations exist.
+        convertByRootDecomposition(key)?.takeUnless { isUnfaithfulFragmentMatch(key, it) }?.let { result ->
             val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
             // Reassembled root+suffix string — may be an invented form; gate it.
             val gated = applyCompositionCommitGate(key, ranked)
@@ -4278,7 +4299,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // caller. Tokens with non-letter characters (e.g. "123", "k,,") are never
         // ambiguity-swapped Bengali inventions — keep the pattern-engine output.
         if (key.any { it !in 'a'..'z' }) return result
-        if (isGateApproved(result)) return result
+        // S10 fragment sanity: validation/disambiguation layers swap the pattern
+        // output to a nearby REAL word that does not own the typed key at all
+        // (poriko → পৃথক while the user types পরিকল্পনা). Being a dictionary
+        // word is not enough to pass the gate when canonical continuations
+        // prove the input is a mid-word fragment — floor to clean output.
+        if (isGateApproved(result) && !isUnfaithfulFragmentMatch(key, result)) return result
         val clean = CleanTransliterator.transliterate(key)
         val dictionaryClosedAlternatives = result.alternatives
             .filter { isKnownWord(it.bengali) || dictionary.containsBengali(it.bengali) }
@@ -4359,6 +4385,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val canValidate = validator.isLoaded() || phoneticIndex != null
         if (!canValidate) return result                   // gate armed only with real dictionary
         if (key.any { it !in 'a'..'z' }) return result    // CleanTransliterator contract (see applyCommitGate)
+        // S10 fragment sanity: composition/section/root layers stretch mid-word
+        // fragments to unrelated REAL words (poriko → পৃথক while typing
+        // পরিকল্পনা) — being a dictionary word is not enough; the word must own
+        // the typed key when canonical continuations prove this is a fragment.
+        if (isUnfaithfulFragmentMatch(key, result)) return applyCommitGate(key, result)
         if (isGateApproved(result)) return result
         if (isApprovedComposition(result.bengali)) return result
         return applyCommitGate(key, result)
