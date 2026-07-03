@@ -7,10 +7,11 @@ class StripProbeJvm {
     fun probe() {
         if (System.getenv("PROBE") == null) return
         val e = ConjunctSolutionRoundJvmTest.engine
-        e.clearCache()
-        val c = e.convertWord("poriko")
-        println("PROBE poriko -> ${c.bengali} src=${c.source} conf=${c.confidence} alts=${c.alternatives.take(3).map{it.bengali}}")
-        val s = e.trySuffixStrippedDictionary("poriko")
-        println("PROBE suffixStripped=${s?.bengali} conf=${s?.confidence}")
+        for (k in listOf("ghumacco", "ghumaccho", "gummacco", "ghumacc", "ghumaccha")) {
+            val c = e.convertForComposing(k)
+            val w = e.convertWord(k)
+            val s = e.getSuggestions(k, 8).map { it.bengali }
+            println("PROBE $k composing=${c.bengali}(${c.source}) commit=${w.bengali}(${w.source}) strip=$s")
+        }
     }
 }

@@ -91,6 +91,23 @@ class EvidenceMarginAndBigramJvmTest {
         }
     }
 
+    // ── S12: exact-spelling fidelity + চ্ছ lazy aliases (user reports) ──
+
+    @Test
+    fun ghuma_literalSpellingBeatsSeedShortcut() {
+        assertEquals("ঘুমা", engine.convertWord("ghuma").bengali)
+        assertEquals("ঘুমা", engine.convertForComposing("ghuma").bengali)
+    }
+
+    @Test
+    fun ghumacco_lazyConjunctReachesConversationalVerb() {
+        assertEquals("ঘুমাচ্ছ", engine.convertWord("ghumacco").bengali)
+        assertEquals("ঘুমাচ্ছ", engine.convertForComposing("ghumacco").bengali)
+        assertEquals("ঘুমাচ্ছ", engine.convertWord("ghumaccho").bengali)
+        val strip = engine.getSuggestions("ghumacco", 4).map { it.bengali }
+        assertTrue(strip.none { 'ছ' in it && "ছ্ছ" in it }, "no ছ্ছ garbage, got $strip")
+    }
+
     // ── regressions ─────────────────────────────────────────────────────
 
     @Test

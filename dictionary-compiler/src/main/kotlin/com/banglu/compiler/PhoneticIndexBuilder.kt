@@ -233,6 +233,11 @@ object PhoneticIndexBuilder {
         // ছ is emitted "chh"; users type "c" (চ-style) or lazy "ch".
         HabitRule("chh_collapse") { it.replace("chh", "c") },
         HabitRule("h_lazy_chh") { it.replace("chh", "ch") },
+        // চ্ছ emits canonical "chch" (ঘুমাচ্ছ -> "ghumachch"); real typists
+        // write "cch" (ghumacchi) or just "cc" (ghumacco). Chained so both
+        // spellings key the word, and final_o composes ghumacco afterwards.
+        HabitRule("chch_cch") { it.replace("chch", "cch") },
+        HabitRule("cch_cc") { it.replace("cch", "cc") },
         // ী/ঈ → "ii", ূ/ঊ → "uu"; users omit the doubled vowel.
         HabitRule("ii_collapse") { it.replace("ii", "i") },
         HabitRule("uu_collapse") { it.replace("uu", "u") },

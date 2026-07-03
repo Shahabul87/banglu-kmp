@@ -842,11 +842,20 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 val storeCanonicalFirst = validator.isLoaded() && storeTop != null &&
                     storeTop.bengali == corpusResult.bengali &&
                     storeTop.tier == PhoneticIndexHit.TIER_A
+                // S12 exact-spelling fidelity: the user typed the store-first
+                // word's own canonical romanization, and the seed layer's word
+                // does not own this key at all — the seed mapping is a legacy
+                // fuzzy shortcut (ghuma -> ঘুমায়, he -> হয়ে) and must not beat
+                // the word the user literally spelled (ঘুমা, হে).
+                val seedOwnsKey = storeLookup(key).any { it.bengali == result.bengali }
+                val exactSpellingFidelity = storeCanonicalFirst &&
+                    storeTop.priority == PhoneticIndexHit.PRIORITY_CANONICAL && !seedOwnsKey
                 val corpusClearlyBetter = if (corpusExactKey && typedExtendsDictPhonetic) {
                     !(dictFreq > corpusFreq + 15 && dictFreq > corpusFreq * 2)
                 } else {
                     corpusFreq > dictFreq + 5 || result.confidence < 0.90 ||
-                        (storeCanonicalFirst && corpusFreq >= dictFreq)
+                        (storeCanonicalFirst && corpusFreq >= dictFreq) ||
+                        exactSpellingFidelity
                 }
                 if (corpusClearlyBetter) {
                     cacheResult(cacheKey, corpusResult); return corpusResult
@@ -1070,8 +1079,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     validator.getFrequency(corpusResult.bengali),
                     storeFrequencyOf(key, corpusResult.bengali)
                 )
+                val seedOwnsKey = storeLookup(key).any { it.bengali == dictionaryResult.bengali }
+                val exactSpellingFidelity = canonicalFirst &&
+                    storeTop.priority == PhoneticIndexHit.PRIORITY_CANONICAL && !seedOwnsKey
                 if (canonicalFirst && corpusResult.bengali != dictionaryResult.bengali &&
-                    corpusFreq >= validator.getFrequency(dictionaryResult.bengali)
+                    (exactSpellingFidelity ||
+                        corpusFreq >= validator.getFrequency(dictionaryResult.bengali))
                 ) {
                     return corpusResult.copy(alternatives = emptyList())
                 }

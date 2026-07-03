@@ -31,7 +31,7 @@ class AndroidDictionaryLoader(
     companion object {
         private const val TAG = "BangluDictLoader"
         internal const val DB_FILENAME = "dictionary.sqlite"
-        internal const val REQUIRED_DB_VERSION = "3.7.0"
+        internal const val REQUIRED_DB_VERSION = "3.7.1"
     }
 
     /**

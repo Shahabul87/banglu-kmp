@@ -16,6 +16,10 @@ object CleanTransliterator {
     // Greedy longest-match consonant units (3-char before 2-char before 1-char).
     private val CONSONANTS: Map<String, String> = mapOf(
         "chh" to "ছ", "kkh" to "ক্ষ",
+        // চ্ছ/চ্চ typed lazily as cch/cc (ghumacchi, ghumacco, bachcha):
+        // without these units the floor renders cc as ছ্ছ, a stack that does
+        // not exist in Bengali and reads as engine garbage mid-word.
+        "cch" to "চ্ছ", "cc" to "চ্চ",
         "kh" to "খ", "gh" to "ঘ", "ch" to "চ", "jh" to "ঝ",
         "th" to "থ", "dh" to "ধ", "ph" to "ফ", "bh" to "ভ",
         "sh" to "শ", "ng" to ANUSVARA, "gg" to "জ্ঞ",
