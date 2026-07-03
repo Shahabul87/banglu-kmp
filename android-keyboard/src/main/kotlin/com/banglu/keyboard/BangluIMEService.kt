@@ -909,6 +909,11 @@ class BangluIMEService : InputMethodService(),
      *  broadcast lands, so dictation must start when the keyboard next shows. */
     private var pendingVoiceStart = false
 
+    /** The exact string the last voice segment inserted (text + punctuation).
+     *  The delete chip removes THIS segment only, after verifying the editor
+     *  still ends with it — never a blind session-length wipe. */
+    private var voiceLastSegmentText: String = ""
+
     /** Production guard: consecutive fruitless listen cycles (no speech heard).
      *  The continuous-dictation loop must not keep the mic hot forever when the
      *  user walked away — after the cap we stop gracefully to STOPPED. */
@@ -1732,6 +1737,10 @@ class BangluIMEService : InputMethodService(),
         val cleanText = text.trim()
         if (committedPartial.isEmpty()) return cleanText
         if (cleanText == committedPartial) return ""
+        // A late, SHORTER hypothesis of already-committed speech (recognizers
+        // re-emit trimmed interims around a pause) is stale — re-appending it
+        // would duplicate text the pause commit already wrote.
+        if (committedPartial.startsWith(cleanText)) return ""
         return if (cleanText.startsWith("$committedPartial ")) {
             cleanText.removePrefix(committedPartial).trimStart()
         } else {
@@ -1973,7 +1982,8 @@ class BangluIMEService : InputMethodService(),
         voiceLiveCommitLength = 0
         voiceLastLivePartialUpdateAt = 0L
         voiceHasLiveComposing = false
-        lastVoiceCommitLength = currentVoiceSessionCommitLength
+        voiceLastSegmentText = committed
+        lastVoiceCommitLength = committed.length
     }
 
     private fun currentCursorPosition(): Int? {
@@ -2034,7 +2044,14 @@ class BangluIMEService : InputMethodService(),
         } else {
             0L
         }
-        return if (voiceStopRequested || pauseMs >= VOICE_FINAL_PUNCTUATION_PAUSE_MS) "\u0964" else " "
+        // Same ladder as the measured-pause commit: the recognizer can finalize
+        // a segment on its own 1.8s possibly-complete silence, and that path
+        // must not silently drop the comma/dari the pause has earned.
+        return when {
+            voiceStopRequested || pauseMs >= VOICE_DARI_PAUSE_MS -> "\u0964"
+            pauseMs >= VOICE_COMMA_PAUSE_MS -> ","
+            else -> " "
+        }
     }
 
     private fun normalizeVoiceSegment(segment: String): String {
@@ -2232,6 +2249,20 @@ class BangluIMEService : InputMethodService(),
     private fun deleteLastVoiceCommit() {
         val ic = currentInputConnection ?: return
         if (lastVoiceCommitLength <= 0) return
+        // Data-loss guard: only delete when the editor still ends with the
+        // exact segment voice inserted. A long multi-pause dictation must
+        // never vanish to one mistap, and host-app edits invalidate the undo.
+        val segment = voiceLastSegmentText
+        if (segment.isNotEmpty()) {
+            val before = ic.getTextBeforeCursor(segment.length, 0)?.toString().orEmpty()
+            if (before != segment) {
+                log("voice: delete chip skipped — editor no longer ends with the last segment")
+                suggestions.clear()
+                lastVoiceCommitLength = 0
+                voiceLastSegmentText = ""
+                return
+            }
+        }
         if (voiceHasLiveComposing) {
             clearVoiceComposingText()
             voiceCurrentPartial = ""
@@ -2247,6 +2278,7 @@ class BangluIMEService : InputMethodService(),
         voiceCommittedText = ""
         voiceLastAutoCommittedPartial = null
         lastVoiceCommitLength = 0
+        voiceLastSegmentText = ""
         currentVoiceSessionCommitLength = 0
         suggestions.clear()
     }
