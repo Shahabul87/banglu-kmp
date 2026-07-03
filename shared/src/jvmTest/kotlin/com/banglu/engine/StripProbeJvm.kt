@@ -1,5 +1,6 @@
 package com.banglu.engine
 
+import com.banglu.engine.util.ReverseTransliterator
 import kotlin.test.Test
 
 class StripProbeJvm {
@@ -7,12 +8,11 @@ class StripProbeJvm {
     fun probe() {
         if (System.getenv("PROBE") == null) return
         val e = ConjunctSolutionRoundJvmTest.engine
-        val m = e.convertWord("mach")
-        println("PROBE mach primary=${m.bengali} alts=${m.alternatives.map { it.bengali to it.confidence }}")
-        val rt = e.rerankWithPreviousContext("টেস্ট", m)
-        println("PROBE test-mach -> ${rt.bengali}")
-        val p = e.convertWord("phebruari")
-        println("PROBE phebruari primary=${p.bengali} src=${p.source}")
-        println("PROBE phebruari strip=${e.getSuggestions("phebruari", 6).map { it.bengali }}")
+        for (w in listOf("অবাস্তবায়নযোগ্য", "করছাড়ের", "নিত্যপণ্যে")) {
+            val roman = ReverseTransliterator.reverseWord(w)
+            val out = e.convertWord(roman)
+            val match = ReverseTransliterator.foldNukta(out.bengali) == ReverseTransliterator.foldNukta(w)
+            println("PROBE OOV $w roman=$roman -> ${out.bengali} (${out.source}) match=$match")
+        }
     }
 }
