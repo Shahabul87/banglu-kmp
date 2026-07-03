@@ -620,15 +620,28 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (key.length < maxOf(minKeyLength, 2)) return null
 
         // Engine v3: precompiled phonetic index (sqlite), replaces the runtime corpus index.
-        phoneticIndex?.let {
+        phoneticIndex?.let { store ->
             val hits = storeLookup(key).ifEmpty {
                 val normalized = normalizeIndexQuery(key)
                 if (normalized != key) storeLookup(normalized) else emptyList()
             }
             if (hits.isEmpty()) return null
+            // S7 continuation preference (study W3): when the best exact hit only
+            // owns this key through a habit alias (priority > 0) and a canonical
+            // (priority-0) word at least as common continues the typed key, the
+            // alias must not become primary — mid-word it reads as the engine
+            // "panicking" (brit flashing বৃত্ত while the user types british).
+            // hits are (tier, priority)-sorted, so priority > 0 at the top means
+            // no canonical word owns this exact key at all.
+            val top = hits.first()
+            if (top.priority > 0 && top.tier == PhoneticIndexHit.TIER_A &&
+                store.lookupPrefix(key, 8).any { it.priority == 0 && it.frequency >= top.frequency }
+            ) {
+                return null
+            }
             val alternatives = hits.drop(1).take(config.maxSuggestions - 1)
                 .mapIndexed { index, hit -> Alternative(hit.bengali, maxOf(0.72, 0.92 - index * 0.04)) }
-            return ConversionResult(hits.first().bengali, 0.96, ResolutionSource.DICTIONARY, alternatives)
+            return ConversionResult(top.bengali, 0.96, ResolutionSource.DICTIONARY, alternatives)
         }
 
         // Legacy path (no store attached): runtime-built corpus index keeps the
@@ -747,10 +760,22 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 val dictCanonical = dictionary.getPhoneticForBengali(result.bengali)
                 val typedExtendsDictPhonetic = dictCanonical != null &&
                     dictCanonical != key && key.startsWith(dictCanonical)
+                // S6 store-first arbitration (study W1): when the store's FIRST
+                // hit for the exact typed key is a canonical tier-A owner, it
+                // wins ties against the seed layer — seed frequencies are stale
+                // and carry archaic spellings (toiri: seed তৈরী@82 must lose to
+                // store-canonical তৈরি@82; modern usage 5,021 vs 531).
+                // Requires the loaded validator: without it dictFreq is 0 for
+                // every seed word and any tier-A store row would win the tie.
+                val storeTop = storeLookup(key).firstOrNull()
+                val storeCanonicalFirst = validator.isLoaded() && storeTop != null &&
+                    storeTop.bengali == corpusResult.bengali &&
+                    storeTop.tier == PhoneticIndexHit.TIER_A && storeTop.priority == 0
                 val corpusClearlyBetter = if (corpusExactKey && typedExtendsDictPhonetic) {
                     !(dictFreq > corpusFreq + 15 && dictFreq > corpusFreq * 2)
                 } else {
-                    corpusFreq > dictFreq + 5 || result.confidence < 0.90
+                    corpusFreq > dictFreq + 5 || result.confidence < 0.90 ||
+                        (storeCanonicalFirst && corpusFreq >= dictFreq)
                 }
                 if (corpusClearlyBetter) {
                     cacheResult(cacheKey, corpusResult); return corpusResult
@@ -1172,6 +1197,28 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                         tier = "tier0_corpus"
                     )
                 )
+            }
+        }
+
+        // S7 usage-ranked continuations: real tier-A words whose key extends the
+        // typed prefix, ordered canonical-first then by frequency (the store's
+        // lookupPrefix contract). This is what puts ব্রিটিশ on the strip at
+        // "brit" instead of alphabetical ব্রিং junk from the Bengali-prefix scan.
+        if (key.length >= 3) {
+            phoneticIndex?.let { store ->
+                for ((index, hit) in store.lookupPrefix(key, 8).withIndex()) {
+                    if (seen.add(hit.bengali)) {
+                        suggestions.add(
+                            SmartSuggestion(
+                                bengali = hit.bengali,
+                                confidence = maxOf(0.68, 0.90 - index * 0.03),
+                                source = "corpus_prefix",
+                                phonetic = key,
+                                tier = "tier1_continuation"
+                            )
+                        )
+                    }
+                }
             }
         }
 
