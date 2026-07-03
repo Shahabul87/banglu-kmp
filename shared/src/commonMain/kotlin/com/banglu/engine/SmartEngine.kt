@@ -170,6 +170,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         private const val MAX_PRIMARY_STRIP_RANK = 3
 
         /**
+         * S8: log-scale frequency gap (~25x real usage on the 60-100 corpus
+         * scale) beyond which a tier-A habit-alias hit outranks the tier-A
+         * canonical owner of the same key. See [applyEvidenceMargin].
+         */
+        private const val ALIAS_EVIDENCE_MARGIN = 12
+
+        /**
          * S1/D3: minimum 484K-validator frequency for a stem to anchor an
          * inflection the validator itself does not attest (see
          * [SmartEngine.isCompositionStemTrusted]). Junk web-corpus aliases sit
@@ -578,9 +585,52 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private fun storeLookup(key: String): List<PhoneticIndexHit> {
         val store = phoneticIndex ?: return emptyList()
         storeLookupMemo[key]?.let { return it }
-        val hits = store.lookupExact(key)
+        val hits = applyEvidenceMargin(store.lookupExact(key))
         storeLookupMemo[key] = hits
         return hits
+    }
+
+    /**
+     * S9: append tier-A store hits for [key] as low-confidence alternatives
+     * (deduped, capped) so downstream context reranking sees every real
+     * homophone of the typed key, whichever layer produced the primary.
+     */
+    private fun withStoreAlternatives(key: String, result: ConversionResult): ConversionResult {
+        val hits = storeLookup(key)
+        if (hits.isEmpty()) return result
+        val seen = mutableSetOf(result.bengali)
+        result.alternatives.forEach { seen.add(it.bengali) }
+        val extra = hits
+            .filter { it.tier == PhoneticIndexHit.TIER_A && seen.add(it.bengali) }
+            .take(4)
+            .map { Alternative(it.bengali, 0.80) }
+        if (extra.isEmpty()) return result
+        return result.copy(alternatives = result.alternatives + extra)
+    }
+
+    /**
+     * S8 within-tier evidence margin (y-drop study follow-up, docs/engine-
+     * conjunct-study §4): the store orders tier-A hits canonical-owner-first,
+     * which is right for ties and modest gaps (jon → জন before জন্য). But when
+     * a habit-alias claimant out-uses the canonical owner by
+     * [ALIAS_EVIDENCE_MARGIN] on the 60-100 log scale (~25x real usage), the
+     * canonical owner is in practice a rare word squatting on a common typing
+     * (songkha: সংখা vs সংখ্যা; suru: সুরু vs শুরু — the user's own learned
+     * words agree) and the alias takes the key.
+     */
+    private fun applyEvidenceMargin(hits: List<PhoneticIndexHit>): List<PhoneticIndexHit> {
+        if (hits.size < 2) return hits
+        val top = hits.first()
+        if (top.tier != PhoneticIndexHit.TIER_A ||
+            top.priority != PhoneticIndexHit.PRIORITY_CANONICAL
+        ) return hits
+        // Sorted (tier, priority, freq desc): the first tier-A alias hit is
+        // the strongest challenger.
+        val challenger = hits.firstOrNull {
+            it.tier == PhoneticIndexHit.TIER_A && it.priority > PhoneticIndexHit.PRIORITY_CANONICAL
+        } ?: return hits
+        if (challenger.frequency < top.frequency + ALIAS_EVIDENCE_MARGIN) return hits
+        return listOf(challenger) + hits.filter { it !== challenger }
     }
 
     /**
@@ -768,9 +818,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 // Requires the loaded validator: without it dictFreq is 0 for
                 // every seed word and any tier-A store row would win the tie.
                 val storeTop = storeLookup(key).firstOrNull()
+                // priority is NOT required here: storeLookup's evidence margin
+                // (S8) only lets an alias sit first on ~25x usage, so a tier-A
+                // first hit is the store's verdict either way.
                 val storeCanonicalFirst = validator.isLoaded() && storeTop != null &&
                     storeTop.bengali == corpusResult.bengali &&
-                    storeTop.tier == PhoneticIndexHit.TIER_A && storeTop.priority == 0
+                    storeTop.tier == PhoneticIndexHit.TIER_A
                 val corpusClearlyBetter = if (corpusExactKey && typedExtendsDictPhonetic) {
                     !(dictFreq > corpusFreq + 15 && dictFreq > corpusFreq * 2)
                 } else {
@@ -783,10 +836,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
 
             val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
-            if (ranked.confidence >= config.autoAcceptThreshold) {
-                cacheResult(cacheKey, ranked); return ranked
-            }
-            cacheResult(cacheKey, ranked); return ranked
+            // S9: when the seed layer wins, its alternatives only carry seed
+            // variants — merge tier-A store hits so the bigram context rerank
+            // can promote homophones (টেস্ট + mach needs ম্যাচ visible).
+            val enriched = withStoreAlternatives(key, ranked)
+            cacheResult(cacheKey, enriched); return enriched
         }
 
         if (EnglishDetector.isEnglish(key)) {
@@ -969,9 +1023,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // word diverge (editor তৈরী, space commits তৈরি).
             tryCorpusPhoneticLookup(key)?.let { corpusResult ->
                 val storeTop = storeLookup(key).firstOrNull()
+                // Like convertWord's S6 check: margin-promoted alias tops
+                // (songkha → সংখ্যা) count — the preview must match the commit.
                 val canonicalFirst = validator.isLoaded() && storeTop != null &&
                     storeTop.bengali == corpusResult.bengali &&
-                    storeTop.tier == PhoneticIndexHit.TIER_A && storeTop.priority == 0
+                    storeTop.tier == PhoneticIndexHit.TIER_A
                 val corpusFreq = maxOf(
                     validator.getFrequency(corpusResult.bengali),
                     storeFrequencyOf(key, corpusResult.bengali)

@@ -260,13 +260,51 @@ fun main(args: Array<String>) {
             println("Skipping dictionary-extended.json (not found)")
         }
 
-        // 6. Load and insert bigram model
+        // 6. Load and insert bigram model.
+        // S9: prefer the 2026-07 corpus bigrams (real observed pairs, modern
+        // register weighted 4:1 over literature) over the legacy JSON model —
+        // homophone context ranking (mach → মাছ vs ম্যাচ) needs pair evidence
+        // the 25k-pair legacy model doesn't have.
         val bigramFile = File(inputDir, "bigram-model.json")
         var unigramCount = 0
         var bigramCount = 0
         var totalUnigrams = 0
         var totalBigrams = 0
-        if (bigramFile.exists()) {
+        val corpusBigrams = corpusDir?.let {
+            CorpusBigrams.build(
+                modern = File(it, "bnwiki_bigrams.tsv"),
+                literature = File(it, "bnwikisource_bigrams.tsv"),
+                unigramCounts = usageCounts,
+                dictionaryWords = wordIdByBengali.keys
+            )
+        }
+        if (corpusBigrams != null && corpusBigrams.pairs.isNotEmpty()) {
+            println("Building corpus bigram model...")
+            val insertUnigram = connection.prepareStatement(
+                "INSERT INTO bigram_unigrams (word, count) VALUES (?, ?)"
+            )
+            for ((word, count) in corpusBigrams.unigrams) {
+                insertUnigram.setString(1, word)
+                insertUnigram.setInt(2, count)
+                insertUnigram.addBatch()
+                if (++unigramCount % 50000 == 0) insertUnigram.executeBatch()
+            }
+            insertUnigram.executeBatch()
+            val insertBigram = connection.prepareStatement(
+                "INSERT INTO bigram_pairs (previous_word, next_word, count) VALUES (?, ?, ?)"
+            )
+            for ((pair, count) in corpusBigrams.pairs) {
+                insertBigram.setString(1, pair.first)
+                insertBigram.setString(2, pair.second)
+                insertBigram.setInt(3, count)
+                insertBigram.addBatch()
+                if (++bigramCount % 50000 == 0) insertBigram.executeBatch()
+            }
+            insertBigram.executeBatch()
+            totalUnigrams = corpusBigrams.totalUnigrams
+            totalBigrams = corpusBigrams.totalBigrams
+            println("  Inserted $unigramCount unigrams and $bigramCount corpus bigram pairs")
+        } else if (bigramFile.exists()) {
             println("Reading ${bigramFile.name}...")
             val bigramJson = Json.parseToJsonElement(bigramFile.readText()).jsonObject
             val unigrams = bigramJson["unigrams"]!!.jsonObject
@@ -307,7 +345,7 @@ fun main(args: Array<String>) {
         // 7. Insert metadata
         val insertMeta = connection.prepareStatement("INSERT INTO metadata (key, value) VALUES (?, ?)")
         val metadataEntries = mapOf(
-            "version" to "3.5.0",
+            "version" to "3.6.0",
             "word_count" to count.toString(),
             "disambiguation_count" to mappings.size.toString(),
             "extended_entry_count" to extendedEntryCount.toString(),

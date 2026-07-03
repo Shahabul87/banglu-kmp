@@ -13,5 +13,7 @@ class LearnedProbeJvm {
         assertEquals("খণ্ড", e.convertForComposing("khond").bengali)
         assertEquals("করি", e.convertForComposing("kori").bengali)
         assertEquals("স্বাস্থ্য", e.convertForComposing("sastho").bengali)
+        // S8: margin-promoted alias tops must show in the preview too.
+        assertEquals("সংখ্যা", e.convertForComposing("songkha").bengali)
     }
 }

@@ -179,7 +179,10 @@ class PhoneticIndexBuilderTest {
     @Test
     fun glideWordsUnaffectedByBoPholaDrop() {
         val rows = PhoneticIndexBuilder.build(words = listOf("হাওয়া"), frequencies = emptyMap())
-        assertEquals(listOf("haoya"), rows.map { it.key })
+        // Canonical key intact (no bo-phola "w" mangling); the vowel-glide
+        // y-drop habit (S8) adds "haoa" as a priority-1 alias.
+        assertEquals("haoya", rows.first { it.priority == 0 }.key)
+        assertEquals(listOf("haoa"), rows.filter { it.priority == 1 }.map { it.key })
     }
 
     @Test

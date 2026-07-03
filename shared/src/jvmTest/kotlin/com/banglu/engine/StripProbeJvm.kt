@@ -7,10 +7,12 @@ class StripProbeJvm {
     fun probe() {
         if (System.getenv("PROBE") == null) return
         val e = ConjunctSolutionRoundJvmTest.engine
-        for (k in listOf("toiri", "brit", "khond", "kori", "kotha", "sastho")) {
-            val p = e.convertWord(k)
-            val s = e.getSuggestions(k, 8).joinToString(" | ") { "${it.bengali}(${it.source})" }
-            println("PROBE $k -> primary=${p.bengali} src=${p.source} strip: $s")
-        }
+        val m = e.convertWord("mach")
+        println("PROBE mach primary=${m.bengali} alts=${m.alternatives.map { it.bengali to it.confidence }}")
+        val rt = e.rerankWithPreviousContext("টেস্ট", m)
+        println("PROBE test-mach -> ${rt.bengali}")
+        val p = e.convertWord("phebruari")
+        println("PROBE phebruari primary=${p.bengali} src=${p.source}")
+        println("PROBE phebruari strip=${e.getSuggestions("phebruari", 6).map { it.bengali }}")
     }
 }

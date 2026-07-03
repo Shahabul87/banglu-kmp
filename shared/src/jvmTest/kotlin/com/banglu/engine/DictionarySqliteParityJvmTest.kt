@@ -33,13 +33,17 @@ class DictionarySqliteParityJvmTest {
             "Extended dictionary should include kobe -> কবে"
         )
 
+        // S9 corpus bigram model (db 3.6.0): unigrams are dictionary-filtered
+        // real-usage words (count >= 10), pairs are observed web-text bigrams
+        // (weighted count >= 24) — fewer but cleaner unigrams than the legacy
+        // 83k table, and ~4x its pairs.
         assertTrue(
-            bigram.unigrams.size >= 80_000,
-            "Expected at least 80K unigram entries, got ${bigram.unigrams.size}"
+            bigram.unigrams.size >= 40_000,
+            "Expected at least 40K unigram entries, got ${bigram.unigrams.size}"
         )
         assertTrue(
-            bigram.bigrams.size >= 25_000,
-            "Expected at least 25K bigram entries, got ${bigram.bigrams.size}"
+            bigram.bigrams.size >= 90_000,
+            "Expected at least 90K bigram entries, got ${bigram.bigrams.size}"
         )
         assertTrue(
             bigram.bigrams.keys.any { '\t' in it },

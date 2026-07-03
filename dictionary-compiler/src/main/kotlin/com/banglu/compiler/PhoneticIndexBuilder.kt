@@ -206,6 +206,9 @@ object PhoneticIndexBuilder {
     /** A doubled consonant letter, for the lazy single-press habit (উত্তর "uttor" → "utor"). */
     private val DOUBLED_CONSONANT = Regex("([bcdfghjklmnpqrstvwxyz])\\1")
 
+    /** য় glide between two vowels, dropped by lazy typists (phebruyari → phebruari). */
+    private val VOWEL_Y_VOWEL = Regex("([aeiou])y([aeiou])")
+
     private const val VOWELS = "aeiou"
 
     private class HabitRule(val name: String, val transform: (String) -> String)
@@ -256,6 +259,9 @@ object PhoneticIndexBuilder {
         // ্য as gemination (জন্য "jonyo" → "jonno") — after final_o so the
         // jony → jonyo → jonno chain composes.
         HabitRule("ya_fola_gemination") { it.replace(YA_PHALA_GEMINATION, "$1$1$2") },
+        // য় glide between vowels dropped (S8, y-drop study): ফেব্রুয়ারি
+        // "phebruyari" → "phebruari", দুনিয়াতে "duniyate" → "duniate".
+        HabitRule("vowel_glide_y_drop") { it.replace(VOWEL_Y_VOWEL, "$1$2") },
     )
 
     /**
