@@ -76,7 +76,28 @@ shape-shifts even when the user is typing a perfectly ordinary word.
 - **S8 (next round) y-drop habit aliases:** y_drop at 59.1% is the largest remaining lazy-class
   gap; needs the same alias-table treatment sh→s got.
 
-## 4. Register caveat (honest measurement note)
+## 4. Solution round S5-S7 — measured results (same 92,609-word corpus, db 3.5.0)
+
+| Metric | Before | After |
+|---|---|---|
+| Majority-form primary (fair metric) | 95.8% | **97.2%** |
+| Majority-form, frequency-weighted | 96.4% | **98.8%** |
+| Canonical primary / top-3 | 93.1 / 96.9% | **94.2 / 97.9%** |
+| Conjunct words primary (freq-weighted) | 98.0% | **98.9%** |
+| ri-kar mid-word preview leak | 7.1% | 5.0% (strip flash separately fixed by continuation ranking) |
+| degeminate / rri→ri / w_drop top-3 | 91.7 / 96.4 / 91.2% | **93.9 / 97.8 / 95.0%** |
+
+Delivered: S5 corpus-authority frequencies (CorpusAuthority.kt, db 3.5.0 — twin spellings
+order by evidence); S6 store-first arbitration in BOTH convert paths plus corpus-blended
+candidate-lattice scoring (the তৈরী class died in three places); S7 continuation preference +
+usage-ranked continuation chips. Plus two bugs only device testing caught: LazyRow strip
+anchoring hid fresh top chips behind persisting continuation keys (snap-to-rank-1 fix), and
+the composing preview diverged from the committed word. Phone-verified: toiri→তৈরি,
+brit→ব্রিট|ব্রিটিশ (no বৃত্ত flash), khond→খণ্ড, kori→করি, sastho→স্বাস্থ্য.
+Suite: 408 JVM tests green. Known remaining: y_drop habit class (56% primary — S8 next),
+residual composing-trace ri previews on rare words.
+
+## 5. Register caveat (honest measurement note)
 
 Of 3,786 majority-form failures, 1,906 are cases where the engine's choice IS the modern
 (bnwiki) majority and only the literature corpus disagrees (কোরিয়া vs করিয়া, হয়ে-class সাধু
