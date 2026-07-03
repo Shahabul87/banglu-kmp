@@ -1,0 +1,7 @@
+total_tokens	1552524
+unique_words	79176
+articles_fetched	3798
+failed_fetches	0
+source	prothomalo	articles=3798	tokens=1552524
+blocked_sources	bangla.bdnews24.com (403), www.anandabazar.com (403)
+token_regex	[ঀ-৿\u200d]+ (Unicode Bengali block, ZWJ-trimmed)
