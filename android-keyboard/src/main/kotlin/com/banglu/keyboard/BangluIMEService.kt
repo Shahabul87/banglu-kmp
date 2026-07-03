@@ -202,6 +202,13 @@ class BangluIMEService : InputMethodService(),
         private const val PUNCTUATION_SOURCE = "gap_punctuation"
         private const val PREF_VOICE_DISCLOSURE_ACCEPTED = "voice_disclosure_accepted"
 
+        /** SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED / _UNAVAILABLE (API 31+ constants, stable ints). */
+        private const val VOICE_ERROR_LANGUAGE_NOT_SUPPORTED = 12
+        private const val VOICE_ERROR_LANGUAGE_UNAVAILABLE = 13
+
+        /** Consecutive no-speech listen cycles before dictation auto-stops. */
+        private const val VOICE_MAX_FRUITLESS_RESTARTS = 3
+
         /** In-app signal from [VoicePermissionActivity]: disclosure accepted —
          *  resume dictation without a second mic tap. */
         const val ACTION_VOICE_DISCLOSURE_ACCEPTED = "com.banglu.keyboard.VOICE_DISCLOSURE_ACCEPTED"
@@ -902,6 +909,11 @@ class BangluIMEService : InputMethodService(),
      *  broadcast lands, so dictation must start when the keyboard next shows. */
     private var pendingVoiceStart = false
 
+    /** Production guard: consecutive fruitless listen cycles (no speech heard).
+     *  The continuous-dictation loop must not keep the mic hot forever when the
+     *  user walked away — after the cap we stop gracefully to STOPPED. */
+    private var voiceFruitlessRestarts = 0
+
     private val voiceDisclosureReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != ACTION_VOICE_DISCLOSURE_ACCEPTED) return
@@ -1508,6 +1520,7 @@ class BangluIMEService : InputMethodService(),
         voicePartialCommitJob?.cancel()
         voicePartialCommitJob = null
         voiceLastAutoCommittedPartial = null
+        voiceFruitlessRestarts = 0
 
         startVoiceRecognition()
     }
@@ -1553,6 +1566,7 @@ class BangluIMEService : InputMethodService(),
 
             override fun onBeginningOfSpeech() {
                 log("voice: beginning")
+                voiceFruitlessRestarts = 0
                 voicePartialCommitJob?.cancel()
                 commitVoicePartialForMeasuredPause()
                 voiceInputState.value = VoiceInputState.LISTENING
@@ -1580,6 +1594,33 @@ class BangluIMEService : InputMethodService(),
                     finishVoiceComposingText()
                     showVoiceDeleteAction()
                     return
+                }
+                // Language not available for bn-BD on this recognizer: if we were
+                // forcing offline, drop the preference and retry online once;
+                // otherwise surface UNAVAILABLE instead of a generic error.
+                if (error == VOICE_ERROR_LANGUAGE_NOT_SUPPORTED || error == VOICE_ERROR_LANGUAGE_UNAVAILABLE) {
+                    if (voicePreferOfflineForSession && isNetworkAvailable()) {
+                        voicePreferOfflineForSession = false
+                        log("voice: bn model unavailable offline, retrying online")
+                        restartVoiceRecognitionSoon(afterError = true)
+                    } else {
+                        voiceDictationActive = false
+                        voiceInputState.value = VoiceInputState.UNAVAILABLE
+                        resetVoiceStateSoon()
+                    }
+                    return
+                }
+                // Silence cap: NO_MATCH/SPEECH_TIMEOUT cycles with nothing heard.
+                if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                    voiceFruitlessRestarts++
+                    if (voiceFruitlessRestarts >= VOICE_MAX_FRUITLESS_RESTARTS) {
+                        log("voice: $voiceFruitlessRestarts silent cycles — stopping dictation")
+                        voiceFruitlessRestarts = 0
+                        voiceDictationActive = false
+                        voiceInputState.value = VoiceInputState.STOPPED
+                        finishVoiceComposingText()
+                        return
+                    }
                 }
                 if (
                     voiceDictationActive &&

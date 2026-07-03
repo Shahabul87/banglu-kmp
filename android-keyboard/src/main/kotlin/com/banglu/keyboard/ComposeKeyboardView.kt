@@ -5,6 +5,7 @@ import android.view.SoundEffectConstants
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -617,10 +618,13 @@ private fun AdaptiveTopStrip(
                         modifier = Modifier.width(52.dp),
                         onClick = onVoiceInput
                     )
-                    CompactToolbarIcon(
-                        "…", "More tools",
-                        modifier = Modifier.width(44.dp)
-                    ) { onToggleToolbar() }
+                    CompactIconSlot(
+                        "More tools",
+                        modifier = Modifier.width(44.dp),
+                        onClick = onToggleToolbar
+                    ) {
+                        IconDots(Modifier.size(21.dp), it)
+                    }
                 }
             } else {
                 BangluSuggestionRow(suggestions, onSuggestionClick)
@@ -667,24 +671,37 @@ private fun ToolbarRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (isExpanded) {
-            ToolbarIcon("\uD83D\uDCCB", "Clipboard", modifier = Modifier.weight(1f)) { onClipboardOpen() }
-            ToolbarIcon("\uD83D\uDE0A", "Emoji", modifier = Modifier.weight(1f)) { onEmojiOpen() }
-            ToolbarIcon("ST", "Stickers", modifier = Modifier.weight(1f)) { onStickerOpen() }
-            ToolbarIcon(
-                if (voiceInputState == VoiceInputState.LISTENING) "\uD83D\uDD34" else "\uD83C\uDFA4",
+            ToolbarIconSlot("Clipboard", modifier = Modifier.weight(1f), onClick = onClipboardOpen) {
+                IconClipboard(Modifier.size(22.dp), it)
+            }
+            ToolbarIconSlot("Emoji", modifier = Modifier.weight(1f), onClick = onEmojiOpen) {
+                IconEmoji(Modifier.size(22.dp), it)
+            }
+            ToolbarIconSlot("Stickers", modifier = Modifier.weight(1f), onClick = onStickerOpen) {
+                IconSticker(Modifier.size(22.dp), it)
+            }
+            ToolbarIconSlot(
                 "Bangla voice typing",
                 highlighted = true,
                 active = voiceInputState == VoiceInputState.LISTENING || voiceInputState == VoiceInputState.PROCESSING,
-                modifier = Modifier.weight(1f)
-            ) { onVoiceInput() }
-            ToolbarIcon("\u2699", "Settings", modifier = Modifier.weight(1f)) { onSettingsClick() }
+                modifier = Modifier.weight(1f),
+                onClick = onVoiceInput
+            ) {
+                MicGlyph(Modifier.size(21.dp), it)
+            }
+            ToolbarIconSlot("Settings", modifier = Modifier.weight(1f), onClick = onSettingsClick) {
+                IconGear(Modifier.size(22.dp), it)
+            }
         }
         // Toggle button always visible
-        ToolbarIcon(
-            if (isExpanded) "\u25B2" else "\u00B7\u00B7\u00B7",
+        ToolbarIconSlot(
             if (isExpanded) "Collapse toolbar" else "Expand toolbar",
-            modifier = Modifier.weight(1f)
-        ) { onToggleToolbar() }
+            modifier = Modifier.weight(1f),
+            onClick = onToggleToolbar
+        ) {
+            if (isExpanded) IconChevronDown(Modifier.size(22.dp), it)
+            else IconDots(Modifier.size(22.dp), it)
+        }
     }
 }
 
@@ -699,151 +716,205 @@ private fun VoiceStatusPanel(
     val colors = LocalKeyboardColors.current
     val configuration = LocalConfiguration.current
     val compact = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val animatedLevel by animateFloatAsState(
-        targetValue = level.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 120),
-        label = "voiceLevel"
-    )
     val message = when (state) {
-        VoiceInputState.LISTENING -> "বাংলায় বলুন"
-        VoiceInputState.PROCESSING -> "ভয়েস লেখা হচ্ছে..."
-        VoiceInputState.STOPPED -> "ভয়েস থামানো হয়েছে"
-        VoiceInputState.PERMISSION_REQUIRED -> "মাইক্রোফোন পারমিশন দিন"
-        VoiceInputState.UNAVAILABLE -> "ভয়েস সার্ভিস পাওয়া যায়নি"
-        VoiceInputState.ERROR -> "আবার চেষ্টা করুন"
+        VoiceInputState.LISTENING -> "\u09ac\u09be\u0982\u09b2\u09be\u09df \u09ac\u09b2\u09c1\u09a8"
+        VoiceInputState.PROCESSING -> "\u09b2\u09c7\u0996\u09be \u09b9\u099a\u09cd\u099b\u09c7\u2026"
+        VoiceInputState.STOPPED -> "\u09ad\u09df\u09c7\u09b8 \u09a5\u09be\u09ae\u09be\u09a8\u09cb \u09b9\u09df\u09c7\u099b\u09c7"
+        VoiceInputState.PERMISSION_REQUIRED -> "\u09ae\u09be\u0987\u0995\u09cd\u09b0\u09cb\u09ab\u09cb\u09a8 \u09aa\u09be\u09b0\u09ae\u09bf\u09b6\u09a8 \u09a6\u09bf\u09a8"
+        VoiceInputState.UNAVAILABLE -> "\u09ad\u09df\u09c7\u09b8 \u09b8\u09be\u09b0\u09cd\u09ad\u09bf\u09b8 \u09aa\u09be\u0993\u09df\u09be \u09af\u09be\u09df\u09a8\u09bf"
+        VoiceInputState.ERROR -> "\u0986\u09ac\u09be\u09b0 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8"
         VoiceInputState.IDLE -> ""
     }
     val detail = when (state) {
-        VoiceInputState.LISTENING -> "বিরতি দিলেও শুনবে, শেষ হলে থামান"
-        VoiceInputState.PROCESSING -> "একটু অপেক্ষা করুন"
-        VoiceInputState.STOPPED -> "বাতিল চাপলে এই বার বন্ধ হবে"
-        VoiceInputState.PERMISSION_REQUIRED -> "Banglu অ্যাপে অনুমতি চালু করুন"
-        VoiceInputState.UNAVAILABLE -> "ডিভাইসে speech service নেই"
-        VoiceInputState.ERROR -> "মাইক চেক করে আবার চেষ্টা করুন"
-        VoiceInputState.IDLE -> ""
+        VoiceInputState.STOPPED -> "\u0986\u09ac\u09be\u09b0 \u09ac\u09b2\u09a4\u09c7 \u09b0\u09bf\u099f\u09cd\u09b0\u09be\u0987 \u099a\u09be\u09aa\u09c1\u09a8"
+        VoiceInputState.PERMISSION_REQUIRED -> "Banglu \u0985\u09cd\u09af\u09be\u09aa\u09c7 \u0985\u09a8\u09c1\u09ae\u09a4\u09bf \u099a\u09be\u09b2\u09c1 \u0995\u09b0\u09c1\u09a8"
+        VoiceInputState.UNAVAILABLE -> "\u09a1\u09bf\u09ad\u09be\u0987\u09b8\u09c7 speech service \u09a8\u09c7\u0987"
+        VoiceInputState.ERROR -> "\u09ae\u09be\u0987\u0995 \u099a\u09c7\u0995 \u0995\u09b0\u09c7 \u0986\u09ac\u09be\u09b0 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8"
+        else -> ""
     }
     val isActive = state == VoiceInputState.LISTENING || state == VoiceInputState.PROCESSING
-    Column(
+    val isTrouble = state == VoiceInputState.ERROR ||
+        state == VoiceInputState.PERMISSION_REQUIRED ||
+        state == VoiceInputState.UNAVAILABLE
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                if (state == VoiceInputState.ERROR || state == VoiceInputState.PERMISSION_REQUIRED)
-                    Color(0xFF3A2424)
-                else
-                    Color(0xFF17281D)
-            )
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.suggestionChipBg)
             .semantics {
                 liveRegion = LiveRegionMode.Polite
                 contentDescription = listOf(message, detail).filter { it.isNotBlank() }.joinToString(". ")
             }
-            .padding(horizontal = if (compact) 8.dp else 12.dp, vertical = if (compact) 5.dp else 10.dp)
+            .padding(horizontal = if (compact) 8.dp else 12.dp, vertical = if (compact) 4.dp else 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val iconSize = if (compact) 30.dp else 42.dp
-            Box(
-                modifier = Modifier
-                    .size(iconSize)
-                    .clip(RoundedCornerShape(iconSize / 2))
-                    .background(if (state == VoiceInputState.LISTENING) Color(0xFF2E7D32) else colors.suggestionChipBg),
-                contentAlignment = Alignment.Center
-            ) {
-                if (state == VoiceInputState.LISTENING || state == VoiceInputState.STOPPED) {
-                    MicGlyph(
-                        modifier = Modifier.size(if (compact) 16.dp else 22.dp),
-                        color = colors.keyText
-                    )
-                } else {
-                    Text(
-                        text = "\u2022\u2022\u2022",
-                        color = colors.keyText,
-                        fontSize = if (compact) scaledSp(15) else scaledSp(20),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 10.dp)
-            ) {
+        MicBadge(
+            active = state == VoiceInputState.LISTENING,
+            level = level,
+            modifier = Modifier.size(if (compact) 36.dp else 48.dp),
+            idleInk = if (isTrouble) BangluVoiceAccent else colors.keyText,
+            idleBg = colors.keyBg
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = if (compact) 8.dp else 12.dp, end = 8.dp)
+        ) {
+            Text(
+                text = message,
+                color = if (isTrouble) BangluVoiceAccent else colors.keyText,
+                fontSize = scaledSp(if (compact) 13 else 15),
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (isActive) {
+                Spacer(modifier = Modifier.height(if (compact) 2.dp else 4.dp))
+                CenterWaveform(
+                    level = if (state == VoiceInputState.LISTENING) level else 0f,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (compact) 12.dp else 18.dp)
+                )
+            } else if (detail.isNotBlank() && !compact) {
                 Text(
-                    text = message,
-                    color = colors.keyText,
-                    fontSize = scaledSp(15),
-                    fontWeight = FontWeight.Bold,
+                    text = detail,
+                    color = colors.subText,
+                    fontSize = scaledSp(12),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (!compact) {
-                    Text(
-                        text = detail,
-                        color = colors.subText,
-                        fontSize = scaledSp(12),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            if (isActive) {
-                VoiceActionButton("থামান", compact, onStop)
-                Spacer(modifier = Modifier.width(if (compact) 4.dp else 6.dp))
-                VoiceActionButton("বাতিল", compact, onCancel)
-            } else if (state == VoiceInputState.STOPPED) {
-                VoiceActionButton("আবার", compact, onRetry)
-                Spacer(modifier = Modifier.width(if (compact) 4.dp else 6.dp))
-                VoiceActionButton("বাতিল", compact, onCancel)
-            } else {
-                VoiceActionButton("আবার", compact, onRetry)
             }
         }
-        if (isActive && !compact) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                repeat(18) { index ->
-                    val threshold = (index + 1) / 18f
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(if (animatedLevel >= threshold) 7.dp else 3.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(
-                                if (animatedLevel >= threshold) Color(0xFF66BB6A) else Color(0xFF344338)
-                            )
-                    )
-                }
+        val buttonSize = if (compact) 30.dp else 38.dp
+        if (isActive) {
+            VoiceRoundButton("\u09a5\u09be\u09ae\u09be\u09a8", buttonSize, filled = true, onClick = onStop) {
+                IconStop(Modifier.size(buttonSize * 0.5f), it)
+            }
+            Spacer(modifier = Modifier.width(if (compact) 6.dp else 8.dp))
+            VoiceRoundButton("\u09ac\u09be\u09a4\u09bf\u09b2", buttonSize, filled = false, onClick = onCancel) {
+                IconClose(Modifier.size(buttonSize * 0.52f), it)
+            }
+        } else if (state == VoiceInputState.STOPPED) {
+            VoiceRoundButton("\u0986\u09ac\u09be\u09b0", buttonSize, filled = true, onClick = onRetry) {
+                IconRetry(Modifier.size(buttonSize * 0.52f), it)
+            }
+            Spacer(modifier = Modifier.width(if (compact) 6.dp else 8.dp))
+            VoiceRoundButton("\u09ac\u09be\u09a4\u09bf\u09b2", buttonSize, filled = false, onClick = onCancel) {
+                IconClose(Modifier.size(buttonSize * 0.52f), it)
+            }
+        } else {
+            VoiceRoundButton("\u0986\u09ac\u09be\u09b0", buttonSize, filled = true, onClick = onRetry) {
+                IconRetry(Modifier.size(buttonSize * 0.52f), it)
             }
         }
     }
 }
 
+/** Circular voice-bar control: filled terracotta for the primary action,
+ *  hairline ghost for the secondary. */
 @Composable
-private fun VoiceActionButton(label: String, compact: Boolean = false, onClick: () -> Unit) {
+private fun VoiceRoundButton(
+    label: String,
+    size: Dp,
+    filled: Boolean,
+    onClick: () -> Unit,
+    icon: @Composable (tint: Color) -> Unit
+) {
     val colors = LocalKeyboardColors.current
     Box(
         modifier = Modifier
-            .height(if (compact) 26.dp else 32.dp)
+            .size(size)
             .semantics {
                 role = Role.Button
                 contentDescription = label
             }
-            .clip(RoundedCornerShape(8.dp))
-            .background(colors.suggestionChipBg)
-            .clickable { onClick() }
-            .padding(horizontal = if (compact) 8.dp else 10.dp),
+            .clip(RoundedCornerShape(size / 2))
+            .background(if (filled) BangluVoiceAccent else Color.Transparent)
+            .then(
+                if (filled) Modifier
+                else Modifier.border(1.dp, colors.subText.copy(alpha = 0.55f), RoundedCornerShape(size / 2))
+            )
+            .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = label,
-            color = colors.keyText,
-            fontSize = if (compact) scaledSp(11) else scaledSp(13),
-            fontWeight = FontWeight.Bold,
-            maxLines = 1
-        )
+        icon(if (filled) Color.White else colors.keyText)
+    }
+}
+
+@Composable
+private fun ToolbarIconSlot(
+    accessibilityLabel: String,
+    highlighted: Boolean = false,
+    active: Boolean = false,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    icon: @Composable (tint: Color) -> Unit
+) {
+    val colors = LocalKeyboardColors.current
+    val shape = if (highlighted) RoundedCornerShape(18.dp) else RoundedCornerShape(10.dp)
+    val background = when {
+        highlighted && active -> BangluVoiceAccent
+        highlighted -> BangluVoiceAccent.copy(alpha = 0.16f)
+        else -> Color.Transparent
+    }
+    val tint = when {
+        highlighted && active -> Color.White
+        highlighted -> BangluVoiceAccent
+        else -> colors.subText
+    }
+    Box(
+        modifier = modifier
+            .height(scaledDp(ToolbarExpandedHeight))
+            .semantics {
+                role = Role.Button
+                contentDescription = accessibilityLabel
+                if (active) stateDescription = "Active"
+            }
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(if (highlighted) 38.dp else 34.dp)
+                .clip(shape)
+                .background(background),
+            contentAlignment = Alignment.Center
+        ) {
+            icon(tint)
+        }
+    }
+}
+
+@Composable
+private fun CompactIconSlot(
+    accessibilityLabel: String,
+    active: Boolean = false,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    icon: @Composable (tint: Color) -> Unit
+) {
+    val colors = LocalKeyboardColors.current
+    Box(
+        modifier = modifier
+            .height(scaledDp(ToolbarCollapsedHeight))
+            .semantics {
+                role = Role.Button
+                contentDescription = accessibilityLabel
+                if (active) stateDescription = "Active"
+            }
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (active) BangluVoiceAccent else Color.Transparent),
+            contentAlignment = Alignment.Center
+        ) {
+            icon(if (active) Color.White else colors.subText)
+        }
     }
 }
 
@@ -921,17 +992,27 @@ private fun KeyboardActionBar(
         horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        CompactToolbarIcon("\u263A", "Emoji", modifier = Modifier.weight(1f)) { onEmojiOpen() }
-        CompactToolbarIcon("ST", "Stickers", modifier = Modifier.weight(1f)) { onStickerOpen() }
+        CompactIconSlot("Emoji", modifier = Modifier.weight(1f), onClick = onEmojiOpen) {
+            IconEmoji(Modifier.size(21.dp), it)
+        }
+        CompactIconSlot("Stickers", modifier = Modifier.weight(1f), onClick = onStickerOpen) {
+            IconSticker(Modifier.size(21.dp), it)
+        }
         CompactToolbarIcon("\u0964", "Insert dari", modifier = Modifier.weight(1f)) { onPunctuationPress('\u0964') }
-        CompactToolbarIcon("\uD83D\uDCCB", "Clipboard", modifier = Modifier.weight(1f)) { onClipboardOpen() }
+        CompactIconSlot("Clipboard", modifier = Modifier.weight(1f), onClick = onClipboardOpen) {
+            IconClipboard(Modifier.size(21.dp), it)
+        }
         CompactMicToolbarIcon(
             active = voiceInputState == VoiceInputState.LISTENING || voiceInputState == VoiceInputState.PROCESSING,
             onClick = onVoiceInput,
             modifier = Modifier.weight(1f)
         )
-        CompactToolbarIcon("\u2699", "Settings", modifier = Modifier.weight(1f)) { onSettingsClick() }
-        CompactToolbarIcon("\u2026", "More tools", modifier = Modifier.weight(1f)) { onToggleToolbar() }
+        CompactIconSlot("Settings", modifier = Modifier.weight(1f), onClick = onSettingsClick) {
+            IconGear(Modifier.size(21.dp), it)
+        }
+        CompactIconSlot("More tools", modifier = Modifier.weight(1f), onClick = onToggleToolbar) {
+            IconDots(Modifier.size(21.dp), it)
+        }
     }
 }
 
@@ -995,13 +1076,13 @@ private fun CompactMicToolbarIcon(
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (active) Color(0xFF263B30) else Color.Transparent),
+                .clip(RoundedCornerShape(18.dp))
+                .background(if (active) BangluVoiceAccent else BangluVoiceAccent.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center
         ) {
             MicGlyph(
-                modifier = Modifier.size(22.dp),
-                color = if (active) Color.White else colors.subText
+                modifier = Modifier.size(20.dp),
+                color = if (active) Color.White else BangluVoiceAccent
             )
         }
     }
