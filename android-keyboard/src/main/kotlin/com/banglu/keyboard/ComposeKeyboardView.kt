@@ -8,11 +8,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -1429,16 +1429,16 @@ private fun NumberRow(
     onSymbolPress: (Char) -> Unit
 ) {
     val height = scaledKeyHeight(NumberRowHeight)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(currentKeyGapH())
-    ) {
+    // S13: no spacedBy dead strips — the visual gap lives inside each cell.
+    val hitPad = currentKeyGapH() / 2
+    Row(modifier = Modifier.fillMaxWidth()) {
         for (num in '1'..'9') {
             NumberKey(
                 number = num,
                 displayNumber = if (useBanglaDigits) banglaDigitLabel(num) else num,
                 modifier = Modifier.weight(1f),
                 height = height,
+                hitPaddingH = hitPad,
                 onNumberPress = onNumberPress,
                 onSymbolPress = onSymbolPress
             )
@@ -1448,6 +1448,7 @@ private fun NumberRow(
             displayNumber = if (useBanglaDigits) banglaDigitLabel('0') else '0',
             modifier = Modifier.weight(1f),
             height = height,
+            hitPaddingH = hitPad,
             onNumberPress = onNumberPress,
             onSymbolPress = onSymbolPress
         )
@@ -1575,12 +1576,14 @@ private fun LetterRows(
             )
         }
 
-        // Backspace with long-press repeat and word deletion
+        // Backspace with long-press repeat and word deletion.
+        // S13: gap goes INSIDE the touch cell (hitPaddingH) — the old outer
+        // .padding() shrank the touchable area, leaving a dead margin around
+        // the second-most-pressed key.
         BackspaceKey(
-            modifier = Modifier
-                .weight(1.5f)
-                .padding(horizontal = letterHitPad),
+            modifier = Modifier.weight(1.5f),
             height = keyHeight,
+            hitPaddingH = letterHitPad,
             onBackspace = onBackspace,
             onBackspaceRepeat = onBackspaceRepeat,
             onBackspaceWord = onBackspaceWord
@@ -1618,12 +1621,11 @@ private fun SymbolRows(
 ) {
     val colors = LocalKeyboardColors.current
     val keyHeight = scaledKeyHeight(LetterKeyRowHeight)
+    // S13: no spacedBy dead strips — the visual gap lives inside each cell.
+    val hitPad = currentKeyGapH() / 2
 
     // Symbol row 1 (10 keys)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(currentKeyGapH())
-    ) {
+    Row(modifier = Modifier.fillMaxWidth()) {
         for (sym in rows[0]) {
             KeyButton(
                 label = sym,
@@ -1631,6 +1633,7 @@ private fun SymbolRows(
                 height = keyHeight,
                 bgColor = colors.keyBg,
                 fontSize = 18,
+                hitPaddingH = hitPad,
                 onClick = { onSymbolPress(sym[0]) }
             )
         }
@@ -1639,10 +1642,7 @@ private fun SymbolRows(
     Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
 
     // Symbol row 2 (10 keys)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(currentKeyGapH())
-    ) {
+    Row(modifier = Modifier.fillMaxWidth()) {
         for (sym in rows[1]) {
             KeyButton(
                 label = sym,
@@ -1650,6 +1650,7 @@ private fun SymbolRows(
                 height = keyHeight,
                 bgColor = colors.keyBg,
                 fontSize = 18,
+                hitPaddingH = hitPad,
                 onClick = { onSymbolPress(sym[0]) }
             )
         }
@@ -1658,16 +1659,14 @@ private fun SymbolRows(
     Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
 
     // Symbol row 3: [page toggle] symbols... [backspace]
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(currentKeyGapH())
-    ) {
+    Row(modifier = Modifier.fillMaxWidth()) {
         KeyButton(
             label = pageLabel,
             modifier = Modifier.weight(1.5f),
             height = keyHeight,
             bgColor = colors.specialKeyBg,
             fontSize = 16,
+            hitPaddingH = hitPad,
             onClick = onPageToggle
         )
         for (sym in rows[2]) {
@@ -1677,12 +1676,14 @@ private fun SymbolRows(
                 height = keyHeight,
                 bgColor = colors.keyBg,
                 fontSize = 18,
+                hitPaddingH = hitPad,
                 onClick = { onSymbolPress(sym[0]) }
             )
         }
         BackspaceKey(
             modifier = Modifier.weight(1.5f),
             height = keyHeight,
+            hitPaddingH = hitPad,
             onBackspace = onBackspace,
             onBackspaceRepeat = onBackspaceRepeat,
             onBackspaceWord = onBackspaceWord
@@ -1709,10 +1710,10 @@ private fun BottomRow(
 ) {
     val colors = LocalKeyboardColors.current
     val keyHeight = scaledKeyHeight(BottomKeyRowHeight)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(currentKeyGapH())
-    ) {
+    // S13: no spacedBy dead strips in the highest-traffic row — the 7dp gaps
+    // around the spacebar were dead gutters exactly where thumbs land.
+    val hitPad = currentKeyGapH() / 2
+    Row(modifier = Modifier.fillMaxWidth()) {
         // !#1 or ABC
         KeyButton(
             label = leftLabel,
@@ -1720,6 +1721,7 @@ private fun BottomRow(
             height = keyHeight,
             bgColor = colors.specialKeyBg,
             fontSize = 16,
+            hitPaddingH = hitPad,
             onClick = onLeftPress
         )
 
@@ -1730,6 +1732,7 @@ private fun BottomRow(
             height = keyHeight,
             bgColor = colors.specialKeyBg,
             fontSize = 16,
+            hitPaddingH = hitPad,
             onClick = onGlobePress
         )
 
@@ -1738,6 +1741,7 @@ private fun BottomRow(
             label = spaceLabel,
             modifier = Modifier.weight(4f),
             height = keyHeight,
+            hitPaddingH = hitPad,
             onClick = onSpace,
             onCursorMove = onCursorMove
         )
@@ -1749,6 +1753,7 @@ private fun BottomRow(
             height = keyHeight,
             bgColor = colors.specialKeyBg,
             fontSize = 20,
+            hitPaddingH = hitPad,
             onClick = { onPunctuationPress('.') }
         )
 
@@ -1758,6 +1763,7 @@ private fun BottomRow(
             modifier = Modifier.weight(1.5f),
             height = keyHeight,
             bgColor = colors.specialKeyBg,
+            hitPaddingH = hitPad,
             onClick = onEnter
         )
     }
@@ -1773,6 +1779,7 @@ private fun EnterActionKey(
     modifier: Modifier = Modifier,
     height: Dp = BottomKeyRowHeight,
     bgColor: Color,
+    hitPaddingH: Dp = 0.dp,
     onClick: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
@@ -1798,28 +1805,29 @@ private fun EnterActionKey(
                 contentDescription = "Enter"
             }
             .pointerInput(label) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        try {
-                            awaitRelease()
-                        } finally {
-                            isPressed = false
-                        }
-                    },
-                    onTap = {
-                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
-                        currentOnClick()
+                // S13: commit on DOWN like letter keys \u2014 detectTapGestures
+                // fired on UP and cancelled on slide-out, dropping sloppy taps.
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    down.consume()
+                    isPressed = true
+                    if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
+                    currentOnClick()
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        event.changes.forEach { it.consume() }
+                        if (event.changes.all { !it.pressed }) break
                     }
-                )
+                    isPressed = false
+                }
             },
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = KeyVisualPaddingH, vertical = KeyVisualPaddingV)
+                .padding(horizontal = hitPaddingH + KeyVisualPaddingH, vertical = KeyVisualPaddingV)
                 .shadow(if (isPressed) 0.dp else 1.5.dp, keyShape, clip = false)
                 .graphicsLayer {
                     scaleX = scale
@@ -2024,6 +2032,7 @@ private fun SpaceBar(
     label: String,
     modifier: Modifier = Modifier,
     height: Dp = BottomKeyRowHeight,
+    hitPaddingH: Dp = 0.dp,
     onClick: () -> Unit,
     onCursorMove: (Int) -> Unit = {}
 ) {
@@ -2036,10 +2045,6 @@ private fun SpaceBar(
     val currentOnCursorMove by rememberUpdatedState(onCursorMove)
     var isPressed by remember { mutableStateOf(false) }
     var isCursorMode by remember { mutableStateOf(false) }
-    var cursorDragUsed by remember { mutableStateOf(false) }
-    var lastCursorDragEndedAt by remember { mutableStateOf(0L) }
-    var dragRemainderX by remember { mutableFloatStateOf(0f) }
-    var cursorMoveCount by remember { mutableIntStateOf(0) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
         animationSpec = tween(50)
@@ -2054,63 +2059,60 @@ private fun SpaceBar(
                 contentDescription = "Spacebar. Drag left or right to move cursor"
             }
             .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = {
-                        isCursorMode = true
-                        cursorDragUsed = true
-                        dragRemainderX = 0f
-                        cursorMoveCount = 0
-                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        dragRemainderX += dragAmount.x
-                        val threshold = 14.dp.toPx()
-                        while (kotlin.math.abs(dragRemainderX) >= threshold) {
-                            val direction = if (dragRemainderX > 0) 1 else -1
-                            currentOnCursorMove(direction)
-                            cursorMoveCount++
-                            dragRemainderX -= direction * threshold
-                            if (hapticOn && cursorMoveCount % 3 == 0) {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                // S13: single gesture owner. The old detectDragGestures +
+                // detectTapGestures pair let ~8dp of natural thumb roll start a
+                // "cursor drag" that swallowed the space entirely (buzz but no
+                // space -> felt as "space needs a hard/double press"). Now only
+                // a deliberate 28dp horizontal pull engages cursor mode; any
+                // smaller drift — and any vertical slide — is still a space.
+                val cursorEngagePx = 28.dp.toPx()
+                val stepPx = 14.dp.toPx()
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    down.consume()
+                    isPressed = true
+                    if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
+                    var totalDx = 0f
+                    var cursorMode = false
+                    var remainder = 0f
+                    var moves = 0
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id }
+                        val deltaX = change?.positionChange()?.x ?: 0f
+                        event.changes.forEach { it.consume() }
+                        totalDx += deltaX
+                        if (!cursorMode && kotlin.math.abs(totalDx) >= cursorEngagePx) {
+                            cursorMode = true
+                            isCursorMode = true
+                            remainder = 0f
+                            if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        } else if (cursorMode) {
+                            remainder += deltaX
+                            while (kotlin.math.abs(remainder) >= stepPx) {
+                                val direction = if (remainder > 0) 1 else -1
+                                currentOnCursorMove(direction)
+                                moves++
+                                remainder -= direction * stepPx
+                                if (hapticOn && moves % 3 == 0) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
                             }
                         }
-                    },
-                    onDragEnd = {
-                        isCursorMode = false
-                        dragRemainderX = 0f
-                        cursorMoveCount = 0
-                        lastCursorDragEndedAt = System.currentTimeMillis()
-                        cursorDragUsed = false
-                    },
-                    onDragCancel = {
-                        isCursorMode = false
-                        dragRemainderX = 0f
-                        cursorMoveCount = 0
-                        lastCursorDragEndedAt = System.currentTimeMillis()
-                        cursorDragUsed = false
+                        if (event.changes.all { !it.pressed }) break
                     }
-                )
-            }
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
-                        try { awaitRelease() } finally { isPressed = false }
-                        val justDragged = System.currentTimeMillis() - lastCursorDragEndedAt < 120L
-                        if (!cursorDragUsed && !justDragged) currentOnClick()
-                        cursorDragUsed = false
-                    }
-                )
+                    isPressed = false
+                    isCursorMode = false
+                    if (!cursorMode) currentOnClick()
+                }
             },
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = KeyVisualPaddingH, vertical = KeyVisualPaddingV)
+                .padding(horizontal = hitPaddingH + KeyVisualPaddingH, vertical = KeyVisualPaddingV)
                 .shadow(if (isPressed) 0.dp else 1.5.dp, keyShape, clip = false)
                 .graphicsLayer { scaleX = scale; scaleY = scale }
                 .clip(keyShape)
@@ -2138,6 +2140,7 @@ private fun SpaceBar(
 private fun BackspaceKey(
     modifier: Modifier = Modifier,
     height: Dp = LetterKeyRowHeight,
+    hitPaddingH: Dp = 0.dp,
     onBackspace: () -> Unit,
     onBackspaceRepeat: (Int) -> Unit = { count -> repeat(count) { onBackspace() } },
     onBackspaceWord: () -> Unit = {}
@@ -2209,7 +2212,7 @@ private fun BackspaceKey(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = KeyVisualPaddingH, vertical = KeyVisualPaddingV)
+                .padding(horizontal = hitPaddingH + KeyVisualPaddingH, vertical = KeyVisualPaddingV)
                 .shadow(if (isPressed) 0.dp else 1.5.dp, keyShape, clip = false)
                 .graphicsLayer { scaleX = scale; scaleY = scale }
                 .clip(keyShape)
@@ -2236,6 +2239,7 @@ private fun NumberKey(
     displayNumber: Char = number,
     modifier: Modifier = Modifier,
     height: Dp = NumberRowHeight,
+    hitPaddingH: Dp = 0.dp,
     onNumberPress: (Char) -> Unit,
     onSymbolPress: (Char) -> Unit
 ) {
@@ -2292,7 +2296,7 @@ private fun NumberKey(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = KeyVisualPaddingH, vertical = KeyVisualPaddingV)
+                .padding(horizontal = hitPaddingH + KeyVisualPaddingH, vertical = KeyVisualPaddingV)
                 .shadow(if (isPressed) 0.dp else 1.5.dp, keyShape, clip = false)
                 .graphicsLayer { scaleX = scale; scaleY = scale }
                 .clip(keyShape)
