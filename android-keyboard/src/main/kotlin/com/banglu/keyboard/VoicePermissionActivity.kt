@@ -69,10 +69,16 @@ class VoicePermissionActivity : ComponentActivity() {
     }
 
     private fun markVoiceDisclosureAccepted() {
-        getSharedPreferences("banglu_prefs", Context.MODE_PRIVATE)
+        remoteBangluPrefs(this)
             .edit()
             .putBoolean("voice_disclosure_accepted", true)
             .apply()
+        // Tell the IME so dictation starts right away — the user already
+        // expressed intent by tapping the mic; don't make them tap it twice.
+        sendBroadcast(
+            android.content.Intent(BangluIMEService.ACTION_VOICE_DISCLOSURE_ACCEPTED)
+                .setPackage(packageName)
+        )
     }
 }
 

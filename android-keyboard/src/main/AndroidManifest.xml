@@ -92,6 +92,14 @@
             android:exported="false"
             android:process=":ui" />
 
+        <!-- Prefs bridge across the IME privacy boundary: hosted in the DEFAULT
+             (keyboard) process so the IME's SharedPreferences stays the single
+             source of truth; :ui activities read/write through it. -->
+        <provider
+            android:name=".BangluPrefsProvider"
+            android:authorities="${applicationId}.prefs"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

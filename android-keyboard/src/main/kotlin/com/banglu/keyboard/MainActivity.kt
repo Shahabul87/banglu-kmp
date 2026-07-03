@@ -141,7 +141,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun BangluHomeScreen() {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("banglu_prefs", Context.MODE_PRIVATE) }
+    val prefs = remember { remoteBangluPrefs(context) }
     val themeMode = prefs.getString("theme", "dark") ?: "dark"
     val systemDark = isSystemInDarkTheme()
     val darkTheme = themeMode == "dark" || themeMode == "amoled" || (themeMode == "auto" && systemDark)

@@ -172,7 +172,7 @@ class SettingsActivity : ComponentActivity() {
 @Composable
 fun BangluSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("banglu_prefs", Context.MODE_PRIVATE) }
+    val prefs = remember { remoteBangluPrefs(context) }
     val storage = remember { AndroidStorage(context) }
     val coroutineScope = rememberCoroutineScope()
 

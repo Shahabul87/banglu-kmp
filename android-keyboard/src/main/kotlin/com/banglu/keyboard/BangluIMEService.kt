@@ -201,6 +201,10 @@ class BangluIMEService : InputMethodService(),
         private const val VOICE_DELETE_SOURCE = "voice_delete"
         private const val PUNCTUATION_SOURCE = "gap_punctuation"
         private const val PREF_VOICE_DISCLOSURE_ACCEPTED = "voice_disclosure_accepted"
+
+        /** In-app signal from [VoicePermissionActivity]: disclosure accepted —
+         *  resume dictation without a second mic tap. */
+        const val ACTION_VOICE_DISCLOSURE_ACCEPTED = "com.banglu.keyboard.VOICE_DISCLOSURE_ACCEPTED"
         private const val PREF_VOICE_TYPING_ENABLED = "voice_typing_enabled"
         private const val PREF_VOICE_OFFLINE_PREFERRED = "voice_offline_preferred"
         private const val PREF_RECENT_EMOJIS = "recent_emojis"
@@ -574,6 +578,12 @@ class BangluIMEService : InputMethodService(),
         installCrashDiagnostics()
         installImeRuntimePolicy()
         prefs.registerOnSharedPreferenceChangeListener(preferenceListener)
+        androidx.core.content.ContextCompat.registerReceiver(
+            this,
+            voiceDisclosureReceiver,
+            android.content.IntentFilter(ACTION_VOICE_DISCLOSURE_ACCEPTED),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         reloadSettings()
         SmartEngineAdapter.configurePersistenceScope(serviceScope)
 
@@ -810,6 +820,11 @@ class BangluIMEService : InputMethodService(),
         suggestions.clear()
         collapseTransientKeyboardUi()
         clearCommitCaches()
+        if (pendingVoiceStart) {
+            pendingVoiceStart = false
+            log("voice: starting deferred dictation after disclosure")
+            onVoiceInput()
+        }
         clearAutoCorrectUndoState()
         lastSpaceTime = 0L
 
@@ -883,8 +898,21 @@ class BangluIMEService : InputMethodService(),
         super.onWindowHidden()
     }
 
+    /** First-run flow: the disclosure activity still has focus when its accept
+     *  broadcast lands, so dictation must start when the keyboard next shows. */
+    private var pendingVoiceStart = false
+
+    private val voiceDisclosureReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ACTION_VOICE_DISCLOSURE_ACCEPTED) return
+            log("voice: disclosure accepted — resuming dictation")
+            if (isInputViewShown) onVoiceInput() else pendingVoiceStart = true
+        }
+    }
+
     override fun onDestroy() {
         cleanupImeSession("destroy", cancelVoice = true)
+        try { unregisterReceiver(voiceDisclosureReceiver) } catch (_: Exception) { /* not registered */ }
         if (::prefs.isInitialized) {
             prefs.unregisterOnSharedPreferenceChangeListener(preferenceListener)
         }

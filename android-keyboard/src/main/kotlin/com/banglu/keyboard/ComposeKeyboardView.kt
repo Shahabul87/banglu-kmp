@@ -597,7 +597,31 @@ private fun AdaptiveTopStrip(
                 isExpanded = true
             )
         } else if (suggestions.isNotEmpty()) {
-            BangluSuggestionRow(suggestions, onSuggestionClick)
+            // Punctuation predictions fill the strip on an idle buffer, which
+            // used to make the mic and toolbar unreachable — keep both pinned
+            // at the strip's end whenever the user is not mid-word.
+            val idlePunctuationBar = suggestions.all { it.tier == "punctuation" }
+            if (idlePunctuationBar) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        BangluSuggestionRow(suggestions, onSuggestionClick)
+                    }
+                    CompactMicToolbarIcon(
+                        active = voiceInputState == VoiceInputState.LISTENING,
+                        modifier = Modifier.width(52.dp),
+                        onClick = onVoiceInput
+                    )
+                    CompactToolbarIcon(
+                        "…", "More tools",
+                        modifier = Modifier.width(44.dp)
+                    ) { onToggleToolbar() }
+                }
+            } else {
+                BangluSuggestionRow(suggestions, onSuggestionClick)
+            }
         } else {
             KeyboardActionBar(
                 onSettingsClick = onSettingsClick,
