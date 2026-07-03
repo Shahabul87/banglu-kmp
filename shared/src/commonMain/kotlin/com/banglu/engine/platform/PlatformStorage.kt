@@ -21,6 +21,18 @@ interface PlatformStorage {
     /** Clear all learned words from persistent storage. */
     suspend fun clearLearnedWords()
 
+    /**
+     * Retrieve user-typed next-word pairs: previous word -> (next word -> count).
+     * Powers personalized next-word prediction. Default: no persistence.
+     */
+    suspend fun getUserBigrams(): Map<String, Map<String, Int>> = emptyMap()
+
+    /** Save or update one user bigram pair. Default: no persistence. */
+    suspend fun saveUserBigram(previous: String, next: String, count: Int) {}
+
+    /** Clear all user bigram pairs. Default: no-op. */
+    suspend fun clearUserBigrams() {}
+
     /** Get the version string of the cached dictionary, or null if not cached. */
     suspend fun getDictionaryVersion(): String?
 

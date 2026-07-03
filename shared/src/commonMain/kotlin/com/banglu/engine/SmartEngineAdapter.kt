@@ -96,6 +96,8 @@ object SmartEngineAdapter {
                     selectedPreferenceMap[phonetic] = learnedBest.bengali
                 }
             }
+        // Personalized next-word prediction: user-typed pairs outrank corpus bigrams.
+        eng.setUserBigrams(storage.getUserBigrams())
         // Clear cache so stale seed-only conversions are re-evaluated with 480K data
         eng.clearCache()
     }
@@ -224,6 +226,30 @@ object SmartEngineAdapter {
         getEngine().getNextWordPredictions(prevBengali, limit)
 
     /**
+     * Record one observed (previous, next) Bengali commit pair for personalized
+     * next-word prediction. The caller (IME) is responsible for verifying the
+     * two words were actually committed adjacently in the same field.
+     */
+    fun recordNextWordUsage(previousBengali: String, nextBengali: String) {
+        if (!learningEnabled || !personalDictionaryEnabled) return
+        val prev = previousBengali.trim()
+        val next = nextBengali.trim()
+        if (prev.isEmpty() || next.isEmpty() || prev == next) return
+
+        val count = getEngine().recordUserBigram(prev, next)
+        if (count <= 0) return
+        val s = storage ?: return
+        val scope = persistenceScope ?: return
+        scope.launch {
+            try {
+                s.saveUserBigram(prev, next, count)
+            } catch (_: Exception) {
+                // Persistence failure is non-critical
+            }
+        }
+    }
+
+    /**
      * Record a user's word selection for learning.
      * Stores ranking preference and persists asynchronously.
      *
@@ -315,6 +341,7 @@ object SmartEngineAdapter {
      */
     suspend fun resetLearning() {
         storage?.clearLearnedWords()
+        storage?.clearUserBigrams()
         customPreferenceMap.clear()
         selectedPreferenceMap.clear()
         engine = null

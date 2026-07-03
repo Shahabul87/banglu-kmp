@@ -65,6 +65,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private val disambiguator = AIDisambiguator()
     private val validator = BengaliWordValidator()
     private val bigramModel = BigramModel()
+    // User-typed (prev -> next -> count) pairs. Personal typing habits outrank
+    // the corpus in next-word prediction: the corpus is formal wiki/news
+    // register while the user types chat register.
+    private val userBigrams = mutableMapOf<String, MutableMap<String, Int>>()
     private val sectionEngine = SectionNarrowingEngine()
     val narrowingEngine: ProgressiveNarrowingEngine
     private var viterbiDecoder: ViterbiDecoder? = null
@@ -251,6 +255,26 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "tomr" to "তোমার",
             "tmi" to "তুমি",
             "tomi" to "তুমি",
+        )
+
+        /** Surfacing threshold for personal pairs — one occurrence may be a typo. */
+        private const val USER_BIGRAM_MIN_COUNT = 2
+
+        /** Retention cap per previous-word so a runaway context can't grow unbounded. */
+        private const val USER_BIGRAM_MAX_FOLLOWERS = 24
+
+        /**
+         * Words that must never be *predicted* (still fully typeable). These are
+         * wiki-meta and title-transliteration artifacts that rank high in the
+         * corpus bigram table but are never a plausible chat continuation
+         * (ভালো -> নিবন্ধ comes from "good article" wiki badges; তুমি -> অ্যান্ড
+         * from song/movie titles).
+         */
+        private val PREDICTION_STOPLIST = setOf(
+            "নিবন্ধ", "নিবন্ধটি", "নিবন্ধের",
+            "উইকিপিডিয়া", "উইকিপিডিয়ার", "উইকি",
+            "তথ্যসূত্র", "বিষয়শ্রেণী", "টেমপ্লেট", "প্রবেশদ্বার",
+            "অ্যান্ড", "এন্ড", "দ্য", "দি", "অব", "অভ"
         )
 
         private val FALLBACK_NEXT_WORDS: Map<String, List<String>> = mapOf(
@@ -4641,24 +4665,92 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val previous = prevBengali.trim()
         if (previous.isEmpty() || limit <= 0) return emptyList()
 
-        val modelPredictions = if (bigramModel.isLoaded()) {
-            bigramModel.getTopPredictions(previous, limit)
-        } else {
-            emptyList()
-        }
-        if (modelPredictions.size >= limit) return modelPredictions
+        val predictions = mutableListOf<PredictedWord>()
+        val seen = mutableSetOf<String>()
 
-        val seen = modelPredictions.map { it.bengali }.toMutableSet()
-        val fallbackPredictions = FALLBACK_NEXT_WORDS[previous].orEmpty()
-            .filter { seen.add(it) }
-            .mapIndexed { index, word ->
-                PredictedWord(
-                    bengali = word,
-                    confidence = (0.64 - index * 0.04).coerceAtLeast(0.42)
-                )
+        // 1. Personal pairs first: the user's own repeated (prev, next) commits
+        // are the strongest signal and correct the corpus's formal register.
+        userBigrams[previous]?.entries
+            ?.filter { it.value >= USER_BIGRAM_MIN_COUNT }
+            ?.sortedByDescending { it.value }
+            ?.take(limit)
+            ?.forEachIndexed { index, entry ->
+                if (seen.add(entry.key)) {
+                    predictions.add(
+                        PredictedWord(
+                            bengali = entry.key,
+                            confidence = (0.97 - index * 0.03).coerceAtLeast(0.6)
+                        )
+                    )
+                }
             }
 
-        return (modelPredictions + fallbackPredictions).take(limit)
+        // 2. Corpus bigrams, with wiki-meta junk filtered out. Ask for extra
+        // headroom so filtering and dedup don't starve the strip.
+        if (predictions.size < limit && bigramModel.isLoaded()) {
+            bigramModel.getTopPredictions(previous, limit * 2 + 4)
+                .asSequence()
+                .filter { it.bengali !in PREDICTION_STOPLIST }
+                .filter { seen.add(it.bengali) }
+                .take(limit - predictions.size)
+                .forEach { predictions.add(it) }
+        }
+
+        // 3. Static fallback for common conversational openers.
+        if (predictions.size < limit) {
+            FALLBACK_NEXT_WORDS[previous].orEmpty()
+                .filter { seen.add(it) }
+                .take(limit - predictions.size)
+                .forEachIndexed { index, word ->
+                    predictions.add(
+                        PredictedWord(
+                            bengali = word,
+                            confidence = (0.64 - index * 0.04).coerceAtLeast(0.42)
+                        )
+                    )
+                }
+        }
+
+        return predictions.take(limit)
+    }
+
+    /**
+     * Bulk-load persisted user bigram pairs (called once at initialization).
+     */
+    fun setUserBigrams(pairs: Map<String, Map<String, Int>>) {
+        userBigrams.clear()
+        for ((previous, followers) in pairs) {
+            val prev = previous.trim()
+            if (prev.isEmpty() || followers.isEmpty()) continue
+            userBigrams[prev] = followers
+                .entries
+                .sortedByDescending { it.value }
+                .take(USER_BIGRAM_MAX_FOLLOWERS)
+                .associate { it.key.trim() to it.value }
+                .filterKeys { it.isNotEmpty() }
+                .toMutableMap()
+        }
+    }
+
+    /**
+     * Record one observed (previous, next) commit pair.
+     *
+     * @return the updated count for the pair (callers persist this).
+     */
+    fun recordUserBigram(prevBengali: String, nextBengali: String): Int {
+        val prev = prevBengali.trim()
+        val next = nextBengali.trim()
+        if (prev.isEmpty() || next.isEmpty() || prev == next) return 0
+
+        val followers = userBigrams.getOrPut(prev) { mutableMapOf() }
+        val updated = (followers[next] ?: 0) + 1
+        followers[next] = updated
+        if (followers.size > USER_BIGRAM_MAX_FOLLOWERS) {
+            followers.entries
+                .minByOrNull { it.value }
+                ?.let { followers.remove(it.key) }
+        }
+        return updated
     }
 
     /**

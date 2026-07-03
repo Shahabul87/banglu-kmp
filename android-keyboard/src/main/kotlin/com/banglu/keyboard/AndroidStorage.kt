@@ -34,10 +34,12 @@ class AndroidStorage(context: Context) : PlatformStorage {
     companion object {
         private const val KEY_LEARNED_WORDS = "learned_words"
         private const val KEY_CUSTOM_CONVERSIONS = "custom_conversions"
+        private const val KEY_USER_BIGRAMS = "user_bigrams"
         private const val KEY_DICT_VERSION = "dict_version"
         private const val SEPARATOR = "::"
         private const val MAX_LEARNED_WORDS = 500
         private const val MAX_CUSTOM_CONVERSIONS = 300
+        private const val MAX_USER_BIGRAMS = 800
     }
 
     override suspend fun getLearnedWords(): List<LearnedWord> {
@@ -101,6 +103,67 @@ class AndroidStorage(context: Context) : PlatformStorage {
         prefs.edit()
             .remove(scopedKey(KEY_LEARNED_WORDS))
             .remove(scopedKey(KEY_CUSTOM_CONVERSIONS))
+            .apply()
+    }
+
+    override suspend fun getUserBigrams(): Map<String, Map<String, Int>> {
+        val raw = getScopedString(KEY_USER_BIGRAMS) ?: return emptyMap()
+        val pairs = mutableMapOf<String, MutableMap<String, Int>>()
+        raw.lines()
+            .filter { it.isNotBlank() }
+            .forEach { line ->
+                val parts = line.split(SEPARATOR)
+                if (parts.size >= 3) {
+                    val count = parts[2].toIntOrNull() ?: return@forEach
+                    pairs.getOrPut(parts[0]) { mutableMapOf() }[parts[1]] = count
+                }
+            }
+        return pairs
+    }
+
+    override suspend fun saveUserBigram(previous: String, next: String, count: Int) {
+        val prev = previous.trim()
+        val follower = next.trim()
+        if (prev.isEmpty() || follower.isEmpty() || count <= 0) return
+        val now = System.currentTimeMillis()
+
+        data class BigramLine(val prev: String, val next: String, val count: Int, val lastUsed: Long)
+
+        val raw = getScopedString(KEY_USER_BIGRAMS) ?: ""
+        val entries = raw.lines()
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                val parts = line.split(SEPARATOR)
+                if (parts.size >= 3) {
+                    BigramLine(
+                        prev = parts[0],
+                        next = parts[1],
+                        count = parts[2].toIntOrNull() ?: 1,
+                        lastUsed = parts.getOrNull(3)?.toLongOrNull() ?: now
+                    )
+                } else {
+                    null
+                }
+            }
+            .associateBy { "${it.prev}$SEPARATOR${it.next}" }
+            .toMutableMap()
+
+        entries["$prev$SEPARATOR$follower"] = BigramLine(prev, follower, count, now)
+
+        // Recency eviction, matching learned-word behavior.
+        val lines = entries.values
+            .sortedByDescending { it.lastUsed }
+            .take(MAX_USER_BIGRAMS)
+            .map { "${it.prev}$SEPARATOR${it.next}$SEPARATOR${it.count}$SEPARATOR${it.lastUsed}" }
+
+        prefs.edit()
+            .putString(scopedKey(KEY_USER_BIGRAMS), lines.joinToString("\n"))
+            .apply()
+    }
+
+    override suspend fun clearUserBigrams() {
+        prefs.edit()
+            .remove(scopedKey(KEY_USER_BIGRAMS))
             .apply()
     }
 

@@ -1342,6 +1342,7 @@ class BangluIMEService : InputMethodService(),
             sessionPredictionTapCount++
             ic.commitText(suggestion.bengali + " ", 1)
             lastCommittedTextLength = suggestion.bengali.length + 1
+            recordNextWordPairLearning(suggestion.bengali)
             updatePredictions(suggestion.bengali)
         } else {
             // This is a conversion suggestion
@@ -1352,6 +1353,7 @@ class BangluIMEService : InputMethodService(),
             buffer = ""
             suggestions.clear()
             clearCommitCaches()
+            recordNextWordPairLearning(suggestion.bengali)
             updatePredictions(suggestion.bengali)
         }
     }
@@ -2634,10 +2636,41 @@ class BangluIMEService : InputMethodService(),
         buffer = ""
         suggestions.clear()
         clearCommitCaches()
-        if (appendText.contains(" ")) {
-            updatePredictions(result.bengali)
-        } else {
-            updatePredictions(result.bengali)
+        recordNextWordPairLearning(result.bengali)
+        updatePredictions(result.bengali)
+    }
+
+    /**
+     * Feature 4.1b: learn the (previous, committed) Bengali pair for
+     * personalized next-word prediction. Must run after commitText and BEFORE
+     * updatePredictions (which overwrites lastCommittedBengali).
+     *
+     * lastCommittedBengali is never reset on cursor jumps or field switches,
+     * so the editor text itself is the adjacency oracle: record only when the
+     * text before the cursor actually ends with "previous committed".
+     */
+    private fun recordNextWordPairLearning(committed: String) {
+        if (privateInputMode || rawCommitInputMode) return
+        val previous = lastCommittedBengali
+        if (previous.isEmpty() || committed.isEmpty()) return
+        if (!previous.any { isBengaliChar(it) } || !committed.any { isBengaliChar(it) }) return
+
+        val ic = currentInputConnection ?: return
+        val before = ic.getTextBeforeCursor(previous.length + committed.length + 8, 0)
+            ?.toString()?.trimEnd() ?: return
+        if (!before.endsWith(committed)) return
+        val head = before.removeSuffix(committed)
+        // The committed word must stand alone (space/punct before it, not glyphs).
+        if (head.isEmpty() || isBengaliChar(head.last())) return
+        val beforePrevious = head.trimEnd()
+        if (!beforePrevious.endsWith(previous)) return
+        val boundaryIndex = beforePrevious.length - previous.length - 1
+        if (boundaryIndex >= 0 && isBengaliChar(beforePrevious[boundaryIndex])) return
+
+        serviceScope.launch {
+            withContext(Dispatchers.Default) {
+                SmartEngineAdapter.recordNextWordUsage(previous, committed)
+            }
         }
     }
 
