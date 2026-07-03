@@ -8,7 +8,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -1404,11 +1407,10 @@ private fun LetterRows(
     val colors = LocalKeyboardColors.current
     val keyHeight = scaledKeyHeight(LetterKeyRowHeight)
 
-    // Row 1: q w e r t y u i o p
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(currentKeyGapH())
-    ) {
+    // Row 1: q w e r t y u i o p — S11: no spacedBy dead strips; the visual
+    // gap lives inside each cell so every pixel of the row hits a key.
+    val letterHitPad = currentKeyGapH() / 2
+    Row(modifier = Modifier.fillMaxWidth()) {
         for (key in LETTER_ROW_1) {
             val display = letterKeyLabel(key, shiftState, useShiftedLetterInput)
             val input = letterKeyInput(key, shiftState, useShiftedLetterInput)
@@ -1419,6 +1421,8 @@ private fun LetterRows(
                 bgColor = colors.keyBg,
                 longPressOptions = longPressAlternatives(key[0]),
                 onTextInput = onTextInput,
+                hitPaddingH = letterHitPad,
+                onReplaceLast = { alt -> onBackspace(); onTextInput(alt) },
                 onClick = { onKeyPress(input) }
             )
         }
@@ -1430,8 +1434,7 @@ private fun LetterRows(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = middleLetterRowIndent()),
-        horizontalArrangement = Arrangement.spacedBy(currentKeyGapH())
+            .padding(horizontal = middleLetterRowIndent())
     ) {
         for (key in LETTER_ROW_2) {
             val display = letterKeyLabel(key, shiftState, useShiftedLetterInput)
@@ -1443,6 +1446,8 @@ private fun LetterRows(
                 bgColor = colors.keyBg,
                 longPressOptions = longPressAlternatives(key[0]),
                 onTextInput = onTextInput,
+                hitPaddingH = letterHitPad,
+                onReplaceLast = { alt -> onBackspace(); onTextInput(alt) },
                 onClick = { onKeyPress(input) }
             )
         }
@@ -1451,10 +1456,7 @@ private fun LetterRows(
     Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
 
     // Row 3: Shift z x c v b n m Backspace
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(currentKeyGapH())
-    ) {
+    Row(modifier = Modifier.fillMaxWidth()) {
         // Shift key with visual state
         val shiftLabel = when (shiftState) {
             ShiftState.OFF -> "\u21E7"
@@ -1472,6 +1474,7 @@ private fun LetterRows(
             height = keyHeight,
             bgColor = shiftBg,
             fontSize = 20,
+            hitPaddingH = letterHitPad,
             onClick = onShiftTap
         )
 
@@ -1485,13 +1488,17 @@ private fun LetterRows(
                 bgColor = colors.keyBg,
                 longPressOptions = longPressAlternatives(key[0]),
                 onTextInput = onTextInput,
+                hitPaddingH = letterHitPad,
+                onReplaceLast = { alt -> onBackspace(); onTextInput(alt) },
                 onClick = { onKeyPress(input) }
             )
         }
 
         // Backspace with long-press repeat and word deletion
         BackspaceKey(
-            modifier = Modifier.weight(1.5f),
+            modifier = Modifier
+                .weight(1.5f)
+                .padding(horizontal = letterHitPad),
             height = keyHeight,
             onBackspace = onBackspace,
             onBackspaceRepeat = onBackspaceRepeat,
@@ -1781,6 +1788,12 @@ private fun KeyButton(
     accessibilityLabel: String = label,
     longPressOptions: List<KeyAlternative> = emptyList(),
     onTextInput: (String) -> Unit = {},
+    /** S11: keeps the visual key gap INSIDE the touch cell so rows tile
+     *  edge-to-edge with no dead strips between keys. */
+    hitPaddingH: Dp = 0.dp,
+    /** S11: with commit-on-press the base character is already committed when
+     *  the long-press popup opens; selecting an alternative must REPLACE it. */
+    onReplaceLast: ((String) -> Unit)? = null,
     onClick: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
@@ -1815,34 +1828,52 @@ private fun KeyButton(
                 }
             }
             .pointerInput(longPressOptions) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
+                // S11 key accuracy: commit on pointer DOWN, not on tap-release.
+                // detectTapGestures fired onTap at finger-UP and cancelled on
+                // slide-out, so fast typing produced release-order transposition
+                // ("the" -> "hte") and slightly-sliding taps dropped entirely —
+                // both perceived as "I pressed one key and got another".
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    down.consume()
+                    isPressed = true
+                    if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
+                    currentOnClick()
+                    var longPressed = false
+                    if (longPressOptions.isNotEmpty()) {
                         try {
-                            awaitRelease()
-                        } finally {
-                            isPressed = false
-                        }
-                    },
-                    onTap = {
-                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
-                        currentOnClick()
-                    },
-                    onLongPress = if (longPressOptions.isEmpty()) null else {
-                        {
+                            withTimeout(viewConfiguration.longPressTimeoutMillis) {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    event.changes.forEach { it.consume() }
+                                    if (event.changes.all { !it.pressed }) return@withTimeout
+                                }
+                            }
+                        } catch (_: PointerEventTimeoutCancellationException) {
+                            longPressed = true
                             showAlternatives = true
                             if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         }
                     }
-                )
+                    if (!longPressed) {
+                        // Slide-tolerant release wait: pointer capture keeps the
+                        // gesture on this key even if the finger drifts.
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            event.changes.forEach { it.consume() }
+                            if (event.changes.all { !it.pressed }) break
+                        }
+                    }
+                    isPressed = false
+                }
             },
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = KeyVisualPaddingH, vertical = KeyVisualPaddingV)
+                .padding(horizontal = hitPaddingH + KeyVisualPaddingH, vertical = KeyVisualPaddingV)
                 .shadow(if (isPressed) 0.dp else 1.5.dp, keyShape, clip = false)
                 .graphicsLayer {
                     scaleX = scale
@@ -1889,7 +1920,7 @@ private fun KeyButton(
                                 .clickable {
                                     showAlternatives = false
                                     if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    onTextInput(option.input)
+                                    (onReplaceLast ?: onTextInput)(option.input)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
