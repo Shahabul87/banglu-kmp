@@ -49,5 +49,5 @@ android {
 tasks.withType<Test>().configureEach {
     // The JVM engine parity suite loads the full Bengali validator dictionary,
     // extended phonetic dictionary, and bigram model from SQLite.
-    maxHeapSize = "2g"
+    maxHeapSize = "4g"
 }
