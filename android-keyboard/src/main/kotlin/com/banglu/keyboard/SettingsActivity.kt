@@ -181,7 +181,10 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
     var suggestions by remember { mutableStateOf(prefs.getBoolean("suggestions", true)) }
     var typingLearning by remember { mutableStateOf(prefs.getBoolean("typing_learning", true)) }
     var personalDictionary by remember { mutableStateOf(prefs.getBoolean("personal_dictionary", true)) }
-    var liteMode by remember { mutableStateOf(prefs.getBoolean("lite_mode", true)) }
+    // Full dictionary by default: predictions, context reranking, and the strong
+    // commit gate all need the full tables. Weak devices still auto-fall to lite
+    // via the IME's device check (isLowRamDevice / memoryClass < 256).
+    var liteMode by remember { mutableStateOf(prefs.getBoolean("lite_mode", false)) }
     var voiceTypingEnabled by remember { mutableStateOf(prefs.getBoolean("voice_typing_enabled", true)) }
     var voiceOfflinePreferred by remember { mutableStateOf(prefs.getBoolean("voice_offline_preferred", false)) }
     var keyFeedbackMode by remember {
@@ -474,7 +477,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                         .clickable {
                             prefs.edit().clear().apply()
                             autoCapitalize = true; doubleSpacePeriod = true; suggestions = true
-                            typingLearning = true; personalDictionary = true; liteMode = true
+                            typingLearning = true; personalDictionary = true; liteMode = false
                             voiceTypingEnabled = true; voiceOfflinePreferred = false
                             keyFeedbackMode = "both"; keyPreview = true
                             numberRow = true; themeMode = "dark"; defaultMode = "banglu"; keyboardHeight = "normal"; keyboardFontSize = "large"

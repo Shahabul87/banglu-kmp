@@ -564,7 +564,10 @@ class BangluIMEService : InputMethodService(),
         keyPreviewEnabled.value = prefs.getBoolean("key_preview", true)
         typingLearningEnabled.value = prefs.getBoolean("typing_learning", true)
         personalDictionaryEnabled.value = prefs.getBoolean("personal_dictionary", true)
-        liteModeEnabled.value = prefs.getBoolean("lite_mode", true)
+        // Full dictionary by default (fresh installs get predictions + context
+        // reranking + strong gates). shouldUseLiteDictionary() still forces lite
+        // on low-RAM devices, and every heavy loader degrades gracefully on OOM.
+        liteModeEnabled.value = prefs.getBoolean("lite_mode", false)
         themeMode.value = prefs.getString("theme", "dark") ?: "dark"
         keyboardHeightMode.value = prefs.getString("keyboard_height", "normal") ?: "normal"
         keyboardFontSizeMode.value = prefs.getString("keyboard_font_size", "large") ?: "large"
