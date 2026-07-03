@@ -955,7 +955,7 @@
   },
   {
     "input": "bikel",
-    "expected": "বিকাল",
+    "expected": "বিকেল",
     "category": "common-words",
     "priority": "P0"
   },
@@ -1021,7 +1021,7 @@
   },
   {
     "input": "bon",
-    "expected": "বোন",
+    "expected": "বন",
     "category": "common-words",
     "priority": "P0"
   },

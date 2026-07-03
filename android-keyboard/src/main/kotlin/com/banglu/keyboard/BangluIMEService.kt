@@ -499,6 +499,9 @@ class BangluIMEService : InputMethodService(),
             if (keyboardMode.value == KeyboardMode.BANGLU && buffer == snapshot) {
                 suggestions.clear()
                 suggestions.addAll(newSuggestions)
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "sugg '$snapshot': ${newSuggestions.joinToString { "${it.bengali}/${it.source}" }}")
+                }
             }
         }
     }

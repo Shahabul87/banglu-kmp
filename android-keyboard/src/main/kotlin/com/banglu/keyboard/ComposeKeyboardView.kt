@@ -13,6 +13,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
@@ -1185,6 +1186,12 @@ private fun BangluSuggestionRow(
     onSuggestionClick: (SmartSuggestion) -> Unit
 ) {
     val colors = LocalKeyboardColors.current
+    // Stable item keys make LazyRow anchor scroll to chips that persist
+    // across keystrokes (continuation chips keep identical keys), rendering
+    // fresh top-ranked chips off-screen left. Every list update is a new
+    // ranking — snap back so rank 1 is always visible.
+    val stripState = rememberLazyListState()
+    LaunchedEffect(suggestions) { stripState.scrollToItem(0) }
 
     Row(
         modifier = Modifier
@@ -1194,6 +1201,7 @@ private fun BangluSuggestionRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         LazyRow(
+            state = stripState,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(scaledDp(TopStripHeight)),

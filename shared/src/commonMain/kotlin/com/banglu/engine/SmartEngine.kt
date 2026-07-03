@@ -962,6 +962,26 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // stable and let the suggestion row show smart candidates.
         val dictionaryResult = if (key.length >= 4) convertByDictionary(key) else null
         if (dictionaryResult != null && dictionaryResult.confidence >= 0.88) {
+            // S6, composing side: the editor preview must not show a stale seed
+            // spelling (toiri -> তৈরী) when the store's canonical tier-A owner
+            // of the exact typed key is at least as common. Same arbitration
+            // rule as convertWord; without this the preview and the committed
+            // word diverge (editor তৈরী, space commits তৈরি).
+            tryCorpusPhoneticLookup(key)?.let { corpusResult ->
+                val storeTop = storeLookup(key).firstOrNull()
+                val canonicalFirst = validator.isLoaded() && storeTop != null &&
+                    storeTop.bengali == corpusResult.bengali &&
+                    storeTop.tier == PhoneticIndexHit.TIER_A && storeTop.priority == 0
+                val corpusFreq = maxOf(
+                    validator.getFrequency(corpusResult.bengali),
+                    storeFrequencyOf(key, corpusResult.bengali)
+                )
+                if (canonicalFirst && corpusResult.bengali != dictionaryResult.bengali &&
+                    corpusFreq >= validator.getFrequency(dictionaryResult.bengali)
+                ) {
+                    return corpusResult.copy(alternatives = emptyList())
+                }
+            }
             return applyCandidateLatticeRanking(key, dictionaryResult)
         }
 
@@ -3251,7 +3271,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 return if (key.length < 4) {
                     1000 + corpusFrequency * 4 + exact.first - exact.second + alignment
                 } else {
-                    1000 + exact.first * 3 - exact.second + alignment
+                    // S6: seed/extended entry frequencies are stale; the words-table
+                    // frequency is corpus-refreshed (S5). Score exact matches by the
+                    // stronger of the two so archaic twins (তৈরী) can't outrank the
+                    // modern spelling (তৈরি@90) on legacy entry weight alone.
+                    1000 + maxOf(exact.first, corpusFrequency) * 3 - exact.second + alignment
                 }
             }
 

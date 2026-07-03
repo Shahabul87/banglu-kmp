@@ -73,13 +73,31 @@ fun main(args: Array<String>) {
         println("  Nukta fold/dedupe removed ${foldResult.mergedCount} duplicate rows " +
             "(${rawWordList.size} -> ${foldResult.words.size} words)")
 
+        // S5 corpus-authority frequency refresh (study W2): rebuild frequencies
+        // from real web usage so twin spellings order by evidence, not legacy.
+        val corpusDir = sequenceOf(
+            File("data/corpus-2026-07"),
+            File("dictionary-compiler/data/corpus-2026-07")
+        ).firstOrNull { it.isDirectory }
+        val usageCounts = HashMap<String, Long>(400_000)
+        if (corpusDir != null) {
+            println("Applying corpus authority from ${corpusDir.path}...")
+            val modern = CorpusAuthority.addCounts(File(corpusDir, "modern_counts.tsv"), 1, 1, usageCounts)
+            val literature = CorpusAuthority.addCounts(File(corpusDir, "bnwikisource_counts.tsv"), 1, 4, usageCounts)
+            println("  Corpus counts: $modern modern lines, $literature literature lines, " +
+                "${usageCounts.size} weighted words")
+        } else {
+            println("WARNING: corpus-2026-07 not found — frequencies stay legacy")
+        }
+        val frequenciesByWord = CorpusAuthority.refreshFrequencies(foldResult.frequencies, usageCounts)
+
         println("Inserting words...")
         val insertWord = connection.prepareStatement("INSERT INTO words (bengali, frequency) VALUES (?, ?)")
         val wordIdByBengali = HashMap<String, Int>(foldResult.words.size * 2)
         var count = 0
         for (word in foldResult.words) {
             insertWord.setString(1, word)
-            insertWord.setInt(2, foldResult.frequencies[word] ?: 0)
+            insertWord.setInt(2, frequenciesByWord[word] ?: 0)
             insertWord.addBatch()
             count++
             // id == insertion ordinal (AUTOINCREMENT starts at 1)
@@ -108,7 +126,7 @@ fun main(args: Array<String>) {
 
         // 3b. Build precompiled phonetic index (Engine v3)
         println("Building phonetic index...")
-        val indexRows = PhoneticIndexBuilder.build(foldResult.words, foldResult.frequencies, usageWords)
+        val indexRows = PhoneticIndexBuilder.build(foldResult.words, frequenciesByWord, usageWords)
         val report = PhoneticIndexBuilder.lastReport
         println("  Rows: ${report.totalRows} (canonical ${report.canonicalRows}, habit-alias ${report.habitAliasRows})")
         println("  Words: tier-A ${report.tierAWords}, tier-B ${report.tierBWords}")
@@ -289,7 +307,7 @@ fun main(args: Array<String>) {
         // 7. Insert metadata
         val insertMeta = connection.prepareStatement("INSERT INTO metadata (key, value) VALUES (?, ?)")
         val metadataEntries = mapOf(
-            "version" to "3.4.1",
+            "version" to "3.5.0",
             "word_count" to count.toString(),
             "disambiguation_count" to mappings.size.toString(),
             "extended_entry_count" to extendedEntryCount.toString(),
