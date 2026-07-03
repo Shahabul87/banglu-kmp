@@ -97,7 +97,28 @@ brit→ব্রিট|ব্রিটিশ (no বৃত্ত flash), khond�
 Suite: 408 JVM tests green. Known remaining: y_drop habit class (56% primary — S8 next),
 residual composing-trace ri previews on rare words.
 
-## 5. Register caveat (honest measurement note)
+## 5. Round S8-S9 — y-drop + homophone context (db 3.6.0)
+
+| Metric | S5-S7 | S8-S9 |
+|---|---|---|
+| y_drop lazy typing primary / top-3 | 56.0 / 75.5% | **74.0 / 90.6%** |
+| h_lazy weighted | 94.0% | **96.7%** |
+| degeminate weighted | 81.4% | **87.1%** |
+| w_drop weighted | 78.8% | **85.3%** |
+| Canonical / majority-form (weighted) | 98.0 / 98.8% | 97.9 / 98.7% |
+
+Delivered: S8a within-tier evidence margin (a ~25x-more-used alias claimant takes the
+key from a rare canonical squatter: songkha→সংখ্যা, suru→শুরু; modest gaps keep the
+canonical owner: jon→জন); S8b vowel-glide y-drop aliases (+129k keys, phebruari→ফেব্রুয়ারি);
+S9 corpus bigram model (98,483 observed pairs, 4x legacy, dictionary-filtered) with
+store-alternative enrichment so context flips homophones: ইলিশ+mach→মাছ, টেস্ট+mach→ম্যাচ —
+both phone-verified live. The 0.1-0.2pt canonical dip is the margin rule deliberately
+trading a handful of rare-word exact typings for the common-word reading, per corpus and
+the user's own learned-word history. Suite: 418 JVM tests green.
+Remaining y_drop misses are mostly the study transform stripping final -্য into typings
+real users don't produce (jon for জন্য); real-habit subclasses are covered.
+
+## 6. Register caveat (honest measurement note)
 
 Of 3,786 majority-form failures, 1,906 are cases where the engine's choice IS the modern
 (bnwiki) majority and only the literature corpus disagrees (কোরিয়া vs করিয়া, হয়ে-class সাধু
