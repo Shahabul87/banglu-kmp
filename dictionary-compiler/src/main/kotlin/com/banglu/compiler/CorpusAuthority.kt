@@ -60,6 +60,40 @@ object CorpusAuthority {
         return lines
     }
 
+    /** Minimum news-register count for a word absent from the base dictionary
+     *  to be added as a new dictionary word. News (professionally edited) is
+     *  the anchor register: wiki-only candidates carry template artifacts
+     *  (বিষয়শ্রেণী, তথ্যছক) and OCR noise, so they are NOT admitted. */
+    const val MIN_NEWS_COUNT_FOR_NEW_WORD = 2L
+
+    /** Bengali letters only — excludes digits ০-৯ (U+09E6..U+09EF). */
+    private val BENGALI_LETTERS = Regex("^[\\u0980-\\u09E5\\u09F0-\\u09FF]+$")
+
+    /**
+     * Vocabulary expansion (data-refresh round): corpus words missing from the
+     * base 484k list, anchored in the news register. Covers modern names
+     * (ট্রাম্পের, এমবাপ্পে), Academy-modern spellings (শ্রেণির), and compound
+     * inflections (অবাস্তবায়নযোগ্য, নিত্যপণ্যে) that real articles use.
+     * Returned nukta-folded, count-descending.
+     */
+    fun newsAnchoredNewWords(newsFile: File, existing: Set<String>): List<String> {
+        if (!newsFile.exists()) return emptyList()
+        val counts = HashMap<String, Long>(120_000)
+        addCounts(newsFile, 1, 1, counts)
+        return counts.entries
+            .asSequence()
+            .filter { (w, c) ->
+                c >= MIN_NEWS_COUNT_FOR_NEW_WORD &&
+                    w !in existing &&
+                    w.length in 2..18 &&
+                    BENGALI_LETTERS.matches(w) &&
+                    !w.endsWith('্')
+            }
+            .sortedByDescending { it.value }
+            .map { it.key }
+            .toList()
+    }
+
     /**
      * Rebuild the frequency map: corpus-evidenced words get a log-scaled
      * [EVIDENCED_FLOOR]..100 frequency ordered by usage; everything else keeps

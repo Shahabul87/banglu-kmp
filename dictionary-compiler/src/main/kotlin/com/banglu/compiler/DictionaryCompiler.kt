@@ -91,11 +91,20 @@ fun main(args: Array<String>) {
         }
         val frequenciesByWord = CorpusAuthority.refreshFrequencies(foldResult.frequencies, usageCounts)
 
+        // Vocabulary expansion: news-anchored corpus words the base list lacks
+        // (names, modern spellings, compound inflections). They inherit their
+        // corpus-scaled frequency from refreshFrequencies via usageCounts.
+        val newWords = corpusDir?.let {
+            CorpusAuthority.newsAnchoredNewWords(File(it, "news_counts.tsv"), foldResult.words.toHashSet())
+        }.orEmpty()
+        println("  Vocabulary expansion: ${newWords.size} news-anchored new words")
+        val allWords = foldResult.words + newWords
+
         println("Inserting words...")
         val insertWord = connection.prepareStatement("INSERT INTO words (bengali, frequency) VALUES (?, ?)")
-        val wordIdByBengali = HashMap<String, Int>(foldResult.words.size * 2)
+        val wordIdByBengali = HashMap<String, Int>(allWords.size * 2)
         var count = 0
-        for (word in foldResult.words) {
+        for (word in allWords) {
             insertWord.setString(1, word)
             insertWord.setInt(2, frequenciesByWord[word] ?: 0)
             insertWord.addBatch()
@@ -126,7 +135,7 @@ fun main(args: Array<String>) {
 
         // 3b. Build precompiled phonetic index (Engine v3)
         println("Building phonetic index...")
-        val indexRows = PhoneticIndexBuilder.build(foldResult.words, frequenciesByWord, usageWords)
+        val indexRows = PhoneticIndexBuilder.build(allWords, frequenciesByWord, usageWords)
         val report = PhoneticIndexBuilder.lastReport
         println("  Rows: ${report.totalRows} (canonical ${report.canonicalRows}, habit-alias ${report.habitAliasRows})")
         println("  Words: tier-A ${report.tierAWords}, tier-B ${report.tierBWords}")
@@ -345,7 +354,7 @@ fun main(args: Array<String>) {
         // 7. Insert metadata
         val insertMeta = connection.prepareStatement("INSERT INTO metadata (key, value) VALUES (?, ?)")
         val metadataEntries = mapOf(
-            "version" to "3.6.0",
+            "version" to "3.7.0",
             "word_count" to count.toString(),
             "disambiguation_count" to mappings.size.toString(),
             "extended_entry_count" to extendedEntryCount.toString(),
