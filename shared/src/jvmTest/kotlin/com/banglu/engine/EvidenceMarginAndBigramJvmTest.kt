@@ -61,6 +61,17 @@ class EvidenceMarginAndBigramJvmTest {
         assertEquals("ম্যাচ", r.bengali)
     }
 
+    // ── S9b: composing preview honors context ───────────────────────────
+
+    @Test
+    fun composingPreview_contextFlipsHomophone() {
+        assertEquals("ম্যাচ", engine.convertForComposing("mach", "টেস্ট").bengali)
+        assertEquals("মাছ", engine.convertForComposing("mach", "ইলিশ").bengali)
+        assertEquals("মাছ", engine.convertForComposing("mach").bengali)
+        // No real bigram evidence -> preview unchanged (stability guard).
+        assertEquals("তৈরি", engine.convertForComposing("toiri", "আমরা").bengali)
+    }
+
     // ── regressions ─────────────────────────────────────────────────────
 
     @Test

@@ -149,7 +149,8 @@ object SmartEngineAdapter {
      * conservative than convertWord() so incomplete words do not jump through
      * fuzzy/recovery dictionary candidates while the user is still typing.
      */
-    fun convertForComposing(word: String): ConversionResult = getEngine().convertForComposing(word)
+    fun convertForComposing(word: String, previousBengali: String? = null): ConversionResult =
+        getEngine().convertForComposing(word, previousBengali)
 
     fun getCompositionPreview(word: String): String = getEngine().getCompositionPreview(word)
 

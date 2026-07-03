@@ -431,7 +431,7 @@ class BangluIMEService : InputMethodService(),
     private fun safeComposingConvert(input: String): ConversionResult {
         val start = System.nanoTime()
         return try {
-            SmartEngineAdapter.convertForComposing(input)
+            SmartEngineAdapter.convertForComposing(input, lastCommittedBengali)
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Composing conversion failed for '$input'", e)
             ConversionResult(input, 0.0, ResolutionSource.RULE, emptyList())

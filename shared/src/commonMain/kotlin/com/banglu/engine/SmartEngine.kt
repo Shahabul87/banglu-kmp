@@ -985,6 +985,23 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * user's current buffer is usually incomplete while typing. Those aggressive
      * layers are still used by convertWord() when the word is committed.
      */
+    /**
+     * S9b: context-aware composing preview. The commit path and the strip
+     * apply bigram context (টেস্ট + mach → ম্যাচ); without this overload the
+     * inline preview showed the context-free reading (মাছ) and disagreed with
+     * what space would commit. Store homophones are merged in as candidates,
+     * and [rerankWithPreviousContext]'s observed-pair guard keeps previews
+     * stable when there is no real evidence.
+     */
+    fun convertForComposing(input: String, previousBengali: String?): ConversionResult {
+        val base = convertForComposing(input)
+        val prev = previousBengali?.trim().orEmpty()
+        if (prev.isEmpty() || base.bengali.isEmpty()) return base
+        val enriched = withStoreAlternatives(input.trim().lowercase(), base)
+        if (enriched.alternatives.isEmpty()) return base
+        return rerankWithPreviousContext(prev, enriched).copy(alternatives = emptyList())
+    }
+
     fun convertForComposing(input: String): ConversionResult {
         val trimmed = input.trim()
         val key = trimmed.lowercase()
