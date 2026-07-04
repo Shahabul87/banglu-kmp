@@ -8,7 +8,9 @@ import com.banglu.engine.types.ConversionResult
 import com.banglu.engine.types.PredictedWord
 import com.banglu.engine.types.SmartSuggestion
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * SmartEngineAdapter - Public API singleton wrapping SmartEngine with learned-word persistence.
@@ -29,6 +31,8 @@ object SmartEngineAdapter {
     private var learningEnabled = true
     private var personalDictionaryEnabled = true
     private var persistenceScope: CoroutineScope? = null
+    private var phoneticStore: com.banglu.engine.platform.PhoneticIndexStore? = null
+    private var engineFullyLoaded = false
 
     @Synchronized
     internal fun getEngine(): SmartEngine {
@@ -57,12 +61,65 @@ object SmartEngineAdapter {
      */
     suspend fun initialize(storage: PlatformStorage, loader: DictionaryLoader? = null) {
         this.storage = storage
-        val eng = getEngine()
-        eng.initialize(storage, loader)
-        val learnedWords = storage.getLearnedWords()
-        customPreferenceMap.clear()
-        selectedPreferenceMap.clear()
-        learnedWords
+
+        if (loader == null) {
+            // Light path (no dictionary loader — tests, learned-words-only
+            // refresh): cheap, runs in place on the current engine.
+            val eng = getEngine()
+            eng.initialize(storage, null)
+            eng.setUserBigrams(storage.getUserBigrams())
+            applyPreferenceMaps(buildPreferenceMaps(eng, storage))
+            eng.clearCache()
+            return
+        }
+
+        // S14: the full-dictionary load takes seconds. It must NEVER run on the
+        // engine that is serving live keystrokes (which happens on the IME main
+        // thread): a fresh engine is built entirely on a background dispatcher
+        // and swapped in atomically at the end. Typing keeps hitting the current
+        // (seed) engine — degraded quality for a few seconds, but never frozen.
+        if (engineFullyLoaded) {
+            // Rebuild path (profile / lite-mode change): drop the old full
+            // engine BEFORE building the new one so two full dictionaries never
+            // coexist on a 256MB heap.
+            synchronized(this) { engine = null }
+            engineFullyLoaded = false
+        }
+        // Ensure a serving engine exists and sees the sqlite store.
+        val serving = getEngine()
+        phoneticStore?.let { serving.setPhoneticIndex(it) }
+
+        val store = phoneticStore
+        val built = withContext(Dispatchers.Default) {
+            val fresh = SmartEngine()
+            fresh.initializeSync()
+            // Attach the precompiled index BEFORE initialize so the engine
+            // skips the runtime corpus-index build.
+            store?.let { fresh.setPhoneticIndex(it) }
+            fresh.initialize(storage, loader)
+            // Personalized next-word prediction: user pairs outrank corpus bigrams.
+            fresh.setUserBigrams(storage.getUserBigrams())
+            Pair(fresh, buildPreferenceMaps(fresh, storage))
+        }
+
+        // Publish: swap the fully-built engine in under the same monitor that
+        // getEngine() synchronizes on, then apply the preference maps. Learning
+        // events recorded during the build window were persisted to storage and
+        // reappear on the next initialize; the in-session map entries are
+        // rebuilt here from the storage snapshot.
+        applyPreferenceMaps(built.second)
+        synchronized(this) { engine = built.first }
+        engineFullyLoaded = true
+        built.first.clearCache()
+    }
+
+    private suspend fun buildPreferenceMaps(
+        eng: SmartEngine,
+        storage: PlatformStorage
+    ): Pair<Map<String, String>, Map<String, String>> {
+        val custom = mutableMapOf<String, String>()
+        val selected = mutableMapOf<String, String>()
+        storage.getLearnedWords()
             .groupBy { it.phonetic.normalizedPhonetic() }
             .forEach { (phonetic, words) ->
                 val customBest = words
@@ -91,15 +148,19 @@ object SmartEngineAdapter {
                             .thenBy { it.lastUsed }
                     )
                 if (customBest != null) {
-                    customPreferenceMap[phonetic] = customBest.bengali
+                    custom[phonetic] = customBest.bengali
                 } else if (learnedBest != null) {
-                    selectedPreferenceMap[phonetic] = learnedBest.bengali
+                    selected[phonetic] = learnedBest.bengali
                 }
             }
-        // Personalized next-word prediction: user-typed pairs outrank corpus bigrams.
-        eng.setUserBigrams(storage.getUserBigrams())
-        // Clear cache so stale seed-only conversions are re-evaluated with 480K data
-        eng.clearCache()
+        return Pair(custom, selected)
+    }
+
+    private fun applyPreferenceMaps(maps: Pair<Map<String, String>, Map<String, String>>) {
+        customPreferenceMap.clear()
+        customPreferenceMap.putAll(maps.first)
+        selectedPreferenceMap.clear()
+        selectedPreferenceMap.putAll(maps.second)
     }
 
     /**
@@ -110,6 +171,8 @@ object SmartEngineAdapter {
      * See [SmartEngine.setPhoneticIndex] for null-detach semantics.
      */
     fun setPhoneticIndex(store: PhoneticIndexStore?) {
+        // Remembered so background-built engines (S14 swap) inherit the store.
+        phoneticStore = store
         getEngine().setPhoneticIndex(store)
     }
 
@@ -345,6 +408,7 @@ object SmartEngineAdapter {
         customPreferenceMap.clear()
         selectedPreferenceMap.clear()
         engine = null
+        engineFullyLoaded = false
     }
 
     /**
@@ -374,6 +438,8 @@ object SmartEngineAdapter {
         learningEnabled = true
         personalDictionaryEnabled = true
         persistenceScope = null
+        phoneticStore = null
+        engineFullyLoaded = false
     }
 
     private fun applyUserPreference(phonetic: String, result: ConversionResult): ConversionResult {

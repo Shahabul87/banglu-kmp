@@ -297,21 +297,52 @@ class BangluIMEService : InputMethodService(),
         sessionExpressionSearchCount = 0
     }
 
+    // S14: latency telemetry accumulates in memory — the previous version did
+    // four SharedPreferences writes per event (~12 per keystroke) on the main
+    // thread. Flushed every 64 events and when the input view closes.
+    private val latencyCounts = HashMap<String, Int>()
+    private val latencyTotals = HashMap<String, Long>()
+    private val latencyMaxes = HashMap<String, Long>()
+    private var latencyPendingEvents = 0
+
     private fun recordLatencyEvent(event: String, elapsedMs: Long) {
-        if (!::prefs.isInitialized) return
-        val countKey = "diag_latency_${event}_count"
-        val totalKey = "diag_latency_${event}_total_ms"
-        val maxKey = "diag_latency_${event}_max_ms"
-        val count = prefs.getInt(countKey, 0) + 1
-        val total = prefs.getLong(totalKey, 0L) + elapsedMs
-        val max = maxOf(prefs.getLong(maxKey, 0L), elapsedMs)
-        prefs.edit()
-            .putInt(countKey, count)
-            .putLong(totalKey, total)
-            .putLong(maxKey, max)
-            .putLong("diag_latency_last_${event}_ms", elapsedMs)
-            .apply()
+        val shouldFlush: Boolean
+        synchronized(latencyCounts) {
+            latencyCounts[event] = (latencyCounts[event] ?: 0) + 1
+            latencyTotals[event] = (latencyTotals[event] ?: 0L) + elapsedMs
+            latencyMaxes[event] = maxOf(latencyMaxes[event] ?: 0L, elapsedMs)
+            latencyPendingEvents++
+            shouldFlush = latencyPendingEvents >= 64
+        }
         if (elapsedMs > 32L) log("latency: $event ${elapsedMs}ms")
+        if (shouldFlush) flushLatencyTelemetry()
+    }
+
+    private fun flushLatencyTelemetry() {
+        if (!::prefs.isInitialized) return
+        val counts: Map<String, Int>
+        val totals: Map<String, Long>
+        val maxes: Map<String, Long>
+        synchronized(latencyCounts) {
+            if (latencyPendingEvents == 0) return
+            counts = HashMap(latencyCounts)
+            totals = HashMap(latencyTotals)
+            maxes = HashMap(latencyMaxes)
+            latencyCounts.clear()
+            latencyTotals.clear()
+            latencyMaxes.clear()
+            latencyPendingEvents = 0
+        }
+        val editor = prefs.edit()
+        for ((event, count) in counts) {
+            val countKey = "diag_latency_${event}_count"
+            val totalKey = "diag_latency_${event}_total_ms"
+            val maxKey = "diag_latency_${event}_max_ms"
+            editor.putInt(countKey, prefs.getInt(countKey, 0) + count)
+            editor.putLong(totalKey, prefs.getLong(totalKey, 0L) + (totals[event] ?: 0L))
+            editor.putLong(maxKey, maxOf(prefs.getLong(maxKey, 0L), maxes[event] ?: 0L))
+        }
+        editor.apply()
     }
 
     private fun installCrashDiagnostics() {
@@ -900,6 +931,7 @@ class BangluIMEService : InputMethodService(),
 
     override fun onFinishInputView(finishingInput: Boolean) {
         cleanupImeSession("finish_input_view", cancelVoice = true)
+        flushLatencyTelemetry()
         super.onFinishInputView(finishingInput)
     }
 
@@ -932,6 +964,7 @@ class BangluIMEService : InputMethodService(),
 
     override fun onDestroy() {
         cleanupImeSession("destroy", cancelVoice = true)
+        flushLatencyTelemetry()
         try { unregisterReceiver(voiceDisclosureReceiver) } catch (_: Exception) { /* not registered */ }
         if (::prefs.isInitialized) {
             prefs.unregisterOnSharedPreferenceChangeListener(preferenceListener)
