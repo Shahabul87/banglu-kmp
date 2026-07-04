@@ -1930,13 +1930,17 @@ private fun KeyButton(
                     if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
                     currentOnClick()
                     var longPressed = false
+                    var released = false
                     if (longPressOptions.isNotEmpty()) {
                         try {
                             withTimeout(viewConfiguration.longPressTimeoutMillis) {
                                 while (true) {
                                     val event = awaitPointerEvent()
                                     event.changes.forEach { it.consume() }
-                                    if (event.changes.all { !it.pressed }) return@withTimeout
+                                    if (event.changes.all { !it.pressed }) {
+                                        released = true
+                                        return@withTimeout
+                                    }
                                 }
                             }
                         } catch (_: PointerEventTimeoutCancellationException) {
@@ -1945,9 +1949,17 @@ private fun KeyButton(
                             if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         }
                     }
-                    if (!longPressed) {
+                    if (!longPressed && !released) {
                         // Slide-tolerant release wait: pointer capture keeps the
                         // gesture on this key even if the finger drifts.
+                        //
+                        // S15: guarded by `released` — the long-press wait above
+                        // already ends when the finger lifts, and re-entering
+                        // this loop afterwards left a stale awaitPointerEvent()
+                        // that CONSUMED the next tap's DOWN on this key. Every
+                        // second press of t/d/r/s/i/u was silently eaten
+                        // (shipped in 1.5.1 with commit-on-press; felt as
+                        // "keys skip when typing fast").
                         while (true) {
                             val event = awaitPointerEvent()
                             event.changes.forEach { it.consume() }
