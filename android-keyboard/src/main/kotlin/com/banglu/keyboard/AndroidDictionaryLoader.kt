@@ -31,7 +31,7 @@ class AndroidDictionaryLoader(
     companion object {
         private const val TAG = "BangluDictLoader"
         internal const val DB_FILENAME = "dictionary.sqlite"
-        internal const val REQUIRED_DB_VERSION = "3.7.3"
+        internal const val REQUIRED_DB_VERSION = "3.8.0"
     }
 
     /**
@@ -296,6 +296,26 @@ class AndroidDictionaryLoader(
                 return@withDatabase null
             }
 
+            // S20: trigram table (db 3.8.0+). Optional and OOM-guarded — the
+            // model works bigram-only when absent or when memory is tight.
+            val trigrams = mutableMapOf<String, Int>()
+            if (db.hasTable("trigram_triples")) {
+                try {
+                    db.rawQuery("SELECT w1, w2, w3, count FROM trigram_triples", null).use { cursor ->
+                        while (cursor.moveToNext()) {
+                            val key = "${cursor.getString(0)}	${cursor.getString(1)}	${cursor.getString(2)}"
+                            trigrams[key] = cursor.getInt(3)
+                        }
+                    }
+                } catch (e: Exception) {
+                    if (BuildConfig.DEBUG) Log.e(TAG, "Failed to load trigram model", e)
+                    trigrams.clear()
+                } catch (oom: OutOfMemoryError) {
+                    if (BuildConfig.DEBUG) Log.e(TAG, "Skipping trigram model after OOM", oom)
+                    trigrams.clear()
+                }
+            }
+
             val totalUnigrams = loadMetadataInt(db, "total_unigrams") ?: unigrams.values.sum()
             val totalBigrams = loadMetadataInt(db, "total_bigrams") ?: bigrams.values.sum()
             if (BuildConfig.DEBUG) {
@@ -306,7 +326,8 @@ class AndroidDictionaryLoader(
                     unigrams = unigrams,
                     bigrams = bigrams,
                     totalUnigrams = totalUnigrams,
-                    totalBigrams = totalBigrams
+                    totalBigrams = totalBigrams,
+                    trigrams = trigrams
                 )
             } else {
                 null

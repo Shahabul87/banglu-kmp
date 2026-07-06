@@ -102,6 +102,11 @@ class BangluIMEService : InputMethodService(),
     // Feature 4.1: Bengali next-word predictions
     private var lastCommittedBengali = ""
 
+    // S20: the word before lastCommittedBengali — trigram context. Follows
+    // the same never-reset convention; adjacency safety comes from the
+    // evidence gating in the engine (promotion needs an OBSERVED triple).
+    private var secondLastCommittedBengali = ""
+
     // Feature 1.3: Context-aware enter key label
     private val enterKeyLabel = mutableStateOf("\u21B5")
 
@@ -473,7 +478,9 @@ class BangluIMEService : InputMethodService(),
     private fun safeComposingConvert(input: String): ConversionResult {
         val start = System.nanoTime()
         return try {
-            SmartEngineAdapter.convertForComposing(input, lastCommittedBengali)
+            SmartEngineAdapter.convertForComposing(
+                input, lastCommittedBengali, secondLastCommittedBengali
+            )
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Composing conversion failed for '$input'", e)
             ConversionResult(input, 0.0, ResolutionSource.RULE, emptyList())
@@ -486,7 +493,9 @@ class BangluIMEService : InputMethodService(),
     private fun safeSuggestions(input: String, limit: Int = 8): List<SmartSuggestion> {
         val start = System.nanoTime()
         return try {
-            SmartEngineAdapter.getSuggestionsWithContext(input, listOf(lastCommittedBengali), limit)
+            SmartEngineAdapter.getSuggestionsWithContext(
+                input, listOf(secondLastCommittedBengali, lastCommittedBengali), limit
+            )
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Suggestions failed for '$input'", e)
             emptyList()
@@ -498,7 +507,9 @@ class BangluIMEService : InputMethodService(),
     private fun safeConvertWithContext(input: String): ConversionResult {
         val start = System.nanoTime()
         return try {
-            SmartEngineAdapter.convertWordWithContext(input, listOf(lastCommittedBengali))
+            SmartEngineAdapter.convertWordWithContext(
+                input, listOf(secondLastCommittedBengali, lastCommittedBengali)
+            )
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Context conversion failed for '$input'", e)
             safeConvert(input)
@@ -2517,14 +2528,18 @@ class BangluIMEService : InputMethodService(),
      * Only shows predictions when the composing buffer is empty and keyboard is in Banglu mode.
      */
     private fun updatePredictions(committedBengali: String) {
+        if (committedBengali != lastCommittedBengali) {
+            secondLastCommittedBengali = lastCommittedBengali
+        }
         lastCommittedBengali = committedBengali
         if (suggestionsAllowedForCurrentInput() && buffer.isEmpty() && keyboardMode.value == KeyboardMode.BANGLU) {
             suggestionJob?.cancel()
             suggestions.clear()
             val snapshot = committedBengali
+            val prev2Snapshot = secondLastCommittedBengali
             suggestionJob = serviceScope.launch {
                 val predictions = withContext(Dispatchers.Default) {
-                    SmartEngineAdapter.getNextWordPredictions(snapshot, 4)
+                    SmartEngineAdapter.getNextWordPredictions(prev2Snapshot, snapshot, 4)
                 }
                 if (
                     suggestionsAllowedForCurrentInput() &&

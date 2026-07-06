@@ -202,10 +202,16 @@ object SmartEngineAdapter {
      * final ranking layer.
      */
     fun convertWordWithContext(word: String, context: List<String>): ConversionResult {
-        val lastContextWord = context.asReversed().firstOrNull { it.isNotBlank() }
+        // S20: last two non-blank context words — trigram evidence first,
+        // bigram fallback inside rerankWithContext.
+        val recent = context.asReversed().filter { it.isNotBlank() }
         val eng = getEngine()
         val result = eng.convertWord(word)
-        val contextRanked = eng.rerankWithPreviousContext(lastContextWord, result)
+        val contextRanked = eng.rerankWithContext(
+            prev2Bengali = recent.getOrNull(1),
+            prev1Bengali = recent.getOrNull(0),
+            result = result
+        )
         return applyUserPreference(word, contextRanked)
     }
 
@@ -214,8 +220,12 @@ object SmartEngineAdapter {
      * conservative than convertWord() so incomplete words do not jump through
      * fuzzy/recovery dictionary candidates while the user is still typing.
      */
-    fun convertForComposing(word: String, previousBengali: String? = null): ConversionResult =
-        getEngine().convertForComposing(word, previousBengali)
+    fun convertForComposing(
+        word: String,
+        previousBengali: String? = null,
+        secondPreviousBengali: String? = null
+    ): ConversionResult =
+        getEngine().convertForComposing(word, previousBengali, secondPreviousBengali)
 
     fun getCompositionPreview(word: String): String = getEngine().getCompositionPreview(word)
 
@@ -287,6 +297,24 @@ object SmartEngineAdapter {
      */
     fun getNextWordPredictions(prevBengali: String, limit: Int = 5): List<PredictedWord> =
         getEngine().getNextWordPredictions(prevBengali, limit)
+
+    /** S20: two-word next-word prediction — exact (prev2, prev1) trigram
+     *  followers lead, bigram/user predictions fill the remainder. */
+    fun getNextWordPredictions(
+        prev2Bengali: String?,
+        prevBengali: String,
+        limit: Int = 5
+    ): List<PredictedWord> {
+        val eng = getEngine()
+        val tri = if (!prev2Bengali.isNullOrBlank()) {
+            eng.getTrigramNextWordPredictions(prev2Bengali, prevBengali, limit)
+        } else emptyList()
+        if (tri.size >= limit) return tri.take(limit)
+        val seen = tri.mapTo(mutableSetOf()) { it.bengali }
+        val rest = eng.getNextWordPredictions(prevBengali, limit)
+            .filter { it.bengali !in seen }
+        return (tri + rest).take(limit)
+    }
 
     /**
      * Record one observed (previous, next) Bengali commit pair for personalized

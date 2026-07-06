@@ -382,10 +382,42 @@ fun main(args: Array<String>) {
             println("Skipping bigram-model.json (not found)")
         }
 
+        // 6b. S20 corpus trigram model — two-word context for homophone
+        // reranking (register study 2026-07-06: the dominant miss class).
+        var trigramCount = 0
+        val corpusTrigrams = corpusDir?.let { dir ->
+            CorpusTrigrams.build(
+                sources = listOf(
+                    File(dir, "news_trigrams.tsv") to CorpusTrigrams.MODERN_WEIGHT,
+                    File(dir, "bnwiki_trigrams.tsv") to CorpusTrigrams.MODERN_WEIGHT,
+                    File(dir, "bnwikisource_trigrams.tsv") to 1L
+                ),
+                dictionaryWords = wordIdByBengali.keys
+            )
+        }
+        if (corpusTrigrams != null && corpusTrigrams.triples.isNotEmpty()) {
+            println("Building corpus trigram model...")
+            val insertTri = connection.prepareStatement(
+                "INSERT INTO trigram_triples (w1, w2, w3, count) VALUES (?, ?, ?, ?)"
+            )
+            for ((t, c) in corpusTrigrams.triples) {
+                insertTri.setString(1, t.first)
+                insertTri.setString(2, t.second)
+                insertTri.setString(3, t.third)
+                insertTri.setInt(4, c)
+                insertTri.addBatch()
+                if (++trigramCount % 50000 == 0) insertTri.executeBatch()
+            }
+            insertTri.executeBatch()
+            println("  Inserted $trigramCount corpus trigram triples")
+        } else {
+            println("Skipping trigram model (no *_trigrams.tsv in corpus dir)")
+        }
+
         // 7. Insert metadata
         val insertMeta = connection.prepareStatement("INSERT INTO metadata (key, value) VALUES (?, ?)")
         val metadataEntries = mapOf(
-            "version" to "3.7.3",
+            "version" to "3.8.0",
             "word_count" to count.toString(),
             "disambiguation_count" to mappings.size.toString(),
             "extended_entry_count" to extendedEntryCount.toString(),
@@ -393,6 +425,7 @@ fun main(args: Array<String>) {
             "pruned_engine_verb_phonetic_count" to prunedEngineVerbPhoneticCount.toString(),
             "bigram_unigram_count" to unigramCount.toString(),
             "bigram_pair_count" to bigramCount.toString(),
+            "trigram_triple_count" to trigramCount.toString(),
             "total_unigrams" to totalUnigrams.toString(),
             "total_bigrams" to totalBigrams.toString(),
             "phonetic_index_count" to indexCount.toString(),
@@ -497,6 +530,14 @@ private fun createTables(connection: Connection) {
                 next_word TEXT NOT NULL,
                 count INTEGER NOT NULL,
                 PRIMARY KEY(previous_word, next_word)
+            )
+        """)
+        execute("""
+            CREATE TABLE trigram_triples (
+                w1 TEXT NOT NULL,
+                w2 TEXT NOT NULL,
+                w3 TEXT NOT NULL,
+                count INTEGER NOT NULL
             )
         """)
         execute("CREATE INDEX idx_bigram_pairs_previous ON bigram_pairs(previous_word)")

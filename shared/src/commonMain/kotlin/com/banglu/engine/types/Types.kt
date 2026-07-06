@@ -99,7 +99,9 @@ data class BigramModelData(
     val unigrams: Map<String, Int>,
     val bigrams: Map<String, Int>,
     val totalUnigrams: Int,
-    val totalBigrams: Int
+    val totalBigrams: Int,
+    /** S20: "w1\tw2\tw3" -> count. Empty when the db has no trigram table. */
+    val trigrams: Map<String, Int> = emptyMap()
 )
 
 data class PredictedWord(

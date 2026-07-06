@@ -173,9 +173,21 @@ class TestDictionaryLoader(
                 }
             }
 
+            val trigrams = mutableMapOf<String, Int>()
+            if (conn.hasTable("trigram_triples")) {
+                conn.createStatement().use { stmt ->
+                    stmt.executeQuery("SELECT w1, w2, w3, count FROM trigram_triples").use { rs ->
+                        while (rs.next()) {
+                            trigrams["${rs.getString("w1")}	${rs.getString("w2")}	${rs.getString("w3")}"] =
+                                rs.getInt("count")
+                        }
+                    }
+                }
+            }
+
             println(
-                "TestDictionaryLoader: Loaded ${unigrams.size} unigram entries and " +
-                    "${bigrams.size} bigram entries"
+                "TestDictionaryLoader: Loaded ${unigrams.size} unigram entries, " +
+                    "${bigrams.size} bigram entries, ${trigrams.size} trigram entries"
             )
 
             if (unigrams.isEmpty() && bigrams.isEmpty()) {
@@ -186,6 +198,7 @@ class TestDictionaryLoader(
                     bigrams = bigrams,
                     totalUnigrams = conn.loadMetadataInt("total_unigrams") ?: unigrams.values.sum(),
                     totalBigrams = conn.loadMetadataInt("total_bigrams") ?: bigrams.values.sum(),
+                    trigrams = trigrams,
                 )
             }
         }

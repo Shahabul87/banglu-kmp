@@ -1063,13 +1063,23 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * and [rerankWithPreviousContext]'s observed-pair guard keeps previews
      * stable when there is no real evidence.
      */
-    fun convertForComposing(input: String, previousBengali: String?): ConversionResult {
+    fun convertForComposing(input: String, previousBengali: String?): ConversionResult =
+        convertForComposing(input, previousBengali, null)
+
+    /** S20 overload: two-word context so the preview mirrors the trigram
+     *  rerank the commit path applies — preview and Space must agree. */
+    fun convertForComposing(
+        input: String,
+        previousBengali: String?,
+        secondPreviousBengali: String?
+    ): ConversionResult {
         val base = convertForComposing(input)
         val prev = previousBengali?.trim().orEmpty()
         if (prev.isEmpty() || base.bengali.isEmpty()) return base
         val enriched = withStoreAlternatives(input.trim().lowercase(), base)
         if (enriched.alternatives.isEmpty()) return base
-        return rerankWithPreviousContext(prev, enriched).copy(alternatives = emptyList())
+        return rerankWithContext(secondPreviousBengali, prev, enriched)
+            .copy(alternatives = emptyList())
     }
 
     fun convertForComposing(input: String): ConversionResult {
@@ -4806,6 +4816,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * @param limit Maximum predictions to return
      * @return List of predicted words with confidence scores
      */
+    /** S20: followers observed after the exact two-word context. */
+    fun getTrigramNextWordPredictions(prev2: String, prev1: String, limit: Int = 5): List<PredictedWord> =
+        bigramModel.getTopTrigramPredictions(prev2.trim(), prev1.trim(), limit)
+            .filter { it.bengali !in PREDICTION_STOPLIST }
+
     fun getNextWordPredictions(prevBengali: String, limit: Int = 5): List<PredictedWord> {
         val previous = prevBengali.trim()
         if (previous.isEmpty() || limit <= 0) return emptyList()
@@ -4906,6 +4921,70 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * keeps live typing fast and prevents context from inventing unrelated
      * dictionary words.
      */
+    /**
+     * S20: two-word context rerank. Trigram evidence (observed w1,w2,cand
+     * triple) is the strongest homophone signal we have — mot after "onek
+     * beshi" is মত, after "shob theke" is মোট. Falls back to the bigram
+     * rerank when there is no second word or no trigram table. Promotion
+     * stays evidence-gated (S4): an alternative needs an OBSERVED triple,
+     * never interpolated probability alone.
+     */
+    fun rerankWithContext(
+        prev2Bengali: String?,
+        prev1Bengali: String?,
+        result: ConversionResult
+    ): ConversionResult {
+        val prev1 = prev1Bengali?.trim().orEmpty()
+        val prev2 = prev2Bengali?.trim().orEmpty()
+        if (prev1.isEmpty() || !bigramModel.isLoaded() || result.alternatives.isEmpty()) {
+            return rerankWithPreviousContext(prev1Bengali, result)
+        }
+        if (prev2.isEmpty() || !bigramModel.hasTrigrams()) {
+            return rerankWithPreviousContext(prev1Bengali, result)
+        }
+
+        var bestWord = result.bengali
+        var bestConfidence = result.confidence
+        var bestScore = bigramModel.contextProb(prev2, prev1, result.bengali)
+        val primaryTriple = bigramModel.trigramCount(prev2, prev1, result.bengali)
+
+        for (alt in result.alternatives) {
+            if (alt.bengali == result.bengali || alt.confidence < 0.35) continue
+            val altTriple = bigramModel.trigramCount(prev2, prev1, alt.bengali)
+            if (altTriple == 0) continue
+            val bothValid = validator.isLoaded() &&
+                validator.isValid(result.bengali) &&
+                validator.isValid(alt.bengali)
+            if (!bothValid) continue
+            val altScore = bigramModel.contextProb(prev2, prev1, alt.bengali)
+            // Observed triple against an unobserved primary is decisive on a
+            // small margin; against an observed primary it must clearly win.
+            val threshold = if (primaryTriple == 0) 1.05 else 1.30
+            if (altScore > bestScore * threshold) {
+                bestWord = alt.bengali
+                bestConfidence = maxOf(result.confidence, alt.confidence, 0.91)
+                bestScore = altScore
+            }
+        }
+
+        if (bestWord == result.bengali) {
+            // No trigram promotion — the bigram layer may still act.
+            return rerankWithPreviousContext(prev1Bengali, result)
+        }
+        val alternatives = buildList {
+            add(Alternative(result.bengali, minOf(result.confidence, 0.88)))
+            result.alternatives
+                .filter { it.bengali != bestWord && it.bengali != result.bengali }
+                .forEach { add(it) }
+        }
+        return result.copy(
+            bengali = bestWord,
+            confidence = bestConfidence,
+            source = ResolutionSource.STATISTICAL,
+            alternatives = alternatives
+        )
+    }
+
     fun rerankWithPreviousContext(prevBengali: String?, result: ConversionResult): ConversionResult {
         val prev = prevBengali?.trim().orEmpty()
         if (prev.isEmpty() || !bigramModel.isLoaded() || result.alternatives.isEmpty()) return result
