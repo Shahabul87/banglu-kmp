@@ -67,8 +67,31 @@ fun main(args: Array<String>) {
         // 3. Nukta-fold + dedupe the word list, then insert words with frequencies.
         // The words table stores the FOLDED form only (engine-side comparisons
         // are nukta-folded post-F1); duplicate folded forms merge (max frequency).
-        val rawWordList = bengaliWords.map { it.jsonPrimitive.content }
-        val freqMap = frequencies.entries.associate { (w, f) -> w to f.jsonPrimitive.int }
+        val rawWordList = bengaliWords.map { it.jsonPrimitive.content }.toMutableList()
+        val freqMap = frequencies.entries.associate { (w, f) -> w to f.jsonPrimitive.int }.toMutableMap()
+
+        // S18: chat-register supplemental lexicon (register study 2026-07-06).
+        // Words real typists use daily that never appear in wiki/news corpora
+        // (গেসি, করতেসি, আছোস...). Frequencies are curated (40-60 band): high
+        // enough to surface when typed, below evidenced formal words. Absent
+        // from the usage corpus they assign as tier-B exact-only keys — they
+        // never pollute suggestions for other typings.
+        val chatLexicon = sequenceOf(
+            File("data/chat_lexicon.tsv"),
+            File("dictionary-compiler/data/chat_lexicon.tsv")
+        ).firstOrNull { it.exists() }
+        val chatWords = mutableListOf<String>()
+        if (chatLexicon != null) {
+            chatLexicon.readLines().forEach { line ->
+                val parts = line.trim().split("\t")
+                if (parts.size == 2 && parts[1].toIntOrNull() != null) {
+                    rawWordList.add(parts[0])
+                    freqMap.putIfAbsent(parts[0], parts[1].toInt())
+                    chatWords.add(parts[0])
+                }
+            }
+            println("  Chat lexicon: merged ${chatWords.size} supplemental words")
+        }
         val foldResult = PhoneticIndexBuilder.foldAndDedupe(rawWordList, freqMap)
         println("  Nukta fold/dedupe removed ${foldResult.mergedCount} duplicate rows " +
             "(${rawWordList.size} -> ${foldResult.words.size} words)")
@@ -88,6 +111,14 @@ fun main(args: Array<String>) {
                 "${usageCounts.size} weighted words")
         } else {
             println("WARNING: corpus-2026-07 not found — frequencies stay legacy")
+        }
+        // S18: chat-lexicon words carry curated usage evidence — they exist
+        // precisely because wiki/news corpora never contain them. Without
+        // this they assign tier-B (exact-only, STRIP-INVISIBLE) and the whole
+        // point of adding them (chat typings in the suggestion strip) is lost.
+        for (w in chatWords) {
+            val folded = com.banglu.engine.util.ReverseTransliterator.foldNukta(w.trim())
+            usageCounts[folded] = maxOf(usageCounts[folded] ?: 0L, 3L)
         }
         val frequenciesByWord = CorpusAuthority.refreshFrequencies(foldResult.frequencies, usageCounts)
 
@@ -354,7 +385,7 @@ fun main(args: Array<String>) {
         // 7. Insert metadata
         val insertMeta = connection.prepareStatement("INSERT INTO metadata (key, value) VALUES (?, ?)")
         val metadataEntries = mapOf(
-            "version" to "3.7.2",
+            "version" to "3.7.3",
             "word_count" to count.toString(),
             "disambiguation_count" to mappings.size.toString(),
             "extended_entry_count" to extendedEntryCount.toString(),

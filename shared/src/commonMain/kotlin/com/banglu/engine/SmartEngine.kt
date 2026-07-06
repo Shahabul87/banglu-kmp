@@ -1356,12 +1356,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
-        for (bengali in corpusWordsFor(key).take(maxResults)) {
+        // S18: confidence ranks by the store's OWN order (frequency within the
+        // exact key), not by how crowded the strip already is — the old
+        // suggestions.size discount floored exact tier-A hits at 0.72, below
+        // prefix continuations (0.90), so পারোস vanished behind পারস্পরিক.
+        // An exact-key match always outranks a continuation.
+        for ((index, bengali) in corpusWordsFor(key).take(maxResults).withIndex()) {
             if (seen.add(bengali)) {
                 suggestions.add(
                     SmartSuggestion(
                         bengali = bengali,
-                        confidence = maxOf(0.72, 0.94 - suggestions.size * 0.03),
+                        confidence = maxOf(0.80, 0.94 - index * 0.02),
                         source = "corpus_phonetic",
                         phonetic = key,
                         tier = "tier0_corpus"
@@ -1710,7 +1715,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     ): Double {
         val exactDictionaryMatch = suggestion.bengali in exactDictionaryWords ||
             suggestion.source == "dictionary_exact" ||
-            suggestion.source == "dictionary"
+            suggestion.source == "dictionary" ||
+            // S18: the compiled index is the spelling authority — a word that
+            // owns the EXACT typed key is an exact match wherever it entered
+            // the strip from. Without this, exact-key store words that are
+            // absent from the in-memory dictionaries (chat lexicon: পারোস)
+            // rank below high-usage prefix continuations (পারস্পরিক).
+            storeLookup(key).any { it.bengali == suggestion.bengali }
         val seedDictionaryWord = dictionary.getPhoneticForBengali(suggestion.bengali) != null
         val validatorWord = if (validator.isLoaded()) {
             validator.isValid(suggestion.bengali)
@@ -2275,6 +2286,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         "cile" to "ছিলে",      // করছিলে
         "cilo" to "ছিলো",      // করছিলো
         "cilen" to "ছিলেন",    // করছিলেন
+        // S18: informal 2nd person (চট্টগ্রাম/ঢাকা chat register):
+        // আছোস "achhos", পারোস "paros", করোস "koros".
+        "os" to "োস",
         "teci" to "তেছি",      // করতেছি
         "techi" to "তেছি",     // legacy/common: kortechi -> করতেছি
         // S16 note: on store-backed engines, tryNegationCompound runs BEFORE
@@ -2617,7 +2631,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      */
     private fun tryNegationCompound(key: String): ConversionResult? {
         if (inNegationCompound) return null
-        if (key.length < 7 || !key.endsWith("na")) return null
+        // S18: "nai" (খাইনাই class) joined the "na" class from the S17
+        // register study — same attached-negation phenomenon, same machinery.
+        val suffix = when {
+            key.endsWith("nai") -> "nai" to "নাই"
+            key.endsWith("na") -> "na" to "না"
+            else -> return null
+        }
+        // Minimum lengths: "na" keeps the proven S16 floor (>= 7 — sona/kena
+        // class must never reach here); "nai" allows >= 6 (hoinai -> হইনাই,
+        // prefix hoi is still pipeline+validator gated).
+        val minLen = if (suffix.first == "nai") 6 else 7
+        if (key.length < minLen) return null
         if (!validator.isLoaded()) return null
 
         // Whole-word precedence: if the store attests the FULL key (মন্ত্রণা,
@@ -2629,7 +2654,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
-        val prefixKey = key.dropLast(2)
+        val prefixKey = key.dropLast(suffix.first.length)
         inNegationCompound = true
         val prefix = try {
             convertWord(prefixKey)
@@ -2651,10 +2676,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         return ConversionResult(
-            bengali = stem + "না",
+            bengali = stem + suffix.second,
             confidence = 0.93,
             source = ResolutionSource.DICTIONARY,
-            alternatives = listOf(Alternative("$stem না", 0.9))
+            alternatives = listOf(Alternative("$stem ${suffix.second}", 0.9))
         )
     }
 
