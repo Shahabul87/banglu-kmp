@@ -260,6 +260,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "tomr" to "তোমার",
             "tmi" to "তুমি",
             "tomi" to "তুমি",
+            // S21: jac-/khac- continuous chat class (S17 leftover). The chat
+            // stem is the -চ্ছ- form (যাচ্ছি "jacchi") but the continuous is
+            // written with the dialect -তেছি/-তেসি tail: jactesi = যাইতেছি.
+            // No habit chain can derive ite -> c, so the class is enumerated.
+            // Attached negation (jactesina) resolves via tryNegationCompound,
+            // whose prefix conversion re-enters this map.
+            "jactesi" to "যাইতেছি",
+            "jactechi" to "যাইতেছি",
+            "jacteci" to "যাইতেছি",
+            "khactesi" to "খাইতেছি",
+            "khactechi" to "খাইতেছি",
+            "khacteci" to "খাইতেছি",
         )
 
         /** Surfacing threshold for personal pairs — one occurrence may be a typo. */

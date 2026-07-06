@@ -102,4 +102,13 @@ class ChatContinuousNegationJvmTest {
         assertTrue("পারোস" in paros, "পারোস reachable for paros, got $paros")
         assertEquals("আছোস", engine.convertWord("achhos").bengali)
     }
+
+    @Test
+    fun jacKhacContinuousClassResolves() {
+        // S21: enumerated chat stems (no habit chain derives ite -> c).
+        assertEquals("যাইতেছি", engine.convertWord("jactesi").bengali)
+        assertEquals("খাইতেছি", engine.convertWord("khactesi").bengali)
+        assertEquals("যাইতেছিনা", engine.convertWord("jactesina").bengali)
+        assertEquals("খাইতেছিনা", engine.convertWord("khactesina").bengali)
+    }
 }

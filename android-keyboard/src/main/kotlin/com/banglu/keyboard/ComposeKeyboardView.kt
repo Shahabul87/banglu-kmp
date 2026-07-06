@@ -152,18 +152,21 @@ private fun middleLetterRowIndent(): Dp {
 private data class KeyAlternative(val label: String, val input: String)
 
 // ── Dimensions ───────────────────────────────────────────────────────────────────
-private val NumberRowHeight = 40.dp
-private val LetterKeyRowHeight = 46.dp
-private val BottomKeyRowHeight = 48.dp
+// S21 seam fix: KeyGapV folded INTO each row's touch cell (row heights +3dp,
+// visual inset +1.5dp) so rows tile edge-to-edge with no dead strips between
+// them — the vertical twin of S13's hitPaddingH. Keys render identically.
+private val NumberRowHeight = 43.dp
+private val LetterKeyRowHeight = 49.dp
+private val BottomKeyRowHeight = 51.dp
 private val MinKeyTouchHeight = 46.dp
 private val TopStripHeight = 38.dp
 private val ToolbarExpandedHeight = 40.dp
 private val ToolbarCollapsedHeight = 36.dp
 private val KeyGapH = 7.dp
 private val KeyGapHLandscape = 5.dp
-private val KeyGapV = 3.dp
+private val KeyGapV = 0.dp
 private val KeyVisualPaddingH = 0.dp
-private val KeyVisualPaddingV = 4.dp
+private val KeyVisualPaddingV = 5.5.dp
 private val KeyCorner = 7.dp
 private val KeyboardPadding = 6.dp
 private val NavigationFallbackBottomPadding = 56.dp
@@ -2848,7 +2851,10 @@ private fun EmojiSearchKeyboard(
     onBackToKeyboard: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
-    val keyHeight = 40.dp
+    // S21: gaps live INSIDE each touch cell (S13 pattern) — no spacedBy dead
+    // strips between emoji-search keys, no dead seams between its rows.
+    val keyHeight = 44.dp
+    val hitPad = currentKeyGapH() / 2
 
     Column(
         modifier = Modifier
@@ -2857,12 +2863,10 @@ private fun EmojiSearchKeyboard(
             .padding(horizontal = 6.dp, vertical = 4.dp)
     ) {
         EmojiSearchKeyRow(EMOJI_SEARCH_ROW_1, keyHeight, onKey)
-        Spacer(modifier = Modifier.height(4.dp))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(currentKeyGapH())
+                .padding(horizontal = 20.dp)
         ) {
             EMOJI_SEARCH_ROW_2.forEach { key ->
                 KeyButton(
@@ -2871,14 +2875,13 @@ private fun EmojiSearchKeyboard(
                     height = keyHeight,
                     bgColor = colors.keyBg,
                     fontSize = 18,
+                    hitPaddingH = hitPad,
                     onClick = { onKey(key) }
                 )
             }
         }
-        Spacer(modifier = Modifier.height(4.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(currentKeyGapH()),
             verticalAlignment = Alignment.CenterVertically
         ) {
             KeyButton(
@@ -2888,6 +2891,7 @@ private fun EmojiSearchKeyboard(
                 bgColor = colors.specialKeyBg,
                 fontSize = 15,
                 accessibilityLabel = "Back to keyboard",
+                hitPaddingH = hitPad,
                 onClick = onBackToKeyboard
             )
             EMOJI_SEARCH_ROW_3.forEach { key ->
@@ -2897,6 +2901,7 @@ private fun EmojiSearchKeyboard(
                     height = keyHeight,
                     bgColor = colors.keyBg,
                     fontSize = 18,
+                    hitPaddingH = hitPad,
                     onClick = { onKey(key) }
                 )
             }
@@ -2907,6 +2912,7 @@ private fun EmojiSearchKeyboard(
                 bgColor = colors.specialKeyBg,
                 fontSize = 18,
                 accessibilityLabel = if (query.isBlank()) "Backspace search" else "Delete ${query.last()} from search",
+                hitPaddingH = hitPad,
                 onClick = onBackspace
             )
         }
@@ -2920,10 +2926,8 @@ private fun EmojiSearchKeyRow(
     onKey: (String) -> Unit
 ) {
     val colors = LocalKeyboardColors.current
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(currentKeyGapH())
-    ) {
+    val hitPad = currentKeyGapH() / 2
+    Row(modifier = Modifier.fillMaxWidth()) {
         keys.forEach { key ->
             KeyButton(
                 label = key,
@@ -2931,6 +2935,7 @@ private fun EmojiSearchKeyRow(
                 height = keyHeight,
                 bgColor = colors.keyBg,
                 fontSize = 18,
+                hitPaddingH = hitPad,
                 onClick = { onKey(key) }
             )
         }
