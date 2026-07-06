@@ -45,6 +45,16 @@ android {
             )
             signingConfig = signingConfigs.getByName("release")
         }
+        // Release-grade performance (R8, no debuggable overhead) with the
+        // DEBUG signature: installs OVER the daily debug build on the dev
+        // phone without uninstalling, so learned words survive. Compose runs
+        // 2-4x faster than the debug variant — this is what typing-feel
+        // testing must use; never judge smoothness on the debug build.
+        create("perf") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {

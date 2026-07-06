@@ -822,6 +822,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             cacheResult(cacheKey, result); return result
         }
 
+        // S16: attached-negation compound (chat register writes না joined:
+        // "bujtecina" = বুঝতেছি + না). Runs BEFORE the invented-composition
+        // layers below, which otherwise assemble junk-stem garbage
+        // (বুজয়তেছিনা@0.97) for exactly these keys. Internally defers to the
+        // store when the FULL key is an attested word (মন্ত্রণা-class), and
+        // requires the loaded validator, so seed-only engines fall through to
+        // the productive-suffix table unchanged.
+        tryNegationCompound(key)?.let { result ->
+            cacheResult(cacheKey, result); return result
+        }
+
         tryProductiveVerbSuffixConversion(key)?.let { result ->
             // Composed root+suffix string — may be an invented form; gate it.
             val gated = applyCompositionCommitGate(key, result)
@@ -1068,6 +1079,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         MOBILE_SHORTHAND_OVERRIDES[key]?.let { bengali ->
             return ConversionResult(bengali, 0.99, ResolutionSource.DICTIONARY, emptyList())
+        }
+
+        // S16 mirror: the committed path resolves attached-negation keys via
+        // tryNegationCompound BEFORE the verb-suffix table; the live preview
+        // must agree or the editor shows garbage that space then "fixes"
+        // (bujtecina previewed বুজয়তেছিনা, committed বুঝতেছিনা).
+        tryNegationCompound(key)?.let { result ->
+            return result.copy(alternatives = emptyList())
         }
 
         tryProductiveVerbSuffixConversion(key)?.let { result ->
@@ -2258,6 +2277,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         "cilen" to "ছিলেন",    // করছিলেন
         "teci" to "তেছি",      // করতেছি
         "techi" to "তেছি",     // legacy/common: kortechi -> করতেছি
+        // S16 note: on store-backed engines, tryNegationCompound runs BEFORE
+        // this layer and resolves *na keys against real store words
+        // (bujtecina -> বুঝতেছি + না). These two entries remain for
+        // seed-only mode (no validator/store), where the table is the only
+        // path for partecina/kortecina-class forms.
         "tecina" to "তেছিনা",  // করতেছিনা
         "techina" to "তেছিনা", // legacy/common: kortechina -> করতেছিনা
         "tece" to "তেছে",      // করতেছে
@@ -2343,6 +2367,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private fun tryProductiveVerbSuffixConversion(key: String): ConversionResult? {
         if (key.length < 5) return null
 
+        // S16: an invented root+suffix composition must not preempt exact
+        // store evidence for the typed key. bujteci matched suffix "techi"
+        // with junk root বুজয় and returned বুজয়তেছি@0.97 while the store
+        // held the real বুঝতেছি under the exact key. Defer when the store's
+        // top hit is a suggestible word or validator-attested.
+        if (phoneticIndex != null) {
+            storeLookup(key).firstOrNull()?.let { top ->
+                if (top.tier == PhoneticIndexHit.TIER_A || validator.isValid(top.bengali)) {
+                    return null
+                }
+            }
+        }
+
         for (suffixPhonetic in productiveVerbSuffixes.keys.sortedByDescending { it.length }) {
             if (!key.endsWith(suffixPhonetic) || key.length <= suffixPhonetic.length + 1) continue
 
@@ -2364,6 +2401,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     rootResults = rootResults.filter { !it.bengali.startsWith("স") }
                 }
                 if (rootResults.isEmpty()) continue
+
+                // S16 stem trust (same fix as convertByRootDecomposition):
+                // junk corpus roots (বুজয়) must not outrank attested roots.
+                // Both junk and real roots can pass isValid (the 476K list
+                // carries corpus tail noise), so validator FREQUENCY breaks
+                // the tie: বুজ@67 over বুজয়@floor.
+                if (validator.isLoaded()) {
+                    rootResults = rootResults.sortedWith(
+                        compareByDescending<com.banglu.engine.types.LookupResult> { validator.isValid(it.bengali) }
+                            .thenByDescending { validator.getFrequency(it.bengali) }
+                    )
+                }
 
                 val root = verbRootPreferences[rootPhonetic]
                     ?.firstNotNullOfOrNull { preferred ->
@@ -2556,6 +2605,59 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      *   Case 6: 2-char suffix NOT ending in 'o' -> direct attachment
      *   Case 7: Arbitrary suffix with 480K validation
      */
+    /** Reentrancy guard for [tryNegationCompound] (it re-enters [convertWord]). */
+    private var inNegationCompound = false
+
+    /**
+     * S16: resolve keys with an attached negation ("bujtecina", "partesina") as
+     * prefix-word + না. The prefix runs through the FULL pipeline (store-first,
+     * so habit aliases like bujteci -> বুঝতেছি apply) and must resolve to a
+     * validator-attested word with high confidence; otherwise this layer stays
+     * silent and the normal layers handle the key.
+     */
+    private fun tryNegationCompound(key: String): ConversionResult? {
+        if (inNegationCompound) return null
+        if (key.length < 7 || !key.endsWith("na")) return null
+        if (!validator.isLoaded()) return null
+
+        // Whole-word precedence: if the store attests the FULL key (মন্ত্রণা,
+        // করছিনা as a real corpus word, ...), the store layer must resolve it —
+        // this layer only serves keys nothing else owns.
+        storeLookup(key).firstOrNull()?.let { top ->
+            if (top.tier == PhoneticIndexHit.TIER_A || validator.isValid(top.bengali)) {
+                return null
+            }
+        }
+
+        val prefixKey = key.dropLast(2)
+        inNegationCompound = true
+        val prefix = try {
+            convertWord(prefixKey)
+        } finally {
+            inNegationCompound = false
+        }
+        if (prefix.confidence < 0.9) return null
+        if (!validator.isValid(prefix.bengali)) return null
+
+        // Stem tie-break: the in-memory layers can hand back a floor-frequency
+        // corpus squatter (parteci -> পার্তেছি@1) while the store's top hit for
+        // the same key is the real word (পারতেছি@33). Validator frequency is
+        // the shared evidence scale — take the stronger attested stem.
+        var stem = prefix.bengali
+        storeLookup(prefixKey).firstOrNull { validator.isValid(it.bengali) }?.let { top ->
+            if (validator.getFrequency(top.bengali) > validator.getFrequency(stem)) {
+                stem = top.bengali
+            }
+        }
+
+        return ConversionResult(
+            bengali = stem + "না",
+            confidence = 0.93,
+            source = ResolutionSource.DICTIONARY,
+            alternatives = listOf(Alternative("$stem না", 0.9))
+        )
+    }
+
     private fun convertByRootDecomposition(key: String): ConversionResult? {
         if (key.length < 4) return null // Too short for meaningful decomposition
         val validatorLoaded = validator.isLoaded()
@@ -2583,6 +2685,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 rootResults = rootResults.filter { !it.bengali.startsWith("স") }
             }
             if (rootResults.isEmpty()) continue
+
+            // S16 stem trust: prefer roots the 484K validator attests, then
+            // validator frequency. Junk corpus words otherwise outrank real
+            // roots on raw in-memory frequency (বুজয়@68-unevidenced beat
+            // বুজ@60 — and both can pass isValid, since the 476K list carries
+            // corpus tail noise) and every suffix composition inherits the
+            // garbage: bujte -> বুজয়তে, bujtechi -> বুজয়তেছি.
+            if (validatorLoaded) {
+                rootResults = rootResults.sortedWith(
+                    compareByDescending<com.banglu.engine.types.LookupResult> { validator.isValid(it.bengali) }
+                        .thenByDescending { validator.getFrequency(it.bengali) }
+                )
+            }
 
             // Skip suffix-stripped matches — only use exact phonetic matches
             val topResult = if (suffixPhonetic in verbProductiveSuffixPhonetics) {

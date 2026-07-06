@@ -66,6 +66,22 @@ class PhoneticIndexBuilderTest {
         )
     }
 
+
+    /**
+     * S16 chat-register chains (bujtecina study): বুঝতেছি reverses to
+     * "bujhotechhi". The typed forms drop the medial inherent o
+     * (verb_o_drop_te), the jh aspiration (h_lazy_jh), and write ছ as
+     * ch/c/s — so bujtechi, bujteci, and bujtesi must all key the word.
+     */
+    @Test
+    fun chatContinuousAliasesForBujhtechhi() {
+        val rows = PhoneticIndexBuilder.build(words = listOf("বুঝতেছি"), frequencies = emptyMap())
+        val keys = rows.map { it.key }
+        for (expected in listOf("bujhtechhi", "bujtechi", "bujteci", "bujtesi")) {
+            assertTrue(expected in keys, "expected alias '$expected' for বুঝতেছি, got $keys")
+        }
+    }
+
     @Test
     fun filtersExcludeOutOfScopeWords() {
         val rows = PhoneticIndexBuilder.build(

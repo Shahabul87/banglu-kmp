@@ -233,6 +233,9 @@ object PhoneticIndexBuilder {
         // ছ is emitted "chh"; users type "c" (চ-style) or lazy "ch".
         HabitRule("chh_collapse") { it.replace("chh", "c") },
         HabitRule("h_lazy_chh") { it.replace("chh", "ch") },
+        // S16 chat register: ছ written as স in continuous forms — বুঝতেছি
+        // typed "bujtesi", পারতেছি "partesi". The whole "-tesi/-teci" dialect.
+        HabitRule("s_for_chh") { it.replace("chh", "s") },
         // চ্ছ emits canonical "chch" (ঘুমাচ্ছ -> "ghumachch"); real typists
         // write "cch" (ghumacchi) or just "cc" (ghumacco). Chained so both
         // spellings key the word, and final_o composes ghumacco afterwards.
@@ -241,6 +244,17 @@ object PhoneticIndexBuilder {
         // ী/ঈ → "ii", ূ/ঊ → "uu"; users omit the doubled vowel.
         HabitRule("ii_collapse") { it.replace("ii", "i") },
         HabitRule("uu_collapse") { it.replace("uu", "u") },
+        // S16: reverse transliteration emits the inherent vowel before the
+        // continuous suffix (বুঝতেছি -> "bujhotechhi", করতেস -> "korotes");
+        // typists never write that o ("bujhtechi", "kortes"). Targeted at the
+        // -te verb morphology only — a general medial-o drop was rejected for
+        // collision noise (same reasoning as the final-o-drop rejection below).
+        HabitRule("verb_o_drop_te") { it.replace("ote", "te") },
+        // ঝ emits "jh"; users drop the h (বুঝি → "buji", ঝাল → "jal").
+        // Must run BEFORE j_to_z: that rule doubles the alias set with
+        // z-variants and would starve the 32-key budget for jh chains
+        // (bujhotechhi -> ... -> bujtechi/bujteci/bujtesi).
+        HabitRule("h_lazy_jh") { it.replace("jh", "j") },
         // য is emitted "z"; users overwhelmingly type "j" (যদি → "jodi") —
         // and the reverse: জ-words are reachable via "z" (জীবন → "zibon").
         HabitRule("z_to_j") { it.replace("z", "j") },
