@@ -168,10 +168,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         private const val MAX_SUGGESTION_CANDIDATES = 40
 
         /**
-         * S1/D1: worst strip rank the editor primary may hold. The primary is
-         * gate-approved by definition and the strip must never hide it.
+         * S1/D1, tightened S19 (WYSIWYG divergence audit, register study
+         * 2026-07-06): the editor primary ALWAYS leads the strip. The study
+         * found ~120 words where the strip's first chip differed from what
+         * Space commits (chil: strip led চিল, commit ছিল) — the first chip
+         * is the commit contract and may never disagree with it. Exact-key
+         * competitors that outscore the primary sit at ranks 2+, still one
+         * tap away (ghoro: ঘর first, ঘরোয়া/ঘোরা behind it).
          */
-        private const val MAX_PRIMARY_STRIP_RANK = 3
+        private const val MAX_PRIMARY_STRIP_RANK = 1
 
         /**
          * S8: log-scale frequency gap (~25x real usage on the 60-100 corpus
