@@ -111,4 +111,23 @@ class ChatContinuousNegationJvmTest {
         assertEquals("যাইতেছিনা", engine.convertWord("jactesina").bengali)
         assertEquals("খাইতেছিনা", engine.convertWord("khactesina").bengali)
     }
+
+    @Test
+    fun s25_attachedToParticle() {
+        assertEquals("দেখিস তো", engine.convertWord("dekhisto").bengali)
+        assertEquals("করিস তো", engine.convertWord("koristo").bengali)
+        assertEquals("খাবি তো", engine.convertWord("khabito").bengali)
+        assertEquals("হবে তো", engine.convertWord("hobeto").bengali)
+        // real -to/-ত words never stolen
+        assertEquals("মতো", engine.convertWord("moto").bengali)
+        assertEquals("পোস্ট", engine.convertWord("posto").bengali)
+        assertEquals("হয়তো", engine.convertWord("hoyto").bengali)
+        assertEquals("দেখত", engine.convertWord("dekhto").bengali)
+    }
+
+    @Test
+    fun s25_lineRendersLoanword() {
+        assertEquals("লাইন", engine.convertWord("line").bengali)
+        assertEquals("নামে", engine.convertWord("name").bengali) // guard intact
+    }
 }

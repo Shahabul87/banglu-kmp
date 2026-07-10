@@ -263,7 +263,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
          */
         private val ENGLISH_PRIMARY_INTENT: Set<String> = setOf(
             "time", "common", "printer", "price", "single", "double",
-            "simple", "share", "video", "table", "hotel", "note"
+            "simple", "share", "video", "table", "hotel", "note", "line",
+            "online", "offline"
         )
 
         private val MOBILE_SHORTHAND_OVERRIDES: Map<String, String> = mapOf(
@@ -2975,16 +2976,24 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private fun tryNegationCompound(key: String): ConversionResult? {
         if (inNegationCompound) return null
         // S18: "nai" (খাইনাই class) joined the "na" class from the S17
-        // register study — same attached-negation phenomenon, same machinery.
+        // register study; S25 adds the attached তো particle (dekhisto =
+        // দেখিস তো, koristo = করিস তো) — same machinery, but তো composes
+        // SPACED (দেখিসতো is unattested; দেখিস@65 + তো@85 both are).
         val suffix = when {
             key.endsWith("nai") -> "nai" to "নাই"
             key.endsWith("na") -> "na" to "না"
+            key.endsWith("to") -> "to" to "তো"
             else -> return null
         }
         // Minimum lengths: "na" keeps the proven S16 floor (>= 7 — sona/kena
-        // class must never reach here); "nai" allows >= 6 (hoinai -> হইনাই,
-        // prefix hoi is still pipeline+validator gated).
-        val minLen = if (suffix.first == "nai") 6 else 7
+        // class must never reach here); "nai" allows >= 6 (hoinai -> হইনাই);
+        // "to" needs a 5+ char prefix (moto/gosto-class words stay clear and
+        // the whole-word store guard below protects the rest).
+        val minLen = when (suffix.first) {
+            "nai" -> 6
+            "to" -> 6   // hobeto -> হবে তো; store guard keeps dekhto/gosto safe
+            else -> 7
+        }
         if (key.length < minLen) return null
         if (!validator.isLoaded()) return null
 
@@ -3018,12 +3027,27 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
-        return ConversionResult(
-            bengali = stem + suffix.second,
-            confidence = 0.93,
-            source = ResolutionSource.DICTIONARY,
-            alternatives = listOf(Alternative("$stem ${suffix.second}", 0.9))
-        )
+        // "to" only: the -ত past-habitual reading owns the key when attested
+        // (dekhto -> দেখত, not দেখ তো; hobeto composes — হবেত is not a word).
+        if (suffix.first == "to" && validator.getFrequency(stem + "ত") >= 25) return null
+
+        // না/নাই attach glued by convention (করিনা attested); তো is written
+        // as a separate word — primary and alternative swap for it.
+        return if (suffix.first == "to") {
+            ConversionResult(
+                bengali = "$stem ${suffix.second}",
+                confidence = 0.93,
+                source = ResolutionSource.DICTIONARY,
+                alternatives = listOf(Alternative(stem + suffix.second, 0.85))
+            )
+        } else {
+            ConversionResult(
+                bengali = stem + suffix.second,
+                confidence = 0.93,
+                source = ResolutionSource.DICTIONARY,
+                alternatives = listOf(Alternative("$stem ${suffix.second}", 0.9))
+            )
+        }
     }
 
     private fun convertByRootDecomposition(key: String): ConversionResult? {
