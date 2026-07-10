@@ -175,15 +175,16 @@
   },
   {
     "input": "banlag",
-    "expected": "বানগুলা",
+    "expected": "বাংলা",
     "category": "typo-correction",
     "priority": "P0"
   },
   {
     "input": "bangaldesh",
-    "expected": "বাঙ্গালে",
+    "expected": "বাংলাদেশ",
     "category": "typo-correction",
-    "priority": "P0"
+    "priority": "P0",
+    "note": null
   },
   {
     "input": "biswsa",
@@ -199,7 +200,7 @@
   },
   {
     "input": "porbes",
-    "expected": "পর্বেস",
+    "expected": "প্রবেশ",
     "category": "typo-correction",
     "priority": "P0"
   },
@@ -229,7 +230,7 @@
   },
   {
     "input": "uttro",
-    "expected": "উত্ত্র",
+    "expected": "উত্তর",
     "category": "commit-gate-floor",
     "priority": "P0"
   },
@@ -289,7 +290,7 @@
   },
   {
     "input": "shorboshesha",
-    "expected": "শর্বশেশা",
+    "expected": "সর্বশেষ",
     "category": "layer6-recovery",
     "priority": "P0"
   },
@@ -631,7 +632,7 @@
   },
   {
     "input": "nishshobd",
-    "expected": "নিশ্শব্দ",
+    "expected": "নিঃশব্দ",
     "category": "commit-gate-floor",
     "priority": "P1"
   },

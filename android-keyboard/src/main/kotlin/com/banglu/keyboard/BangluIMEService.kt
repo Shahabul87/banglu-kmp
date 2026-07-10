@@ -881,7 +881,10 @@ class BangluIMEService : InputMethodService(),
         lastSpaceTime = 0L
 
         // Feature 1.3: Set enter key label based on IME action
-        enterKeyLabel.value = when (info?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)) {
+        val optsForLabel = info?.imeOptions ?: 0
+        enterKeyLabel.value = if ((optsForLabel and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0) {
+            "\u21B5" // S22: editor wants newline from enter — label must say so
+        } else when (optsForLabel and EditorInfo.IME_MASK_ACTION) {
             EditorInfo.IME_ACTION_SEARCH -> "\uD83D\uDD0D"  // magnifying glass
             EditorInfo.IME_ACTION_GO -> "\u2192"             // right arrow
             EditorInfo.IME_ACTION_NEXT -> "\u21E5"           // tab right
@@ -1332,22 +1335,38 @@ class BangluIMEService : InputMethodService(),
             commitBufferedWordFast(ic, appendText = "")
         }
 
-        // Feature 1.3: Perform the appropriate IME action
+        // Feature 1.3 / S22: perform the IME action ONLY when the editor
+        // wants enter to trigger it. Messaging apps (WhatsApp, Messages)
+        // declare an action (SEND) but set IME_FLAG_NO_ENTER_ACTION —
+        // "enter inserts a newline; sending is my own button". We ignored
+        // the flag, fired performEditorAction(SEND), the app ignored THAT,
+        // and the enter key read as completely dead.
         val editorInfo = currentInputEditorInfo
-        val action = editorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
-            ?: EditorInfo.IME_ACTION_UNSPECIFIED
+        val imeOptions = editorInfo?.imeOptions ?: 0
+        val action = imeOptions and EditorInfo.IME_MASK_ACTION
+        val enterPerformsAction =
+            (imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION) == 0 &&
+                action in setOf(
+                    EditorInfo.IME_ACTION_SEARCH,
+                    EditorInfo.IME_ACTION_GO,
+                    EditorInfo.IME_ACTION_NEXT,
+                    EditorInfo.IME_ACTION_SEND,
+                    EditorInfo.IME_ACTION_DONE
+                )
 
-        if (action == EditorInfo.IME_ACTION_SEARCH ||
-            action == EditorInfo.IME_ACTION_GO ||
-            action == EditorInfo.IME_ACTION_NEXT ||
-            action == EditorInfo.IME_ACTION_SEND ||
-            action == EditorInfo.IME_ACTION_DONE
-        ) {
+        if (enterPerformsAction) {
             ic.performEditorAction(action)
         } else {
-            // Default: insert newline
-            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
-            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+            // Newline. commitText is the reliable path for multiline editors;
+            // key events remain for fields that only listen for KEYCODE_ENTER.
+            val multiline = (editorInfo?.inputType ?: 0) and
+                android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE != 0
+            if (multiline) {
+                ic.commitText("\n", 1)
+            } else {
+                ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
+                ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+            }
         }
         clearEditorStateAfterAction(ic)
     }

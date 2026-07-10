@@ -792,7 +792,67 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * @param input English phonetic input (e.g., "ami", "bangladesh")
      * @return ConversionResult with Bengali text, confidence, source, and alternatives
      */
+    /**
+     * S22 typo correction wrapper. Every conversion path can end in one of
+     * two garbage shapes: the commit-gate CLEAN_TRANSLITERATION floor
+     * (kmon -> ক্মন) or a confident hit on an UNEVIDENCED junk corpus word
+     * (amdaer -> আময়দাের@freq1). Both mean "nothing real owns this key" —
+     * only then is an edit-distance-1 search worth trusting. Confident
+     * evidenced words and seed/learned/user words are never re-guessed, and
+     * recursive layer calls (compound halves, negation prefixes) resolve
+     * exactly, not fuzzily.
+     */
     fun convertWord(input: String): ConversionResult {
+        val raw = convertWordRaw(input)
+        if (inTypoCorrection || inCompoundSplit || inNegationCompound) return raw
+        val key = input.trim().lowercase()
+        if (key.length < 4 || !key.all { it in 'a'..'z' }) return raw
+        if (!validator.isLoaded()) return raw
+        // Legitimate results with no words-table row of their own: two-word
+        // splits, attached-negation compounds, approved compositions, and
+        // words the store assigns to this EXACT key (habit aliases). None of
+        // these are junk — never re-guess them.
+        if (' ' in raw.bengali) return raw
+        val negationStemValid = (raw.bengali.endsWith("না") &&
+            validator.isValid(raw.bengali.removeSuffix("না"))) ||
+            (raw.bengali.endsWith("নাই") && validator.isValid(raw.bengali.removeSuffix("নাই")))
+        // Composition protection needs an EVIDENCED stem — the words table's
+        // junk tail makes isApprovedComposition alone too lenient (আময়দাের
+        // parses as junk-root আময়দা + ের and would be shielded).
+        val evidencedComposition = approvedCompositionSuffixes.any { sfx ->
+            raw.bengali.length > sfx.length && raw.bengali.endsWith(sfx) &&
+                raw.bengali.dropLast(sfx.length).removeSuffix("্").let { root ->
+                    root.isNotEmpty() && validator.getFrequency(root) >= 25
+                }
+        }
+        if (negationStemValid || evidencedComposition) return raw
+        if (storeLookup(key).any { it.bengali == raw.bengali && it.tier == PhoneticIndexHit.TIER_A }) {
+            return raw
+        }
+        // Rare-but-deliberate exact-key rows (tier-B ghumacco -> ঘুমাচ্ছ) are
+        // protected only when the raw result actually CAME from that row —
+        // i.e. the store owns the key AND the pipeline chose its word with
+        // conviction. Junk tier-B ownership (amdaer -> আময়দাের) does not
+        // shield a floor-frequency word from correction.
+        if (raw.confidence >= 0.9 &&
+            storeLookup(key).any { it.bengali == raw.bengali } &&
+            validator.getFrequency(raw.bengali) >= 10
+        ) return raw
+        val junkFloor = raw.source == ResolutionSource.CLEAN_TRANSLITERATION ||
+            raw.confidence < 0.82
+        val unevidencedWord = raw.confidence < 0.97 &&
+            validator.getFrequency(raw.bengali) < 25 &&
+            !dictionary.containsBengali(raw.bengali)
+        if (!junkFloor && !unevidencedWord) return raw
+        val corrected = tryStoreTypoCorrection(key) ?: return raw
+        if (corrected.bengali == raw.bengali) return raw
+        return corrected.copy(
+            alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.7))) +
+                raw.alternatives.filter { it.bengali != corrected.bengali }.take(2)
+        )
+    }
+
+    private fun convertWordRaw(input: String): ConversionResult {
         val trimmed = input.trim()
         val key = trimmed.lowercase()
         if (key.isEmpty()) return ConversionResult("", 0.0, ResolutionSource.RULE)
@@ -1010,9 +1070,28 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             result.bengali.length >= 3 && !isApprovedComposition(result.bengali)
         ) {
             applyBengaliRecovery(result)?.let { recovered ->
+                // S22 arbitration: recovery may land on a word that covers
+                // only part of the typed key (valolagchena -> ভাললাগে drops
+                // four keystrokes). A well-covering recovery wins; a poorly-
+                // covering one yields to a glued two-word split when one
+                // exists (ভালো লাগছেনা).
+                val covered = com.banglu.engine.util.ReverseTransliterator
+                    .reverseWord(recovered.bengali).length >= key.length
+                if (!covered) {
+                    tryCompoundSplit(key)?.let { split ->
+                        cacheResult(cacheKey, split); return split
+                    }
+                }
                 val gated = applyCommitGate(key, recovered)
                 cacheResult(cacheKey, gated); return gated
             }
+        }
+
+        // S22: glued two-word compounds ("bujteparcina" = বুঝতে পারছিনা).
+        // Every single-word layer including recovery has had its chance —
+        // a strong split beats the pattern/typo floor below.
+        tryCompoundSplit(key)?.let { split ->
+            cacheResult(cacheKey, split); return split
         }
 
         // ======== Typo Correction + Fuzzy Fallback (post-Layer 6) ========
@@ -2656,6 +2735,171 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * validator-attested word with high confidence; otherwise this layer stays
      * silent and the normal layers handle the key.
      */
+    /**
+     * S22: resolve a glued two-word chat compound ("bujteparcina") by trying
+     * every split point and requiring BOTH halves to resolve to high-
+     * confidence validator-attested words. Output is the proper two-word
+     * spelling ("বুঝতে পারছিনা"). Splits are scored by bigram evidence first
+     * (observed pair wins), then by the weaker half's frequency.
+     */
+    private var inCompoundSplit = false
+    private fun tryCompoundSplit(key: String): ConversionResult? {
+        if (inCompoundSplit || inNegationCompound) return null
+        if (key.length < 9 || !validator.isLoaded()) return null
+        if (!key.all { it in 'a'..'z' }) return null
+
+        // Priority: if the glued key is ONE EDIT from a real single word
+        // (duniajora -> duniyajora -> দুনিয়াজোড়া), that word wins — users
+        // glue phrases, but they also just typo long words.
+        tryStoreTypoCorrection(key)?.let { single ->
+            if (validator.getFrequency(single.bengali) >= 40) return single
+        }
+
+        var best: Triple<String, String, Double>? = null
+        inCompoundSplit = true
+        try {
+            for (i in 4..(key.length - 4)) {
+                val leftKey = key.substring(0, i)
+                val rightKey = key.substring(i)
+                val left = convertWord(leftKey)
+                if (left.confidence < 0.9 || !validator.isValid(left.bengali)) continue
+                val right = convertWord(rightKey)
+                if (right.confidence < 0.9) continue
+                // The right half may itself be an attached-negation form
+                // (parcina -> পারছিনা) — accept validator words or negation
+                // compounds whose stem the validator attests.
+                val rightValid = validator.isValid(right.bengali) ||
+                    (right.bengali.endsWith("না") &&
+                        validator.isValid(right.bengali.removeSuffix("না")))
+                if (!rightValid) continue
+
+                val pairEvidence = bigramModel.bigramCount(left.bengali, right.bengali)
+                val minFreq = minOf(
+                    validator.getFrequency(left.bengali),
+                    if (validator.isValid(right.bengali)) validator.getFrequency(right.bengali)
+                    else validator.getFrequency(right.bengali.removeSuffix("না"))
+                )
+                val score = pairEvidence * 1000.0 + minFreq
+                if (best == null || score > best!!.third) {
+                    best = Triple(left.bengali, right.bengali, score)
+                }
+            }
+        } finally {
+            inCompoundSplit = false
+        }
+        val found = best ?: return null
+        // Both words must carry real evidence — junk-floor halves stay out.
+        if (found.third < 25) return null
+        return ConversionResult(
+            bengali = "${found.first} ${found.second}",
+            confidence = 0.88,
+            source = ResolutionSource.DICTIONARY,
+            alternatives = listOf(Alternative(found.first + found.second, 0.7))
+        )
+    }
+
+    /**
+     * S22: edit-distance-1 typo correction against the compiled index and the
+     * full pipeline. Fires ONLY from the low-confidence fallthrough — a
+     * confident exact word is never second-guessed. Two passes:
+     *  1. all edit-1 variants (delete/transpose/substitute/insert) looked up
+     *     in the store as O(1) exact keys, tier-A hits only;
+     *  2. delete/transpose variants (the cheap, most common typo shapes) run
+     *     through the full pipeline so alias- and negation-resolved words
+     *     ("bujjtecina" -> bujtecina -> বুঝতেছিনা) are reachable too.
+     */
+    private var inTypoCorrection = false
+    private fun tryStoreTypoCorrection(key: String): ConversionResult? {
+        if (inTypoCorrection || inCompoundSplit || inNegationCompound) return null
+        if (key.length < 4 || !validator.isLoaded()) return null
+        if (!key.all { it in 'a'..'z' }) return null
+
+        data class Cand(val word: String, val weight: Double, val freq: Int)
+        var best: Cand? = null
+        fun consider(variantKey: String, editWeight: Double) {
+            val top = storeLookup(variantKey).firstOrNull() ?: return
+            if (top.tier != PhoneticIndexHit.TIER_A) return
+            if (!validator.isValid(top.bengali)) return
+            val freq = maxOf(top.frequency, validator.getFrequency(top.bengali))
+            // Corrections replace what the user typed — only corpus-evidenced
+            // words (55+ band) qualify; junk-tail rows (বাড়িআলা) never do.
+            if (freq < 55) return
+            val c = Cand(top.bengali, editWeight, freq)
+            fun score(x: Cand) = x.weight * (1.0 + kotlin.math.ln(x.freq.toDouble()))
+            if (best == null || score(c) > score(best!!)) best = c
+        }
+
+        val n = key.length
+        for (i in 0 until n) {
+            // deletion (doubled-letter deletions are the most trusted edit)
+            val del = key.removeRange(i, i + 1)
+            consider(del, if (i > 0 && key[i] == key[i - 1]) 1.0 else 0.9)
+            // transposition
+            if (i < n - 1 && key[i] != key[i + 1]) {
+                val t = key.toCharArray().also { val c = it[i]; it[i] = it[i + 1]; it[i + 1] = c }
+                consider(String(t), 1.0)
+            }
+            // substitution
+            for (ch in 'a'..'z') if (ch != key[i]) {
+                consider(key.substring(0, i) + ch + key.substring(i + 1), 0.7)
+            }
+        }
+        for (i in 0..n) for (ch in 'a'..'z') {
+            val w = if (ch in "aeiou") 0.95 else 0.75
+            consider(key.substring(0, i) + ch + key.substring(i), w)
+        }
+
+        best?.let {
+            return ConversionResult(
+                bengali = it.word,
+                confidence = 0.85,
+                source = ResolutionSource.DICTIONARY,
+                alternatives = emptyList()
+            )
+        }
+
+        // Pass 2: delete/transpose through the full pipeline (bounded: ~2n calls).
+        inTypoCorrection = true
+        try {
+            var bestFull: ConversionResult? = null
+            for (i in 0 until n) {
+                val variants = buildList {
+                    add(key.removeRange(i, i + 1))
+                    if (i < n - 1 && key[i] != key[i + 1]) {
+                        add(String(key.toCharArray().also {
+                            val c = it[i]; it[i] = it[i + 1]; it[i + 1] = c
+                        }))
+                    }
+                }
+                for (v in variants) {
+                    if (v.length < 3) continue
+                    val r = convertWord(v)
+                    if (r.confidence < 0.92) continue
+                    // Plain words need corpus evidence (bariwala must not
+                    // become junk-tail বাড়িআলা); negation compounds are
+                    // already evidence-gated by their own layer.
+                    val negationForm = r.bengali.endsWith("না") &&
+                        validator.isValid(r.bengali.removeSuffix("না"))
+                    val evidenced = validator.isValid(r.bengali) &&
+                        validator.getFrequency(r.bengali) >= 55
+                    if (!negationForm && !evidenced) continue
+                    if (bestFull == null || r.confidence > bestFull!!.confidence) bestFull = r
+                }
+            }
+            bestFull?.let {
+                return ConversionResult(
+                    bengali = it.bengali,
+                    confidence = 0.84,
+                    source = ResolutionSource.DICTIONARY,
+                    alternatives = emptyList()
+                )
+            }
+        } finally {
+            inTypoCorrection = false
+        }
+        return null
+    }
+
     private fun tryNegationCompound(key: String): ConversionResult? {
         if (inNegationCompound) return null
         // S18: "nai" (খাইনাই class) joined the "na" class from the S17
