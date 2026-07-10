@@ -211,6 +211,24 @@ fun main(args: Array<String>) {
             val insertEnglish = connection.prepareStatement(
                 "INSERT OR IGNORE INTO english_lexicon (key, bengali) VALUES (?, ?)"
             )
+            // S23: curated overrides FIRST — CMU-derived renderings carry schwa
+            // artifacts on common words (government -> গাভারমেন্ট, society ->
+            // সসায়াটি). INSERT OR IGNORE makes the earlier curated row win.
+            val overridesFile = dataDir.let { File(it, "english_lexicon_overrides.tsv") }
+            var overrideCount = 0
+            if (overridesFile.exists()) {
+                overridesFile.readLines().forEach { line ->
+                    val parts = line.trim().split("	")
+                    if (parts.size == 2) {
+                        insertEnglish.setString(1, parts[0].lowercase())
+                        insertEnglish.setString(2, parts[1])
+                        insertEnglish.addBatch()
+                        overrideCount++
+                    }
+                }
+                insertEnglish.executeBatch()
+                println("  English lexicon overrides: $overrideCount curated entries")
+            }
             for (entry in englishEntries) {
                 insertEnglish.setString(1, entry.key)
                 insertEnglish.setString(2, entry.bengali)
@@ -417,7 +435,7 @@ fun main(args: Array<String>) {
         // 7. Insert metadata
         val insertMeta = connection.prepareStatement("INSERT INTO metadata (key, value) VALUES (?, ?)")
         val metadataEntries = mapOf(
-            "version" to "3.8.0",
+            "version" to "3.8.1",
             "word_count" to count.toString(),
             "disambiguation_count" to mappings.size.toString(),
             "extended_entry_count" to extendedEntryCount.toString(),
