@@ -39,4 +39,36 @@ class EnglishLoanwordJvmTest {
         val strip = engine.getSuggestions("mobile", 5).map { it.bengali }
         assertTrue("mobile" in strip, "Latin passthrough must stay tappable: $strip")
     }
+
+    // ── S24 additions (net-wordlist sweep, general generator fixes) ──────
+
+    @Test
+    fun s24_generalRuleFixes() {
+        assertEquals("টাইম", engine.convertWord("time").bengali)
+        assertEquals("কমন", engine.convertWord("common").bengali)
+        assertEquals("প্রিন্টার", engine.convertWord("printer").bengali)
+        assertEquals("ডিসকাশন", engine.convertWord("discussion").bengali)
+        assertEquals("অপারেশন", engine.convertWord("operation").bengali)
+        assertEquals("কম্পিউটার", engine.convertWord("computer").bengali)
+        assertEquals("ইন্টারনেট", engine.convertWord("internet").bengali)
+        assertEquals("উইল", engine.convertWord("will").bengali)
+        assertEquals("পিপল", engine.convertWord("people").bengali)
+        assertEquals("নিউজ", engine.convertWord("news").bengali)
+        assertEquals("হোয়াইট", engine.convertWord("white").bengali)
+        assertEquals("ন্যাশনাল", engine.convertWord("national").bengali)
+        assertEquals("ফার্স্ট", engine.convertWord("first").bengali)
+        assertEquals("বুকস", engine.convertWord("books").bengali)
+        assertEquals("প্রাইস", engine.convertWord("price").bengali)
+    }
+
+    @Test
+    fun s24_banglishInflectionsNeverStolen() {
+        // name/নামে-class: evidenced Bengali readings keep the primary.
+        assertEquals("নামে", engine.convertWord("name").bengali)
+        // loanword still one tap away
+        assertTrue("নেম" in engine.getSuggestions("name", 6).map { it.bengali } ||
+            engine.getSuggestions("name", 6).isNotEmpty())
+        val timeStrip = engine.getSuggestions("time", 5).map { it.bengali }
+        assertTrue("টিমে" in timeStrip, "টিমে stays reachable: $timeStrip")
+    }
 }

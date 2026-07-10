@@ -58,7 +58,7 @@ object EnglishLexiconBuilder {
             if (word !in topWords) continue
             // First pronunciation wins; skip subsequent duplicate base entries
             if (!seen.add(word)) continue
-            val bengali = ArpabetToBengali.convert(parts.drop(1))
+            val bengali = ArpabetToBengali.convert(parts.drop(1), word)
             if (bengali == null) {
                 lastSkippedUnconvertible++
                 continue

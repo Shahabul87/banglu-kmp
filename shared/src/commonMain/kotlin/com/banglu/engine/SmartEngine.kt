@@ -255,6 +255,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             best.mapValues { it.value.first }
         }
 
+        /**
+         * S24: English keys whose loanword intent overwhelmingly dominates the
+         * evidenced Bengali inflection squatting on the key (time -> টাইম over
+         * টিমে). Keep SMALL and unambiguous — name/নামে-class words must never
+         * enter this list.
+         */
+        private val ENGLISH_PRIMARY_INTENT: Set<String> = setOf(
+            "time", "common", "printer", "price", "single", "double",
+            "simple", "share", "video", "table", "hotel", "note"
+        )
+
         private val MOBILE_SHORTHAND_OVERRIDES: Map<String, String> = mapOf(
             "amr" to "আমার",
             "tomr" to "তোমার",
@@ -808,6 +819,31 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val key = input.trim().lowercase()
         if (key.length < 4 || !key.all { it in 'a'..'z' }) return raw
         if (!validator.isLoaded()) return raw
+        // S24: English-intent arbitration. When an English key collides with
+        // an EVIDENCED Bengali inflection (time -> টিমে, printer -> প্রিন্টের)
+        // no frequency margin can decide safely (name -> নামে must stay
+        // Bengali). Primary flips are limited to a vetted intent list; the
+        // 4x-margin rule handles weakly-attested squatters generally, and
+        // getSuggestions always offers the loanword as a chip.
+        if (key in ENGLISH_PRIMARY_INTENT ||
+            (EnglishDetector.isEnglish(key) && raw.confidence < 1.0)
+        ) {
+            phoneticIndex?.lookupEnglish(key)?.let { en ->
+                if (en != raw.bengali &&
+                    (key in ENGLISH_PRIMARY_INTENT ||
+                        validator.getFrequency(en) > maxOf(validator.getFrequency(raw.bengali), 6) * 4)
+                ) {
+                    return ConversionResult(
+                        bengali = en,
+                        confidence = 0.93,
+                        source = ResolutionSource.ENGLISH_LEXICON,
+                        alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.8))) +
+                            raw.alternatives.take(2)
+                    )
+                }
+            }
+        }
+
         // Legitimate results with no words-table row of their own: two-word
         // splits, attached-negation compounds, approved compositions, and
         // words the store assigns to this EXACT key (habit aliases). None of
@@ -844,6 +880,30 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             validator.getFrequency(raw.bengali) < 25 &&
             !dictionary.containsBengali(raw.bengali)
         if (!junkFloor && !unevidencedWord) return raw
+        // S24: an English word whose Bengali pipeline result is junk should
+        // render as its loanword, not as whatever corpus-tail word squats on
+        // the key (there -> থেরে, read -> রোড). The lexicon is consulted only
+        // from this junk path — real Bengali words always win upstream.
+        run {
+            // Not gated on EnglishDetector: the detector is deliberately shy
+            // (Banglish protection), but on THIS path the Bengali reading is
+            // already junk — lexicon presence is evidence enough (price ->
+            // প্রাইস, there -> দেয়ার instead of corpus-tail থেরে). The lexicon
+            // must be MORE attested than the raw reading, or a correct-but-
+            // rare loanword the pipeline already found (ডেভেলপ) gets replaced
+            // by a worse generated one (ডিভেলপ).
+            phoneticIndex?.lookupEnglish(key)?.let { en ->
+                if (en != raw.bengali &&
+                    validator.getFrequency(en) > validator.getFrequency(raw.bengali)) {
+                    return ConversionResult(
+                        bengali = en,
+                        confidence = 0.9,
+                        source = ResolutionSource.ENGLISH_LEXICON,
+                        alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.7)))
+                    )
+                }
+            }
+        }
         val corrected = tryStoreTypoCorrection(key) ?: return raw
         if (corrected.bengali == raw.bengali) return raw
         return corrected.copy(
@@ -1531,6 +1591,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 val withOkar = bengali + "ো"
                 if (seen.add(withOkar)) {
                     suggestions.add(SmartSuggestion(withOkar, 0.88, "okar_variant", key, "tier0_okar"))
+                }
+            }
+        }
+
+        // S24: the loanword rendering is always one tap away for English keys
+        // (time -> টাইম chip even while টিমে holds the primary).
+        if (EnglishDetector.isEnglish(key)) {
+            phoneticIndex?.lookupEnglish(key)?.let { en ->
+                if (seen.add(en)) {
+                    suggestions.add(
+                        SmartSuggestion(en, 0.9, "english_lexicon", key, "tier0_english")
+                    )
                 }
             }
         }

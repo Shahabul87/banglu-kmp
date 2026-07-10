@@ -82,8 +82,24 @@ object ArpabetToBengali {
      *
      * Callers should skip words and count failures when null is returned.
      */
-    fun convert(phonemes: List<String>): String? {
+    fun convert(phonemes: List<String>): String? = convert(phonemes, null)
+
+    /**
+     * S24 spelling-aware overload: Bengali loanword convention follows English
+     * ORTHOGRAPHY for unstressed vowels (-al -> াল, -le -> dropped schwa,
+     * -ed -> েড, plural -s -> no coda conjunct), which pronunciation alone
+     * cannot recover. [spelling] enables those rules; null keeps pure-phoneme
+     * behavior for existing callers.
+     */
+    fun convert(phonemes: List<String>, spelling: String?): String? {
         if (phonemes.isEmpty()) return null
+        val sp = spelling?.lowercase()?.trim()
+        // plural/inflected -s (books, links): final s not part of -ss/-es/-us/-is/-os
+        val pluralS = sp != null && sp.endsWith("s") &&
+            !listOf("ss", "es", "us", "is", "os", "as").any { sp.endsWith(it) }
+        // Suffix checks see through the plural s (items -> item -> "-em" rule).
+        val spBase = if (pluralS) sp!!.dropLast(1) else sp
+        fun spEnds(vararg sfx: String) = spBase != null && sfx.any { spBase.endsWith(it) }
 
         // Parse and validate all tokens upfront into (phoneme, stress?) pairs
         data class Token(val phoneme: String, val stress: Int?)
@@ -196,6 +212,26 @@ object ArpabetToBengali {
                         prevWasConsonant = true
                         lastJoined = false
                     }
+                } else if (out.isEmpty() && sp != null && sp.startsWith("wh") &&
+                    (nextPhoneme == "AY" || nextPhoneme == "AA")
+                ) {
+                    // S24: wh- + open vowel -> হোয় (white হোয়াইট, why হোয়াই,
+                    // what হোয়াট). Front-vowel wh- stays উ (which উইচ) and
+                    // wh+EH stays ওয়ে (whether ওয়েদার) — both corpus-attested.
+                    out.append("হোয়")
+                    prevWasConsonant = true
+                    lastJoined = false
+                } else if (out.isEmpty() && (nextPhoneme == "IH" || nextPhoneme == "IY")) {
+                    // S24: word-initial W + front vowel -> উ + ই (will উইল,
+                    // winter উইন্টার, window উইন্ডো) — ওয়ি is not a Bengali
+                    // loanword shape.
+                    out.append("উ")
+                    prevWasConsonant = false
+                    vowelEmitted = true
+                } else if (out.isEmpty() && (nextPhoneme == "UH" || nextPhoneme == "UW")) {
+                    // S24: word-initial W before a rounded vowel is silent in
+                    // convention (would উড, wood উড).
+                    prevWasConsonant = false
                 } else {
                     // Word-initial or after vowel: ওয় acts as a consonant cluster
                     out.append("ওয়")
@@ -235,6 +271,13 @@ object ArpabetToBengali {
                 val glyph = when {
                     // ZH word-final -> জ (garage গ্যারেজ); elsewhere শ (television টেলিভিশন)
                     p == "ZH" && i == tokens.size - 1 -> "জ"
+                    // S24: DH word-final -> থ (with উইথ, smooth স্মুথ)
+                    p == "DH" && i == tokens.size - 1 -> "থ"
+                    p == "Z" && pluralS && (prev in CONSONANTS || prev == "ER") -> "স"
+                    // S24: sibilant+es plurals take স (সার্ভিসেস, পেজেস);
+                    // vowel-final plurals keep জ (নিউজ, রিভিউজ).
+                    p == "Z" && i == tokens.size - 1 && sp != null &&
+                        listOf("ces", "ses", "ges", "xes", "zes").any { sp.endsWith(it) } -> "স"
                     // Z in a word-final cluster after a consonant -> স (jeans জিন্স, details ডিটেইলস)
                     p == "Z" && prev in CONSONANTS && restAreConsonants(i - 1) -> "স"
                     // N before CH assimilates to ঞ (branch ব্রাঞ্চ, launch লঞ্চ)
@@ -262,6 +305,12 @@ object ArpabetToBengali {
                         // Cluster directly before a word-final -er/-or syllable: চ্যাপ্টার, ফিল্টার, অ্যাক্টর
                         nextPhoneme == "ER" && i + 1 == tokens.size - 1 &&
                             (p == "T" || p == "D" || p == "S") -> true
+                        // S24: plural/inflected -s never conjuncts (books বুকস,
+                        // links লিংকস) — only morpheme-internal codas join (box বক্স).
+                        (p == "S" || p == "Z") && i == tokens.size - 1 && pluralS -> false
+                        // S24: -st coda joins even after reph/ER (first ফার্স্ট)
+                        prev == "S" && p == "T" && prev2 == "ER" &&
+                            restAreConsonants(i - 1) -> true
                         coda && !lastJoined &&
                             (prev == "N" || prev == "K" || prev == "P") -> true // ন্ট, ক্স, প্ট codas
                         coda && prev == "L" && p == "T" -> true    // ল্ট: রেজাল্ট, ডিফিকাল্ট
@@ -279,6 +328,49 @@ object ArpabetToBengali {
             // Vowels
             // ------------------------------------------------------------------
 
+            // S24: unstressed IH in inflectional -ed/-es endings -> ে
+            // (posted পোস্টেড, united ইউনাইটেড, services সার্ভিসেস).
+            if (p == "IH" && stress == 0 && prevWasConsonant &&
+                i == tokens.size - 2 && restAreConsonants(i) &&
+                spEnds("ed", "es", "en")
+            ) {
+                out.append("ে")
+                prevWasConsonant = false
+                vowelEmitted = true
+                continue
+            }
+
+            // S24: "-ore" spellings with AO/AA before final R render ো
+            // (before বিফোর, store স্টোর) — george/york keep the open vowel.
+            if ((p == "AO" || p == "AA") && nextPhoneme == "R" &&
+                i == tokens.size - 2 && sp != null && sp.endsWith("ore")) {
+                if (prevWasConsonant) out.append("ো") else out.append("ও")
+                prevWasConsonant = false
+                vowelEmitted = true
+                continue
+            }
+
+            // S24: unstressed IH after a back vowel takes a য় glide
+            // (following ফলোয়িং, going গোয়িং).
+            if (p == "IH" && stress == 0 && !prevWasConsonant && vowelEmitted &&
+                (prev == "OW" || prev == "AO" || prev == "EY")
+            ) {
+                out.append("য়ি")
+                prevWasConsonant = false
+                continue
+            }
+
+            // S24: "ew" spellings render as িউ after coronal/labial onsets
+            // (news নিউজ, new নিউ) — CMU's UW alone gives নুজ.
+            if (p == "UW" && prevWasConsonant && sp != null && "ew" in sp &&
+                prev in setOf("N", "D", "F", "V")
+            ) {
+                out.append("িউ")
+                prevWasConsonant = false
+                vowelEmitted = true
+                continue
+            }
+
             // Special case: AH0 (unstressed schwa) — see class KDoc for the rule table.
             if (p == "AH" && stress == 0) {
                 if (prevWasConsonant) {
@@ -286,12 +378,31 @@ object ArpabetToBengali {
                         i == tokens.size - 1 -> out.append("া")
                         restAreConsonants(i) -> when {
                             prev == "SH" || prev == "ZH" -> { /* -tion/-sion: inherent */ }
+                            // S24 spelling-conditioned final-syllable schwa:
+                            // the vowel LETTER decides the conventional kar.
+                            // -le drops the schwa (পিপল, লিটল) except after a
+                            // diphthong stem (টাইটেল, বাইবেল).
+                            spEnds("le") && prev2 == "AY" -> out.append("ে")
+                            spEnds("le") -> { /* people পিপল, simple সিম্পল */ }
+                            // -ical/-eral keep ে (মেডিকেল, জেনারেল, ফেডারেল);
+                            // other -al take া (লোকাল, ক্যাপিটাল).
+                            spEnds("ical", "eral") -> out.append("ে")
+                            spEnds("al", "an", "ous", "us") -> out.append("া")   // লোকাল, আমেরিকান, ডেঞ্জারাস
+                            spEnds("on") -> { /* পারসন, লন্ডন */ }
+                            spEnds("ot", "op") -> { /* পাইলট */ }
+                            spEnds("em") -> out.append("ে")          // আইটেম, সিস্টেম
+                            spEnds("ed") -> out.append("ে")          // ইউনাইটেড
+                            spEnds("es") -> out.append("ে")          // সার্ভিসেস
                             nextPhoneme == "M" -> out.append("া")   // album অ্যালবাম, momentum মোমেন্টাম
                             nextPhoneme == "S" -> out.append("ি")   // tennis টেনিস, service সার্ভিস
                             else -> out.append("ে")                  // cancel ক্যানসেল, agent এজেন্ট
                         }
                         prev == "W" -> out.append("ে")               // frequency ফ্রিকোয়েন্সি
                         prev == "AY" -> out.append("া")              // diabetes ডায়াবেটিস, diagnosis ডায়াগনোসিস
+                        // S24: -tion-/-sion- schwa mid-word stays inherent
+                        // (national ন্যাশনাল, professional প্রফেশনাল) — the
+                        // ি rule below is for true post-tonic vowels.
+                        prev == "SH" || prev == "ZH" -> { /* inherent */ }
                         postTonic -> out.append("ি")                 // monitor মনিটর, oxygen অক্সিজেন
                         else -> { /* pre-tonic: inherent (computer কম্পিউটার, command কমান্ড) */ }
                     }
