@@ -331,7 +331,10 @@ object SmartEngineAdapter {
         if (count <= 0) return
         val s = storage ?: return
         val scope = persistenceScope ?: return
-        scope.launch {
+        // Dispatchers.Default: the IME's persistenceScope is Main-dispatched,
+        // and AndroidStorage reparses the full learned-words/bigram prefs blob
+        // (500/300/800-line caps) on every save — keep that off the UI thread.
+        scope.launch(Dispatchers.Default) {
             try {
                 s.saveUserBigram(prev, next, count)
             } catch (_: Exception) {
@@ -393,7 +396,8 @@ object SmartEngineAdapter {
     private fun persistLearnedWord(phonetic: String, bengali: String, frequency: Int) {
         val s = storage ?: return
         val scope = persistenceScope ?: return
-        scope.launch {
+        // Off the Main-dispatched persistenceScope — see recordNextWordUsage.
+        scope.launch(Dispatchers.Default) {
             try {
                 s.saveLearnedWord(phonetic, bengali, frequency)
             } catch (_: Exception) {
