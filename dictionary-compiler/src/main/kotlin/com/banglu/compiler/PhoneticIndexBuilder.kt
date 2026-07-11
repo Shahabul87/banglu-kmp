@@ -230,6 +230,13 @@ object PhoneticIndexBuilder {
      * Output is bounded by [MAX_KEYS_PER_WORD] and deduped.
      */
     private val HABIT_RULES: List<HabitRule> = listOf(
+        // S27: inherent-o before the plain-ছ continuous (করছি -> "korochhi",
+        // করছে -> "korochhe"); typists write "korchi"/"korsi". MUST run before
+        // the chh-family rules below so their chains compose on the o-dropped
+        // form (korchhi -> korchi/korci/korsi) — after them, "ochh" no longer
+        // exists in the transformed aliases. Targeted at the -chh verb
+        // morphology only, like verb_o_drop_te.
+        HabitRule("verb_o_drop_chh") { it.replace("ochh", "chh") },
         // ছ is emitted "chh"; users type "c" (চ-style) or lazy "ch".
         HabitRule("chh_collapse") { it.replace("chh", "c") },
         HabitRule("h_lazy_chh") { it.replace("chh", "ch") },
@@ -241,6 +248,9 @@ object PhoneticIndexBuilder {
         // spellings key the word, and final_o composes ghumacco afterwards.
         HabitRule("chch_cch") { it.replace("chch", "cch") },
         HabitRule("cch_cc") { it.replace("cch", "cc") },
+        // S27 chat register: চ্ছ written as ss — ইচ্ছা "issa", হচ্ছে "hosse",
+        // খাচ্ছি "khassi". Same dialect family as s_for_chh below.
+        HabitRule("chch_ss") { it.replace("chch", "ss") },
         // ী/ঈ → "ii", ূ/ঊ → "uu"; users omit the doubled vowel.
         HabitRule("ii_collapse") { it.replace("ii", "i") },
         HabitRule("uu_collapse") { it.replace("uu", "u") },
