@@ -229,6 +229,10 @@ object SmartEngineAdapter {
 
     fun getCompositionPreview(word: String): String = getEngine().getCompositionPreview(word)
 
+    /** S28: rule-only instant echo — safe on the UI thread (see SmartEngine). */
+    fun convertForInstantPreview(word: String): String =
+        getEngine().convertForInstantPreview(word)
+
     /**
      * Parse multi-word input, converting each word and preserving whitespace.
      *

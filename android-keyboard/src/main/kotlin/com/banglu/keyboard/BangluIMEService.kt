@@ -120,6 +120,7 @@ class BangluIMEService : InputMethodService(),
     private var previousUncaughtExceptionHandler: Thread.UncaughtExceptionHandler? = null
     private var suggestionJob: Job? = null
     private var commitConversionJob: Job? = null
+    private var composingJob: Job? = null
     private var composingInput = ""
     private var composingResult: ConversionResult? = null
     private var cachedCommitInput = ""
@@ -363,6 +364,13 @@ class BangluIMEService : InputMethodService(),
         val threadPolicyBuilder = StrictMode.ThreadPolicy.Builder()
             .detectNetwork()
             .penaltyLog()
+        // S28: main-thread disk I/O is exactly the "keys stuck on budget
+        // devices" bug class (per-keystroke SQLite lookups froze typing on
+        // slow eMMC). Debug-only so telemetry/prefs noise never penalizes
+        // release users.
+        if (BuildConfig.DEBUG) {
+            threadPolicyBuilder.detectDiskReads().detectDiskWrites()
+        }
         val vmPolicyBuilder = StrictMode.VmPolicy.Builder()
             .detectActivityLeaks()
             .detectLeakedClosableObjects()
@@ -389,6 +397,7 @@ class BangluIMEService : InputMethodService(),
         if (privateInputMode || rawCommitInputMode) {
             suggestions.clear()
             suggestionJob?.cancel()
+            composingJob?.cancel()
             suggestionJob = null
         }
         log(
@@ -471,6 +480,38 @@ class BangluIMEService : InputMethodService(),
             ConversionResult(input, 0.0, ResolutionSource.RULE, emptyList())
         } finally {
             recordLatencyEvent("convert", (System.nanoTime() - start) / 1_000_000)
+        }
+    }
+
+    /**
+     * S28: per-keystroke composing update. The full composing conversion does
+     * SQLite store lookups and dictionary-trie walks — running it on the UI
+     * thread froze typing on slow-flash budget devices (Moto G10 Power "keys
+     * stuck" report). The pressed key must appear INSTANTLY, so: a rule-only
+     * echo (microseconds, zero I/O) goes into the editor synchronously, and
+     * the refined conversion lands asynchronously, replacing the echo only if
+     * the buffer is still the same. Rapid bursts self-coalesce via job cancel.
+     */
+    private fun updateComposingAsync(ic: InputConnection) {
+        val snapshot = buffer
+        val instant = try {
+            SmartEngineAdapter.convertForInstantPreview(snapshot)
+        } catch (e: Throwable) {
+            if (BuildConfig.DEBUG) Log.e(TAG, "Instant preview failed for '$snapshot'", e)
+            snapshot
+        }
+        composingInput = snapshot
+        composingResult = null
+        ic.setComposingText(instant, 1)
+
+        composingJob?.cancel()
+        composingJob = serviceScope.launch {
+            val result = withContext(Dispatchers.Default) { safeComposingConvert(snapshot) }
+            if (keyboardMode.value == KeyboardMode.BANGLU && buffer == snapshot) {
+                composingInput = snapshot
+                composingResult = result
+                currentInputConnection?.setComposingText(result.bengali, 1)
+            }
         }
     }
 
@@ -1004,6 +1045,7 @@ class BangluIMEService : InputMethodService(),
         imeSessionVisible = false
         collapseTransientKeyboardUi()
         suggestionJob?.cancel()
+        composingJob?.cancel()
         suggestionJob = null
         suggestions.clear()
         buffer = ""
@@ -1079,10 +1121,7 @@ class BangluIMEService : InputMethodService(),
             shiftState.value = ShiftState.OFF
         }
 
-        val result = safeComposingConvert(buffer)
-        composingInput = buffer
-        composingResult = result
-        ic.setComposingText(result.bengali, 1)
+        updateComposingAsync(ic)
 
         refreshSuggestionsAsync(buffer)
         prepareCommitConversionAsync(buffer)
@@ -1165,10 +1204,7 @@ class BangluIMEService : InputMethodService(),
                         suggestions.clear()
                         clearCommitCaches()
                     } else {
-                        val result = safeComposingConvert(buffer)
-                        composingInput = buffer
-                        composingResult = result
-                        ic.setComposingText(result.bengali, 1)
+                        updateComposingAsync(ic)
                         refreshSuggestionsAsync(buffer)
                         prepareCommitConversionAsync(buffer)
                     }
@@ -1201,10 +1237,7 @@ class BangluIMEService : InputMethodService(),
                 suggestions.clear()
                 clearCommitCaches()
             } else {
-                val result = safeComposingConvert(buffer)
-                composingInput = buffer
-                composingResult = result
-                ic.setComposingText(result.bengali, 1)
+                updateComposingAsync(ic)
                 refreshSuggestionsAsync(buffer)
                 prepareCommitConversionAsync(buffer)
             }
@@ -2273,6 +2306,7 @@ class BangluIMEService : InputMethodService(),
             return
         }
         suggestionJob?.cancel()
+        composingJob?.cancel()
         suggestions.clear()
         suggestions.addAll(gapPunctuationSuggestions())
     }
@@ -2553,6 +2587,7 @@ class BangluIMEService : InputMethodService(),
         lastCommittedBengali = committedBengali
         if (suggestionsAllowedForCurrentInput() && buffer.isEmpty() && keyboardMode.value == KeyboardMode.BANGLU) {
             suggestionJob?.cancel()
+            composingJob?.cancel()
             suggestions.clear()
             val snapshot = committedBengali
             val prev2Snapshot = secondLastCommittedBengali

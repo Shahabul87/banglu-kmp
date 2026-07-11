@@ -43,6 +43,21 @@ class S27ChatConjunctSpellingJvmTest {
         assertEquals("করছি", engine.convertWord("korchi").bengali)
     }
 
+    /**
+     * S28: the instant composing echo is the rule layer only — it must stay
+     * usable as a per-keystroke UI-thread call and reasonably close to the
+     * refined preview for plain words.
+     */
+    @Test
+    fun instantPreviewIsRuleOnlyAndSane() {
+        assertEquals("\u0986\u09ae\u09bf", engine.convertForInstantPreview("ami"))
+        assertTrue(engine.convertForInstantPreview("kemon").isNotEmpty())
+        val start = System.nanoTime()
+        repeat(500) { engine.convertForInstantPreview("obisassokemonacho") }
+        val perCallMicros = (System.nanoTime() - start) / 500 / 1000
+        assertTrue(perCallMicros < 1000, "instant preview must be sub-ms, was ${'$'}{perCallMicros}us")
+    }
+
     @Test
     fun realWordsUnaffected() {
         // ss/s keys that belong to real words must not be hijacked.

@@ -1365,6 +1365,22 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     fun getCompositionPreview(input: String): String = convertForComposing(input).bengali
 
+    /**
+     * S28: instant composing echo for the IME keystroke path. Rule layer only —
+     * ZERO dictionary/validator/store access, so it is safe to run
+     * synchronously on the UI thread on every key press (the full
+     * [convertForComposing] does SQLite store lookups and must stay off the
+     * main thread on slow-flash devices: Moto G10 Power "keys stuck" report).
+     * The refined preview replaces this echo asynchronously a frame or two
+     * later.
+     */
+    fun convertForInstantPreview(input: String): String {
+        val key = input.trim().lowercase()
+        if (key.isEmpty()) return ""
+        MOBILE_SHORTHAND_OVERRIDES[key]?.let { return it }
+        return convertByPatterns(key).bengali
+    }
+
     // ======================== MULTI-WORD CONVERSION ========================
 
     /**
