@@ -267,6 +267,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "online", "offline"
         )
 
+        /**
+         * S26: the adapter's preference layer needs to know these keys —
+         * vetted intent flips are preference-immune (like curated loanwords),
+         * or a stale learned entry from an older build keeps overriding the
+         * shipped fix forever.
+         */
+        internal fun isEnglishPrimaryIntentKey(key: String): Boolean =
+            key in ENGLISH_PRIMARY_INTENT
+
         private val MOBILE_SHORTHAND_OVERRIDES: Map<String, String> = mapOf(
             "amr" to "আমার",
             "tomr" to "তোমার",
@@ -1239,6 +1248,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val key = trimmed.lowercase()
         if (key.isEmpty()) return ConversionResult("", 0.0, ResolutionSource.RULE)
         tryLowercaseV2ControlRule(key)?.let { return it }
+
+        // S26 mirror: vetted English-intent keys always commit the loanword
+        // (convertWord wrapper, S24/S25); the live preview must agree or the
+        // editor shows the Bengali inflection (line previewed লিনে) that
+        // space then "fixes" to লাইন. Store-less engines keep the raw
+        // preview, matching the wrapper which also cannot flip without the
+        // lexicon.
+        if (key in ENGLISH_PRIMARY_INTENT) {
+            phoneticIndex?.lookupEnglish(key)?.let { en ->
+                return ConversionResult(en, 0.93, ResolutionSource.ENGLISH_LEXICON, emptyList())
+            }
+        }
 
         tryDirectWordOverride(key)?.let { override ->
             return override.copy(alternatives = emptyList())

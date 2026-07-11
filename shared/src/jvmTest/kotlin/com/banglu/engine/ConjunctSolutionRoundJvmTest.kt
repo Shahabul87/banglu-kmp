@@ -25,9 +25,12 @@ class ConjunctSolutionRoundJvmTest {
             SmartEngine().also { eng ->
                 eng.initializeSync()
                 runBlocking { eng.initialize(storage = null, loader = TestDictionaryLoader()) }
-                eng.setPhoneticIndex(loadStore())
+                eng.setPhoneticIndex(store)
             }
         }
+
+        /** Shared full store — also reused by adapter-level JVM tests. */
+        val store: InMemoryPhoneticIndexStore by lazy { loadStore() }
 
         private fun loadStore(): InMemoryPhoneticIndexStore {
             val dbFile = TestDictionaryLoader.findDictionarySqlite()

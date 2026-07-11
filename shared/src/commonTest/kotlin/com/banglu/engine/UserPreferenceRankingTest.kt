@@ -108,6 +108,52 @@ class UserPreferenceRankingTest {
         assertTrue(possibleSuggestions.contains("possible"))
     }
 
+    /**
+     * S26: accepting the engine's own primary (space commit / first-chip tap)
+     * must NOT be persisted as a ranking preference — recording it would pin
+     * this build's output as a "user choice" and veto engine fixes shipped in
+     * later updates (device-observed: line->লিনে accepted on 1.5.10 shadowed
+     * the 1.5.14 line->লাইন fix).
+     */
+    @Test
+    fun acceptingEnginePrimaryIsNotPersistedAsPreference() {
+        val storage = RecordingStorage()
+        SmartEngineAdapter.initializeSync()
+        kotlinx.coroutines.runBlocking {
+            SmartEngineAdapter.initialize(storage)
+            SmartEngineAdapter.configurePersistenceScope(this)
+
+            val primary = SmartEngineAdapter.convertWord("taka").bengali
+            assertEquals("টাকা", primary)
+            SmartEngineAdapter.onWordSelected("taka", primary)
+
+            // Divergent explicit tap IS persisted.
+            SmartEngineAdapter.onWordSelected("taka", "তাকা")
+        }
+        assertEquals(listOf("taka:তাকা:94"), storage.saved)
+    }
+
+    private class RecordingStorage(
+        preload: List<com.banglu.engine.types.LearnedWord> = emptyList()
+    ) : com.banglu.engine.platform.PlatformStorage {
+        val saved = mutableListOf<String>()
+        private val words = preload.toMutableList()
+        override suspend fun getLearnedWords() = words.toList()
+        override suspend fun saveLearnedWord(phonetic: String, bengali: String, frequency: Int) {
+            saved.add("$phonetic:$bengali:$frequency")
+            words.add(com.banglu.engine.types.LearnedWord("s${saved.size}", phonetic, bengali, frequency, lastUsed = 0L))
+        }
+        override suspend fun clearLearnedWords() { words.clear() }
+        override suspend fun getDictionaryVersion(): String? = null
+        override suspend fun cacheDictionary(
+            words: List<String>,
+            frequencies: Map<String, Int>?,
+            disambigMap: Map<String, String>?,
+            version: String
+        ) {}
+        override suspend fun getCachedDictionary(currentVersion: String) = null
+    }
+
     @Test
     fun bulkPreferencePromotionAcrossManyDictionaryWords() {
         val phoneticKeys = SeedData.SEED_DICTIONARY

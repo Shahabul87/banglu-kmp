@@ -411,6 +411,13 @@ object SmartEngineAdapter {
      * user's explicit choice and must be honored this session. On the NEXT
      * initialize, the persisted entry is re-evaluated by
      * [SmartEngine.isLearnedEntryTrusted] like everything else.
+     *
+     * S26: a selection that MATCHES the engine's current primary is not a
+     * preference — it is a space commit (or first-chip tap) accepting whatever
+     * the engine said. Recording it would freeze this build's ranking as a
+     * "user choice" and silently veto engine fixes shipped in later updates
+     * (observed on-device: line->লিনে accepted on 1.5.10 shadowed the 1.5.14
+     * line->লাইন fix). Only divergent selections carry signal.
      */
     private fun rememberPreferredConversion(phonetic: String, bengali: String, baseFrequency: Int) {
         val key = phonetic.normalizedPhonetic()
@@ -419,12 +426,12 @@ object SmartEngineAdapter {
         if (!learningEnabled || !personalDictionaryEnabled) return
 
         val primaryResult = getEngine().convertWord(key)
-        val freq = if (cleanBengali == primaryResult.bengali) maxOf(baseFrequency, 96) else baseFrequency
+        if (cleanBengali == primaryResult.bengali) return
         selectedPreferenceMap[key] = cleanBengali
         // Suggestion taps are preferences, not dictionary mutations. Explicit
         // user dictionary formulas still go through addCustomConversion().
         getEngine().clearCache()
-        persistLearnedWord(key, cleanBengali, freq)
+        persistLearnedWord(key, cleanBengali, baseFrequency)
     }
 
     /**
@@ -476,6 +483,17 @@ object SmartEngineAdapter {
         val key = phonetic.normalizedPhonetic()
         val curatedPrimary = CURATED_LOANWORD_PRIMARY[key]
         if (curatedPrimary != null && result.bengali == curatedPrimary) return result
+        // S26: vetted English-intent flips (line -> লাইন) are preference-
+        // immune exactly like curated loanwords. Pre-S26 builds auto-learned
+        // every space commit, so devices that ever committed the OLD primary
+        // (লিনে on 1.5.10) carry a stale "preference" that would veto the
+        // shipped fix forever. ENGLISH_LEXICON source means the wrapper flip
+        // actually fired — keep it.
+        if (result.source == com.banglu.engine.types.ResolutionSource.ENGLISH_LEXICON &&
+            SmartEngine.isEnglishPrimaryIntentKey(key)
+        ) {
+            return result
+        }
 
         val learnedPreferred = if (learningEnabled) selectedPreferenceMap[key] else null
         val preferred: String = customPreferenceMap[key]
