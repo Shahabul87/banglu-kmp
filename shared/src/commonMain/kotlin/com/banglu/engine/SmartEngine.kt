@@ -828,20 +828,35 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (inTypoCorrection || inCompoundSplit || inNegationCompound) return raw
         val key = input.trim().lowercase()
         if (key.length < 4 || !key.all { it in 'a'..'z' }) return raw
+        // S24/S26: English-intent arbitration. When an English key collides
+        // with an EVIDENCED Bengali inflection (time -> টিমে, printer ->
+        // প্রিন্টের) no frequency margin can decide safely (name -> নামে must
+        // stay Bengali). Primary flips are limited to a vetted intent list.
+        // The vetted flip needs only the lexicon store, NOT the validator —
+        // it must fire in lite mode too, or the composing preview (which
+        // mirrors it) shows লাইন while Space commits লিনে (observed on the
+        // 192-memoryClass emulator).
+        if (key in ENGLISH_PRIMARY_INTENT) {
+            phoneticIndex?.lookupEnglish(key)?.let { en ->
+                if (en != raw.bengali) {
+                    return ConversionResult(
+                        bengali = en,
+                        confidence = 0.93,
+                        source = ResolutionSource.ENGLISH_LEXICON,
+                        alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.8))) +
+                            raw.alternatives.take(2)
+                    )
+                }
+            }
+        }
         if (!validator.isLoaded()) return raw
-        // S24: English-intent arbitration. When an English key collides with
-        // an EVIDENCED Bengali inflection (time -> টিমে, printer -> প্রিন্টের)
-        // no frequency margin can decide safely (name -> নামে must stay
-        // Bengali). Primary flips are limited to a vetted intent list; the
-        // 4x-margin rule handles weakly-attested squatters generally, and
-        // getSuggestions always offers the loanword as a chip.
-        if (key in ENGLISH_PRIMARY_INTENT ||
-            (EnglishDetector.isEnglish(key) && raw.confidence < 1.0)
-        ) {
+        // General 4x-margin rule for weakly-attested squatters (needs the
+        // frequency validator); getSuggestions always offers the loanword as
+        // a chip either way.
+        if (EnglishDetector.isEnglish(key) && raw.confidence < 1.0) {
             phoneticIndex?.lookupEnglish(key)?.let { en ->
                 if (en != raw.bengali &&
-                    (key in ENGLISH_PRIMARY_INTENT ||
-                        validator.getFrequency(en) > maxOf(validator.getFrequency(raw.bengali), 6) * 4)
+                    validator.getFrequency(en) > maxOf(validator.getFrequency(raw.bengali), 6) * 4
                 ) {
                     return ConversionResult(
                         bengali = en,

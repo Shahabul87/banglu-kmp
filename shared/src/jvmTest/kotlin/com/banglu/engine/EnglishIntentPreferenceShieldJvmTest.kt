@@ -38,6 +38,23 @@ class EnglishIntentPreferenceShieldJvmTest {
         assertEquals("তাকা", SmartEngineAdapter.convertWord("taka").bengali)
     }
 
+    /**
+     * Lite mode (store attached, NO validator words — the memoryClass<256
+     * configuration): the intent flip must fire on the COMMIT path too, not
+     * just the composing mirror, or the preview shows লাইন while Space
+     * commits লিনে (observed on the 192-class emulator, 2026-07-10).
+     */
+    @Test
+    fun liteModeCommitMatchesComposingPreviewForIntentKeys() {
+        val engine = SmartEngine()
+        engine.initializeSync()
+        engine.setPhoneticIndex(ConjunctSolutionRoundJvmTest.store)
+
+        assertEquals("লাইন", engine.convertWord("line").bengali)
+        assertEquals("লাইন", engine.convertForComposing("line").bengali)
+        assertEquals("টাইম", engine.convertWord("time").bengali)
+    }
+
     @Test
     fun composingPreviewMirrorsIntentFlip() {
         val engine = ConjunctSolutionRoundJvmTest.engine
