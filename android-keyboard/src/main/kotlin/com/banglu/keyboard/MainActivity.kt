@@ -494,11 +494,34 @@ fun BangluHomeScreen() {
                 }
             }
 
+            // ── Privacy policy footer link ──
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    TextButton(onClick = {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(PRIVACY_POLICY_URL))
+                        )
+                    }) {
+                        Text(
+                            "🔒 প্রাইভেসি পলিসি · Privacy Policy",
+                            color = TextMuted,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+
             // Bottom breathing room
             item { Spacer(modifier = Modifier.height(40.dp)) }
         }
     }
 }
+
+/** Hosted policy — same URL as the Play Console listing entry. */
+private const val PRIVACY_POLICY_URL = "https://shahabul87.github.io/banglu-privacy-policy/"
 
 private data class OnboardingFeature(
     val marker: String,

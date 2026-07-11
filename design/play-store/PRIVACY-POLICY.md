@@ -1,6 +1,6 @@
 # Privacy Policy — Banglu Bengali Keyboard
 
-**Last updated:** June 11, 2026
+**Last updated:** July 10, 2026
 
 ## Overview
 
@@ -50,8 +50,8 @@ If we update this privacy policy, we will post the changes here with an updated 
 ## Contact
 
 If you have questions about this privacy policy, contact us at:
-- Email: sham251087@gmail.com
-- GitHub: https://github.com/banglu-keyboard
+- Email: isham251087@gmail.com
+- GitHub: https://github.com/Shahabul87
 
 ## Open Source
 

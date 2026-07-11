@@ -466,7 +466,7 @@ class BangluIMEService : InputMethodService(),
         val start = System.nanoTime()
         return try {
             SmartEngineAdapter.convertWord(input)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Conversion failed for '$input'", e)
             ConversionResult(input, 0.0, ResolutionSource.RULE, emptyList())
         } finally {
@@ -481,7 +481,7 @@ class BangluIMEService : InputMethodService(),
             SmartEngineAdapter.convertForComposing(
                 input, lastCommittedBengali, secondLastCommittedBengali
             )
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Composing conversion failed for '$input'", e)
             ConversionResult(input, 0.0, ResolutionSource.RULE, emptyList())
         } finally {
@@ -496,7 +496,7 @@ class BangluIMEService : InputMethodService(),
             SmartEngineAdapter.getSuggestionsWithContext(
                 input, listOf(secondLastCommittedBengali, lastCommittedBengali), limit
             )
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Suggestions failed for '$input'", e)
             emptyList()
         } finally {
@@ -510,7 +510,7 @@ class BangluIMEService : InputMethodService(),
             SmartEngineAdapter.convertWordWithContext(
                 input, listOf(secondLastCommittedBengali, lastCommittedBengali)
             )
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Context conversion failed for '$input'", e)
             safeConvert(input)
         } finally {

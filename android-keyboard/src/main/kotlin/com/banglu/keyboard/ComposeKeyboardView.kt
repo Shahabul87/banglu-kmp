@@ -158,7 +158,7 @@ private data class KeyAlternative(val label: String, val input: String)
 private val NumberRowHeight = 43.dp
 private val LetterKeyRowHeight = 49.dp
 private val BottomKeyRowHeight = 51.dp
-private val MinKeyTouchHeight = 46.dp
+private val MinKeyTouchHeight = 48.dp
 private val TopStripHeight = 38.dp
 private val ToolbarExpandedHeight = 40.dp
 private val ToolbarCollapsedHeight = 36.dp
