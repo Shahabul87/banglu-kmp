@@ -123,8 +123,14 @@ class BangluIMEService : InputMethodService(),
     private var composingJob: Job? = null
     private var composingInput = ""
     private var composingResult: ConversionResult? = null
+    /** Exactly what setComposingText last put on screen (echo or refined). */
+    private var composingVisibleText = ""
     private var cachedCommitInput = ""
     private var cachedCommitResult: ConversionResult? = null
+    /** S32: bumped whenever the edit context changes (new field, cursor jump,
+     *  session teardown) — a pending fast-commit reconcile from an older
+     *  context must never touch the editor. */
+    private var imeTextSessionToken = 0
     private var speechRecognizer: SpeechRecognizer? = null
     private var imeSessionVisible = false
     private var voiceCancelRequested = false
@@ -502,6 +508,7 @@ class BangluIMEService : InputMethodService(),
         }
         composingInput = snapshot
         composingResult = null
+        composingVisibleText = instant
         ic.setComposingText(instant, 1)
 
         composingJob?.cancel()
@@ -510,6 +517,7 @@ class BangluIMEService : InputMethodService(),
             if (keyboardMode.value == KeyboardMode.BANGLU && buffer == snapshot) {
                 composingInput = snapshot
                 composingResult = result
+                composingVisibleText = result.bengali
                 currentInputConnection?.setComposingText(result.bengali, 1)
             }
         }
@@ -906,6 +914,7 @@ class BangluIMEService : InputMethodService(),
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         imeSessionVisible = true
+        imeTextSessionToken++
         recordImeEvent("start_input_view")
         reloadSettings()
         configureInputSafety(info)
@@ -969,6 +978,7 @@ class BangluIMEService : InputMethodService(),
             // The user moved the cursor or the app changed selection outside our active
             // composing word. Keeping the old phonetic buffer would inject the next key at
             // the wrong cursor position, so finalize the visible composition and reset IME state.
+            imeTextSessionToken++
             currentInputConnection?.finishComposingText()
             buffer = ""
             suggestions.clear()
@@ -1043,6 +1053,7 @@ class BangluIMEService : InputMethodService(),
         flushImeSessionTelemetry()
         recordImeEvent(reason)
         imeSessionVisible = false
+        imeTextSessionToken++
         collapseTransientKeyboardUi()
         suggestionJob?.cancel()
         composingJob?.cancel()
@@ -2580,8 +2591,8 @@ class BangluIMEService : InputMethodService(),
      * After committing a Bengali word, show predicted next words in the suggestion bar.
      * Only shows predictions when the composing buffer is empty and keyboard is in Banglu mode.
      */
-    private fun updatePredictions(committedBengali: String) {
-        if (committedBengali != lastCommittedBengali) {
+    private fun updatePredictions(committedBengali: String, replacesLast: Boolean = false) {
+        if (!replacesLast && committedBengali != lastCommittedBengali) {
             secondLastCommittedBengali = lastCommittedBengali
         }
         lastCommittedBengali = committedBengali
@@ -2724,25 +2735,106 @@ class BangluIMEService : InputMethodService(),
         if (phonetic.isEmpty()) return
 
         val visibleBeforeCommit = composingResult?.takeIf { composingInput == phonetic }?.bengali
-        val result = when {
-            cachedCommitInput == phonetic && cachedCommitResult != null -> cachedCommitResult!!
-            else -> safeConvertWithContext(phonetic)
+        val cached = cachedCommitResult?.takeIf { cachedCommitInput == phonetic }
+        if (cached != null) {
+            log("commitBufferedWordFast: committing '${cached.bengali}' cached=true")
+            ic.commitText(cached.bengali + appendText, 1)
+            lastCommittedTextLength = cached.bengali.length + appendText.length
+            sessionBangluWordCommitCount++
+            maybeOfferAutoCorrectUndo(phonetic, visibleBeforeCommit, cached.bengali, appendText)
+            learnCommittedWordAsync(
+                phonetic,
+                cached.bengali,
+                learnAsWord = cached.source == ResolutionSource.CLEAN_TRANSLITERATION
+            )
+            buffer = ""
+            suggestions.clear()
+            clearCommitCaches()
+            recordNextWordPairLearning(cached.bengali)
+            updatePredictions(cached.bengali)
+            return
         }
-        log("commitBufferedWordFast: committing '${result.bengali}' cached=${cachedCommitInput == phonetic}")
-        ic.commitText(result.bengali + appendText, 1)
-        lastCommittedTextLength = result.bengali.length + appendText.length
+
+        // S32: no prepared conversion — the space landed inside the conversion
+        // window (fast typing on a slow device, exactly the case that used to
+        // run the full SQLite+trie conversion ON the UI thread and made the
+        // spacebar feel dead). Commit what is on screen RIGHT NOW, then let
+        // the authoritative conversion reconcile off the UI thread: it may
+        // replace the word only while the editor still ends with exactly what
+        // we committed and no new word has started.
+        val committedNow = visibleBeforeCommit
+            ?: composingVisibleText.takeIf { composingInput == phonetic && it.isNotEmpty() }
+            ?: runCatching { SmartEngineAdapter.convertForInstantPreview(phonetic) }.getOrDefault(phonetic)
+        log("commitBufferedWordFast: fast-committing visible '$committedNow', reconcile pending")
+        ic.commitText(committedNow + appendText, 1)
+        lastCommittedTextLength = committedNow.length + appendText.length
         sessionBangluWordCommitCount++
-        maybeOfferAutoCorrectUndo(phonetic, visibleBeforeCommit, result.bengali, appendText)
+        buffer = ""
+        suggestions.clear()
+        clearCommitCaches()
+        // Pair learning needs the word BEFORE this one; updatePredictions
+        // overwrites it, so capture first and record in the reconcile step.
+        val previousWord = lastCommittedBengali
+        val sessionToken = imeTextSessionToken
+        // Context/predictions use the visible word immediately; the reconcile
+        // below re-runs them with the authoritative word if it differs.
+        updatePredictions(committedNow)
+        serviceScope.launch {
+            val result = withContext(Dispatchers.Default) { safeConvertWithContext(phonetic) }
+            reconcileFastCommit(phonetic, committedNow, previousWord, sessionToken, result, appendText)
+        }
+    }
+
+    /**
+     * S32 second half: the authoritative conversion finished after the word was
+     * already committed from its on-screen preview. Runs on the main thread.
+     * Replacement is triple-guarded: still in Banglu mode, no new word being
+     * composed, and the editor text still ends with exactly what we committed —
+     * any user action in between (next word, backspace, danda double-space,
+     * field switch, cursor jump) makes at least one guard fail and the visible
+     * text stays untouched.
+     */
+    private fun reconcileFastCommit(
+        phonetic: String,
+        committedNow: String,
+        previousWord: String,
+        sessionToken: Int,
+        result: ConversionResult,
+        appendText: String
+    ) {
+        var finalWord = committedNow
+        if (result.bengali != committedNow) {
+            val ic = currentInputConnection
+            val expected = committedNow + appendText
+            if (ic != null &&
+                sessionToken == imeTextSessionToken &&
+                buffer.isEmpty() &&
+                keyboardMode.value == KeyboardMode.BANGLU &&
+                !rawCommitInputMode &&
+                ic.getTextBeforeCursor(expected.length + 4, 0)?.toString()?.endsWith(expected) == true
+            ) {
+                ic.beginBatchEdit()
+                ic.deleteSurroundingText(expected.length, 0)
+                ic.commitText(result.bengali + appendText, 1)
+                ic.endBatchEdit()
+                lastCommittedTextLength = result.bengali.length + appendText.length
+                maybeOfferAutoCorrectUndo(phonetic, committedNow, result.bengali, appendText)
+                finalWord = result.bengali
+                log("reconcileFastCommit: '$committedNow' -> '${result.bengali}'")
+            }
+        }
+        // Learning always uses the ENGINE result, never a preview the engine
+        // didn't rank first — recording a passively committed preview as a
+        // user preference is exactly the S26 poisoning bug.
         learnCommittedWordAsync(
             phonetic,
             result.bengali,
             learnAsWord = result.source == ResolutionSource.CLEAN_TRANSLITERATION
         )
-        buffer = ""
-        suggestions.clear()
-        clearCommitCaches()
-        recordNextWordPairLearning(result.bengali)
-        updatePredictions(result.bengali)
+        recordNextWordPairLearning(finalWord, previousWord)
+        // replacesLast: committedNow was a transient preview of the SAME word,
+        // so the two-word context must not shift it into the second slot.
+        if (finalWord != committedNow) updatePredictions(finalWord, replacesLast = true)
     }
 
     /**
@@ -2754,9 +2846,9 @@ class BangluIMEService : InputMethodService(),
      * so the editor text itself is the adjacency oracle: record only when the
      * text before the cursor actually ends with "previous committed".
      */
-    private fun recordNextWordPairLearning(committed: String) {
+    private fun recordNextWordPairLearning(committed: String, previousOverride: String? = null) {
         if (privateInputMode || rawCommitInputMode) return
-        val previous = lastCommittedBengali
+        val previous = previousOverride ?: lastCommittedBengali
         if (previous.isEmpty() || committed.isEmpty()) return
         if (!previous.any { isBengaliChar(it) } || !committed.any { isBengaliChar(it) }) return
 

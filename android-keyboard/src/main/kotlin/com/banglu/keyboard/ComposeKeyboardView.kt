@@ -169,7 +169,6 @@ private val KeyVisualPaddingH = 0.dp
 private val KeyVisualPaddingV = 5.5.dp
 private val KeyCorner = 7.dp
 private val KeyboardPadding = 6.dp
-private val NavigationFallbackBottomPadding = 56.dp
 
 // ── Symbol Layouts ───────────────────────────────────────────────────────────────
 private val SYMBOLS_1_ROWS = listOf(
@@ -316,10 +315,16 @@ fun BangluKeyboardLayout(
         LocalKeyboardHeightScale provides heightScale,
         LocalKeyboardFontScale provides fontScale
     ) {
+        // S30: trust the real inset. The old maxOf(inset, 56dp) fallback padded
+        // a dead 56dp strip under the bottom row on every device whose IME
+        // window already sits above the nav bar (3-button phones report a 0
+        // inset there) — testers saw it as "empty space below the keyboard".
+        // Gesture-nav phones report the gesture-pill inset here and still get
+        // exactly the padding they need.
         val navBottomPadding = WindowInsets.navigationBars
             .asPaddingValues()
             .calculateBottomPadding()
-        val bottomSafePadding = if (isLandscape) navBottomPadding else maxOf(navBottomPadding, NavigationFallbackBottomPadding)
+        val bottomSafePadding = if (isLandscape) navBottomPadding else maxOf(navBottomPadding, 3.dp)
         val isVoiceActive = voiceInputState == VoiceInputState.LISTENING ||
             voiceInputState == VoiceInputState.PROCESSING
         val showNumberRow = numberRowEnabled && !isLandscape
@@ -1739,10 +1744,22 @@ private fun BottomRow(
             onClick = onGlobePress
         )
 
+        // Comma — mirrors the period on the right (top tester request: the
+        // highest-frequency punctuation after danda deserves a dedicated key)
+        KeyButton(
+            label = ",",
+            modifier = Modifier.weight(0.8f),
+            height = keyHeight,
+            bgColor = colors.specialKeyBg,
+            fontSize = 20,
+            hitPaddingH = hitPad,
+            onClick = { onPunctuationPress(',') }
+        )
+
         // Spacebar with swipe-to-move cursor
         SpaceBar(
             label = spaceLabel,
-            modifier = Modifier.weight(4f),
+            modifier = Modifier.weight(3.4f),
             height = keyHeight,
             hitPaddingH = hitPad,
             onClick = onSpace,
@@ -2082,12 +2099,19 @@ private fun SpaceBar(
                 // smaller drift — and any vertical slide — is still a space.
                 val cursorEngagePx = 28.dp.toPx()
                 val stepPx = 14.dp.toPx()
+                // S32: distance alone misfired — a fast thumb FLICK on space
+                // covers 28dp+ of incidental travel and the tap was swallowed
+                // as a zero-move "cursor drag" (felt as "space needs a hard
+                // press"). A real cursor drag is a sustained pull, so require
+                // the finger to also be down for a beat before engaging.
+                val cursorEngageMinMs = 120L
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     down.consume()
                     isPressed = true
                     if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
+                    val downTime = down.uptimeMillis
                     var totalDx = 0f
                     var cursorMode = false
                     var remainder = 0f
@@ -2096,9 +2120,10 @@ private fun SpaceBar(
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull { it.id == down.id }
                         val deltaX = change?.positionChange()?.x ?: 0f
+                        val heldMs = (change?.uptimeMillis ?: downTime) - downTime
                         event.changes.forEach { it.consume() }
                         totalDx += deltaX
-                        if (!cursorMode && kotlin.math.abs(totalDx) >= cursorEngagePx) {
+                        if (!cursorMode && kotlin.math.abs(totalDx) >= cursorEngagePx && heldMs >= cursorEngageMinMs) {
                             cursorMode = true
                             isCursorMode = true
                             remainder = 0f
