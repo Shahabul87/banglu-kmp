@@ -159,6 +159,7 @@ object PhoneticIndexBuilder {
             }
             if (rowsForWord == 0) wordsWithNoRows++
         }
+        promoteModernChhOverArchaicCc(rows)
         lastReport = IndexBuildReport(
             totalWords = total,
             roundTripOk = roundTripOk,
@@ -172,6 +173,43 @@ object PhoneticIndexBuilder {
             tierBWords = tierBWords
         )
         return rows
+    }
+
+    /**
+     * S33: archaic চ্চ continuous forms (হচ্চে, পাচ্চি, যাচ্চে — the Kolkata
+     * literary register) romanize straight to "cc" keys, so they own those
+     * keys at canonical priority and shadow the modern চ্ছ spelling the whole
+     * userbase means (hocce → হচ্চে over হচ্ছে@89). When the same key also
+     * maps to a strictly more frequent word that differs ONLY by চ্চ → চ্ছ,
+     * promote that row to canonical priority — the engine's (tier, priority,
+     * freq) order then surfaces the modern word first while the archaic form
+     * stays reachable one slot down. কাচ্চি-style keys are untouched: the
+     * dish outranks কাচছি on frequency, so no promotion happens there.
+     */
+    private fun promoteModernChhOverArchaicCc(rows: ArrayList<PhoneticIndexRow>) {
+        val archaicOwners = HashMap<String, PhoneticIndexRow>()
+        for (row in rows) {
+            if (row.priority == PRIORITY_CANONICAL && "চ্চ" in row.bengali) {
+                val existing = archaicOwners[row.key]
+                if (existing == null || row.frequency > existing.frequency) {
+                    archaicOwners[row.key] = row
+                }
+            }
+        }
+        if (archaicOwners.isEmpty()) return
+        var promoted = 0
+        for (i in rows.indices) {
+            val row = rows[i]
+            if (row.priority != PRIORITY_HABIT) continue
+            val owner = archaicOwners[row.key] ?: continue
+            if (row.tier != owner.tier) continue
+            if (row.frequency <= owner.frequency) continue
+            if (owner.bengali.replace("চ্চ", "চ্ছ") != row.bengali) continue
+            rows[i] = row.copy(priority = PRIORITY_CANONICAL)
+            promoted++
+            println("  chh-promote: '${row.key}' ${owner.bengali}@${owner.frequency} -> ${row.bengali}@${row.frequency}")
+        }
+        if (promoted > 0) println("  chh-promote: $promoted key(s) now surface the modern চ্ছ form first")
     }
 
     // =========================================================================
@@ -208,6 +246,9 @@ object PhoneticIndexBuilder {
 
     /** য় glide between two vowels, dropped by lazy typists (phebruyari → phebruari). */
     private val VOWEL_Y_VOWEL = Regex("([aeiou])y([aeiou])")
+
+    /** স্য before a vowel, for the S33 cc chat spelling (somosya → somocca). */
+    private val SYA_BEFORE_VOWEL = Regex("sy([aeiou])")
 
     private const val VOWELS = "aeiou"
 
@@ -251,6 +292,10 @@ object PhoneticIndexBuilder {
         // S27 chat register: চ্ছ written as ss — ইচ্ছা "issa", হচ্ছে "hosse",
         // খাচ্ছি "khassi". Same dialect family as s_for_chh below.
         HabitRule("chch_ss") { it.replace("chch", "ss") },
+        // S33 chat register: the স্য gemination class also written cc —
+        // সমস্যা "somocca" (tester 2026-07-12: "সাজেশনেও আসছে না"). Same
+        // ss≡cc equivalence users already expect from the চ্ছ family above.
+        HabitRule("sya_cc") { it.replace(SYA_BEFORE_VOWEL, "cc$1") },
         // ী/ঈ → "ii", ূ/ঊ → "uu"; users omit the doubled vowel.
         HabitRule("ii_collapse") { it.replace("ii", "i") },
         HabitRule("uu_collapse") { it.replace("uu", "u") },
