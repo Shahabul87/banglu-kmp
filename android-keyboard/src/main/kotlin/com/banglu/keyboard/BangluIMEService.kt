@@ -206,8 +206,8 @@ class BangluIMEService : InputMethodService(),
     companion object {
         private const val TAG = "BangluIME"
         private const val VOICE_LANGUAGE = "bn-BD"
-        private const val VOICE_COMPLETE_SILENCE_MS = 3_500
-        private const val VOICE_POSSIBLY_COMPLETE_SILENCE_MS = 1_800
+        private const val VOICE_COMPLETE_SILENCE_MS = 5_000
+        private const val VOICE_POSSIBLY_COMPLETE_SILENCE_MS = 2_800
         private const val VOICE_RESTART_DELAY_MS = 250L
         private const val VOICE_ERROR_RESTART_DELAY_MS = 650L
         private const val VOICE_COMMA_PAUSE_MS = 1_400L
@@ -2180,8 +2180,11 @@ class BangluIMEService : InputMethodService(),
         // Same ladder as the measured-pause commit: the recognizer can finalize
         // a segment on its own 1.8s possibly-complete silence, and that path
         // must not silently drop the comma/dari the pause has earned.
+        // S42: a user-requested STOP must not stamp a dari on the sentence —
+        // testers got । after every dictation. Only a genuinely long
+        // pause earns sentence-final punctuation now.
         return when {
-            voiceStopRequested || pauseMs >= VOICE_DARI_PAUSE_MS -> "\u0964"
+            pauseMs >= VOICE_DARI_PAUSE_MS -> "\u0964"
             pauseMs >= VOICE_COMMA_PAUSE_MS -> ","
             else -> " "
         }

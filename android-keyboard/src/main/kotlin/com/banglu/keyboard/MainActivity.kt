@@ -447,37 +447,6 @@ fun BangluHomeScreen() {
                 }
             }
 
-            // ── Stats Bar ──
-            item {
-                AnimatedVisibility(visible, enter = fadeIn(tween(800, 900))) {
-                    // Dashed separator
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                            .height(1.dp)
-                            .drawBehind {
-                                drawLine(
-                                    Primary.copy(alpha = 0.10f),
-                                    Offset(0f, 0f), Offset(size.width, 0f),
-                                    strokeWidth = 1f,
-                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
-                                )
-                            }
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        StatChip("৪৮৫,০০০+", "শব্দ")
-                        StatChip("৯৯%", "নির্ভুল")
-                        StatChip("<৩০ms", "গতি")
-                        StatChip("৫০০+", "ইমোজি")
-                    }
-                }
-            }
-
             // ── Privacy policy footer link ──
             item {
                 Row(
@@ -861,14 +830,6 @@ private fun SetupCTA(label: String, sublabel: String, color: Color, onClick: () 
     Text(sublabel, color = TextMuted, fontSize = 14.sp, modifier = Modifier.padding(start = 4.dp))
 }
 
-@Composable
-private fun StatChip(value: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = Success, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(label, color = TextMuted, fontSize = 13.sp)
-    }
-}
 
 // ── Utility Functions ────────────────────────────────────────────────────────
 
