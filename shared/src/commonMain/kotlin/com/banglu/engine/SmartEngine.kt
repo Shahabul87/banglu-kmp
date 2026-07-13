@@ -279,8 +279,25 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         private val MOBILE_SHORTHAND_OVERRIDES: Map<String, String> = mapOf(
             "amr" to "আমার",
             "tomr" to "তোমার",
+            "tmr" to "তোমার",
             "tmi" to "তুমি",
             "tomi" to "তুমি",
+            "tmra" to "তোমরা",
+            "tmder" to "তোমাদের",
+            "amder" to "আমাদের",
+            // S35: chat interjections (tester report 2026-07-12). No habit
+            // chain can insert the vowel (hm -> হুম) and the raw pipeline
+            // yields junk (হ্ম, হ্মণ, ওক "oak"). "ha" is deliberately NOT
+            // here — হা (laughter, real word) stays primary with হ্যাঁ as a
+            // seeded suggestion.
+            "hm" to "হুম",
+            "hmm" to "হুম",
+            "hmmm" to "হুম",
+            "hmmmm" to "হুম",
+            "hmn" to "হুম",
+            "ok" to "ওকে",
+            "hae" to "হ্যাঁ",
+            "haa" to "হ্যাঁ",
             // S21: jac-/khac- continuous chat class (S17 leftover). The chat
             // stem is the -চ্ছ- form (যাচ্ছি "jacchi") but the continuous is
             // written with the dialect -তেছি/-তেসি tail: jactesi = যাইতেছি.

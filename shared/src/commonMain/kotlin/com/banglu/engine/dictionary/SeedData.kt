@@ -1745,7 +1745,7 @@ object SeedData {
             e("আশ্রয়", listOf("ashroy", "asroy", "ashroi"), 45, WordCategory.TATSAMA),
             e("ভরসা", listOf("bhorsha", "bhorosa", "bhorshaa", "vorsha", "bhorosaa", "vorosa", "bhorsa", "bhorosha", "bhorsaa", "vorsa", "bhoroshaa", "vorosha"), 50, WordCategory.TADBHAVA),
             e("অনুভূতি", listOf("onuvuti", "anubhuti", "onuvutii", "onuvuuti", "onubhuti", "anubhutii", "anubhuuti", "anuvuti", "onuvutee", "anubhutee", "onuvuutee", "onubhutee", "anubhuutee", "anuvutee"), 45, WordCategory.TATSAMA),
-            e("হ্যাঁ", listOf("hya", "hyaa", "hyan", "hyaan"), 85, WordCategory.TADBHAVA),
+            e("হ্যাঁ", listOf("hya", "hyaa", "hyan", "hyaan", "ha", "han", "hae", "haa"), 85, WordCategory.TADBHAVA),
             e("ছবি", listOf("chhobi", "chobi", "chhobii", "chhobee", "chobii"), 80, WordCategory.TADBHAVA),
             e("কাগজ", listOf("kagoj", "kagoz"), 50, WordCategory.TADBHAVA),
             e("পানীয়", listOf("paniyo", "paniiyo", "paniyou", "paniiyou"), 35, WordCategory.TATSAMA),
