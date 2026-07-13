@@ -177,15 +177,12 @@ fun BangluHomeScreen() {
         return
     }
 
-    var demoInput by remember { mutableStateOf("ami") }
+    var demoInput by remember { mutableStateOf("") }
     var isEnabled by remember { mutableStateOf(isKeyboardEnabled(context)) }
     var isDefault by remember { mutableStateOf(isKeyboardDefault(context)) }
     var visible by remember { mutableStateOf(false) }
     val homeListState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val demoEngine = remember {
-        SmartEngine().apply { initializeSync() }
-    }
 
     val currentContext = rememberUpdatedState(context)
     LaunchedEffect(Unit) {
@@ -195,10 +192,6 @@ fun BangluHomeScreen() {
             isEnabled = isKeyboardEnabled(currentContext.value)
             isDefault = isKeyboardDefault(currentContext.value)
         }
-    }
-
-    val demoOutput = remember(demoInput) {
-        if (demoInput.isNotEmpty()) try { demoEngine.convertWord(demoInput).bengali } catch (_: Exception) { "" } else ""
     }
 
     // Soft iOS-style setup background.
@@ -252,17 +245,17 @@ fun BangluHomeScreen() {
                 AnimatedVisibility(visible, enter = fadeIn(tween(800, 200)) + slideInVertically(tween(700, 200)) { 60 }) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
-                            "ইংরেজি টাইপ করুন,",
+                            "শুধু ছোট হাতের English অক্ষরে",
                             color = TextLight,
                             fontSize = 28.sp,
-                            lineHeight = 34.sp,
+                            lineHeight = 36.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            "বাংলা পান",
+                            "বাংলা টাইপ করুন",
                             color = Success,
-                            fontSize = 31.sp,
-                            lineHeight = 38.sp,
+                            fontSize = 32.sp,
+                            lineHeight = 40.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -273,10 +266,10 @@ fun BangluHomeScreen() {
             item {
                 AnimatedVisibility(visible, enter = fadeIn(tween(600, 400))) {
                     Text(
-                        "ছোট হাতের ইংরেজিতে লিখুন, বাংলু আপনাকে পরিষ্কার বাংলা, voice typing, emoji এবং smart suggestion দিয়ে সাহায্য করবে।",
+                        "সাথে থাকছে — voice typing, নিজের ডিকশনারি তৈরি, smart suggestions, emoji এবং AI ব্যবহার (শীঘ্রই আসছে)।",
                         color = TextMuted,
-                        fontSize = 17.sp,
-                        lineHeight = 28.sp,
+                        fontSize = 15.sp,
+                        lineHeight = 24.sp,
                         fontStyle = FontStyle.Italic
                     )
                 }
@@ -303,27 +296,31 @@ fun BangluHomeScreen() {
                             )
 
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("ENGLISH INPUT", color = TextMuted, fontSize = 13.sp, letterSpacing = 3.sp)
+                            Text("এখানে লিখে দেখুন", color = TextMuted, fontSize = 13.sp, letterSpacing = 3.sp)
                             Spacer(modifier = Modifier.height(10.dp))
 
+                            // Single Bengali editor: the Banglu keyboard itself
+                            // converts and shows suggestions in its strip — no
+                            // separate input/output boxes. Standard EditText so
+                            // long-press gives cut/copy/paste out of the box.
                             AndroidView(
-                                modifier = Modifier.fillMaxWidth().height(72.dp),
+                                modifier = Modifier.fillMaxWidth().height(150.dp),
                                 factory = { viewContext ->
                                     EditText(viewContext).apply {
                                         isFocusableInTouchMode = true
-                                        setSingleLine(true)
+                                        setTextIsSelectable(true)
+                                        hint = "ami banglay likhi…"
                                         setText(demoInput)
                                         setSelection(text.length)
-                                        textSize = 26f
+                                        textSize = 24f
                                         typeface = Typeface.DEFAULT_BOLD
                                         includeFontPadding = false
-                                        gravity = android.view.Gravity.CENTER_VERTICAL
-                                        setPadding(44, 0, 44, 0)
+                                        gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                                        setPadding(44, 32, 44, 32)
                                         inputType = InputType.TYPE_CLASS_TEXT or
-                                            InputType.TYPE_TEXT_VARIATION_NORMAL or
-                                            InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-                                        imeOptions = EditorInfo.IME_ACTION_DONE or
-                                            EditorInfo.IME_FLAG_NO_EXTRACT_UI
+                                            InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                                            InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                                        imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
                                         addTextChangedListener(object : TextWatcher {
                                             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                                             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
@@ -342,12 +339,12 @@ fun BangluHomeScreen() {
                                     }
                                 },
                                 update = { editText ->
-                                    editText.setTextColor(TextLight.toArgb())
-                                    editText.setHintTextColor(TextMuted.toArgb())
+                                    editText.setTextColor(Primary.toArgb())
+                                    editText.setHintTextColor(TextMuted.copy(alpha = 0.6f).toArgb())
                                     editText.background = GradientDrawable().apply {
                                         shape = GradientDrawable.RECTANGLE
                                         cornerRadius = 12.dp.value * editText.resources.displayMetrics.density
-                                        setColor(Color.Transparent.toArgb())
+                                        setColor((if (darkTheme) Color(0xFF101A2A) else Color(0xFFF3F7FF)).toArgb())
                                         setStroke(
                                             (1.2f * editText.resources.displayMetrics.density).toInt().coerceAtLeast(1),
                                             WarmCardBorder.toArgb()
@@ -359,37 +356,6 @@ fun BangluHomeScreen() {
                                     }
                                 }
                             )
-
-                            // Animated arrow
-                            val arrowAlpha by rememberInfiniteTransition(label = "arrow").animateFloat(
-                                initialValue = 0.4f, targetValue = 1f,
-                                animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
-                                label = "arrowAlpha"
-                            )
-                            Text(
-                                "↓", color = Primary.copy(alpha = arrowAlpha), fontSize = 28.sp,
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                                textAlign = TextAlign.Center
-                            )
-
-                            Text("বাংলা OUTPUT", color = TextMuted, fontSize = 13.sp, letterSpacing = 3.sp)
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (darkTheme) Color(0xFF101A2A) else Color(0xFFF3F7FF))
-                                    .border(1.dp, Primary.copy(alpha = 0.18f), RoundedCornerShape(12.dp))
-                                    .padding(20.dp)
-                            ) {
-                                Text(
-                                    text = demoOutput.ifEmpty { " " },
-                                    color = Primary,
-                                    fontSize = 38.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
 
                             // Bottom corner decoration (right-aligned)
                             Spacer(modifier = Modifier.height(8.dp))
