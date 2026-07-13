@@ -133,10 +133,26 @@ private val typingSteps = listOf(
         title = "৩. সাজেশন থেকে বেছে নিন",
         subtitle = "প্রথম suggestion না চাইলে পাশের শব্দে ট্যাপ করুন।",
         examples = listOf("taka" to "টাকা | তাকা", "dan" to "দান | ডান", "pore" to "পরে | পড়ে"),
-        tips = listOf("ট্যাপ করা বানান পরের বার আগে আসবে", "সাইন ইন করলে ব্যক্তিগত অভিধান sync হতে পারে", "Learning বন্ধ করলে শেখা বন্ধ হবে")
+        tips = listOf("ট্যাপ করা বানান পরের বার আগে আসবে", "ভুল অটোকারেক্ট হলে ↶ চিপ ট্যাপ করুন — আগের লেখা ফিরে আসবে", "Learning বন্ধ করলে শেখা বন্ধ হবে")
     ),
     TutorialStep(
-        title = "৪. English রেখে Bangla লিখুন",
+        title = "৪. চ্যাটের মতো লিখুন — শর্টকাটও বোঝে",
+        subtitle = "পুরো বানান না লিখলেও চলে। চ্যাটে যেভাবে লেখেন, Banglu সেভাবেই বোঝে।",
+        examples = listOf(
+            "kmon" to "কেমন",
+            "hm / hmm" to "হুম",
+            "ok" to "ওকে",
+            "tmi / tmra" to "তুমি / তোমরা",
+            "amr / tmr" to "আমার / তোমার",
+            "issa / icca" to "ইচ্ছা",
+            "korsi / korci" to "করছি",
+            "hosse / somossa" to "হচ্ছে / সমস্যা",
+            "golp / shobd" to "গল্প / শব্দ"
+        ),
+        tips = listOf("চ্ছ-শব্দ ss বা cc দুইভাবেই লেখা যায়", "শেষের o না দিলেও চলে: golp → গল্প", "bujteparcina → বুঝতে পারছিনা — জোড়া লাগানো শব্দও ভাঙে")
+    ),
+    TutorialStep(
+        title = "৫. English রেখে Bangla লিখুন",
         subtitle = "Assignment, WhatsApp, office word জোর করে বাংলা বানাবে না।",
         examples = listOf("ami assignment submit korbo" to "আমি assignment submit করবো", "meeting ache" to "meeting আছে"),
         tips = listOf("English mode দরকার হলে EN চাপুন", "আবার BN চাপলে Banglu mode", "Space দিয়ে দ্রুত মিশ্র লেখা লিখুন")
@@ -145,31 +161,31 @@ private val typingSteps = listOf(
 
 private val featureSteps = listOf(
     TutorialStep(
-        title = "৫. Voice typing",
+        title = "৬. Voice typing",
         subtitle = "Mic চাপুন, বাংলায় বলুন, Banglu editor-এ লিখে দেবে।",
         examples = listOf("আমি কাল ঢাকা যাব" to "আমি কাল ঢাকা যাব।", "pause" to "কমা বা দাঁড়ি"),
         tips = listOf("ছোট বিরতিতে কমা", "বড় বিরতিতে দাঁড়ি", "থামান বা বাতিল বোতাম ব্যবহার করুন")
     ),
     TutorialStep(
-        title = "৬. Voice লেখা মুছুন",
+        title = "৭. Voice লেখা মুছুন",
         subtitle = "Voice শেষ হলে suggestion bar-এ ভয়েস মুছুন দেখা যাবে।",
         examples = listOf("ভয়েস মুছুন" to "শেষ voice sentence delete"),
         tips = listOf("লম্বা sentence হলেও শেষ voice অংশ মুছবে", "Backspace long press করলে word delete", "Voice active থাকলে suggestion লুকানো থাকে")
     ),
     TutorialStep(
-        title = "৭. Emoji ও expression",
+        title = "৮. Emoji ও expression",
         subtitle = "Toolbar খুলে emoji panel ব্যবহার করুন।",
         examples = listOf("😊" to "Emoji panel", "⌄" to "Keyboard dismiss"),
         tips = listOf("তিন ডট চাপলে toolbar খুলবে", "Emoji থেকে back দিলে keyboard-এ ফিরবে", "বাংলা chat দ্রুত হবে")
     ),
     TutorialStep(
-        title = "৮. Toolbar, cursor ও delete",
+        title = "৯. Toolbar, cursor ও delete",
         subtitle = "Settings, mic, emoji, cursor movement সব keyboard থেকেই।",
         examples = listOf("Space swipe" to "cursor move", "Backspace hold" to "word delete"),
         tips = listOf("Toolbar-এর gear থেকে settings", "Space bar swipe করে cursor সরান", "Long press backspace দ্রুত delete")
     ),
     TutorialStep(
-        title = "৯. Settings ও privacy",
+        title = "১০. Settings ও privacy",
         subtitle = "নিজের typing style, height, theme, learning control করুন।",
         examples = listOf("ব্যবহার শেখা" to "on/off", "ব্যক্তিগত অভিধান" to "sync-ready", "লাইট মোড" to "low resource"),
         tips = listOf("Learning control আপনার হাতে", "কম RAM ফোনে Lite mode দিন", "Theme, number row, key preview বদলাতে পারবেন")
@@ -298,13 +314,14 @@ private val phoneticMappingSteps = listOf(
         subtitle = "Keyboard punctuation সরাসরি Bengali punctuation-এ map হয়।",
         examples = listOf(
             "." to "।",
-            ".." to "।।",
+            "Space Space" to "। (দাঁড়ি)",
+            "," to "কমা — স্পেসবারের পাশেই",
             ":" to "ঃ",
             "^" to "ঁ",
             "$" to "৳",
             "0-9" to "০-৯"
         ),
-        tips = listOf("Voice pause থেকেও কমা/দাঁড়ি আসতে পারে", "English mode-এ punctuation সরাসরি থাকবে")
+        tips = listOf("শব্দের পর কমা দিলে আগের স্পেস নিজেই সরে যায়: কথা, ", "দুইবার Space চাপলে দাঁড়ি + স্পেস", "English mode-এ punctuation সরাসরি থাকবে")
     ),
     TutorialStep(
         title = "Dictionary ranking",
@@ -465,8 +482,10 @@ private fun ExampleRow(input: String, output: String) {
             .padding(horizontal = 10.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(input, color = TutorialText, fontSize = 16.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // Mappings must never truncate — a tutorial row that reads
+        // "tumi kemon ac… → তুমি কেমন আ…" teaches nothing. Wrap instead.
+        Text(input, color = TutorialText, fontSize = 16.sp, modifier = Modifier.weight(1f))
         Text("→", color = TutorialCoral, fontSize = 17.sp, modifier = Modifier.padding(horizontal = 8.dp))
-        Text(output, color = TutorialSuccess, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(output, color = TutorialSuccess, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
     }
 }
