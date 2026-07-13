@@ -72,6 +72,9 @@ object SmartEngineAdapter {
             eng.setUserBigrams(storage.getUserBigrams())
             applyPreferenceMaps(buildPreferenceMaps(eng, storage))
             eng.clearCache()
+            // No loader means nothing further will load — the engine is as
+            // complete as it gets, so learning is sound (S34 gate).
+            engineFullyLoaded = true
             return
         }
 

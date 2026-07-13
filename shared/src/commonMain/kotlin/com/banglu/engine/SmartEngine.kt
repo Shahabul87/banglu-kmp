@@ -5036,8 +5036,26 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     internal fun isLearnedEntryTrusted(phonetic: String, bengali: String): Boolean {
         if (phonetic.any { it !in 'a'..'z' }) return true
         if (!validator.isLoaded() && phoneticIndex == null) return true
+        if (bengali == CleanTransliterator.transliterate(phonetic)) {
+            // S34: an entry that is just the raw transliteration of its OWN
+            // key is untrusted when (a) the corpus has never seen that word
+            // AND (b) the full pipeline resolves the key to something else.
+            // Commits during the dictionary-load window used to learn the
+            // seed engine's raw fallback (kmon -> ক্মন) which then shadowed
+            // the store's কেমন on that device forever. Both conditions are
+            // required: deliberate divergent taps land on real corpus words
+            // (taka -> তাকা stays trusted), and true-OOV learning resolves to
+            // itself (proper nouns stay trusted). The 476K validator list is
+            // too junk-tolerant to veto this class, so this branch runs FIRST.
+            // Untrusted entries are skipped on load, never deleted (F5b).
+            val store = phoneticIndex
+            if (store != null) {
+                val corpusWord = store.containsWord(ReverseTransliterator.foldNukta(bengali))
+                if (!corpusWord && convertWord(phonetic).bengali != bengali) return false
+            }
+            return true
+        }
         if (isKnownWord(bengali)) return true
-        if (bengali == CleanTransliterator.transliterate(phonetic)) return true
         return isApprovedComposition(bengali)
     }
 

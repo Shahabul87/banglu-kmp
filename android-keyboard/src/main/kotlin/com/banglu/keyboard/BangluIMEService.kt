@@ -131,6 +131,9 @@ class BangluIMEService : InputMethodService(),
      *  session teardown) — a pending fast-commit reconcile from an older
      *  context must never touch the editor. */
     private var imeTextSessionToken = 0
+    /** S34: commit learning is unsound until the dictionary load completes. */
+    @Volatile
+    private var dictionaryReadyForLearning = false
     private var speechRecognizer: SpeechRecognizer? = null
     private var imeSessionVisible = false
     private var voiceCancelRequested = false
@@ -630,6 +633,11 @@ class BangluIMEService : InputMethodService(),
 
     private fun learnCommittedWordAsync(phonetic: String, bengali: String, learnAsWord: Boolean = false) {
         if (privateInputMode || rawCommitInputMode) return
+        // S34: no commit learning while the dictionary is still loading. The
+        // seed engine's raw fallbacks (kmon -> ক্মন) were being learned as
+        // personal words during the few-second load window and then shadowed
+        // the store's resolution on that device forever.
+        if (!dictionaryReadyForLearning) return
         serviceScope.launch {
             withContext(Dispatchers.Default) {
                 SmartEngineAdapter.onWordSelected(phonetic, bengali, learnAsWord)
@@ -712,6 +720,7 @@ class BangluIMEService : InputMethodService(),
                 // copied by the loader's first run above (preAttached == false).
                 if (!preAttached) attachPhoneticIndexStore(dictionaryLoader, preInitialize = false)
                 loadedDictionaryLiteMode = shouldUseLiteDictionary()
+                dictionaryReadyForLearning = true
                 log("onCreate: Learned words loaded")
             } catch (t: Throwable) {
                 if (BuildConfig.DEBUG) Log.e(TAG, "onCreate: Failed to load learned words", t)
@@ -738,6 +747,7 @@ class BangluIMEService : InputMethodService(),
                 )
                 if (!preAttached) attachPhoneticIndexStore(dictionaryLoader, preInitialize = false)
                 loadedDictionaryLiteMode = liteMode
+                dictionaryReadyForLearning = true
                 log("reloadUserLearning: active profile preferences loaded")
             } catch (t: Throwable) {
                 if (BuildConfig.DEBUG) Log.e(TAG, "reloadUserLearning: failed", t)
