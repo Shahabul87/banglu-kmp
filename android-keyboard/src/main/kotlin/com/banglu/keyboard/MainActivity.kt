@@ -285,13 +285,48 @@ fun BangluHomeScreen() {
                         border = BorderStroke(1.dp, WarmCardBorder)
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                "এখানে লিখে দেখুন",
-                                color = TextMuted,
-                                fontSize = 13.sp,
-                                letterSpacing = 3.sp,
-                                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "এখানে লিখে দেখুন",
+                                    color = TextMuted,
+                                    fontSize = 13.sp,
+                                    letterSpacing = 3.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                val clipboard = remember {
+                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                }
+                                @Composable
+                                fun ActionChip(label: String, onClick: () -> Unit) {
+                                    Text(
+                                        label,
+                                        color = Primary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable(onClick = onClick)
+                                            .background(Primary.copy(alpha = 0.10f))
+                                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
+                                ActionChip("কপি") {
+                                    if (demoInput.isNotEmpty()) clipboard.setPrimaryClip(
+                                        android.content.ClipData.newPlainText("Banglu", demoInput)
+                                    )
+                                }
+                                ActionChip("কাট") {
+                                    if (demoInput.isNotEmpty()) {
+                                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Banglu", demoInput))
+                                        demoInput = ""
+                                    }
+                                }
+                                ActionChip("মুছুন") { demoInput = "" }
+                            }
 
                             // Single Bengali editor: the Banglu keyboard itself
                             // converts and shows suggestions in its strip — no
