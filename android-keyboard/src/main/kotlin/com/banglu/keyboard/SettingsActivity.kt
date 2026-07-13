@@ -421,8 +421,8 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
             item {
                 BrandListSetting(
                     "ফন্ট সাইজ",
-                    when (keyboardFontSize) { "small" -> "নরমাল"; "extra_large" -> "আরও বড়"; else -> "বড়" },
-                    listOf("small" to "নরমাল", "large" to "বড়", "extra_large" to "আরও বড়"),
+                    when (keyboardFontSize) { "extra_small" -> "ছোট"; "small" -> "নরমাল"; "extra_large" -> "আরও বড়"; else -> "বড়" },
+                    listOf("extra_small" to "ছোট", "small" to "নরমাল", "large" to "বড়", "extra_large" to "আরও বড়"),
                     keyboardFontSize
                 ) { keyboardFontSize = it; saveString("keyboard_font_size", it) }
             }

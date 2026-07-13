@@ -300,6 +300,9 @@ fun BangluKeyboardLayout(
     }
     val heightScale = baseHeightScale * if (isLandscape) 0.78f else 1.0f
     val baseFontScale = when (keyboardFontSizeMode) {
+        // Font-only scaling — key hit boxes never change, so the layout
+        // system is untouched at every size.
+        "extra_small" -> 0.92f
         "small" -> 1.0f
         "large" -> 1.08f
         "extra_large" -> 1.16f
@@ -389,6 +392,7 @@ fun BangluKeyboardLayout(
                         spaceLabel = "\u09AC\u09BE\u0982\u09B2\u09C1 (BN)",
                         globeLabel = "EN",
                         enterLabel = enterLabel,
+                        periodLabel = "\u0964",
                         onLeftPress = onSymbolsPress,
                         onGlobePress = onGlobePress,
                         onSpace = onSpace,
@@ -1709,6 +1713,7 @@ private fun BottomRow(
     spaceLabel: String,
     globeLabel: String = "EN",
     enterLabel: String = "\u21B5",
+    periodLabel: String = ".",
     onLeftPress: () -> Unit,
     onGlobePress: () -> Unit,
     onSpace: () -> Unit,
@@ -1766,9 +1771,10 @@ private fun BottomRow(
             onCursorMove = onCursorMove
         )
 
-        // Period
+        // Period — the label must show what actually commits: দাঁড়ি (।) in
+        // Banglu mode, full stop everywhere else (tester report 2026-07-13).
         KeyButton(
-            label = ".",
+            label = periodLabel,
             modifier = Modifier.weight(0.8f),
             height = keyHeight,
             bgColor = colors.specialKeyBg,
