@@ -245,9 +245,9 @@ fun BangluHomeScreen() {
                 AnimatedVisibility(visible, enter = fadeIn(tween(800, 200)) + slideInVertically(tween(700, 200)) { 60 }) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
-                            "শুধু ছোট হাতের English অক্ষরে",
+                            "শুধু ছোট হাতের ইংরেজিতে",
                             color = TextLight,
-                            fontSize = 28.sp,
+                            fontSize = 27.sp,
                             lineHeight = 36.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -284,27 +284,21 @@ fun BangluHomeScreen() {
                         colors = CardDefaults.cardColors(containerColor = WarmCard),
                         border = BorderStroke(1.dp, WarmCardBorder)
                     ) {
-                        Column(modifier = Modifier.padding(24.dp)) {
-                            // Corner decoration
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .drawBehind {
-                                        drawLine(Primary.copy(0.28f), Offset(0f, size.height), Offset(0f, 0f), 1.5f)
-                                        drawLine(Primary.copy(0.28f), Offset(0f, 0f), Offset(size.width, 0f), 1.5f)
-                                    }
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "এখানে লিখে দেখুন",
+                                color = TextMuted,
+                                fontSize = 13.sp,
+                                letterSpacing = 3.sp,
+                                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
                             )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("এখানে লিখে দেখুন", color = TextMuted, fontSize = 13.sp, letterSpacing = 3.sp)
-                            Spacer(modifier = Modifier.height(10.dp))
 
                             // Single Bengali editor: the Banglu keyboard itself
                             // converts and shows suggestions in its strip — no
                             // separate input/output boxes. Standard EditText so
                             // long-press gives cut/copy/paste out of the box.
                             AndroidView(
-                                modifier = Modifier.fillMaxWidth().height(150.dp),
+                                modifier = Modifier.fillMaxWidth().height(230.dp),
                                 factory = { viewContext ->
                                     EditText(viewContext).apply {
                                         isFocusableInTouchMode = true
@@ -316,7 +310,7 @@ fun BangluHomeScreen() {
                                         typeface = Typeface.DEFAULT_BOLD
                                         includeFontPadding = false
                                         gravity = android.view.Gravity.TOP or android.view.Gravity.START
-                                        setPadding(44, 32, 44, 32)
+                                        setPadding(28, 22, 28, 22)
                                         inputType = InputType.TYPE_CLASS_TEXT or
                                             InputType.TYPE_TEXT_FLAG_MULTI_LINE or
                                             InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
@@ -357,17 +351,6 @@ fun BangluHomeScreen() {
                                 }
                             )
 
-                            // Bottom corner decoration (right-aligned)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .align(Alignment.End)
-                                    .drawBehind {
-                                        drawLine(Primary.copy(0.28f), Offset(size.width, 0f), Offset(size.width, size.height), 1.5f)
-                                        drawLine(Primary.copy(0.28f), Offset(0f, size.height), Offset(size.width, size.height), 1.5f)
-                                    }
-                            )
                         }
                     }
                 }
