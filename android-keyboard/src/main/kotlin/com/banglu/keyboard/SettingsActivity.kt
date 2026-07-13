@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -434,9 +435,10 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                 }
             }
             item { BrandInfoRow("ভার্সন", BuildConfig.VERSION_NAME) }
-            item { BrandInfoRow("ইঞ্জিন", "SmartEngine 7-layer") }
-            item { BrandInfoRow("শব্দভাণ্ডার", "৪৮৫,০০০ বাংলা শব্দ") }
-            item { BrandInfoRow("সিড ডিকশনারি", "৬,৫০০+ নির্বাচিত শব্দ") }
+            // Internal engine taxonomy (layer count, seed dictionary, word-store
+            // sizes) stays out of the public settings — the About section sells
+            // the outcome, not the implementation.
+            item { BrandInfoRow("ইঞ্জিন", "স্মার্ট বাংলা ইঞ্জিন — সম্পূর্ণ অফলাইন") }
 
             // ── Diagnostics ──
             item { BrandSectionHeader("ডায়াগনস্টিকস", "Diagnostics") }
@@ -716,7 +718,15 @@ private fun BrandInfoRow(label: String, value: String) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, color = TextLight, fontSize = 18.sp)
-        Text(value, color = Primary.copy(alpha = 0.7f), fontSize = 16.sp)
+        // Long values (diagnostics status lines) must wrap in their own
+        // column instead of colliding with the label.
+        Text(
+            value,
+            color = Primary.copy(alpha = 0.7f),
+            fontSize = 16.sp,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f).padding(start = 12.dp)
+        )
     }
 }
 
