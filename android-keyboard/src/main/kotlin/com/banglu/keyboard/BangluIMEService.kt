@@ -689,12 +689,19 @@ class BangluIMEService : InputMethodService(),
         SmartEngineAdapter.configurePersistenceScope(serviceScope)
 
         log("onCreate: Initializing SmartEngine...")
-        SmartEngineAdapter.initializeSync()
-        log("onCreate: Seed dictionary loaded")
-
         serviceScope.launch {
             try {
-                val storage = AndroidStorage(applicationContext)
+                // S29: the seed-dictionary build took ~650ms ON the main thread
+                // here — on 2GB devices the IME process is killed and recreated
+                // constantly, so EVERY keyboard open froze that long before the
+                // view could even render (41 skipped frames measured). Built on
+                // Default instead: the view shows immediately; a keystroke
+                // landing inside the window echoes the raw buffer (instant
+                // preview falls back) and the async composing refine corrects
+                // it the moment seeds land.
+                withContext(Dispatchers.Default) { SmartEngineAdapter.initializeSync() }
+                log("onCreate: Seed dictionary loaded")
+                val storage = withContext(Dispatchers.IO) { AndroidStorage(applicationContext) }
                 val dictionaryLoader = createDictionaryLoader()
                 log("onCreate: Loading learned words...")
                 // Pre-initialize attach: if the db file already exists (warm start), attach
@@ -776,9 +783,12 @@ class BangluIMEService : InputMethodService(),
             return phoneticIndexStore?.isAvailable == true  // keep existing if available
         }
 
-        val newStore = SqlitePhoneticIndexStore(dbFile)
+        // S29: the store constructor opens the db and runs a version probe —
+        // real disk I/O that was landing on the main thread (StrictMode
+        // DiskReadViolation x4 at cold start). Construct on IO.
+        val newStore = withContext(Dispatchers.IO) { SqlitePhoneticIndexStore(dbFile) }
         if (!newStore.isAvailable) {
-            newStore.close()
+            withContext(Dispatchers.IO) { newStore.close() }
             val kept = phoneticIndexStore?.isAvailable == true
             if (kept) {
                 if (BuildConfig.DEBUG) Log.w(TAG, "attachPhoneticIndexStore: new store failed; keeping existing")
@@ -786,10 +796,11 @@ class BangluIMEService : InputMethodService(),
             return kept
         }
 
-        // New store is good — close old connection and replace.
-        phoneticIndexStore?.close()
+        // New store is good — swap in, then close the old connection off-main.
+        val oldStore = phoneticIndexStore
         phoneticIndexStore = newStore
         SmartEngineAdapter.setPhoneticIndex(newStore)
+        if (oldStore != null) withContext(Dispatchers.IO) { oldStore.close() }
 
         // Warm-up: pre-fault index pages so the first real keystroke is fast.
         serviceScope.launch(Dispatchers.IO) {

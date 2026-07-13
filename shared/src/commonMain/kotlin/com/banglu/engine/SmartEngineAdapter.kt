@@ -7,6 +7,7 @@ import com.banglu.engine.platform.PlatformStorage
 import com.banglu.engine.types.ConversionResult
 import com.banglu.engine.types.PredictedWord
 import com.banglu.engine.types.SmartSuggestion
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,6 +25,7 @@ import kotlinx.coroutines.withContext
  *   SmartEngineAdapter.convert("ami")             // Returns "আমি"
  */
 object SmartEngineAdapter {
+    @Volatile
     private var engine: SmartEngine? = null
     private var storage: PlatformStorage? = null
     private val customPreferenceMap = mutableMapOf<String, String>()
@@ -230,8 +232,16 @@ object SmartEngineAdapter {
     fun getCompositionPreview(word: String): String = getEngine().getCompositionPreview(word)
 
     /** S28: rule-only instant echo — safe on the UI thread (see SmartEngine). */
-    fun convertForInstantPreview(word: String): String =
-        getEngine().convertForInstantPreview(word)
+    /**
+     * S29: the instant echo must NEVER build the engine on the caller's (UI)
+     * thread. During the cold-start seed load (engine == null) it falls back
+     * to the raw buffer text; the async composing refine delivers the real
+     * preview as soon as the seed build finishes.
+     */
+    fun convertForInstantPreview(word: String): String {
+        val existing = engine ?: return word
+        return existing.convertForInstantPreview(word)
+    }
 
     /**
      * Parse multi-word input, converting each word and preserving whitespace.
