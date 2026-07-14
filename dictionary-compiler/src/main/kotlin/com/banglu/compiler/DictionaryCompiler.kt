@@ -34,6 +34,14 @@ private fun isEngineComposedVerbVariant(phonetic: String): Boolean {
 }
 
 fun main(args: Array<String>) {
+    if (args.getOrNull(0) == "slim") {
+        SlimExporter.export(
+            dbPath = args.getOrNull(1) ?: error("slim <db> <out.json> [floor]"),
+            outPath = args.getOrNull(2) ?: error("slim <db> <out.json> [floor]"),
+            floor = args.getOrNull(3)?.toInt() ?: 35
+        )
+        return
+    }
     val inputDir = args.getOrNull(0) ?: error("Usage: DictionaryCompiler <input-dir> <output-path>")
     val outputPath = args.getOrNull(1) ?: error("Usage: DictionaryCompiler <input-dir> <output-path>")
 

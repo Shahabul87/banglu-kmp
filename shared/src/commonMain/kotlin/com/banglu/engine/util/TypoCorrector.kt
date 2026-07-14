@@ -60,7 +60,7 @@ object TypoCorrector {
             chars[i] = chars[i + 1]
             chars[i + 1] = temp
 
-            val candidate = String(chars)
+            val candidate = chars.concatToString()
             if (dictionary.has(candidate)) {
                 return TypoCorrectionResult(candidate, key, "transposition")
             }

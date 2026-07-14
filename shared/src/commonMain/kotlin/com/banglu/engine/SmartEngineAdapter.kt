@@ -36,14 +36,13 @@ object SmartEngineAdapter {
     private var phoneticStore: com.banglu.engine.platform.PhoneticIndexStore? = null
     private var engineFullyLoaded = false
 
-    @Synchronized
-    internal fun getEngine(): SmartEngine {
+    internal fun getEngine(): SmartEngine = com.banglu.engine.util.runSynchronized(this) {
         val existing = engine
-        if (existing != null) return existing
+        if (existing != null) return@runSynchronized existing
         val newEngine = SmartEngine()
         newEngine.initializeSync()
         engine = newEngine
-        return newEngine
+        newEngine
     }
 
     /**
@@ -87,7 +86,7 @@ object SmartEngineAdapter {
             // Rebuild path (profile / lite-mode change): drop the old full
             // engine BEFORE building the new one so two full dictionaries never
             // coexist on a 256MB heap.
-            synchronized(this) { engine = null }
+            com.banglu.engine.util.runSynchronized(this) { engine = null }
             engineFullyLoaded = false
         }
         // Ensure a serving engine exists and sees the sqlite store.
@@ -113,7 +112,7 @@ object SmartEngineAdapter {
         // reappear on the next initialize; the in-session map entries are
         // rebuilt here from the storage snapshot.
         applyPreferenceMaps(built.second)
-        synchronized(this) { engine = built.first }
+        com.banglu.engine.util.runSynchronized(this) { engine = built.first }
         engineFullyLoaded = true
         built.first.clearCache()
     }
@@ -601,7 +600,7 @@ object SmartEngineAdapter {
 
     private val CURATED_LOANWORD_PRIMARY = buildMap {
         for (entry in EnglishPronunciationVariantData.ENTRIES) {
-            for (phonetic in entry.phonetics) putIfAbsent(phonetic.normalizedPhonetic(), entry.bengali)
+            for (phonetic in entry.phonetics) { val k = phonetic.normalizedPhonetic(); if (k !in this) put(k, entry.bengali) }
         }
         put("application", "এপ্লিকেশন")
         put("database", "ডেটাবেস")

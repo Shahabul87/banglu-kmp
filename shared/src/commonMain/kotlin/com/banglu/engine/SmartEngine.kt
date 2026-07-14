@@ -93,11 +93,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     // ======================== LRU Word Cache ========================
 
-    private val wordCache = object : LinkedHashMap<String, ConversionResult>(256, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ConversionResult>?): Boolean {
-            return size > MAX_CACHE
-        }
-    }
+    private val wordCache = com.banglu.engine.util.LruCache<String, ConversionResult>(MAX_CACHE)
 
     /**
      * LRU memo over [PhoneticIndexStore.lookupExact]. The composing preview and
@@ -105,11 +101,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * dedupes the double store read. Cleared in [clearCache] (and therefore on
      * [setPhoneticIndex]).
      */
-    private val storeLookupMemo = object : LinkedHashMap<String, List<PhoneticIndexHit>>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<PhoneticIndexHit>>?): Boolean {
-            return size > MAX_STORE_MEMO
-        }
-    }
+    private val storeLookupMemo = com.banglu.engine.util.LruCache<String, List<PhoneticIndexHit>>(MAX_STORE_MEMO)
 
     /**
      * LRU memo over [PhoneticIndexStore.containsWord] for the lite-mode commit
@@ -118,11 +110,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * composition roots); this bounds it to one indexed sqlite query per word.
      * Cleared in [clearCache] (and therefore on [setPhoneticIndex]).
      */
-    private val containsWordMemo = object : LinkedHashMap<String, Boolean>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean {
-            return size > MAX_STORE_MEMO
-        }
-    }
+    private val containsWordMemo = com.banglu.engine.util.LruCache<String, Boolean>(MAX_STORE_MEMO)
 
     private data class InflectionalSuffix(val phonetic: String, val bengali: String)
 
@@ -2989,7 +2977,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // transposition
             if (i < n - 1 && key[i] != key[i + 1]) {
                 val t = key.toCharArray().also { val c = it[i]; it[i] = it[i + 1]; it[i + 1] = c }
-                consider(String(t), 1.0)
+                consider(t.concatToString(), 1.0)
             }
             // substitution
             for (ch in 'a'..'z') if (ch != key[i]) {
@@ -3018,9 +3006,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 val variants = buildList {
                     add(key.removeRange(i, i + 1))
                     if (i < n - 1 && key[i] != key[i + 1]) {
-                        add(String(key.toCharArray().also {
+                        add(key.toCharArray().also {
                             val c = it[i]; it[i] = it[i + 1]; it[i + 1] = c
-                        }))
+                        }.concatToString())
                     }
                 }
                 for (v in variants) {

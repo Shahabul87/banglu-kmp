@@ -22,12 +22,7 @@ class SmartDictionary {
         private set
 
     /** LRU cache for repeated exact lookups */
-    private val cache: LinkedHashMap<String, List<LookupResult>> = object :
-        LinkedHashMap<String, List<LookupResult>>(256, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<LookupResult>>?): Boolean {
-            return size > MAX_CACHE_SIZE
-        }
-    }
+    private val cache = com.banglu.engine.util.LruCache<String, List<LookupResult>>(MAX_CACHE_SIZE)
     private val bengaliToPhonetic: MutableMap<String, String> = mutableMapOf()
 
     /**

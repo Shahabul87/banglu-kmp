@@ -14,6 +14,15 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_11)
         }
     }
+    // S45: the web/extension target — same engine, compiled to JS. Kotlin/JS
+    // (not Wasm) so old Android Chrome in BD still runs the converter page.
+    js(IR) {
+        moduleName = "banglu-engine"
+        browser()
+        nodejs()
+        binaries.library()
+        generateTypeScriptDefinitions()
+    }
 
     sourceSets {
         commonMain.dependencies {
