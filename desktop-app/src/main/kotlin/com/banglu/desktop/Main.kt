@@ -189,6 +189,17 @@ private fun App() {
                 Text(status, color = Muted, fontSize = 12.sp)
             }
             Text("শুধু ছোট হাতের ইংরেজিতে বাংলা টাইপ করুন", color = Green, fontSize = 15.sp)
+            val isMac = remember { System.getProperty("os.name").lowercase().contains("mac") }
+            Text(
+                if (Hotkey.registered)
+                    (if (isMac) "গ্লোবাল হটকি সক্রিয়: ⌘⇧B — যেকোনো অ্যাপে মিনি কনভার্টার"
+                     else "গ্লোবাল হটকি সক্রিয়: Ctrl+Shift+B — যেকোনো অ্যাপে মিনি কনভার্টার")
+                else if (isMac)
+                    "হটকি (⌘⇧B) চালু করতে: System Settings → Privacy & Security → Accessibility-তে Banglu-কে অনুমতি দিন, তারপর অ্যাপ রিস্টার্ট করুন"
+                else "গ্লোবাল হটকি নিবন্ধন হয়নি — অ্যাপ রিস্টার্ট করে দেখুন",
+                color = if (Hotkey.registered) Muted else Color(0xFFFBBF24),
+                fontSize = 11.sp
+            )
 
             OutlinedTextField(
                 value = input,
