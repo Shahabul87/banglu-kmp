@@ -21,6 +21,9 @@ import java.util.logging.Logger
  */
 object Hotkey {
     var registered by mutableStateOf(false); private set
+    // macOS quirk: the event tap can register WITHOUT permission and then
+    // silently receive nothing — only a real key event proves the grant.
+    var eventsSeen by mutableStateOf(false); private set
     var lastError by mutableStateOf<String?>(null); private set
 
     fun register(onTrigger: () -> Unit) {
@@ -33,6 +36,7 @@ object Hotkey {
                     GlobalScreen.registerNativeHook()
                     GlobalScreen.addNativeKeyListener(object : NativeKeyListener {
                         override fun nativeKeyPressed(e: NativeKeyEvent) {
+                            eventsSeen = true
                             val mods = e.modifiers
                             val meta = mods and (NativeKeyEvent.META_MASK or NativeKeyEvent.META_L_MASK or NativeKeyEvent.META_R_MASK) != 0
                             val ctrl = mods and (NativeKeyEvent.CTRL_MASK or NativeKeyEvent.CTRL_L_MASK or NativeKeyEvent.CTRL_R_MASK) != 0
