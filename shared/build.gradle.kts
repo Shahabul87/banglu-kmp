@@ -8,7 +8,12 @@ plugins {
 }
 
 kotlin {
-    jvm()
+    jvm {
+        // S49: the desktop app bundles a Java 17 runtime (jpackage/Temurin 17).
+        // Without this, the Gradle daemon's JBR 21 emits class-file 65 and the
+        // packaged app dies with UnsupportedClassVersionError at first convert.
+        compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+    }
     androidTarget {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_11)
