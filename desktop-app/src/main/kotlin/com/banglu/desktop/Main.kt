@@ -190,25 +190,19 @@ private fun App() {
             }
             Text("শুধু ছোট হাতের ইংরেজিতে বাংলা টাইপ করুন", color = Green, fontSize = 15.sp)
             val isMac = remember { System.getProperty("os.name").lowercase().contains("mac") }
-            // Three truthful states: registered can be a false positive on
-            // macOS (tap registers without permission, then hears nothing),
-            // so only a really-received key event turns the hint "active".
+            // OS-native hotkey (no permissions needed) — registered means armed.
+            // macOS Accessibility is only for auto-paste; without it Enter
+            // still copies, the user pastes manually with ⌘V.
             Text(
                 when {
-                    Hotkey.registered && Hotkey.eventsSeen ->
-                        if (isMac) "গ্লোবাল হটকি সক্রিয়: ⌘⇧B — যেকোনো অ্যাপে মিনি কনভার্টার"
-                        else "গ্লোবাল হটকি সক্রিয়: Ctrl+Shift+B — যেকোনো অ্যাপে মিনি কনভার্টার"
                     Hotkey.registered && isMac ->
-                        "কীবোর্ড শোনা যাচ্ছে না — System Settings → Privacy & Security-তে Accessibility এবং Input Monitoring দুই তালিকাতেই Banglu ON করুন (+ দিয়ে যোগ করুন), তারপর অ্যাপ রিস্টার্ট করুন"
+                        "গ্লোবাল হটকি সক্রিয়: ⌘⇧B — যেকোনো অ্যাপে মিনি কনভার্টার (স্বয়ংক্রিয় পেস্টের জন্য Accessibility অনুমতি দিন; না দিলে Enter-এ কপি হয়, ⌘V-তে পেস্ট করুন)"
                     Hotkey.registered ->
-                        "কীবোর্ড শোনা যাচ্ছে না — অনুমতি দিয়ে অ্যাপ রিস্টার্ট করুন"
-                    isMac ->
-                        "হটকি (⌘⇧B) চালু করতে: Accessibility এবং Input Monitoring-এ Banglu-কে অনুমতি দিন; দিলে কয়েক সেকেন্ডে নিজে থেকেই চালু হবে" +
-                            (Hotkey.lastError?.let { " · ($it)" } ?: "")
-                    else -> "গ্লোবাল হটকি নিবন্ধন হয়নি — অনুমতি দিলে নিজে থেকেই চালু হবে" +
+                        "গ্লোবাল হটকি সক্রিয়: Ctrl+Shift+B — যেকোনো অ্যাপে মিনি কনভার্টার"
+                    else -> "গ্লোবাল হটকি নিবন্ধন হয়নি" +
                         (Hotkey.lastError?.let { " · ($it)" } ?: "")
                 },
-                color = if (Hotkey.registered && Hotkey.eventsSeen) Muted else Color(0xFFFBBF24),
+                color = if (Hotkey.registered) Muted else Color(0xFFFBBF24),
                 fontSize = 11.sp
             )
 

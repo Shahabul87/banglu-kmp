@@ -13,8 +13,15 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")
     implementation("org.xerial:sqlite-jdbc:3.45.1.0")
     implementation(libs.kotlinx.serialization.json)
-    // Global hotkey (system-wide) — macOS needs Accessibility permission
-    implementation("com.github.kwhat:jnativehook:2.2.2")
+    // Global hotkey via OS hotkey APIs (Carbon RegisterEventHotKey on macOS,
+    // RegisterHotKey on Windows, X11 on Linux) — NO permissions needed and no
+    // keyboard event tap. JNativeHook was abandoned: it required Accessibility
+    // + Input Monitoring, false-registered without them, and crashed natively
+    // (CFMachPortInvalidate in destroy_event_runloop_info) on permission
+    // changes. JNA 5.14 pinned: jkeymaster's transitive JNA predates aarch64.
+    implementation("com.github.tulskiy:jkeymaster:1.3")
+    implementation("net.java.dev.jna:jna:5.14.0")
+    implementation("net.java.dev.jna:jna-platform:5.14.0")
 }
 
 compose.desktop {
