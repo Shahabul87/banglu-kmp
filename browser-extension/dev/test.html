@@ -12,6 +12,8 @@
   <p class="hint">Type a roman word then SPACE → converts inline. Chips float below. Alt+B toggles.</p>
   <input id="t1" type="text" placeholder="input type=text" />
   <textarea id="t2" rows="4" placeholder="textarea"></textarea>
+  <div id="t3" contenteditable="true" style="min-height:80px;background:#101a2a;border:1px solid #1e3a5f;border-radius:10px;padding:10px;font-size:18px"><p><br></p></div>
+  <p class="hint">↑ contenteditable (Gmail/FB/WhatsApp-style)</p>
   <script type="module">
     import * as mod from "../vendor/banglu-engine.bundle.js";
     const ns = (mod.default ?? mod);

@@ -12,9 +12,21 @@
     if (!enabled) strip.hide();
   });
 
-  const isEditable = (el) =>
+  const isValueEditable = (el) =>
     el instanceof HTMLTextAreaElement ||
     (el instanceof HTMLInputElement && /^(text|search)$/.test(el.type));
+
+  // P2: rich editors (Gmail compose, Facebook, WhatsApp Web) are
+  // contenteditable trees — resolve the editable ROOT from any inner node.
+  const ceRoot = (node) => {
+    let el = node instanceof Element ? node : node?.parentElement;
+    while (el) {
+      if (el.isContentEditable && (!el.parentElement || !el.parentElement.isContentEditable)) return el;
+      el = el.parentElement;
+    }
+    return null;
+  };
+  const isEditable = (el) => isValueEditable(el) || !!(el instanceof Node && ceRoot(el));
 
   const nativeSet = (el, value) => {
     const proto = el instanceof HTMLTextAreaElement
@@ -50,7 +62,7 @@
     root.append(style, bar);
     document.documentElement.appendChild(host);
     return {
-      show(el, chips, onPick) {
+      show(rect, chips, onPick) {
         if (!chips.length) return this.hide();
         bar.replaceChildren(...chips.map((c) => {
           const b = document.createElement("button");
@@ -59,7 +71,7 @@
           b.addEventListener("mousedown", (e) => { e.preventDefault(); onPick(c); });
           return b;
         }));
-        const r = el.getBoundingClientRect();
+        const r = rect;
         host.style.left = Math.max(8, r.left) + "px";
         host.style.top = Math.min(window.innerHeight - 54, r.bottom + 6) + "px";
         host.style.display = "block";
@@ -68,18 +80,60 @@
     };
   })();
 
+  // ---- word tracking + commit: two backends -------------------------
   const wordBefore = (el) => {
-    const caret = el.selectionStart ?? 0;
-    const m = el.value.slice(0, caret).match(/[a-zA-Z]+$/);
-    return m ? { word: m[0], start: caret - m[0].length, end: caret } : null;
+    if (isValueEditable(el)) {
+      const caret = el.selectionStart ?? 0;
+      const m = el.value.slice(0, caret).match(/[a-zA-Z]+$/);
+      return m ? { kind: "value", el, word: m[0], start: caret - m[0].length, end: caret } : null;
+    }
+    // contenteditable: word is the roman tail of the caret's text node
+    const sel = window.getSelection();
+    if (!sel || !sel.isCollapsed || sel.rangeCount === 0) return null;
+    const r = sel.getRangeAt(0);
+    const node = r.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE) return null;
+    const upto = node.textContent.slice(0, r.startOffset);
+    const m = upto.match(/[a-zA-Z]+$/);
+    if (!m) return null;
+    return {
+      kind: "ce", el, word: m[0], node,
+      start: r.startOffset - m[0].length, end: r.startOffset,
+    };
   };
 
-  const commit = (el, start, end, text) => {
-    const v = el.value;
-    nativeSet(el, v.slice(0, start) + text + v.slice(end));
-    const pos = start + text.length;
-    el.setSelectionRange(pos, pos);
+  const commit = (w, text) => {
+    if (w.kind === "value") {
+      const el = w.el, v = el.value;
+      nativeSet(el, v.slice(0, w.start) + text + v.slice(w.end));
+      const pos = w.start + text.length;
+      el.setSelectionRange(pos, pos);
+    } else {
+      // Select the roman word, then insertText — execCommand keeps the
+      // editor's own undo stack and fires the events rich editors expect.
+      const sel = window.getSelection();
+      const range = document.createRange();
+      try {
+        range.setStart(w.node, w.start);
+        range.setEnd(w.node, w.end);
+      } catch { return; }
+      sel.removeAllRanges();
+      sel.addRange(range);
+      document.execCommand("insertText", false, text);
+    }
     strip.hide();
+  };
+
+  // strip anchor: caret rect for CE (fields are huge), element rect otherwise
+  const anchorRect = (w) => {
+    if (w.kind === "ce") {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        const rr = sel.getRangeAt(0).cloneRange().getBoundingClientRect();
+        if (rr && (rr.width || rr.height || rr.top)) return rr;
+      }
+    }
+    return w.el.getBoundingClientRect();
   };
 
   document.addEventListener("keydown", (e) => {
@@ -102,7 +156,7 @@
     const w = wordBefore(el);
     if (!w) return;
     e.preventDefault();
-    ask(w.word).then(({ primary }) => commit(el, w.start, w.end, primary + " "));
+    ask(w.word).then(({ primary }) => commit(w, primary + " "));
   }, true);
 
   document.addEventListener("input", (e) => {
@@ -115,7 +169,11 @@
       // stale guard: only show if the word is still the tail
       const now = wordBefore(el);
       if (!now || now.word !== w.word) return;
-      strip.show(el, chips, (chip) => commit(el, now.start, now.end, chip + " "));
+      strip.show(anchorRect(now), chips, (chip) => {
+        // recompute at click time — CE ranges go stale across edits
+        const fresh = wordBefore(now.el) ?? now;
+        commit(fresh, chip + " ");
+      });
     });
   }, true);
 
