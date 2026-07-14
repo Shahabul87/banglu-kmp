@@ -80,3 +80,33 @@ Decisions:
 Type "ami tomake valobashi" into a GitHub comment with the extension on →
 আমি তোমাকে ভালোবাসি inline, chips appeared for each word, zero network
 requests in DevTools, Alt+B turns it off instantly.
+
+---
+
+# Appendix — Desktop App (Option A: Compose Desktop, separate S-round)
+
+**What:** windowed converter app for Windows/macOS/Linux built with Compose
+Multiplatform in THIS repo (new `desktop-app/` module), using the engine's
+existing `jvm()` target directly — no JS, no slim tier.
+
+**Why this beats a Tauri/Electron wrapper:** the JVM target loads the FULL
+143MB dictionary + validator over JDBC sqlite — highest-quality Banglu on
+any platform (equal to Android full mode, better than web). Same repo, same
+tests, zero drift.
+
+**v1 features:**
+- Converter window (mirror of /type: input, live Bangla, chips, copy)
+- Global hotkey (Alt/⌥+B) → floating mini-converter near cursor
+- "Convert & paste": Enter commits the Bangla into whatever app has focus
+  (synthetic Cmd/Ctrl+V — the text-expander pattern; no OS IME APIs needed)
+- Fully offline; dictionary bundled or downloaded-once on first run
+
+**Packaging:** Compose Desktop native distributions (.dmg / .msi / .deb).
+
+**Effort:** ~1–2 weeks UI + packaging. **Sequencing:** after extension P3 —
+the extension covers browser typing (most desktop usage); this covers
+Office/native apps/offline.
+
+**Explicit non-goal:** a system-wide IME (Windows TSF / macOS IMK / ibus) —
+weeks-to-months per OS against entrenched free Avro on Windows; revisit only
+with strong user demand ("when we've won mobile").

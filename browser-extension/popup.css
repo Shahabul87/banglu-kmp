@@ -1,0 +1,32 @@
+:root { color-scheme: dark; }
+* { box-sizing: border-box; margin: 0; }
+body {
+  width: 380px; background: #080d16; color: #e2e8f0;
+  font-family: system-ui, "Noto Sans Bengali", sans-serif; padding: 12px;
+}
+header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.brand { font-weight: 700; color: #64d2ff; font-size: 16px; }
+.status { margin-left: auto; font-size: 11px; color: #64748b; }
+textarea {
+  width: 100%; height: 84px; resize: none; border-radius: 12px;
+  background: #101a2a; border: 1px solid #1e3a5f; color: #e2e8f0;
+  padding: 10px; font-size: 15px; outline: none;
+}
+textarea:focus { border-color: #38bdf8aa; }
+#chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; min-height: 30px; }
+#chips button {
+  border-radius: 999px; border: 1px solid #0ea5e94d; background: #0ea5e926;
+  color: #bae6fd; padding: 4px 12px; font-size: 14px; cursor: pointer;
+}
+#chips button:hover { background: #0ea5e94d; }
+.out-card { border-radius: 12px; background: #0d1524; border: 1px solid #1e293b; padding: 10px; }
+.out-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.out-head span { font-size: 10px; color: #64748b; }
+.out-head button {
+  border-radius: 8px; border: 1px solid #22c55e4d; background: #22c55e26;
+  color: #86efac; padding: 3px 10px; font-size: 12px; cursor: pointer;
+}
+#out { font-size: 19px; line-height: 1.6; color: #bae6fd; min-height: 32px;
+  word-break: break-word; white-space: pre-wrap; }
+footer { margin-top: 10px; font-size: 11px; color: #475569; text-align: center; }
+footer a { color: #4ade80; }
