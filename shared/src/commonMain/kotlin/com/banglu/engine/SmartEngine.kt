@@ -295,6 +295,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "hmmm" to "হুম",
             "hmmmm" to "হুম",
             "hmn" to "হুম",
+            "vdo" to "ভিডিও",
+            "rain" to "রেইন",
             "ok" to "ওকে",
             "hae" to "হ্যাঁ",
             "haa" to "হ্যাঁ",
@@ -891,9 +893,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // words the store assigns to this EXACT key (habit aliases). None of
         // these are junk — never re-guess them.
         if (' ' in raw.bengali) return raw
-        val negationStemValid = (raw.bengali.endsWith("না") &&
-            validator.isValid(raw.bengali.removeSuffix("না"))) ||
-            (raw.bengali.endsWith("নাই") && validator.isValid(raw.bengali.removeSuffix("নাই")))
+        fun stemKnown(suffix: String): Boolean {
+            if (!raw.bengali.endsWith(suffix)) return false
+            val stem = raw.bengali.removeSuffix(suffix)
+            // S43: informal -ো verb stems (আসবো) live in the corpus words
+            // table but not always in the validator list — both are stem
+            // evidence here, or the typo layer "corrects" আসবোনে to আসনে.
+            return validator.isValid(stem) || phoneticIndex?.containsWord(
+                com.banglu.engine.util.ReverseTransliterator.foldNukta(stem)
+            ) == true
+        }
+        val negationStemValid = stemKnown("না") || stemKnown("নাই") || stemKnown("নে")
         // Composition protection needs an EVIDENCED stem — the words table's
         // junk tail makes isApprovedComposition alone too lenient (আময়দাের
         // parses as junk-root আময়দা + ের and would be shielded).
@@ -3052,6 +3062,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             key.endsWith("nai") -> "nai" to "নাই"
             key.endsWith("na") -> "na" to "না"
             key.endsWith("to") -> "to" to "তো"
+            // S43: the dialect softener নে (bolbone = বলবোনে, asbone =
+            // আসবোনে) — same guards; attested -ne words (মনে, দোকানে)
+            // never reach here thanks to the whole-word store guard.
+            key.endsWith("bone") -> "ne" to "নে"
             else -> return null
         }
         // Minimum lengths: "na" keeps the proven S16 floor (>= 7 — sona/kena
@@ -3061,6 +3075,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val minLen = when (suffix.first) {
             "nai" -> 6
             "to" -> 6   // hobeto -> হবে তো; store guard keeps dekhto/gosto safe
+            "ne" -> 6   // asbone -> আসবোনে; store guard keeps mone/dokane safe
             else -> 7
         }
         if (key.length < minLen) return null
@@ -3083,7 +3098,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             inNegationCompound = false
         }
         if (prefix.confidence < 0.9) return null
-        if (!validator.isValid(prefix.bengali)) return null
+        // S43: the validator list lacks some informal -ো verb spellings the
+        // store attests (আসবো is store-owned at key asbo but absent from the
+        // 476K list, while বলবো is present). A Tier-A store row for the exact
+        // prefix key is equally strong stem evidence.
+        val stemAttested = validator.isValid(prefix.bengali) ||
+            phoneticIndex?.containsWord(
+                com.banglu.engine.util.ReverseTransliterator.foldNukta(prefix.bengali)
+            ) == true
+        if (!stemAttested) return null
 
         // Stem tie-break: the in-memory layers can hand back a floor-frequency
         // corpus squatter (parteci -> পার্তেছি@1) while the store's top hit for
@@ -3091,7 +3114,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // the shared evidence scale — take the stronger attested stem.
         var stem = prefix.bengali
         storeLookup(prefixKey).firstOrNull { validator.isValid(it.bengali) }?.let { top ->
-            if (validator.getFrequency(top.bengali) > validator.getFrequency(stem)) {
+            // Length guard (S43): the tie-break exists for same-shape squatters
+            // (পার্তেছি vs পারতেছি) — a SHORTER store word (asbo: আস over
+            // আসবো) is a different word, not a better spelling of the stem.
+            if (top.bengali.length >= stem.length &&
+                validator.getFrequency(top.bengali) > validator.getFrequency(stem)
+            ) {
                 stem = top.bengali
             }
         }

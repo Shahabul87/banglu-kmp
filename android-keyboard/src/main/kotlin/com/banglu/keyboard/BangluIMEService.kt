@@ -2001,7 +2001,7 @@ class BangluIMEService : InputMethodService(),
         val previous = voiceLiveCommittedPartial
         when {
             previous.isEmpty() -> {
-                commitVoiceTextAtInsertion(partial)
+                commitVoiceTextAtInsertion(partial, ensureBoundary = true)
                 voiceLiveCommittedPartial = partial
                 voiceLiveCommitLength = partial.length
             }
@@ -2030,15 +2030,24 @@ class BangluIMEService : InputMethodService(),
         voiceLastLivePartialUpdateAt = System.currentTimeMillis()
     }
 
-    private fun commitVoiceTextAtInsertion(text: String) {
+    private fun commitVoiceTextAtInsertion(text: String, ensureBoundary: Boolean = false) {
         if (text.isEmpty()) return
         val ic = currentInputConnection ?: return
         moveVoiceCursorToInsertionPoint(ic)
         ic.finishComposingText()
-        ic.commitText(text, 1)
+        // S43: NEW voice segments were landing glued to the previous text
+        // (তারপরইউটিউব…) whenever the earlier segment ended without a
+        // trailing space. Segment starts guarantee a boundary; mid-segment
+        // suffix continuations never pass ensureBoundary.
+        val before = if (ensureBoundary) ic.getTextBeforeCursor(1, 0)?.toString().orEmpty() else ""
+        val out = if (
+            ensureBoundary && before.isNotEmpty() &&
+            !before.last().isWhitespace() && !text.first().isWhitespace()
+        ) " $text" else text
+        ic.commitText(out, 1)
         ic.finishComposingText()
-        voiceInsertionCursor = voiceInsertionCursor?.plus(text.length)
-        currentVoiceSessionCommitLength += text.length
+        voiceInsertionCursor = voiceInsertionCursor?.plus(out.length)
+        currentVoiceSessionCommitLength += out.length
         lastVoiceCommitLength = currentVoiceSessionCommitLength
     }
 
@@ -2100,13 +2109,13 @@ class BangluIMEService : InputMethodService(),
                 }
                 else -> {
                     log("voice: final does not match live partial, appending final safely")
-                    commitVoiceTextAtInsertion(committed)
+                    commitVoiceTextAtInsertion(committed, ensureBoundary = true)
                 }
             }
         } else {
             moveVoiceCursorToInsertionPoint(ic)
             deleteVoiceLivePartial()
-            commitVoiceTextAtInsertion(committed)
+            commitVoiceTextAtInsertion(committed, ensureBoundary = true)
         }
 
         voiceCommittedText += committed

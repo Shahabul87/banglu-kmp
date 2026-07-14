@@ -598,6 +598,7 @@ object SeedData {
             e("পারো", listOf("paro", "parou"), 88, WordCategory.TADBHAVA),
             e("পারেন", listOf("paren"), 87, WordCategory.TADBHAVA),
             e("পারবো", listOf("parbo", "paribo", "pariibo", "parbou", "paribou", "pariibou"), 86, WordCategory.TADBHAVA),
+            e("পারবি", listOf("parbi"), 66, WordCategory.TADBHAVA),
             e("পারবে", listOf("parbe", "paribe", "parbey", "paribey", "pariibe"), 85, WordCategory.TADBHAVA),
             e("করেছি", listOf("korechi", "korechii", "korechee", "korechhi", "korechhii"), 85, WordCategory.TADBHAVA),
             e("করেছে", listOf("koreche", "korechey", "korechhe", "korechhey"), 85, WordCategory.TADBHAVA),
