@@ -23,10 +23,7 @@ class S45WebParityJsTest {
 
         // Core parity set — the same words the Android S-rounds locked.
         assertEquals("আমি", BangluWebEngine.convert("ami"))
-        // TODO(S46): kmon resolves via the consonant-skeleton layer which
-        // behaves differently on Kotlin/JS (ক্মন here, কেমন on JVM) — first
-        // divergence caught by this harness; fix in the web round.
-        // assertEquals("কেমন", BangluWebEngine.convert("kmon"))
+        assertEquals("কেমন", BangluWebEngine.convert("kmon"))
         assertEquals("ইচ্ছা", BangluWebEngine.convert("issa"))
         assertEquals("আচ্ছা", BangluWebEngine.convert("assa"))
         assertEquals("সমস্যা", BangluWebEngine.convert("somossa"))

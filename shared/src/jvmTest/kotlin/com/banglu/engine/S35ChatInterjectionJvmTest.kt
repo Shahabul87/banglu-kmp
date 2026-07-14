@@ -13,6 +13,9 @@ class S35ChatInterjectionJvmTest {
             assertEquals("হুম", engine.convertForInstantPreview(w), "instant for '$w'")
         }
         assertEquals("হুম", engine.convertWord("hum").bengali)
+        // S46: kmon/kmn must hold WITHOUT the validator (lite + web tiers).
+        assertEquals("কেমন", engine.convertWord("kmon").bengali)
+        assertEquals("কেমন", engine.convertWord("kmn").bengali)
     }
 
     @Test fun okAndYesFamily() {

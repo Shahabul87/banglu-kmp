@@ -201,7 +201,13 @@ class PhoneticTrie {
         if (key.isEmpty()) return emptyList()
 
         val results = mutableListOf<PrefixResult>()
-        val collectLimit = limit * 2
+        // S46: the collect cap fires BEFORE the frequency sort, so traversal
+        // order decided WHICH candidates survived — and that order follows
+        // upstream map iteration, which differs between JVM and JS (kmon
+        // found কেমন on Android but not on the web). Collect a wide pool at
+        // seed scale (trie is ~6.5K words, distance <= 1 — traversal is
+        // cheap), then let the sort pick deterministically by frequency.
+        val collectLimit = maxOf(limit * 4, 128)
 
         if (anchorFirst && key.isNotEmpty()) {
             // Only traverse the branch matching the first character

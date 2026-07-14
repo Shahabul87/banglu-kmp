@@ -283,6 +283,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "hmmm" to "হুম",
             "hmmmm" to "হুম",
             "hmn" to "হুম",
+            // S46: kmon previously relied on the validator-backed recovery
+            // layer — absent in Android lite mode and the slim web tier, where
+            // it degraded to ক্মন. Top-frequency chat token; enumerate it.
+            "kmon" to "কেমন",
+            "kmn" to "কেমন",
             "vdo" to "ভিডিও",
             "rain" to "রেইন",
             "ok" to "ওকে",
