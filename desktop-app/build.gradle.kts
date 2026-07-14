@@ -29,6 +29,10 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb
             )
+            // jpackage builds a MINIMAL runtime; Compose's default module set
+            // omits these. jdeps-verified requirements of our jars — without
+            // java.sql the installed app dies at first convert (JDBC store).
+            modules("java.sql", "java.instrument", "java.management", "jdk.unsupported")
             packageName = "Banglu"
             packageVersion = "1.0.0"
             description = "Type Bangla anywhere with lowercase English letters"
