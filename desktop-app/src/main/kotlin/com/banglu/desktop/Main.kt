@@ -12,6 +12,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.Tray
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.banglu.engine.JvmSqliteDictionaryLoader
@@ -26,19 +35,6 @@ import java.awt.datatransfer.StringSelection
 
 /** S48: Banglu Desktop — the FULL engine (143MB dictionary + validator). */
 
-private object DesktopStorage : PlatformStorage {
-    // v1: no persistence — preferences/learning land in a later round.
-    override suspend fun getLearnedWords() = emptyList<com.banglu.engine.types.LearnedWord>()
-    override suspend fun saveLearnedWord(phonetic: String, bengali: String, frequency: Int) {}
-    override suspend fun clearLearnedWords() {}
-    override suspend fun getDictionaryVersion(): String? = null
-    override suspend fun cacheDictionary(
-        words: List<String>, frequencies: Map<String, Int>?,
-        disambigMap: Map<String, String>?, version: String
-    ) {}
-    override suspend fun getCachedDictionary(currentVersion: String) = null
-}
-
 private val Bg = Color(0xFF080D16)
 private val Card = Color(0xFF0D1524)
 private val CardBorder = Color(0xFF1E293B)
@@ -49,13 +45,99 @@ private val Green = Color(0xFF4ADE80)
 private val Muted = Color(0xFF64748B)
 
 fun main() = application {
-    Window(
-        onCloseRequest = ::exitApplication,
+    var mainVisible by remember { mutableStateOf(true) }
+    var miniVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        Hotkey.register {
+            // hotkey fires on a native thread — hop to the UI state safely
+            java.awt.EventQueue.invokeLater { miniVisible = !miniVisible }
+        }
+    }
+
+    Tray(
+        icon = painterResource("tray.png"),
+        tooltip = "Banglu",
+        menu = {
+            Item("Banglu খুলুন") { mainVisible = true }
+            Item(if (System.getProperty("os.name").lowercase().contains("mac"))
+                "মিনি কনভার্টার (⌘⇧B)" else "মিনি কনভার্টার (Ctrl+Shift+B)") { miniVisible = true }
+            Separator()
+            Item("বন্ধ করুন") { exitApplication() }
+        }
+    )
+
+    if (mainVisible) Window(
+        onCloseRequest = { mainVisible = false }, // tray keeps us alive
         title = "Banglu — বাংলা টাইপিং",
         state = rememberWindowState(width = 720.dp, height = 560.dp)
     ) {
         App()
     }
+
+    if (miniVisible) Window(
+        onCloseRequest = { miniVisible = false },
+        title = "Banglu",
+        alwaysOnTop = true,
+        state = rememberWindowState(width = 560.dp, height = 190.dp)
+    ) {
+        MiniConverter(onDone = { text ->
+            miniVisible = false
+            if (text.isNotBlank()) Paste.copyThenPaste(text)
+        }, onDismiss = { miniVisible = false })
+    }
+}
+
+/**
+ * The over-any-app converter: type Banglish, Enter pastes the Bangla into
+ * the app you came from (Word, editor, browser). Esc dismisses.
+ */
+@Composable
+private fun MiniConverter(onDone: (String) -> Unit, onDismiss: () -> Unit) {
+    var input by remember { mutableStateOf("") }
+    var output by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val focus = remember { FocusRequester() }
+
+    fun recompute(text: String) {
+        input = text
+        scope.launch(Dispatchers.Default) {
+            val bn = text.split(Regex("(?<=\\s)|(?=\\s)")).joinToString("") { p ->
+                if (p.isBlank()) p else SmartEngineAdapter.convertWord(p.trim()).bengali
+            }
+            withContext(Dispatchers.Main) { output = bn }
+        }
+    }
+
+    MaterialTheme(colorScheme = darkColorScheme(background = Bg, surface = Card)) {
+        Column(Modifier.fillMaxSize().background(Bg).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = input,
+                onValueChange = { recompute(it) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+                    .focusRequester(focus)
+                    .onPreviewKeyEvent { e ->
+                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (e.key) {
+                            Key.Enter -> { onDone(output); true }
+                            Key.Escape -> { onDismiss(); true }
+                            else -> false
+                        }
+                    },
+                placeholder = { Text("banglish likhun — Enter = paste", color = Muted) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = FieldBg, unfocusedContainerColor = FieldBg,
+                    focusedBorderColor = Sky.copy(alpha = .5f), unfocusedBorderColor = CardBorder,
+                    focusedTextColor = Color.White, unfocusedTextColor = Color.White
+                )
+            )
+            Text(output.ifEmpty { "…" }, color = SkySoft, fontSize = 20.sp)
+            Text("Enter = আগের অ্যাপে পেস্ট · Esc = বন্ধ", color = Muted, fontSize = 10.sp)
+        }
+    }
+    LaunchedEffect(Unit) { focus.requestFocus() }
 }
 
 @Composable
@@ -71,9 +153,9 @@ private fun App() {
     LaunchedEffect(Unit) {
         withContext(Dispatchers.Default) {
             SmartEngineAdapter.initializeSync()
-            val db = JvmSqliteDictionaryLoader.findDictionarySqlite()
+            val db = findDictionaryFile()
             SmartEngineAdapter.setPhoneticIndex(JvmSqlitePhoneticIndexStore(db))
-            SmartEngineAdapter.initialize(DesktopStorage, JvmSqliteDictionaryLoader(db))
+            SmartEngineAdapter.initialize(FileStorage, JvmSqliteDictionaryLoader(db))
         }
         status = "পূর্ণ অভিধান ✓"
     }

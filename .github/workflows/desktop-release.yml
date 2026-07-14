@@ -1,0 +1,52 @@
+# S49: builds Banglu Desktop installers for all three OSes.
+# jpackage cannot cross-compile — each installer builds on its own runner.
+#
+# Dictionary: 144MB, not in git. Upload dictionary.sqlite ONCE as an asset
+# of a GitHub release tagged `dictionary` (any repo release works), and this
+# workflow pulls it. Trigger: push a tag like desktop-v1.0.0, or run manually.
+name: desktop-release
+on:
+  workflow_dispatch:
+  push:
+    tags: ["desktop-v*"]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            task: packageDmg
+            artifact: desktop-app/build/compose/binaries/main/dmg/*.dmg
+          - os: windows-latest
+            task: packageMsi
+            artifact: desktop-app/build/compose/binaries/main/msi/*.msi
+          - os: ubuntu-latest
+            task: packageDeb
+            artifact: desktop-app/build/compose/binaries/main/deb/*.deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - name: Fetch dictionary
+        shell: bash
+        run: |
+          mkdir -p desktop-app/resources/common
+          gh release download dictionary -p dictionary.sqlite \
+            -O desktop-app/resources/common/dictionary.sqlite
+        env: { GH_TOKEN: "${{ github.token }}" }
+      - name: Windows icon
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          pip install pillow -q
+          python -c "from PIL import Image; Image.open('desktop-app/icons/banglu.png').save('desktop-app/icons/banglu.ico', sizes=[(16,16),(32,32),(48,48),(256,256)])"
+      - name: Build installer
+        shell: bash
+        run: ./gradlew :desktop-app:${{ matrix.task }} --no-daemon
+        env: { BANGLU_JDK: "${{ env.JAVA_HOME }}" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: banglu-${{ runner.os }}
+          path: ${{ matrix.artifact }}
