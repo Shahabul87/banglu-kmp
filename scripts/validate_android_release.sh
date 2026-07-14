@@ -6,7 +6,7 @@ APK="$ROOT_DIR/android-keyboard/build/outputs/apk/release/android-keyboard-relea
 AAB="$ROOT_DIR/android-keyboard/build/outputs/bundle/release/android-keyboard-release.aab"
 MERGED_RELEASE_MANIFEST="$ROOT_DIR/android-keyboard/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml"
 PRIVACY_POLICY="$ROOT_DIR/design/play-store/PRIVACY-POLICY.md"
-MAX_RELEASE_APK_BYTES="${MAX_RELEASE_APK_BYTES:-36700160}"
+MAX_RELEASE_APK_BYTES="${MAX_RELEASE_APK_BYTES:-83886080}"  # 80MiB: 143MB dictionary era (S44)
 
 fail() {
   echo "ERROR: $*" >&2
@@ -64,8 +64,12 @@ if grep -q 'androidx.startup.InitializationProvider' "$MERGED_RELEASE_MANIFEST";
   fail "AndroidX Startup provider must not be registered in release manifest"
 fi
 
-grep -q 'android.permission.INTERNET' "$MERGED_RELEASE_MANIFEST" ||
-  fail "INTERNET permission missing from release manifest"
+# S44 launch posture: the public launch build must ship with ZERO network
+# capability (account/billing feature disabled). Flip this check back to
+# "required" only when the account feature ships.
+if grep -q 'android.permission.INTERNET' "$MERGED_RELEASE_MANIFEST"; then
+  fail "INTERNET permission present — launch posture requires a network-free release manifest"
+fi
 grep -q 'android.permission.RECORD_AUDIO' "$MERGED_RELEASE_MANIFEST" ||
   fail "RECORD_AUDIO permission missing from release manifest"
 grep -qi 'internet' "$PRIVACY_POLICY" ||

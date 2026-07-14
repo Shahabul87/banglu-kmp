@@ -371,8 +371,21 @@ object SmartEngineAdapter {
      *        dictionary so the next conversion is dictionary-backed instead of
      *        gate-floored.
      */
-    fun onWordSelected(phonetic: String, bengali: String, learnAsWord: Boolean = false) {
-        rememberPreferredConversion(phonetic, bengali, baseFrequency = 94)
+    fun onWordSelected(
+        phonetic: String,
+        bengali: String,
+        learnAsWord: Boolean = false,
+        explicitChoice: Boolean = false
+    ) {
+        // S44 (audit finding): ranking preferences may ONLY come from an
+        // explicit user tap. A passive space commit carries no choice signal —
+        // when trigram context promotes ম্যাচ over মাছ, recording that commit
+        // as a preference poisoned the key globally on the device (the S26
+        // equal-to-primary skip compared against the CONTEXT-FREE primary and
+        // misread contextual promotions as deliberate divergence).
+        if (explicitChoice) {
+            rememberPreferredConversion(phonetic, bengali, baseFrequency = 94)
+        }
         if (learnAsWord) {
             val key = phonetic.normalizedPhonetic()
             val cleanBengali = bengali.trim()

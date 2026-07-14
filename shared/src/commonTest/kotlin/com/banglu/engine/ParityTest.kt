@@ -171,7 +171,7 @@ class ParityTest {
         SmartEngineAdapter.reset()
         SmartEngineAdapter.initializeSync()
         // Use a phonetic/bengali pair that doesn't conflict with consonant filtering rules
-        SmartEngineAdapter.onWordSelected("parikkhya", "পরীক্ষা")
+        SmartEngineAdapter.onWordSelected("parikkhya", "পরীক্ষা", explicitChoice = true)
         val result = SmartEngineAdapter.convert("parikkhya")
         assertTrue(result == "পরীক্ষা", "After onWordSelected, convert should return পরীক্ষা, got '$result'")
         SmartEngineAdapter.reset()

@@ -724,11 +724,9 @@ private fun HomeHeaderNav(context: Context) {
             Text("Keyboard", color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HeaderNavButton("প্রোফাইল", Modifier.weight(1f)) {
-                context.startActivity(
-                    Intent().setClassName(context.packageName, "com.banglu.keyboard.AccountActivity")
-                )
-            }
+            // S44 LAUNCH POSTURE: account/billing UI hidden until the premium
+            // feature ships (no deletion flow yet -> no account creation; keeps
+            // the Data Safety form truthful and the app network-free).
             HeaderNavButton("সেটিংস", Modifier.weight(1f)) {
                 context.startActivity(Intent(context, SettingsActivity::class.java))
             }

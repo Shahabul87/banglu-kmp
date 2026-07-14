@@ -24,7 +24,7 @@ class OovLearningTest {
         val first = engine.convertWord("rafsan")
         assertEquals(ResolutionSource.CLEAN_TRANSLITERATION, first.source)
 
-        SmartEngineAdapter.onWordSelected("rafsan", first.bengali, learnAsWord = true)
+        SmartEngineAdapter.onWordSelected("rafsan", first.bengali, learnAsWord = true, explicitChoice = true)
 
         val second = engine.convertWord("rafsan")
         assertEquals(first.bengali, second.bengali)
@@ -40,7 +40,7 @@ class OovLearningTest {
         val first = engine.convertWord("rafsan")
         assertEquals(ResolutionSource.CLEAN_TRANSLITERATION, first.source)
 
-        SmartEngineAdapter.onWordSelected("rafsan", first.bengali)
+        SmartEngineAdapter.onWordSelected("rafsan", first.bengali, explicitChoice = true)
 
         // A plain selection only records an adapter-level ranking preference
         // (selectedPreferenceMap, consumed by applyUserPreference and
@@ -68,7 +68,7 @@ class OovLearningTest {
         val first = engine.convertWord("rafsan")
         assertEquals(ResolutionSource.CLEAN_TRANSLITERATION, first.source)
 
-        SmartEngineAdapter.onWordSelected("rafsan", first.bengali, learnAsWord = true)
+        SmartEngineAdapter.onWordSelected("rafsan", first.bengali, learnAsWord = true, explicitChoice = true)
 
         val second = engine.convertWord("rafsan")
         assertEquals(ResolutionSource.CLEAN_TRANSLITERATION, second.source)
@@ -90,7 +90,7 @@ class OovLearningTest {
         val first = engine.convertWord("rafsan")
         assertEquals(ResolutionSource.CLEAN_TRANSLITERATION, first.source)
 
-        SmartEngineAdapter.onWordSelected("rafsan", first.bengali, learnAsWord = true)
+        SmartEngineAdapter.onWordSelected("rafsan", first.bengali, learnAsWord = true, explicitChoice = true)
 
         val second = engine.convertWord("rafsan")
         assertEquals(ResolutionSource.CLEAN_TRANSLITERATION, second.source)

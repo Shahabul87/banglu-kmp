@@ -20,7 +20,7 @@ class UserPreferenceRankingTest {
         val before = SmartEngineAdapter.convertWord("taka")
         assertEquals("টাকা", before.bengali)
 
-        SmartEngineAdapter.onWordSelected("taka", "তাকা")
+        SmartEngineAdapter.onWordSelected("taka", "তাকা", explicitChoice = true)
 
         val after = SmartEngineAdapter.convertWord("taka")
         val suggestions = SmartEngineAdapter.getSuggestions("taka", 8).map { it.bengali }
@@ -33,7 +33,7 @@ class UserPreferenceRankingTest {
     @Test
     fun learningSettingCanDisablePreferencePromotion() {
         SmartEngineAdapter.initializeSync()
-        SmartEngineAdapter.onWordSelected("taka", "তাকা")
+        SmartEngineAdapter.onWordSelected("taka", "তাকা", explicitChoice = true)
         SmartEngineAdapter.configureLearning(enabled = false, personalDictionary = true)
 
         assertEquals("টাকা", SmartEngineAdapter.convertWord("taka").bengali)
@@ -70,7 +70,7 @@ class UserPreferenceRankingTest {
     fun curatedLoanwordPrimaryBeatsLearnedEnglishSelection() {
         SmartEngineAdapter.initializeSync()
 
-        SmartEngineAdapter.onWordSelected("honeymoon", "honeymoon")
+        SmartEngineAdapter.onWordSelected("honeymoon", "honeymoon", explicitChoice = true)
 
         val result = SmartEngineAdapter.convertWord("honeymoon")
         val suggestions = SmartEngineAdapter.getSuggestions("honeymoon", 8).map { it.bengali }
@@ -84,10 +84,10 @@ class UserPreferenceRankingTest {
     fun everydayLoanwordPrimaryBeatsLearnedEnglishSelection() {
         SmartEngineAdapter.initializeSync()
 
-        SmartEngineAdapter.onWordSelected("practice", "practice")
-        SmartEngineAdapter.onWordSelected("scooter", "scooter")
-        SmartEngineAdapter.onWordSelected("remove", "remove")
-        SmartEngineAdapter.onWordSelected("possible", "possible")
+        SmartEngineAdapter.onWordSelected("practice", "practice", explicitChoice = true)
+        SmartEngineAdapter.onWordSelected("scooter", "scooter", explicitChoice = true)
+        SmartEngineAdapter.onWordSelected("remove", "remove", explicitChoice = true)
+        SmartEngineAdapter.onWordSelected("possible", "possible", explicitChoice = true)
 
         val practiceSuggestions = SmartEngineAdapter.getSuggestions("practice", 8).map { it.bengali }
         val scooterSuggestions = SmartEngineAdapter.getSuggestions("scooter", 8).map { it.bengali }
@@ -125,10 +125,15 @@ class UserPreferenceRankingTest {
 
             val primary = SmartEngineAdapter.convertWord("taka").bengali
             assertEquals("টাকা", primary)
-            SmartEngineAdapter.onWordSelected("taka", primary)
+            // Explicitly tapping the primary — equal-to-primary skip (S26).
+            SmartEngineAdapter.onWordSelected("taka", primary, explicitChoice = true)
 
-            // Divergent explicit tap IS persisted.
+            // S44 (audit): a PASSIVE commit of a divergent word (contextual
+            // promotion, reconcile result — no user choice) records NOTHING.
             SmartEngineAdapter.onWordSelected("taka", "তাকা")
+
+            // Divergent EXPLICIT tap IS persisted.
+            SmartEngineAdapter.onWordSelected("taka", "তাকা", explicitChoice = true)
         }
         assertEquals(listOf("taka:তাকা:94"), storage.saved)
     }
@@ -179,7 +184,7 @@ class UserPreferenceRankingTest {
             val primary = suggestions.firstOrNull() ?: continue
             val alternate = suggestions.drop(1).firstOrNull() ?: continue
 
-            SmartEngineAdapter.onWordSelected(key, alternate)
+            SmartEngineAdapter.onWordSelected(key, alternate, explicitChoice = true)
             val after = SmartEngineAdapter.convertWord(key).bengali
             val ranked = SmartEngineAdapter.getSuggestions(key, 8).map { it.bengali }
 

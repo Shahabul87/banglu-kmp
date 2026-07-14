@@ -1,4 +1,4 @@
-# Banglu — Play Store Listing (ready to paste, v1.5.23)
+# Banglu — Play Store Listing (ready to paste, v1.5.33)
 
 Positioning per market research 2026-07-12: "Avro-compatible but smarter,
 private by default, stable low-surprise typing." All fields respect Play
@@ -33,7 +33,7 @@ TYPE THE WAY YOU ALREADY TYPE
 • English loanwords in Bangla script: interesting → ইন্টারেস্টিং
 
 WHAT YOU SEE IS WHAT YOU GET
-• The preview above the keyboard is exactly what commits when you press space — no surprise replacements
+• The preview above the keyboard is what commits when you press space — and if an autocorrect ever surprises you, one tap on the ↶ chip brings your spelling back
 • Accidental autocorrect? One tap undoes it
 • Smart suggestions and next-word prediction that learn from YOUR writing, on your phone
 
@@ -47,7 +47,7 @@ PRIVATE BY DEFAULT
 FAST ON EVERY PHONE
 • Instant key response, engineered for budget phones — including 2GB devices
 • Automatic lite mode on low-memory phones keeps typing smooth
-• Tiny battery footprint: the keyboard does zero background work when hidden
+• Tiny battery footprint — designed to do nothing while the keyboard is hidden
 
 MADE FOR BANGLA
 • Bengali punctuation done right: dari (।) on double space, tight commas, Bangla digits ০-৯
@@ -60,7 +60,7 @@ VOICE TYPING
 • Speak Bangla, get Bangla — inline, without leaving the keyboard
 • Continuous dictation with automatic punctuation
 
-Works everywhere: WhatsApp, Facebook, Messenger, Gmail, Chrome, Notes — any app.
+Works in the apps you use every day: WhatsApp, Facebook, Messenger, Gmail, Chrome, Notes.
 
 Banglu is developed with love for the Bangla-typing community. Found a word that converts wrong? Tell us — chat-spelling coverage grows with every release, driven by real user reports.
 
@@ -68,7 +68,7 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 ```
 (~2,400 chars — well under the 4000 limit)
 
-## Release notes for 1.5.23 (500 chars max)
+## Release notes for 1.5.33 (500 chars max)
 
 ```
 • New comma key beside the space bar
@@ -105,7 +105,7 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 • একই বাক্যে বাংলা-ইংরেজি মিলিয়ে লিখুন — time, line, online ঠিকঠাক আসবে
 
 যা দেখবেন, তা-ই লেখা হবে
-• স্পেস চাপলে প্রিভিউতে যা দেখছেন ঠিক সেটাই বসবে — কোনো চমক নেই
+• স্পেস চাপলে প্রিভিউর লেখাই বসে — আর অটোকারেক্ট অবাক করলে ↶ চিপে এক ট্যাপেই আগেরটা ফেরত
 • ভুল অটোকারেক্ট? এক ট্যাপে আগেরটা ফেরত
 
 সম্পূর্ণ প্রাইভেট
@@ -115,7 +115,7 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 
 সব ফোনে দ্রুত
 • বাজেট ফোনেও তাৎক্ষণিক সাড়া — ২ জিবি র‍্যামেও মসৃণ
-• লুকানো অবস্থায় ব্যাটারি খরচ শূন্য
+• কীবোর্ড লুকানো থাকলে কোনো কাজ করে না — ব্যাটারিবান্ধব নকশা
 
 বাংলার জন্য তৈরি
 • ডাবল স্পেসে দাঁড়ি (।), বাংলা সংখ্যা ০-৯, স্পেসবারের পাশে কমা
@@ -133,13 +133,13 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 ## Console checklist (in order)
 
 1. Play Console → Create app → "Banglu: Bangla Keyboard", App (not game), Free.
-2. Upload `releases/banglu-1.5.23-2060.aab` to **Closed testing** first.
+2. Upload `releases/banglu-1.5.33-2070.aab` to **Closed testing** first.
    - Personal dev accounts created after Nov 2023: 12+ testers opted in for
      14 continuous days required before production access can be requested.
 3. Store listing: paste texts above (en-US default + bn-BD localization).
 4. Graphics: 512×512 icon ✓ (app-icon-512.png), feature-graphic.png ✓ (review
    whether it reflects current UI), screenshots/ exists — RESHOOT on the S22
-   with 1.5.23 (comma key + flush bottom row visible): typing demo,
+   with the current build (comma key + flush bottom row visible): typing demo,
    suggestions strip, chat spellings, themes, voice, settings.
 5. Privacy policy URL: https://shahabul87.github.io/banglu-privacy-policy/
 6. Data safety: answers in design/play-store/DATA-SAFETY-FORM.md

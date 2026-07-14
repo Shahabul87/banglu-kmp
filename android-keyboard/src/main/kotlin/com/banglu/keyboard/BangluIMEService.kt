@@ -249,12 +249,16 @@ class BangluIMEService : InputMethodService(),
     private fun recordImeEvent(event: String) {
         if (!::prefs.isInitialized) return
         val now = System.currentTimeMillis()
-        val countKey = "diag_ime_${event}_count"
-        prefs.edit()
-            .putLong("diag_ime_last_${event}_at", now)
-            .putInt(countKey, prefs.getInt(countKey, 0) + 1)
-            .apply()
         log("ime: $event buffer=${buffer.length} voice=${voiceInputState.value}")
+        // S44 (audit finding): the first prefs access blocks on the file load —
+        // keep even that one-time cost off the IME main thread.
+        serviceScope.launch(Dispatchers.IO) {
+            val countKey = "diag_ime_${event}_count"
+            prefs.edit()
+                .putLong("diag_ime_last_${event}_at", now)
+                .putInt(countKey, prefs.getInt(countKey, 0) + 1)
+                .apply()
+        }
     }
 
     private fun recordFailureEvent(event: String, throwable: Throwable? = null) {
@@ -631,7 +635,12 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
-    private fun learnCommittedWordAsync(phonetic: String, bengali: String, learnAsWord: Boolean = false) {
+    private fun learnCommittedWordAsync(
+        phonetic: String,
+        bengali: String,
+        learnAsWord: Boolean = false,
+        explicitChoice: Boolean = false
+    ) {
         if (privateInputMode || rawCommitInputMode) return
         // S34: no commit learning while the dictionary is still loading. The
         // seed engine's raw fallbacks (kmon -> ক্মন) were being learned as
@@ -640,7 +649,7 @@ class BangluIMEService : InputMethodService(),
         if (!dictionaryReadyForLearning) return
         serviceScope.launch {
             withContext(Dispatchers.Default) {
-                SmartEngineAdapter.onWordSelected(phonetic, bengali, learnAsWord)
+                SmartEngineAdapter.onWordSelected(phonetic, bengali, learnAsWord, explicitChoice)
             }
         }
     }
@@ -729,6 +738,9 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun reloadUserLearningAsync() {
+        // S44 (audit finding): the rebuild serves the seed engine for seconds —
+        // learning must close for the whole window, not just the first boot.
+        dictionaryReadyForLearning = false
         serviceScope.launch {
             try {
                 val liteMode = shouldUseLiteDictionary()
@@ -1479,7 +1491,7 @@ class BangluIMEService : InputMethodService(),
             // This is a conversion suggestion
             sessionSuggestionTapCount++
             ic.commitText(suggestion.bengali + " ", 1)
-            learnCommittedWordAsync(buffer, suggestion.bengali)
+            learnCommittedWordAsync(buffer, suggestion.bengali, explicitChoice = true)
             lastCommittedTextLength = suggestion.bengali.length + 1
             buffer = ""
             suggestions.clear()
@@ -2265,10 +2277,20 @@ class BangluIMEService : InputMethodService(),
     private fun isBengaliChar(ch: Char): Boolean = ch in '\u0980'..'\u09FF'
 
     private fun isNetworkAvailable(): Boolean {
-        val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
-        val network = manager.activeNetwork ?: return false
-        val capabilities = manager.getNetworkCapabilities(network) ?: return false
-        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        // S44: the launch build ships WITHOUT ACCESS_NETWORK_STATE (zero
+        // network posture) — activeNetwork then throws SecurityException.
+        // Assume online in that case: the OS speech recognizer does its own
+        // offline fallback, and assuming offline would silently force the
+        // much weaker offline Bangla model for everyone.
+        return try {
+            val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return true
+            val network = manager.activeNetwork ?: return false
+            val capabilities = manager.getNetworkCapabilities(network) ?: return false
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        } catch (_: SecurityException) {
+            true
+        }
     }
 
     private fun clearVoiceComposingText() {

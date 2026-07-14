@@ -14,10 +14,17 @@
 
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- S44 LAUNCH POSTURE: the account/billing feature is disabled for the
+         public launch, so the app ships with ZERO network capability — this
+         makes the store's "typing engine has no network access" claim
+         literally verifiable from the manifest. Restore INTERNET (and drop
+         these removals) only when the account feature ships. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="com.android.vending.BILLING" tools:node="remove" />
     <!-- Used by BangluIMEService.isNetworkAvailable(); previously only merged
          in transitively from the billing/auth libraries. -->
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Keep hardware features optional to preserve the old Play device reach. -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -45,6 +52,14 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.BangluKeyboard">
+
+        <!-- S44: keep AndroidX auto-init out of the IME process — these
+             initializers (emoji2/lifecycle/profileinstaller) add cold-start
+             work the keyboard does not need; release gate enforces this. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            tools:node="remove" />
 
         <!-- IME Service -->
         <service

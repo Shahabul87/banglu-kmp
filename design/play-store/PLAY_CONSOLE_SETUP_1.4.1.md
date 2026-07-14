@@ -1,3 +1,7 @@
+> ⚠️ SUPERSEDED (2026-07-13): answers below are from the 1.4.1 era. Use
+> STORE-LISTING.md + DATA-SAFETY-FORM.md. Launch build has NO login, NO IAP,
+> NO INTERNET permission (account/billing feature disabled for launch).
+
 # Banglu Google Play Console Setup
 
 ## App Name

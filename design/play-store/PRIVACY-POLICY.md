@@ -14,7 +14,7 @@ Banglu does not sell personal data and does not collect keystrokes for advertisi
 - **Offline core typing:** Bengali phonetic conversion, local suggestions, and the bundled dictionary can work offline without a Banglu account
 - **Account data:** If you create an account, Banglu may store your email/name, subscription state, and sync metadata needed for login and account features
 - **Dictionary sync:** If you sign in and use sync, custom conversions and selected dictionary preferences may be synced with Banglu's backend so they can work across devices
-- **No analytics:** We do not track usage patterns, app launches, or typing statistics
+- **No analytics:** Nothing about your typing or usage is ever transmitted anywhere. The app keeps a few anonymous counters (e.g., crash and event counts, typing-latency numbers) strictly on your device to power the local Diagnostics screen — they contain no typed text and never leave your phone
 - **No third-party services:** We do not integrate any advertising, analytics, or data collection SDKs
 
 ## Data Storage

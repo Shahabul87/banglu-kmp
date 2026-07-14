@@ -11,7 +11,7 @@ code and the system speech recognizer).
 |---|---|
 | Does your app collect or share any of the required user data types? | **Yes** (only when the user signs in / uses voice) |
 | Is all of the user data collected by your app encrypted in transit? | **Yes** (HTTPS backend; auth tokens AES/GCM at rest) |
-| Do you provide a way for users to request that their data is deleted? | **Yes** — account deletion via the account screen/backend; learned words clearable in Settings. (If backend deletion is not yet implemented, answer accordingly before submitting.) |
+| Do you provide a way for users to request that their data is deleted? | **Not applicable** — this version has NO accounts and collects NO data off-device. Learned words live only on the device and are clearable in Settings (and removed by uninstall). |
 
 ## Section 2 — Data types
 
@@ -29,7 +29,7 @@ code and the system speech recognizer).
 
 ### NOT collected (answer No)
 - Keystrokes / typed text: **never leaves the device**. Learned words, clipboard history, and the dictionary are local-only.
-- Location, contacts, photos, files, health, financial info (card details are handled by Google Play, not the app), device IDs, analytics/diagnostics telemetry: none.
+- Location, contacts, photos, files, health, financial info, device IDs, analytics/diagnostics telemetry: none. (S44 launch build: no accounts, no billing, and no INTERNET permission — verifiable via `aapt dump permissions`.)
 
 ## Section 3 — Declarations that reviewers check for keyboards
 
