@@ -15,6 +15,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "banglu-kmp"
 include(":shared")
+include(":desktop-app")
 include(":dictionary-compiler")
 include(":android-keyboard")
 include(":android_account")
