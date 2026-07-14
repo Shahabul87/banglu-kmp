@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Banglu content-script harness</title>
+<style>
+  body{font-family:system-ui;background:#0b1120;color:#e2e8f0;padding:40px;max-width:640px;margin:auto}
+  input,textarea{width:100%;font-size:18px;padding:10px;margin:12px 0;background:#101a2a;
+    color:#e2e8f0;border:1px solid #1e3a5f;border-radius:10px}
+  .hint{color:#64748b;font-size:13px}
+</style></head>
+<body>
+  <h2>Inline typing harness</h2>
+  <p class="hint">Type a roman word then SPACE → converts inline. Chips float below. Alt+B toggles.</p>
+  <input id="t1" type="text" placeholder="input type=text" />
+  <textarea id="t2" rows="4" placeholder="textarea"></textarea>
+  <script type="module">
+    import * as mod from "../vendor/banglu-engine.bundle.js";
+    const ns = (mod.default ?? mod);
+    const engine = (ns.com ?? ns).banglu.engine.BangluWebEngine;
+    engine.initSeed();
+    const slim = await (await fetch("../vendor/banglu-slim.json")).text();
+    engine.attachSlimDictionary(slim);
+    // chrome stub so content.js runs unmodified outside the extension
+    globalThis.chrome = {
+      runtime: {
+        lastError: undefined,
+        sendMessage(msg, cb) {
+          if (msg?.type === "word") cb({
+            primary: engine.convert(msg.word),
+            chips: Array.from(engine.suggestions(msg.word, 6)),
+          }); else cb({});
+        },
+      },
+    };
+    const s = document.createElement("script");
+    s.src = "../content.js";
+    document.body.appendChild(s);
+    document.title = "harness-ready";
+  </script>
+</body>
+</html>

@@ -1,9 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Banglu — বাংলা টাইপিং",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "শুধু ছোট হাতের ইংরেজিতে বাংলা টাইপ করুন — সম্পূর্ণ অফলাইন, কোনো ডেটা কোথাও যায় না। Same engine as the Banglu Android keyboard.",
-  "default_locale": null,
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -17,5 +16,23 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["storage"]
+  "permissions": [
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": []
 }
