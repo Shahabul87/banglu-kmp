@@ -36,11 +36,24 @@
   };
 
   const ask = (word) => new Promise((resolve) => {
+    // P3: a keystroke must never hang on the service worker. If the reply
+    // takes longer than a human notices, commit the roman word untouched —
+    // the user keeps typing and can retype that one word.
+    const fallback = setTimeout(() => resolve({ primary: word, chips: [] }), 900);
     try {
-      chrome.runtime.sendMessage({ type: "word", word }, (r) =>
-        resolve(r && !chrome.runtime.lastError ? r : { primary: word, chips: [] }));
-    } catch { resolve({ primary: word, chips: [] }); }
+      chrome.runtime.sendMessage({ type: "word", word }, (r) => {
+        clearTimeout(fallback);
+        resolve(r && !chrome.runtime.lastError ? r : { primary: word, chips: [] });
+      });
+    } catch { clearTimeout(fallback); resolve({ primary: word, chips: [] }); }
   });
+
+  // Pre-warm the worker the moment an editable gets focus, so the full
+  // dictionary is live before the first word finishes.
+  document.addEventListener("focusin", (e) => {
+    if (!isEditable(e.target)) return;
+    try { chrome.runtime.sendMessage({ type: "ping" }, () => void chrome.runtime.lastError); } catch {}
+  }, true);
 
   // ---- suggestion strip (shadow DOM so site CSS can't break it) ----
   const strip = (() => {

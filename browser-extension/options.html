@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="bn">
+<head><meta charset="utf-8"><title>Banglu সেটিংস</title>
+<style>
+  :root{color-scheme:dark}
+  body{font-family:system-ui;background:#080d16;color:#e2e8f0;max-width:560px;margin:40px auto;padding:0 16px}
+  h1{font-size:20px;color:#64d2ff}
+  .card{background:#0d1524;border:1px solid #1e293b;border-radius:14px;padding:16px;margin:14px 0}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #16233a}
+  .row:last-child{border-bottom:none}
+  button{border-radius:8px;border:1px solid #ef44444d;background:#ef444426;color:#fca5a5;padding:3px 10px;cursor:pointer}
+  .hint{color:#64748b;font-size:13px;line-height:1.6}
+  .empty{color:#475569;font-style:italic}
+</style></head>
+<body>
+  <h1>বাংলু — সেটিংস</h1>
+  <div class="card">
+    <strong>বন্ধ করা সাইট</strong>
+    <p class="hint">যেসব সাইটে Alt+B দিয়ে বাংলু বন্ধ করেছেন। এখান থেকে আবার চালু করা যায়।</p>
+    <div id="sites"><p class="empty">কোনো সাইট বন্ধ করা নেই।</p></div>
+  </div>
+  <div class="card hint">
+    টিপস: যেকোনো লেখার ঘরে ইংরেজি অক্ষরে শব্দ লিখে Space চাপুন — বাংলা হয়ে যাবে।
+    সাজেশন চিপে ক্লিক করলে সেই বানানটি বসবে। Alt+B = ওই সাইটে চালু/বন্ধ।
+    সবকিছু আপনার ব্রাউজারেই চলে — কোনো ডেটা কোথাও যায় না।
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Banglu — বাংলা টাইপিং",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "শুধু ছোট হাতের ইংরেজিতে বাংলা টাইপ করুন — সম্পূর্ণ অফলাইন, কোনো ডেটা কোথাও যায় না। Same engine as the Banglu Android keyboard.",
   "action": {
     "default_popup": "popup.html",
@@ -34,5 +34,6 @@
       "run_at": "document_idle"
     }
   ],
-  "web_accessible_resources": []
+  "web_accessible_resources": [],
+  "options_page": "options.html"
 }
