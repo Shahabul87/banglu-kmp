@@ -195,8 +195,10 @@ private fun App() {
                     (if (isMac) "গ্লোবাল হটকি সক্রিয়: ⌘⇧B — যেকোনো অ্যাপে মিনি কনভার্টার"
                      else "গ্লোবাল হটকি সক্রিয়: Ctrl+Shift+B — যেকোনো অ্যাপে মিনি কনভার্টার")
                 else if (isMac)
-                    "হটকি (⌘⇧B) চালু করতে: System Settings → Privacy & Security → Accessibility-তে Banglu-কে অনুমতি দিন, তারপর অ্যাপ রিস্টার্ট করুন"
-                else "গ্লোবাল হটকি নিবন্ধন হয়নি — অ্যাপ রিস্টার্ট করে দেখুন",
+                    "হটকি (⌘⇧B) চালু করতে: System Settings → Privacy & Security-তে Accessibility এবং Input Monitoring — দুই তালিকাতেই Banglu-কে অনুমতি দিন; অনুমতি দিলে কয়েক সেকেন্ডে নিজে থেকেই চালু হবে" +
+                        (Hotkey.lastError?.let { " · ($it)" } ?: "")
+                else "গ্লোবাল হটকি নিবন্ধন হয়নি — অনুমতি দিলে নিজে থেকেই চালু হবে" +
+                        (Hotkey.lastError?.let { " · ($it)" } ?: ""),
                 color = if (Hotkey.registered) Muted else Color(0xFFFBBF24),
                 fontSize = 11.sp
             )
