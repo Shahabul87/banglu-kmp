@@ -225,5 +225,76 @@ for phrase in parityPhrases {
     check("ComposerParity.\"\(phrase)\".committedNonEmpty", !committed.isEmpty, "committed was empty")
 }
 
+// S51 Task 4: Composer — digit picks + learning law tests
+// Transposed from the brief's XCTest files (Tests/BangluCoreTests/ComposerTests.swift)
+// into this runner, following the same pattern as Task 3 tests above.
+
+// testDigitPicksCandidateAndReportsNonPrimary
+do {
+    let e = FakeEngine(); e.table["taka"] = ("টাকা", ["তাকা"])
+    let c = Composer(engine: e)
+    var reported: (String, String, Bool)?
+    c.onPick = { reported = ($0, $1, $2) }
+    _ = typeInto(c, "taka")
+    check("Composer.digitPicksCandidateAndReportsNonPrimary.candidates", c.candidates == ["টাকা", "তাকা", "taka"], "got \(c.candidates)")
+    let out = c.handle(.digit("2"))                       // pick তাকা (index 1)
+    check("Composer.digitPicksCandidateAndReportsNonPrimary.commit", out.contains(.commit("তাকা")), "got \(out)")
+    check("Composer.digitPicksCandidateAndReportsNonPrimary.reportedRaw", reported?.0 == "taka", "got \(reported?.0 ?? "nil")")
+    check("Composer.digitPicksCandidateAndReportsNonPrimary.reportedBangla", reported?.1 == "তাকা", "got \(reported?.1 ?? "nil")")
+    check("Composer.digitPicksCandidateAndReportsNonPrimary.wasPrimary", reported?.2 == false, "got \(String(describing: reported?.2))")
+}
+
+// testPickingPrimaryReportsWasPrimary
+do {
+    let e = FakeEngine(); e.table["ami"] = ("আমি", ["আমই"])
+    let c = Composer(engine: e)
+    var wasPrimary: Bool?
+    c.onPick = { wasPrimary = $2 }
+    _ = typeInto(c, "ami")
+    _ = c.handle(.digit("1"))
+    check("Composer.pickingPrimaryReportsWasPrimary", wasPrimary == true, "got \(wasPrimary ?? false)")
+}
+
+// testOutOfRangeDigitTypesBengaliNumeral
+do {
+    let e = FakeEngine(); e.table["k"] = ("ক", [])        // 2 candidates: ক + raw k
+    let c = Composer(engine: e)
+    _ = c.handle(.letter("k"))
+    check("Composer.outOfRangeDigitTypesBengaliNumeral.candidateCount", c.candidates.count == 2, "got \(c.candidates.count)")
+    let out = c.handle(.digit("5"))                       // beyond list → digit
+    check("Composer.outOfRangeDigitTypesBengaliNumeral.commitFormed", out.contains(.commit("ক")), "got \(out)")
+    check("Composer.outOfRangeDigitTypesBengaliNumeral.commitDigit", out.contains(.commit("৫")), "got \(out)")
+}
+
+// testIdleDigitTypesBengaliNumeral
+do {
+    let e = FakeEngine()
+    let c = Composer(engine: e)
+    let out = c.handle(.digit("3"))
+    check("Composer.idleDigitTypesBengaliNumeral", out.contains(.commit("৩")), "got \(out)")
+}
+
+// testArrowsMoveHighlightAndWrap
+do {
+    let e = FakeEngine(); e.table["dan"] = ("দান", ["ডান"])
+    let c = Composer(engine: e)
+    _ = typeInto(c, "dan")                                    // 3 rows incl raw
+    _ = c.handle(.arrowDown); check("Composer.arrowsMoveHighlightAndWrap.down1", c.highlight == 1, "got \(c.highlight)")
+    _ = c.handle(.arrowDown); check("Composer.arrowsMoveHighlightAndWrap.down2", c.highlight == 2, "got \(c.highlight)")
+    _ = c.handle(.arrowDown); check("Composer.arrowsMoveHighlightAndWrap.wrap", c.highlight == 0, "got \(c.highlight)")
+    _ = c.handle(.arrowUp);   check("Composer.arrowsMoveHighlightAndWrap.up", c.highlight == 2, "got \(c.highlight)")
+}
+
+// testPickAfterArrowsCommitsHighlighted
+do {
+    let e = FakeEngine(); e.table["pore"] = ("পরে", ["পড়ে"])
+    let c = Composer(engine: e)
+    _ = typeInto(c, "pore")
+    _ = c.handle(.arrowDown)
+    let out = c.pick(c.highlight)
+    check("Composer.pickAfterArrowsCommitsHighlighted.commit", out.contains(.commit("পড়ে")), "got \(out)")
+    check("Composer.pickAfterArrowsCommitsHighlighted.formingRawEmpty", c.formingRaw.isEmpty, "got \(c.formingRaw)")
+}
+
 print("\(checkCount) checks: \(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILURE(S)")")
 exit(failures == 0 ? 0 : 1)
