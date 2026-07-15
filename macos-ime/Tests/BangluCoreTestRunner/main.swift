@@ -296,5 +296,97 @@ do {
     check("Composer.pickAfterArrowsCommitsHighlighted.formingRawEmpty", c.formingRaw.isEmpty, "got \(c.formingRaw)")
 }
 
+// S51 Task 5: LearnedStore + AppCompat — transposed from the brief's XCTest
+// file (Tests/BangluCoreTests/LearnedStoreTests.swift) into this runner,
+// same "swift test is broken here" rationale as Tasks 3/4 above.
+
+func learnedStoreTempDir() -> URL {
+    let d = FileManager.default.temporaryDirectory
+        .appendingPathComponent("banglu-test-\(UUID().uuidString)")
+    try! FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+    return d
+}
+
+// testRecordPickWritesEditorCompatibleRow
+do {
+    let store = LearnedStore(directory: learnedStoreTempDir())
+    store.recordPick(raw: "Korsi ", bangla: "করছি")
+    let data = try! Data(contentsOf: store.learnedFileURL)
+    let rows = try! JSONSerialization.jsonObject(with: data) as! [[String: Any]]
+    check("LearnedStore.recordPickWritesEditorCompatibleRow.count", rows.count == 1, "got \(rows.count)")
+    check("LearnedStore.recordPickWritesEditorCompatibleRow.p", rows[0]["p"] as? String == "korsi", "got \(String(describing: rows[0]["p"]))")
+    check("LearnedStore.recordPickWritesEditorCompatibleRow.b", rows[0]["b"] as? String == "করছি", "got \(String(describing: rows[0]["b"]))")
+    check("LearnedStore.recordPickWritesEditorCompatibleRow.f", rows[0]["f"] as? Int == 94, "got \(String(describing: rows[0]["f"]))")
+    check("LearnedStore.recordPickWritesEditorCompatibleRow.t", rows[0]["t"] != nil, "t was nil")
+}
+
+// testRepeatPickBumpsFrequencyNotDuplicates
+do {
+    let store = LearnedStore(directory: learnedStoreTempDir())
+    store.recordPick(raw: "korsi", bangla: "করছি")
+    store.recordPick(raw: "korsi", bangla: "করছি")
+    let rows = try! JSONSerialization.jsonObject(with: try! Data(contentsOf: store.learnedFileURL)) as! [[String: Any]]
+    check("LearnedStore.repeatPickBumpsFrequencyNotDuplicates.count", rows.count == 1, "got \(rows.count)")
+    check("LearnedStore.repeatPickBumpsFrequencyNotDuplicates.f", rows[0]["f"] as? Int == 95, "got \(String(describing: rows[0]["f"]))")
+}
+
+// testMergesRowsWrittenByAnotherProcess
+do {
+    let dir = learnedStoreTempDir()
+    let store = LearnedStore(directory: dir)
+    store.recordPick(raw: "a", bangla: "আ")
+    // The editor writes a row between our reads:
+    let external = """
+    [{"p":"a","b":"আ","f":94,"t":1},{"p":"editor","b":"এডিটর","f":94,"t":2}]
+    """
+    try! external.data(using: .utf8)!.write(to: store.learnedFileURL)
+    store.recordPick(raw: "b", bangla: "ব")
+    let rows = try! JSONSerialization.jsonObject(with: try! Data(contentsOf: store.learnedFileURL)) as! [[String: Any]]
+    check("LearnedStore.mergesRowsWrittenByAnotherProcess.count", rows.count == 3, "got \(rows.count)") // read-fresh preserved "editor"
+}
+
+// testLearningEnabledDefaultsTrueAndPersistsWithoutClobbering
+do {
+    let dir = learnedStoreTempDir()
+    // editor.json already has editor prefs — they must survive our write.
+    try! """
+    {"recent":["/x.txt"],"banglaDigits":false,"winW":900,"winH":700}
+    """.data(using: .utf8)!.write(to: dir.appendingPathComponent("editor.json"))
+    let store = LearnedStore(directory: dir)
+    check("LearnedStore.learningEnabledDefaultsTrueAndPersistsWithoutClobbering.defaultsTrue", store.learningEnabled == true, "got \(store.learningEnabled)")
+    store.setLearningEnabled(false)
+    check("LearnedStore.learningEnabledDefaultsTrueAndPersistsWithoutClobbering.persists", LearnedStore(directory: dir).learningEnabled == false, "got \(LearnedStore(directory: dir).learningEnabled)")
+    let prefs = try! JSONSerialization.jsonObject(with: try! Data(contentsOf: dir.appendingPathComponent("editor.json"))) as! [String: Any]
+    check("LearnedStore.learningEnabledDefaultsTrueAndPersistsWithoutClobbering.winWUntouched", prefs["winW"] as? Int == 900, "got \(String(describing: prefs["winW"]))") // untouched
+    check("LearnedStore.learningEnabledDefaultsTrueAndPersistsWithoutClobbering.banglaDigitsUntouched", prefs["banglaDigits"] as? Bool == false, "got \(String(describing: prefs["banglaDigits"]))")
+}
+
+// testCorruptFilesFallBackSafely
+do {
+    let dir = learnedStoreTempDir()
+    try! "{not json".data(using: .utf8)!.write(to: dir.appendingPathComponent("learned.json"))
+    let store = LearnedStore(directory: dir)
+    let learnedRaw = store.learnedJSON()
+    let effective: String? = (learnedRaw == "{not json") ? nil : learnedRaw
+    check("LearnedStore.corruptFilesFallBackSafely.learnedJSONSafe", effective == nil, "got \(String(describing: effective))")
+    store.recordPick(raw: "x", bangla: "ক্স") // must not crash; rewrites clean
+    let rows = try! JSONSerialization.jsonObject(with: try! Data(contentsOf: store.learnedFileURL)) as! [[String: Any]]
+    check("LearnedStore.corruptFilesFallBackSafely.rewritesClean", rows.count == 1, "got \(rows.count)")
+}
+
+// testAppCompatModes
+do {
+    let dir = learnedStoreTempDir()
+    let table = dir.appendingPathComponent("appcompat.json")
+    try! """
+    {"plain": ["com.tinyspeck.slackmacgap"]}
+    """.data(using: .utf8)!.write(to: table)
+    let compat = AppCompat(tableURL: table)
+    check("AppCompat.appCompatModes.notesIsFull", compat.mode(forBundleID: "com.apple.Notes") == .full, "got \(compat.mode(forBundleID: "com.apple.Notes"))")
+    check("AppCompat.appCompatModes.slackIsPlain", compat.mode(forBundleID: "com.tinyspeck.slackmacgap") == .plain, "got \(compat.mode(forBundleID: "com.tinyspeck.slackmacgap"))")
+    check("AppCompat.appCompatModes.nilIsFull", compat.mode(forBundleID: nil) == .full, "got \(compat.mode(forBundleID: nil))")
+    check("AppCompat.appCompatModes.noTableIsFull", AppCompat(tableURL: nil).mode(forBundleID: "anything") == .full, "got \(AppCompat(tableURL: nil).mode(forBundleID: "anything"))")
+}
+
 print("\(checkCount) checks: \(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILURE(S)")")
 exit(failures == 0 ? 0 : 1)
