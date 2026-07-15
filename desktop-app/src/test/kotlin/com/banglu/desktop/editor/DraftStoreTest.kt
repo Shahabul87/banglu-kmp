@@ -49,4 +49,12 @@ class DraftStoreTest {
         assertNull(store.loadDraft())
         assertEquals(EditorPrefs(), store.loadPrefs())
     }
+
+    @Test
+    fun learningEnabledDefaultsTrueAndRoundTrips() {
+        val store = tempStore()
+        assertEquals(true, store.loadPrefs().learningEnabled)
+        store.savePrefs(store.loadPrefs().copy(learningEnabled = false))
+        assertEquals(false, store.loadPrefs().learningEnabled)
+    }
 }

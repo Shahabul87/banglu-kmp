@@ -36,7 +36,9 @@ import kotlinx.coroutines.withContext
 
 /** S48: Banglu Desktop — the FULL engine (143MB dictionary + validator). */
 
-fun main() = application {
+fun main(args: Array<String>) {
+    val startInTutorial = args.contains("--tutorial")
+    application {
     var mainVisible by remember { mutableStateOf(true) }
     var miniVisible by remember { mutableStateOf(false) }
 
@@ -70,7 +72,7 @@ fun main() = application {
         state = winState,
     ) {
         LaunchedEffect(Unit) { window.minimumSize = java.awt.Dimension(520, 400) }
-        EditorScreen()
+        EditorScreen(startInTutorial = startInTutorial)
     }
 
     LaunchedEffect(winState.size) {
@@ -92,6 +94,7 @@ fun main() = application {
             miniVisible = false
             if (text.isNotBlank()) Paste.copyThenPaste(text)
         }, onDismiss = { miniVisible = false })
+    }
     }
 }
 

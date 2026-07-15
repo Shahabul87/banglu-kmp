@@ -80,7 +80,7 @@ internal val isMacOs: Boolean by lazy {
 
 /** স্পেক §3-§5: the page IS the app. One editor window, no second box. */
 @Composable
-fun FrameWindowScope.EditorScreen() {
+fun FrameWindowScope.EditorScreen(startInTutorial: Boolean = false) {
     val engine = remember { RealEngineFacade }
     val drafts = remember { DraftStore(File(System.getProperty("user.home"), ".banglu")) }
     val state = remember { EditorState(engine, drafts.loadPrefs().banglaDigits) }
@@ -110,7 +110,7 @@ fun FrameWindowScope.EditorScreen() {
     var dirty by remember { mutableStateOf(false) }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }  // unsaved guard
     var exportOpen by remember { mutableStateOf(false) }
-    var tutorialOpen by remember { mutableStateOf(false) }  // শিখুন mode; document untouched behind it
+    var tutorialOpen by remember { mutableStateOf(startInTutorial) }  // শিখুন mode; document untouched behind it
 
     fun refreshTitle() {
         fileName = fileState.file?.name
@@ -203,6 +203,8 @@ fun FrameWindowScope.EditorScreen() {
     // scope (without it learned words were silently never written to disk).
     LaunchedEffect(Unit) {
         SmartEngineAdapter.configurePersistenceScope(scope)
+        val learning = drafts.loadPrefs().learningEnabled
+        SmartEngineAdapter.configureLearning(enabled = learning, personalDictionary = learning)
         withContext(Dispatchers.Default) {
             SmartEngineAdapter.initializeSync()
             val db = findDictionaryFile()
