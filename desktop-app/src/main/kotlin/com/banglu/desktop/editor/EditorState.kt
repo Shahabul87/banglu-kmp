@@ -206,6 +206,39 @@ class EditorState(
         undoStack.addLast(Snapshot(committed, commitPos, formingRaw))
         restore(next)
     }
+
+    private fun Char.isBengali() = this in 'ঀ'..'৿'
+
+    /** Bounds of the Bengali word around [offset] in [committed], else null. */
+    fun wordRangeAt(offset: Int): IntRange? {
+        if (committed.isEmpty()) return null
+        var i = offset.coerceIn(0, committed.length)
+        if (i == committed.length) i -= 1              // cursor past end → check last char
+        if (i < 0 || !committed[i].isBengali()) return null
+        var start = i
+        while (start > 0 && committed[start - 1].isBengali()) start--
+        var end = i
+        while (end < committed.length - 1 && committed[end + 1].isBengali()) end++
+        return start..end
+    }
+
+    /** Candidates for an already-committed word. Store I/O — Dispatchers.Default only. */
+    fun candidatesForCommitted(range: IntRange): List<String> {
+        val word = committed.substring(range.first, range.last + 1)
+        val raw = engine.reverse(word)
+        return (engine.suggest(raw, 6) + word).distinct()
+    }
+
+    /** Swaps a committed word; a different choice is an explicit correction. */
+    fun replaceCommitted(range: IntRange, replacement: String) {
+        val word = committed.substring(range.first, range.last + 1)
+        if (replacement == word) return
+        pushUndo()
+        engine.selected(engine.reverse(word), replacement, explicit = true)
+        committed = committed.replaceRange(range.first, range.last + 1, replacement)
+        commitPos = range.first + replacement.length
+        generation++
+    }
 }
 
 internal fun bengaliDigit(c: Char): String =

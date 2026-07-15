@@ -247,4 +247,27 @@ class EditorStateTest {
         s.undo()
         assertEquals("কেমন আছো", s.committed)
     }
+
+    @Test
+    fun clickToFixSwapsACommittedWordAndLearns() {
+        val s = newState()
+        s.setAll("আমি করছি এখন")
+        val range = s.wordRangeAt(5)!!                     // inside করছি
+        assertEquals("করছি", s.committed.substring(range.first, range.last + 1))
+        val cands = s.candidatesForCommitted(range)
+        assertTrue(cands.isNotEmpty())
+        val other = cands.first { it != "করছি" }
+        s.replaceCommitted(range, other)
+        assertEquals("আমি $other এখন", s.committed)
+        s.undo()
+        assertEquals("আমি করছি এখন", s.committed)
+    }
+
+    @Test
+    fun wordRangeAtReturnsNullOutsideBengaliWords() {
+        val s = newState()
+        s.setAll("কেমন আছো")
+        assertEquals(null, s.wordRangeAt(4))               // the space
+        assertEquals(0..3, s.wordRangeAt(2))
+    }
 }
