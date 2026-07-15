@@ -2,6 +2,9 @@ plugins {
     kotlin("jvm")
     alias(libs.plugins.jetbrains.compose)
     alias(libs.plugins.kotlin.compose)
+    // Storage.kt/DraftStore.kt use @Serializable; without this plugin the
+    // serializers are never generated and learned.json writes throw at runtime.
+    alias(libs.plugins.kotlin.serialization)
 }
 
 dependencies {
@@ -22,6 +25,7 @@ dependencies {
     implementation("com.github.tulskiy:jkeymaster:1.3")
     implementation("net.java.dev.jna:jna:5.14.0")
     implementation("net.java.dev.jna:jna-platform:5.14.0")
+    testImplementation(kotlin("test"))
 }
 
 compose.desktop {
@@ -59,3 +63,5 @@ compose.desktop {
 }
 
 kotlin { jvmToolchain(17) }
+
+tasks.withType<Test> { useJUnitPlatform() }
