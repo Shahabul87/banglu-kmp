@@ -179,6 +179,24 @@ class EditorStateTest {
     }
 
     @Test
+    fun outOfRangeDigitInsertsWhilePopupVisible() {
+        val tiny = object : EngineFacade {
+            override fun instant(raw: String) = "ক"
+            override fun convert(raw: String) = "ক"
+            override fun suggest(raw: String, limit: Int) = listOf("ক", "খ")
+            override fun reverse(bangla: String) = "k"
+            override fun selected(raw: String, bangla: String, explicit: Boolean) {}
+        }
+        val s = EditorState(tiny)
+        s.type("k")
+        s.refine("k", "ক", listOf("ক", "খ"))
+        assertTrue(s.popupVisible)
+        s.type("5")   // candidates = ক, খ, raw "k" → index 4 out of range → digit inserts
+        assertTrue(s.committed.endsWith("৫"), "got: '${s.committed}'")
+        assertEquals("", s.formingRaw)
+    }
+
+    @Test
     fun escapeDismissesThePopupAndDigitsInsertAgain() {
         val s = newState()
         s.type("kemon")

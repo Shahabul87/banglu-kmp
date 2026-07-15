@@ -87,7 +87,8 @@ class EditorState(
                     insertCommitted(" ")
                 }
             }
-            c in '1'..'6' && popupVisible -> pickCandidate(c - '1')
+            c in '1'..'6' && popupVisible && (c - '1') < candidates.size ->
+                pickCandidate(c - '1')
             c.isDigit() -> {
                 commitFormingInternal()
                 insertCommitted(if (banglaDigits) bengaliDigit(c) else c.toString())
