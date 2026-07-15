@@ -22,8 +22,13 @@ object Printer {
         job.setJobName(jobName)
         job.setPrintable(BanglaPrintable(text, jobName))
         if (!job.printDialog()) return false
-        job.print()
-        return true
+        return try {
+            job.print()
+            true
+        } catch (e: java.awt.print.PrinterException) {
+            System.err.println("Banglu print failed: $e")
+            false
+        }
     }
 
     private class BanglaPrintable(private val text: String, private val header: String) : Printable {
