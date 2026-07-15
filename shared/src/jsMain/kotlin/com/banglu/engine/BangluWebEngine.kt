@@ -49,7 +49,45 @@ object BangluWebEngine {
         engine.getSuggestions(input.trim(), limit).map { it.bengali }.toTypedArray()
 
     fun instantPreview(input: String): String = engine.convertForInstantPreview(input)
+
+    /**
+     * S51: load the editor's ~/.banglu/learned.json (rows {p,b,f,t}; unknown
+     * keys ignored, malformed input ignored — the IME must never crash on a
+     * user-editable file).
+     */
+    fun applyLearnedWords(json: String) {
+        initSeed()
+        val rows = try {
+            lenientJson.decodeFromString<List<LearnedRow>>(json)
+        } catch (_: Throwable) {
+            return
+        }
+        var applied = false
+        for (r in rows) {
+            val key = r.p.trim().lowercase()
+            val bengali = r.b.trim()
+            if (key.isEmpty() || bengali.isEmpty()) continue
+            engine.addWord(key, bengali, r.f)
+            applied = true
+        }
+        if (applied) engine.clearCache()
+    }
+
+    /** S51: one explicit candidate pick (same frequency the adapter uses). */
+    fun recordPick(raw: String, bangla: String) {
+        initSeed()
+        val key = raw.trim().lowercase()
+        val bengali = bangla.trim()
+        if (key.isEmpty() || bengali.isEmpty()) return
+        engine.addWord(key, bengali, 94)
+        engine.clearCache()
+    }
 }
+
+private val lenientJson = Json { ignoreUnknownKeys = true }
+
+@Serializable
+internal data class LearnedRow(val p: String = "", val b: String = "", val f: Int = 94)
 
 @Serializable
 internal data class SlimRow(val k: String, val b: String, val f: Int, val t: Int, val p: Int)
