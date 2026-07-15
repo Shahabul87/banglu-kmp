@@ -53,11 +53,14 @@ class BangluInputController: IMKInputController {
         let actions: [ComposerAction]
         if key == .returnKey, candidateUI.isVisible, composer.forming {
             actions = composer.pick(composer.highlight)
+        // Composer invariant: forming ⟹ candidates non-empty (refresh always appends raw).
         } else if key == .arrowUp || key == .arrowDown {
             _ = composer.handle(key)
-            candidateUI.show(candidates: composer.candidates,
-                             highlight: composer.highlight,
-                             client: sender as! IMKTextInput)
+            if let client = sender as? IMKTextInput {
+                candidateUI.show(candidates: composer.candidates,
+                                 highlight: composer.highlight,
+                                 client: client)
+            }
             return true
         } else {
             actions = composer.handle(key)
