@@ -109,6 +109,7 @@ class EditorStateTest {
         val s = newState()
         s.type("kemon")
         s.settle()
+        s.dismissPopup()        // popup hidden: digits insert (visible popup would make '5' a pick)
         s.type("5")
         assertEquals("কেমন৫", s.committed)
         s.banglaDigits = false
@@ -138,5 +139,53 @@ class EditorStateTest {
         s.applyEdit(pasted, pasted.length)                 // multi-char change
         assertEquals("কেমন আছো বন্ধু", s.committed)
         assertEquals("", s.formingRaw)
+    }
+
+    @Test
+    fun candidatesIncludeTheRawFormForInlineEnglish() {
+        val s = newState()
+        s.type("kali")
+        s.settle()
+        assertTrue(s.popupVisible)
+        assertTrue(s.candidates.contains("kali"))
+    }
+
+    @Test
+    fun digitKeyPicksACandidateWhilePopupVisible() {
+        val s = newState()
+        s.type("kemon")
+        s.settle()
+        val idx = s.candidates.indexOf(s.formingBangla)    // primary is always listed (invariant #5)
+        assertTrue(idx in 0..5, "primary not in candidates: ${s.candidates}")
+        val expected = s.candidates[idx]
+        s.type(('1' + idx).toString())
+        assertEquals("$expected ", s.committed)             // pick commits word + space
+        assertEquals("", s.formingRaw)
+        // Picking the engine's own first choice must teach NOTHING (invariant #3).
+        assertEquals(expected, engine.convert("kemon"))
+    }
+
+    @Test
+    fun pickingANonPrimaryCandidateTeachesTheEngine() {
+        val s = newState()
+        s.type("kali")
+        s.settle()
+        val primary = s.formingBangla
+        val other = s.candidates.first { it != primary && it != "kali" }
+        s.pickCandidate(s.candidates.indexOf(other))
+        assertEquals("$other ", s.committed)
+        // The explicit pick becomes the new primary (in-memory preference).
+        assertEquals(other, engine.convert("kali"))
+    }
+
+    @Test
+    fun escapeDismissesThePopupAndDigitsInsertAgain() {
+        val s = newState()
+        s.type("kemon")
+        s.settle()
+        s.dismissPopup()
+        assertTrue(!s.popupVisible)
+        s.type("3")
+        assertTrue(s.committed.endsWith("৩"))              // digit, not a pick
     }
 }

@@ -87,6 +87,7 @@ class EditorState(
                     insertCommitted(" ")
                 }
             }
+            c in '1'..'6' && popupVisible -> pickCandidate(c - '1')
             c.isDigit() -> {
                 commitFormingInternal()
                 insertCommitted(if (banglaDigits) bengaliDigit(c) else c.toString())
@@ -128,6 +129,24 @@ class EditorState(
         candidates = emptyList()
         popupDismissed = false
         generation++
+    }
+
+    /**
+     * Commits [candidates][index] + a space. Learning law (invariant #3):
+     * ONLY a pick that differs from what would have been committed anyway is
+     * an explicit choice; picking the engine's own primary teaches nothing.
+     */
+    fun pickCandidate(index: Int) {
+        val choice = candidates.getOrNull(index) ?: return
+        if (!forming) return
+        if (choice != formingBangla) engine.selected(formingRaw, choice, explicit = true)
+        formingBangla = choice
+        commitFormingInternal()
+        insertCommitted(" ")
+    }
+
+    fun dismissPopup() {
+        popupDismissed = true
     }
 
     /** Async engine result landing; stale results (raw moved on) are dropped. */
