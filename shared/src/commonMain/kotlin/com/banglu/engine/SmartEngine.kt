@@ -5,6 +5,8 @@ import com.banglu.engine.ai.BigramModel
 import com.banglu.engine.ai.EnglishDetector
 import com.banglu.engine.ai.ViterbiDecoder
 import com.banglu.engine.ai.WordCandidate
+import com.banglu.engine.dictionary.ACRONYM_OVERRIDES
+import com.banglu.engine.dictionary.ACRONYM_SUGGESTIONS
 import com.banglu.engine.dictionary.BengaliWordValidator
 import com.banglu.engine.dictionary.PhoneticOverlapScorer
 import com.banglu.engine.dictionary.ProgressiveNarrowingEngine
@@ -961,6 +963,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val trimmed = input.trim()
         val key = trimmed.lowercase()
         if (key.isEmpty()) return ConversionResult("", 0.0, ResolutionSource.RULE)
+
+        // S52: Tier P curated acronym override, checked BEFORE the lowercase-
+        // control-rule floor (dc would otherwise be swallowed by the trailing-
+        // "c" hasanta rule -> দ্, never reaching layer 2). Whitelist only,
+        // validator-free — see dictionary/AcronymData.kt.
+        ACRONYM_OVERRIDES[key]?.let { acronym ->
+            return ConversionResult(acronym, 0.99, ResolutionSource.DICTIONARY, emptyList())
+        }
+
         tryLowercaseV2ControlRule(key)?.let { return it }
 
         // Lowercase-only Bangla mode: uppercase letters are not semantic.
@@ -1282,6 +1293,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val trimmed = input.trim()
         val key = trimmed.lowercase()
         if (key.isEmpty()) return ConversionResult("", 0.0, ResolutionSource.RULE)
+
+        // S52 mirror: same ordering fix as convertWordRaw — must run before
+        // the trailing-"c" control rule (dc otherwise -> দ্).
+        ACRONYM_OVERRIDES[key]?.let { acronym ->
+            return ConversionResult(acronym, 0.99, ResolutionSource.DICTIONARY, emptyList())
+        }
+
         tryLowercaseV2ControlRule(key)?.let { return it }
 
         // S26 mirror: vetted English-intent keys always commit the loanword
@@ -1398,6 +1416,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val key = input.trim().lowercase()
         if (key.isEmpty()) return ""
         MOBILE_SHORTHAND_OVERRIDES[key]?.let { return it }
+        // S52 mirror: zero-I/O map lookup, safe on the sync hot path.
+        ACRONYM_OVERRIDES[key]?.let { return it }
         return convertByPatterns(key).bengali
     }
 
@@ -1668,6 +1688,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
+        // S52: Tier S acronym chip — the primary stays the common Bengali
+        // word the key collides with (ba -> বা "or", vat -> ভাত "rice"), but
+        // the acronym reading is always one tap away. Unconditional (not
+        // gated on EnglishDetector) since this is already a curated
+        // whitelist — see dictionary/AcronymData.kt.
+        ACRONYM_SUGGESTIONS[key]?.let { acronym ->
+            if (seen.add(acronym)) {
+                suggestions.add(
+                    SmartSuggestion(acronym, 0.9, "acronym_suggestion", key, "tier0_english")
+                )
+            }
+        }
+
         // S24: the loanword rendering is always one tap away for English keys
         // (time -> টাইম chip even while টিমে holds the primary).
         if (EnglishDetector.isEnglish(key)) {
@@ -1876,6 +1909,20 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 ordered.add(maxPrimaryIndex, promoted)
             }
         }
+
+        // S52: the Tier S acronym chip is a deliberate promotion (S24 chip
+        // precedent) — it must not lose its slot to a swarm of low-value
+        // same-key dictionary spelling variants scoring marginally higher.
+        // Same "guarantee a slot inside the requested limit" pattern as the
+        // primary promotion above.
+        ACRONYM_SUGGESTIONS[key]?.let { acronym ->
+            val maxAcronymIndex = limit - 1
+            val acronymIndex = ordered.indexOfFirst { it.bengali == acronym }
+            if (acronymIndex in (maxAcronymIndex + 1) until ordered.size) {
+                val promoted = ordered.removeAt(acronymIndex)
+                ordered.add(minOf(maxAcronymIndex, ordered.size), promoted)
+            }
+        }
         return ordered.take(limit)
     }
 
@@ -1902,6 +1949,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     ): Int {
         if (suggestion.bengali == primary) return 0
         if (suggestion.source == "english_passthrough") return 0
+        // S52: Tier S acronym chips are a small, hand-vetted whitelist —
+        // never eligible for the band-2 hard-drop (they'd otherwise depend
+        // on happening to be a validator word or sharing the primary's
+        // registered phonetic, neither of which a fresh acronym form like
+        // এমএ/বিএ/এটিএম is guaranteed to satisfy).
+        if (suggestion.source == "acronym_suggestion") return 0
         if (isKnownWord(suggestion.bengali)) {
             return if (wordUsageTier(key, suggestion.bengali) == PhoneticIndexHit.TIER_A) 0 else 1
         }
@@ -2037,6 +2090,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // বাংলাদেশ is "bangladesh" (10 chars) < key "bangladesho" (11 chars).
         if (suggestion.bengali == primary) return true
         if (DIRECT_WORD_OVERRIDES[key]?.contains(suggestion.bengali) == true) return true
+        // S52: Tier S acronym chips are curated whitelist entries (letter-name
+        // expansions like বা -> বিএ) whose reverse phonetic deliberately does
+        // NOT resemble the typed key the way a real transliteration would —
+        // the generic phonetic-fit gate below would always reject them.
+        if (suggestion.source == "acronym_suggestion") return true
         if (suggestion.source == "english_passthrough") return suggestion.bengali.lowercase() == key
         if (Regex("[A-Za-z]").containsMatchIn(suggestion.bengali)) return false
         if (!respectsSibilantKeyBoundary(key, suggestion.bengali, primary, suggestion.source)) return false
