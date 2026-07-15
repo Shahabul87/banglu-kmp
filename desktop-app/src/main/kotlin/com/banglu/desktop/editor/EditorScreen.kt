@@ -191,7 +191,7 @@ fun FrameWindowScope.EditorScreen() {
 
     fun doPrint() {
         state.commitForming(); syncFromState()
-        scope.launch(Dispatchers.Default) { Printer.print(state.committed, fileName ?: "Banglu Editor") }
+        scope.launch(Dispatchers.Default) { Printer.print(state.committed, fileName ?: "বাংলু এডিটর") }
     }
 
     // Engine boot — identical init to the old App(), plus the persistence
@@ -505,7 +505,7 @@ private fun TopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Banglu Editor", color = Sky, fontSize = 17.sp, fontFamily = BengaliFontFamily)
+        Text("বাংলু এডিটর", color = Sky, fontSize = 17.sp, fontFamily = BengaliFontFamily)
         BarAction("নতুন", onNew); BarAction("খুলুন", onOpen); BarAction("সেভ", onSave)
         Box {
             BarAction("এক্সপোর্ট ▾") { setExportOpen(true) }

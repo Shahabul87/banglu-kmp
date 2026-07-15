@@ -64,7 +64,7 @@ private val quickStart = listOf(
         ),
         tips = listOf(
             "তালিকার শেষে ইংরেজি বানানটিও থাকে — English শব্দ এক চাপে",
-            "যে বানান বেছে নেন Banglu Editor সেটা মনে রাখে, পরের বার আগে আসে",
+            "যে বানান বেছে নেন বাংলু এডিটর সেটা মনে রাখে, পরের বার আগে আসে",
         ),
     ),
     TutorialSection(
@@ -248,7 +248,7 @@ private val phoneticMapping = listOf(
 
 private val desktopKeys = TutorialSection(
     title = "কীবোর্ড শর্টকাট",
-    subtitle = "Banglu Editor-এর সব কাজ কীবোর্ড থেকেই।",
+    subtitle = "বাংলু এডিটর-এর সব কাজ কীবোর্ড থেকেই।",
     examples = listOf(
         "⌘S / ⇧⌘S" to "সেভ / নতুন নামে সেভ",
         "⌘O / ⌘N" to "খুলুন / নতুন লেখা",
