@@ -51,7 +51,7 @@ fun main() = application {
         icon = painterResource("tray.png"),
         tooltip = "Banglu",
         menu = {
-            Item("বাংলু লেখক খুলুন") { mainVisible = true }
+            Item("Banglu Editor খুলুন") { mainVisible = true }
             Item(if (System.getProperty("os.name").lowercase().contains("mac"))
                 "মিনি কনভার্টার (⌘⇧B)" else "মিনি কনভার্টার (Ctrl+Shift+B)") { miniVisible = true }
             Separator()
@@ -66,7 +66,7 @@ fun main() = application {
     val winState = rememberWindowState(width = prefs.winW.dp, height = prefs.winH.dp)
     if (mainVisible) Window(
         onCloseRequest = { mainVisible = false },       // tray keeps us alive; draft autosaves
-        title = "বাংলু লেখক",
+        title = "Banglu Editor",
         state = winState,
     ) {
         LaunchedEffect(Unit) { window.minimumSize = java.awt.Dimension(520, 400) }

@@ -105,6 +105,7 @@ fun FrameWindowScope.EditorScreen() {
     var dirty by remember { mutableStateOf(false) }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }  // unsaved guard
     var exportOpen by remember { mutableStateOf(false) }
+    var tutorialOpen by remember { mutableStateOf(false) }  // শিখুন mode; document untouched behind it
 
     fun refreshTitle() {
         fileName = fileState.file?.name
@@ -190,7 +191,7 @@ fun FrameWindowScope.EditorScreen() {
 
     fun doPrint() {
         state.commitForming(); syncFromState()
-        scope.launch(Dispatchers.Default) { Printer.print(state.committed, fileName ?: "বাংলু লেখক") }
+        scope.launch(Dispatchers.Default) { Printer.print(state.committed, fileName ?: "Banglu Editor") }
     }
 
     // Engine boot — identical init to the old App(), plus the persistence
@@ -278,8 +279,20 @@ fun FrameWindowScope.EditorScreen() {
                 exportOpen = exportOpen, setExportOpen = { exportOpen = it },
                 onExportDocx = ::exportDocx, onExportTxt = { doSaveAs() },
                 onPrint = ::doPrint, onCopyAll = ::copyAll,
+                tutorialOpen = tutorialOpen, onToggleTutorial = { tutorialOpen = !tutorialOpen },
             )
             if (restoredBanner) Banner("আগের লেখা ফিরিয়ে আনা হয়েছে") { restoredBanner = false }
+
+            if (tutorialOpen) {
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    TutorialView(onClose = {
+                        tutorialOpen = false
+                        focus.requestFocus()
+                    })
+                }
+                StatusBar(state.committed)
+                return@Column
+            }
 
             // The page: manuscript card, centered column (spec §3).
             Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
@@ -485,13 +498,14 @@ private fun TopBar(
     onNew: () -> Unit, onOpen: () -> Unit, onSave: () -> Unit,
     exportOpen: Boolean, setExportOpen: (Boolean) -> Unit,
     onExportDocx: () -> Unit, onExportTxt: () -> Unit, onPrint: () -> Unit, onCopyAll: () -> Unit,
+    tutorialOpen: Boolean, onToggleTutorial: () -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("বাংলু লেখক", color = Sky, fontSize = 17.sp, fontFamily = BengaliFontFamily)
+        Text("Banglu Editor", color = Sky, fontSize = 17.sp, fontFamily = BengaliFontFamily)
         BarAction("নতুন", onNew); BarAction("খুলুন", onOpen); BarAction("সেভ", onSave)
         Box {
             BarAction("এক্সপোর্ট ▾") { setExportOpen(true) }
@@ -506,6 +520,7 @@ private fun TopBar(
                     onClick = { setExportOpen(false); onCopyAll() })
             }
         }
+        BarAction(if (tutorialOpen) "✕ লেখায় ফিরুন" else "শিখুন", onToggleTutorial)
         Spacer(Modifier.weight(1f))
         Text(
             (fileName ?: "নতুন লেখা") + if (dirty) " ●" else "",
