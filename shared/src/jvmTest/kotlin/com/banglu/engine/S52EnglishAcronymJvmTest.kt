@@ -24,6 +24,16 @@ class S52EnglishAcronymJvmTest {
     }
 
     @Test
+    fun phdUsesStandardLetterNameEich() {
+        // Literal pin, deliberately NOT read from the map: H = এইচ (never এচ)
+        // per the verified letter-name table. A map-derived assertion is
+        // self-consistent and cannot catch a wrong or duplicated map entry —
+        // a stale duplicate key silently reinstated পিএচডি once already.
+        assertEquals("পিএইচডি", engine.convertWord("phd").bengali)
+        assertEquals("পিএইচডি", engine.convertForInstantPreview("phd"))
+    }
+
+    @Test
     fun tierPWysiwygInstantPreviewMatchesCommit() {
         // 8 sampled Tier P keys spanning garbage-fix, collision-fix, lexicon-bug-fix,
         // and hardening categories.
@@ -31,6 +41,18 @@ class S52EnglishAcronymJvmTest {
         for (key in sample) {
             val mapped = ACRONYM_OVERRIDES.getValue(key)
             assertEquals(mapped, engine.convertForInstantPreview(key), "Instant preview for '$key' must match commit (WYSIWYG)")
+        }
+    }
+
+    @Test
+    fun tierPWysiwygComposingPathMatchesCommit() {
+        // Same 8 sampled keys through the third call site — the async richer
+        // composing preview — closing the preview==commit WYSIWYG contract on
+        // all three surfaces (invariant #2 / S26b law).
+        val sample = listOf("ssc", "otp", "nid", "mr", "gps", "phd", "wifi", "vvip")
+        for (key in sample) {
+            val mapped = ACRONYM_OVERRIDES.getValue(key)
+            assertEquals(mapped, engine.convertForComposing(key).bengali, "Composing preview for '$key' must match commit (WYSIWYG)")
         }
     }
 

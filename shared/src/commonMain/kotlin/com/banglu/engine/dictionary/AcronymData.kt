@@ -68,6 +68,7 @@ internal val ACRONYM_OVERRIDES: Map<String, String> = mapOf(
     "vvip" to "ভিভিআইপি", // current: ভিআইপি (garbage — collapses indistinguishably to VIP)
 
     // ── english_lexicon data bugs (broken CMU/Arpabet renderings, fixed here) ──
+    "phd" to "পিএইচডি",  // current: পিএচডি (garbage — nonstandard H rendering; standard is এইচ, never এচ: research-banglish-web.md §C.2, OBSERVED bn.wikipedia)
     "eu" to "ইইউ",       // current: ইইয়ু (garbage — lexicon bug)
     "gps" to "জিপিএস",   // current: গিপিএস (garbage — lexicon bug, wrong G rendering)
     "hr" to "এইচআর",     // current: এচার (garbage — lexicon bug)
@@ -76,7 +77,6 @@ internal val ACRONYM_OVERRIDES: Map<String, String> = mapOf(
     // ── Tier-P hardening: currently correct, whitelisted so lite mode / the
     //    slim web tier (no validator, so the junk-path and margin rule in
     //    SmartEngine never fire there) resolve identically to the full store. ──
-    "phd" to "পিএচডি",     // current: পিএচডি (correct)
     "tv" to "টিভি",        // current: টিভি (correct — lexicalized whole word)
     "kg" to "কেজি",        // current: কেজি (correct)
     "etc" to "এটসেটারা",   // current: এটসেটারা (correct)
