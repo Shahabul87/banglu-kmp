@@ -7,7 +7,7 @@ import BangluCore
 @objc(BangluInputController)
 class BangluInputController: IMKInputController {
     private var composer: Composer?
-    private var candidateUI: CandidateUI = NullCandidateUI()
+    private var candidateUI: CandidateUI = PanelCandidateUI()
 
     override func activateServer(_ sender: Any!) {
         super.activateServer(sender)
@@ -50,7 +50,18 @@ class BangluInputController: IMKInputController {
             if composer.forming { apply(composer.focusLost(), to: sender) }
             return false
         }
-        let actions = composer.handle(key)
+        let actions: [ComposerAction]
+        if key == .returnKey, candidateUI.isVisible, composer.forming {
+            actions = composer.pick(composer.highlight)
+        } else if key == .arrowUp || key == .arrowDown {
+            _ = composer.handle(key)
+            candidateUI.show(candidates: composer.candidates,
+                             highlight: composer.highlight,
+                             client: sender as! IMKTextInput)
+            return true
+        } else {
+            actions = composer.handle(key)
+        }
         return apply(actions, to: sender)
     }
 
@@ -141,14 +152,4 @@ class BangluInputController: IMKInputController {
         apply(composer.focusLost(), to: sender)
         candidateUI.hide()
     }
-}
-
-/// Task 7 replaces this with the real IMKCandidates/NSPanel implementations.
-protocol CandidateUI {
-    func show(candidates: [String], highlight: Int, client: IMKTextInput)
-    func hide()
-}
-final class NullCandidateUI: CandidateUI {
-    func show(candidates: [String], highlight: Int, client: IMKTextInput) {}
-    func hide() {}
 }
