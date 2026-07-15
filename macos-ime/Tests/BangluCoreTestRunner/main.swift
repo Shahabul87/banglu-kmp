@@ -388,5 +388,34 @@ do {
     check("AppCompat.appCompatModes.noTableIsFull", AppCompat(tableURL: nil).mode(forBundleID: "anything") == .full, "got \(AppCompat(tableURL: nil).mode(forBundleID: "anything"))")
 }
 
+// S51 Task 6 (controller-mandated addition): BackgroundEngine — boots EngineJS
+// on its own serial queue so the ~11s slim-dictionary parse never blocks the
+// caller. Pre-ready: convert echoes raw, suggestions are empty (Android S29
+// cold-start pattern). Post-ready: behaves exactly like EngineJS. We poll
+// `ready` with a timeout instead of asserting a fixed pre-ready window,
+// because the boot race is inherently timing-dependent — asserting the
+// pre-ready echo is only valid if we actually observe that state.
+do {
+    let bgLoadStart = Date()
+    let bg = BackgroundEngine(bundleJS: artifacts.bundle, slimJSON: artifacts.slim, learnedJSON: nil)
+    if !bg.ready {
+        // Caught the cold-start window: convert must echo raw, not block.
+        let preConvert = bg.convert("kemon")
+        check("BackgroundEngine.preReadyEchoesRaw", preConvert == "kemon", "got \(preConvert)")
+    }
+    let timeout = Date().addingTimeInterval(30)
+    while !bg.ready && Date() < timeout { usleep(10_000) }
+    let readyLatency = Date().timeIntervalSince(bgLoadStart)
+    print("BackgroundEngine ready-latency: \(String(format: "%.1f", readyLatency))s")
+
+    // (1) always assert post-ready convert, regardless of whether we caught
+    // the pre-ready window above.
+    let postConvert = bg.convert("kemon")
+    check("BackgroundEngine.postReadyConvert", postConvert == "কেমন", "got \(postConvert)")
+    // (2) post-ready suggestions include the primary.
+    let postSuggs = bg.suggestions("kemon", limit: 6)
+    check("BackgroundEngine.postReadySuggestionsContainPrimary", postSuggs.contains("কেমন"), "got \(postSuggs)")
+}
+
 print("\(checkCount) checks: \(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILURE(S)")")
 exit(failures == 0 ? 0 : 1)
