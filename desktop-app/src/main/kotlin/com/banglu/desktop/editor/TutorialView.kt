@@ -77,7 +77,7 @@ private val quickStart = listOf(
         ),
         tips = listOf(
             "বদলে নেওয়া বানানও শেখা হয়",
-            "⌘Z চাপলে আগের অবস্থা ফিরে আসে — কমিট করা শব্দও",
+            "⌘Z (Windows-এ Ctrl+Z) চাপলে আগের অবস্থা ফিরে আসে — কমিট করা শব্দও",
         ),
     ),
     TutorialSection(
@@ -246,16 +246,23 @@ private val phoneticMapping = listOf(
     ),
 )
 
-private val desktopKeys = TutorialSection(
+private fun desktopKeys(mac: Boolean) = TutorialSection(
     title = "কীবোর্ড শর্টকাট",
     subtitle = "বাংলু এডিটর-এর সব কাজ কীবোর্ড থেকেই।",
-    examples = listOf(
+    examples = if (mac) listOf(
         "⌘S / ⇧⌘S" to "সেভ / নতুন নামে সেভ",
         "⌘O / ⌘N" to "খুলুন / নতুন লেখা",
         "⌘Z / ⇧⌘Z" to "আগের অবস্থা / আবার করুন",
         "⌘P" to "প্রিন্ট — Save as PDF এখানেই",
         "⇧⌘C" to "পুরো লেখা কপি",
         "⌘⇧B" to "যেকোনো অ্যাপে মিনি কনভার্টার",
+    ) else listOf(
+        "Ctrl+S / Ctrl+Shift+S" to "সেভ / নতুন নামে সেভ",
+        "Ctrl+O / Ctrl+N" to "খুলুন / নতুন লেখা",
+        "Ctrl+Z / Ctrl+Shift+Z" to "আগের অবস্থা / আবার করুন",
+        "Ctrl+P" to "প্রিন্ট — Print to PDF এখানেই",
+        "Ctrl+Shift+C" to "পুরো লেখা কপি",
+        "Ctrl+Shift+B" to "যেকোনো অ্যাপে মিনি কনভার্টার",
     ),
     tips = listOf(
         "লেখা প্রতি ২ সেকেন্ডে নিজে নিজে সংরক্ষিত হয় — বন্ধ করলেও হারায় না",
@@ -290,7 +297,7 @@ fun TutorialView(onClose: () -> Unit) {
             phoneticMapping.forEach { SectionCard(it) }
 
             SectionHeading("ডেস্কটপ")
-            SectionCard(desktopKeys)
+            SectionCard(desktopKeys(isMacOs))
 
             Spacer(Modifier.padding(bottom = 12.dp))
         }

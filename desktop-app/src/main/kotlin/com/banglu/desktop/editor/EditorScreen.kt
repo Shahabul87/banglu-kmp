@@ -73,6 +73,11 @@ object DraftFlush {
     @Volatile var flush: (() -> Unit)? = null
 }
 
+/** True on macOS — picks ⌘ glyphs vs Ctrl+ labels across the UI. */
+internal val isMacOs: Boolean by lazy {
+    System.getProperty("os.name").lowercase().contains("mac")
+}
+
 /** স্পেক §3-§5: the page IS the app. One editor window, no second box. */
 @Composable
 fun FrameWindowScope.EditorScreen() {
@@ -514,9 +519,9 @@ private fun TopBar(
                     onClick = { setExportOpen(false); onExportDocx() })
                 DropdownMenuItem(text = { MenuLabel("টেক্সট (.txt)") },
                     onClick = { setExportOpen(false); onExportTxt() })
-                DropdownMenuItem(text = { MenuLabel("প্রিন্ট / PDF (⌘P)") },
+                DropdownMenuItem(text = { MenuLabel(if (isMacOs) "প্রিন্ট / PDF (⌘P)" else "প্রিন্ট / PDF (Ctrl+P)") },
                     onClick = { setExportOpen(false); onPrint() })
-                DropdownMenuItem(text = { MenuLabel("সব কপি করুন (⇧⌘C)") },
+                DropdownMenuItem(text = { MenuLabel(if (isMacOs) "সব কপি করুন (⇧⌘C)" else "সব কপি করুন (Ctrl+Shift+C)") },
                     onClick = { setExportOpen(false); onCopyAll() })
             }
         }
@@ -564,6 +569,7 @@ private fun StatusBar(committed: String) {
         Text("${toBengaliDigits(words)} শব্দ · স্বয়ংক্রিয় সংরক্ষিত ✓", color = Muted, fontSize = 11.sp,
             fontFamily = BengaliFontFamily)
         Spacer(Modifier.weight(1f))
-        Text("গ্লোবাল হটকি ⌘⇧B", color = Muted, fontSize = 11.sp, fontFamily = BengaliFontFamily)
+        Text(if (isMacOs) "গ্লোবাল হটকি ⌘⇧B" else "গ্লোবাল হটকি Ctrl+Shift+B",
+            color = Muted, fontSize = 11.sp, fontFamily = BengaliFontFamily)
     }
 }
