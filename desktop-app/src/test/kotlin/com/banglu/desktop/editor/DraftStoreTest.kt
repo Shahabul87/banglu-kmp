@@ -30,6 +30,17 @@ class DraftStoreTest {
     }
 
     @Test
+    fun secondSaveOverwritesTheFirst() {
+        val store = tempStore()
+        store.saveDraft(Draft("প্রথম", 0, "", null, null))
+        store.saveDraft(Draft("দ্বিতীয় লেখা", 5, "kal", null, null))
+        assertEquals("দ্বিতীয় লেখা", store.loadDraft()?.text)
+        store.savePrefs(EditorPrefs(winW = 900))
+        store.savePrefs(EditorPrefs(winW = 1000))
+        assertEquals(1000, store.loadPrefs().winW)
+    }
+
+    @Test
     fun corruptFilesFallBackSafely() {
         val dir = createTempDirectory("banglu-test").toFile()
         File(dir, "draft.json").writeText("{not json")

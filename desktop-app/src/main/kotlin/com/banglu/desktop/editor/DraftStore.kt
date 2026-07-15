@@ -38,7 +38,19 @@ class DraftStore(private val dir: File) {
     private fun writeAtomic(target: File, content: String) {
         val tmp = File(dir, target.name + ".tmp")
         tmp.writeText(content)
-        tmp.renameTo(target)
+        try {
+            java.nio.file.Files.move(
+                tmp.toPath(), target.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+            )
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+            // Filesystem without atomic move: still replace — non-atomic beats stale.
+            java.nio.file.Files.move(
+                tmp.toPath(), target.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+            )
+        }
     }
 
     fun saveDraft(d: Draft) = writeAtomic(draftFile, json.encodeToString(d))
