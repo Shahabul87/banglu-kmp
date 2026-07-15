@@ -223,6 +223,22 @@ class EditorStateTest {
     }
 
     @Test
+    fun pickCreatesExactlyOneUndoStep() {
+        val s = newState()
+        s.type("ami")
+        s.settle()
+        s.type(" ")                       // commit #1 → one snapshot
+        s.type("kemon")
+        s.settle()
+        s.pickCandidate(s.candidates.indexOf(s.formingBangla))   // must add exactly ONE step
+        s.undo()
+        assertEquals("kemon", s.formingRaw)                      // back to forming kemon
+        s.undo()                                                 // fails if pick double-pushed
+        assertEquals("ami", s.formingRaw)
+        assertEquals("", s.committed)
+    }
+
+    @Test
     fun undoRestoresDeletedText() {
         val s = newState()
         s.setAll("কেমন আছো")

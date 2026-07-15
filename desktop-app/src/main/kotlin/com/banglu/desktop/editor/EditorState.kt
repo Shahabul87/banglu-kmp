@@ -1,7 +1,5 @@
 package com.banglu.desktop.editor
 
-import java.util.ArrayDeque
-
 /**
  * The editor's document + typing state machine. Pure Kotlin, no Compose —
  * the JVM regression wall drives it keystroke-by-keystroke against the real
@@ -153,7 +151,6 @@ class EditorState(
     fun pickCandidate(index: Int) {
         val choice = candidates.getOrNull(index) ?: return
         if (!forming) return
-        pushUndo()
         if (choice != formingBangla) engine.selected(formingRaw, choice, explicit = true)
         formingBangla = choice
         commitFormingInternal()
@@ -199,13 +196,13 @@ class EditorState(
     }
 
     fun undo() {
-        val prev = undoStack.pollLast() ?: return
+        val prev = undoStack.removeLastOrNull() ?: return
         redoStack.addLast(Snapshot(committed, commitPos, formingRaw))
         restore(prev)
     }
 
     fun redo() {
-        val next = redoStack.pollLast() ?: return
+        val next = redoStack.removeLastOrNull() ?: return
         undoStack.addLast(Snapshot(committed, commitPos, formingRaw))
         restore(next)
     }
