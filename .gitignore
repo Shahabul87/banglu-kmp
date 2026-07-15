@@ -34,3 +34,7 @@ browser-extension/vendor/
 browser-extension/banglu-chrome.zip
 browser-extension/banglu-firefox.zip
 desktop-app/resources/
+
+# macOS IME — engine bundle build artifacts (17MB+)
+macos-ime/Resources/built/
+macos-ime/.build/
