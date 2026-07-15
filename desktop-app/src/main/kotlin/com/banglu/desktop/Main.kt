@@ -55,7 +55,10 @@ fun main() = application {
             Item(if (System.getProperty("os.name").lowercase().contains("mac"))
                 "মিনি কনভার্টার (⌘⇧B)" else "মিনি কনভার্টার (Ctrl+Shift+B)") { miniVisible = true }
             Separator()
-            Item("বন্ধ করুন") { exitApplication() }
+            Item("বন্ধ করুন") {
+                com.banglu.desktop.editor.DraftFlush.flush?.invoke()
+                exitApplication()
+            }
         }
     )
 
@@ -66,14 +69,17 @@ fun main() = application {
         title = "বাংলু লেখক",
         state = winState,
     ) {
+        LaunchedEffect(Unit) { window.minimumSize = java.awt.Dimension(520, 400) }
         EditorScreen()
     }
 
     LaunchedEffect(winState.size) {
-        DraftStore(java.io.File(System.getProperty("user.home"), ".banglu"))
-            .let { it.savePrefs(it.loadPrefs().copy(
-                winW = winState.size.width.value.toInt(),
-                winH = winState.size.height.value.toInt())) }
+        runCatching {
+            DraftStore(java.io.File(System.getProperty("user.home"), ".banglu"))
+                .let { it.savePrefs(it.loadPrefs().copy(
+                    winW = winState.size.width.value.toInt(),
+                    winH = winState.size.height.value.toInt())) }
+        }
     }
 
     if (miniVisible) Window(

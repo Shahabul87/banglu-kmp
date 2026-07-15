@@ -68,12 +68,17 @@ private fun saveDialog(window: java.awt.Frame, suggested: String): File? {
     }
 }
 
+/** Quit-path draft flush: Main.kt invokes this before exitApplication (spec §5). */
+object DraftFlush {
+    @Volatile var flush: (() -> Unit)? = null
+}
+
 /** স্পেক §3-§5: the page IS the app. One editor window, no second box. */
 @Composable
 fun FrameWindowScope.EditorScreen() {
     val engine = remember { RealEngineFacade }
-    val state = remember { EditorState(engine) }
     val drafts = remember { DraftStore(File(System.getProperty("user.home"), ".banglu")) }
+    val state = remember { EditorState(engine, drafts.loadPrefs().banglaDigits) }
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
 
@@ -233,6 +238,20 @@ fun FrameWindowScope.EditorScreen() {
         kotlinx.coroutines.delay(2000)
         drafts.saveDraft(Draft(state.display, state.cursor, state.formingRaw,
             fileState.file?.absolutePath, fileState.savedText.takeIf { fileState.file != null }))
+    }
+
+    // Quit-path flush (spec §5 — no exit path skips the flush): covers both
+    // hide-to-tray (composition dispose) and tray-quit-while-visible (DraftFlush).
+    val flushDraft = {
+        drafts.saveDraft(Draft(state.display, state.cursor, state.formingRaw,
+            fileState.file?.absolutePath, fileState.savedText.takeIf { fileState.file != null }))
+    }
+    DisposableEffect(Unit) {
+        DraftFlush.flush = flushDraft
+        onDispose {
+            flushDraft()
+            DraftFlush.flush = null
+        }
     }
 
     val forming = state.formingRange
