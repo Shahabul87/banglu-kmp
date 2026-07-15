@@ -77,11 +77,21 @@ class EditorState(
                 if (forming) {
                     commitFormingInternal()
                     insertCommitted(" ")
+                } else if (commitPos >= 1 && committed[commitPos - 1] == ' ' &&
+                    (commitPos < 2 || committed[commitPos - 2] !in " ।\n")
+                ) {
+                    // Double space after a word → দাঁড়ি (spec §4, Android rule)
+                    committed = committed.replaceRange(commitPos - 1, commitPos, "। ")
+                    commitPos += 1
                 } else {
                     insertCommitted(" ")
                 }
             }
-            else -> {                                   // punctuation, newline, digits (Task 3)
+            c.isDigit() -> {
+                commitFormingInternal()
+                insertCommitted(if (banglaDigits) bengaliDigit(c) else c.toString())
+            }
+            else -> {
                 commitFormingInternal()
                 insertCommitted(c.toString())
             }
@@ -138,3 +148,6 @@ class EditorState(
         generation++
     }
 }
+
+internal fun bengaliDigit(c: Char): String =
+    if (c in '0'..'9') ('০' + (c - '0')).toString() else c.toString()

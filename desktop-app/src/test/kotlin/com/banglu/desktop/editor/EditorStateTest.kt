@@ -74,4 +74,69 @@ class EditorStateTest {
         assertEquals("", s.formingRaw)
         assertEquals(s.committed.length, s.cursor)
     }
+
+    @Test
+    fun backspaceEditsTheRawBanglishNotTheOutput() {
+        val s = newState()
+        s.type("kali")
+        s.applyEdit(s.display.dropLast(1), s.cursor - 1)   // one backspace
+        assertEquals("kal", s.formingRaw)
+        s.settle()
+        assertEquals("কাল", s.formingBangla)
+    }
+
+    @Test
+    fun backspaceOnCommittedTextDeletesOneChar() {
+        val s = newState()
+        s.setAll("কেমন ")
+        s.applyEdit("কেমন", 4)
+        assertEquals("কেমন", s.committed)
+    }
+
+    @Test
+    fun doubleSpaceMakesDari() {
+        val s = newState()
+        s.type("kemon")
+        s.type(" ")
+        s.type(" ")
+        assertTrue(s.committed.endsWith("। "), "got: '${s.committed}'")
+        s.type(" ")                                        // third space: plain space
+        assertTrue(s.committed.endsWith("।  "))
+    }
+
+    @Test
+    fun digitsCommitTheFormingWordAndBecomeBengali() {
+        val s = newState()
+        s.type("kemon")
+        s.settle()
+        s.type("5")
+        assertEquals("কেমন৫", s.committed)
+        s.banglaDigits = false
+        s.type("7")
+        assertEquals("কেমন৫7", s.committed)
+    }
+
+    @Test
+    fun punctuationAndNewlineCommitFirst() {
+        val s = newState()
+        s.type("kemon")
+        s.settle()
+        s.type(",")
+        assertEquals("কেমন,", s.committed)
+        s.type("acho")
+        s.settle()
+        s.type("\n")
+        assertTrue(s.committed.endsWith("আছো\n"))
+    }
+
+    @Test
+    fun pasteCommitsFormingThenAcceptsVerbatim() {
+        val s = newState()
+        s.type("kemon")
+        s.settle()
+        val pasted = s.display + " আছো বন্ধু"
+        s.applyEdit(pasted, pasted.length)                 // multi-char change
+        assertEquals("কেমন আছো বন্ধু", s.committed)
+        assertEquals("", s.formingRaw)
+    }
 }
