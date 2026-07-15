@@ -60,7 +60,7 @@ public final class Composer {
 
         case .space:
             if forming {
-                var out = commitForming()
+                let out = commitForming()
                 pendingSpace = true
                 return out
             }
@@ -111,12 +111,13 @@ public final class Composer {
 
         case .punctuation(let p):
             var out: [ComposerAction] = forming ? commitForming() : []
+            let mapped = (p == ".") ? "।" : p
             if pendingSpace {
                 pendingSpace = false
-                if !Composer.tightPunctuation.contains(p) { out.append(.commit(" ")) }
+                if !Composer.tightPunctuation.contains(mapped) { out.append(.commit(" ")) }
             }
-            out.append(.commit(p == "." ? "।" : p))
-            dariJustCommitted = (p == ".")
+            out.append(.commit(mapped))
+            dariJustCommitted = (mapped == "।")
             return out
 
         case .arrowUp, .arrowDown:
@@ -139,7 +140,7 @@ public final class Composer {
         let wasPrimary = (choice == formingBangla)
         onPick?(formingRaw, choice, wasPrimary)
         formingBangla = choice
-        var out = commitForming()
+        let out = commitForming()
         pendingSpace = true
         return out
     }

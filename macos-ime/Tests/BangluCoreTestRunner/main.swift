@@ -179,6 +179,22 @@ do {
     check("Composer.plainModeSuppressesMarkedTextOnly.commitIdenticalToFullMode", commit.contains(.commit("আমি")), "got \(commit)")
 }
 
+// periodSwallowsPendingSpace (reviewer round): period after a committed word
+// must be tight: word␣. → শব্দ। (no space before dari). Guards the mapped-first
+// swallow — membership must test "।", not the raw ".".
+do {
+    let e = FakeEngine(); e.table["shobdo"] = ("শব্দ", [])
+    let c = Composer(engine: e)
+    for ch in "shobdo" { _ = c.handle(.letter(ch)) }
+    _ = c.handle(.space)                                  // commit শব্দ, hold space
+    let out = c.handle(.punctuation("."))
+    check("Composer.periodSwallowsPendingSpace.noSpace", !out.contains(.commit(" ")), "got \(out)")
+    check("Composer.periodSwallowsPendingSpace.dari", out.contains(.commit("।")), "got \(out)")
+    let next = c.handle(.space)                           // dariJustCommitted set → this space is plain
+    check("Composer.periodSwallowsPendingSpace.plainSpaceAfter", next.contains(.commit(" ")), "got \(next)")
+    check("Composer.periodSwallowsPendingSpace.noDoubleDari", !next.contains(.commit("। ")), "got \(next)")
+}
+
 // ComposerParityTests.testCommittedEqualsShownMarkedText — real engine, WYSIWYG
 // pin. Reuses `engine` (already loaded above) instead of a fresh TestSupport,
 // so the ~11s slim-dictionary load happens once for the whole runner.
