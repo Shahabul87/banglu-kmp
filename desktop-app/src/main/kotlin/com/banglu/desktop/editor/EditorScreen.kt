@@ -45,6 +45,29 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+private class FileState {
+    var file: File? = null
+    var savedText: String = ""
+    fun dirty(current: String) = current != savedText || (file == null && current.isNotEmpty())
+}
+
+/** Native file dialogs (java.awt.FileDialog is the macOS-native chooser). */
+private fun openDialog(window: java.awt.Frame): File? {
+    val d = java.awt.FileDialog(window, "খুলুন", java.awt.FileDialog.LOAD)
+    d.isVisible = true
+    return d.file?.let { File(d.directory, it) }
+}
+
+private fun saveDialog(window: java.awt.Frame, suggested: String): File? {
+    val d = java.awt.FileDialog(window, "সেভ", java.awt.FileDialog.SAVE)
+    d.file = suggested
+    d.isVisible = true
+    return d.file?.let {
+        val name = if (it.contains('.')) it else "$it.txt"
+        File(d.directory, name)
+    }
+}
+
 /** স্পেক §3-§5: the page IS the app. One editor window, no second box. */
 @Composable
 fun FrameWindowScope.EditorScreen() {
@@ -72,6 +95,75 @@ fun FrameWindowScope.EditorScreen() {
 
     fun closeFix() { fixToken++; fixRange = null; fixCandidates = emptyList() }
 
+    val fileState = remember { FileState() }
+    var fileName by remember { mutableStateOf<String?>(null) }
+    var dirty by remember { mutableStateOf(false) }
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }  // unsaved guard
+    var exportOpen by remember { mutableStateOf(false) }
+
+    fun refreshTitle() {
+        fileName = fileState.file?.name
+        dirty = fileState.dirty(state.display)
+    }
+
+    fun doSaveAs(): Boolean {
+        val f = saveDialog(window, fileState.file?.name ?: "লেখা.txt") ?: return false
+        state.commitForming(); syncFromState()
+        f.writeText(state.committed)
+        fileState.file = f; fileState.savedText = state.committed
+        refreshTitle(); return true
+    }
+
+    fun doSave(): Boolean {
+        val f = fileState.file ?: return doSaveAs()
+        state.commitForming(); syncFromState()
+        f.writeText(state.committed)
+        fileState.savedText = state.committed
+        refreshTitle(); return true
+    }
+
+    /** Runs [action] directly when clean; else asks সেভ করুন / সেভ ছাড়াই / বাতিল. */
+    fun guarded(action: () -> Unit) {
+        if (!fileState.dirty(state.display)) action() else pendingAction = action
+    }
+
+    fun doNew() = guarded {
+        state.setAll(""); fileState.file = null; fileState.savedText = ""
+        syncFromState(); refreshTitle()
+    }
+
+    fun doOpen() = guarded {
+        openDialog(window)?.let { f ->
+            // Normalize CRLF → LF: Windows-authored .txt would otherwise push
+            // stray \r into committed text and docx runs.
+            state.setAll(f.readText().replace("\r\n", "\n"))
+            fileState.file = f; fileState.savedText = state.committed
+            syncFromState(); refreshTitle()
+            val prefs = drafts.loadPrefs()
+            drafts.savePrefs(prefs.copy(recent = (listOf(f.absolutePath) + prefs.recent).distinct().take(8)))
+        }
+    }
+
+    fun copyAll() {
+        state.commitForming(); syncFromState()
+        java.awt.Toolkit.getDefaultToolkit().systemClipboard
+            .setContents(java.awt.datatransfer.StringSelection(state.committed), null)
+        status = "কপি হয়েছে ✓"
+    }
+
+    fun exportDocx() {
+        saveDialog(window, (fileState.file?.nameWithoutExtension ?: "লেখা") + ".docx")?.let { f ->
+            state.commitForming(); syncFromState()
+            DocxWriter.write(state.committed, f)
+            status = "Word ফাইল তৈরি ✓"
+        }
+    }
+
+    fun doPrint() {
+        state.commitForming(); syncFromState()
+        scope.launch(Dispatchers.Default) { Printer.print(state.committed, fileName ?: "বাংলু লেখক") }
+    }
+
     // Engine boot — identical init to the old App(), plus the persistence
     // scope (without it learned words were silently never written to disk).
     LaunchedEffect(Unit) {
@@ -89,8 +181,12 @@ fun FrameWindowScope.EditorScreen() {
     LaunchedEffect(Unit) {
         drafts.loadDraft()?.let { d ->
             state.setAll(d.text, d.cursor.coerceIn(0, d.text.length))
-            syncFromState()
-            if (d.savedText != d.text) restoredBanner = true
+            d.filePath?.let { p -> File(p).takeIf(File::exists)?.let { f ->
+                fileState.file = f; fileState.savedText = d.savedText ?: f.readText()
+            } }
+            syncFromState(); refreshTitle()
+            // Empty scratch text restoring "clean" shouldn't surface a banner.
+            if (d.text.isNotEmpty() && d.savedText != d.text) restoredBanner = true
         }
     }
 
@@ -109,14 +205,35 @@ fun FrameWindowScope.EditorScreen() {
     // Autosave: 2s after the last change (spec §5).
     LaunchedEffect(fieldValue.text) {
         kotlinx.coroutines.delay(2000)
-        drafts.saveDraft(Draft(state.display, state.cursor, state.formingRaw, filePath = null, savedText = null))
+        drafts.saveDraft(Draft(state.display, state.cursor, state.formingRaw,
+            fileState.file?.absolutePath, fileState.savedText.takeIf { fileState.file != null }))
     }
 
     val forming = state.formingRange
 
     MaterialTheme(colorScheme = darkColorScheme(background = Bg, surface = PageCard)) {
-        Column(Modifier.fillMaxSize().background(Bg)) {
-            TopBar(status)
+        Column(Modifier.fillMaxSize().background(Bg).onPreviewKeyEvent { e ->
+            if (e.type != KeyEventType.KeyDown || !(e.isMetaPressed || e.isCtrlPressed)) return@onPreviewKeyEvent false
+            when {
+                e.key == Key.S && e.isShiftPressed -> { doSaveAs(); true }
+                e.key == Key.S -> { doSave(); true }
+                e.key == Key.O -> { doOpen(); true }
+                e.key == Key.N -> { doNew(); true }
+                e.key == Key.P -> { doPrint(); true }
+                e.key == Key.C && e.isShiftPressed -> { copyAll(); true }
+                // Undo/redo may invalidate the fix popup's captured range.
+                e.key == Key.Z && e.isShiftPressed -> { closeFix(); state.redo(); syncFromState(); refreshTitle(); true }
+                e.key == Key.Z -> { closeFix(); state.undo(); syncFromState(); refreshTitle(); true }
+                else -> false
+            }
+        }) {
+            TopBar(
+                status = status, fileName = fileName, dirty = dirty,
+                onNew = ::doNew, onOpen = ::doOpen, onSave = { doSave() },
+                exportOpen = exportOpen, setExportOpen = { exportOpen = it },
+                onExportDocx = ::exportDocx, onExportTxt = { doSaveAs() },
+                onPrint = ::doPrint, onCopyAll = ::copyAll,
+            )
             if (restoredBanner) Banner("আগের লেখা ফিরিয়ে আনা হয়েছে") { restoredBanner = false }
 
             // The page: manuscript card, centered column (spec §3).
@@ -156,6 +273,7 @@ fun FrameWindowScope.EditorScreen() {
                                     }
                                 }
                             }
+                            refreshTitle()
                         },
                         onTextLayout = { layout = it },
                         textStyle = TextStyle(
@@ -216,6 +334,30 @@ fun FrameWindowScope.EditorScreen() {
             }
 
             StatusBar(state.committed)
+        }
+
+        pendingAction?.let { action ->
+            AlertDialog(
+                onDismissRequest = { pendingAction = null },
+                containerColor = PageCard,
+                title = { Text("অসংরক্ষিত লেখা", fontFamily = BengaliFontFamily, color = Color.White) },
+                text = { Text("এই লেখাটি এখনো সেভ হয়নি।", fontFamily = BengaliFontFamily, color = SkySoft) },
+                confirmButton = {
+                    TextButton(onClick = { if (doSave()) { pendingAction = null; action() } }) {
+                        Text("সেভ করুন", color = Green, fontFamily = BengaliFontFamily)
+                    }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(onClick = { pendingAction = null; action() }) {
+                            Text("সেভ ছাড়াই", color = SkySoft, fontFamily = BengaliFontFamily)
+                        }
+                        TextButton(onClick = { pendingAction = null }) {
+                            Text("বাতিল", color = Muted, fontFamily = BengaliFontFamily)
+                        }
+                    }
+                },
+            )
         }
     }
     LaunchedEffect(Unit) { focus.requestFocus() }
@@ -293,15 +435,51 @@ private fun CandidateList(cands: List<String>, highlight: Int, onPick: (Int) -> 
 }
 
 @Composable
-private fun TopBar(status: String) {
+private fun TopBar(
+    status: String, fileName: String?, dirty: Boolean,
+    onNew: () -> Unit, onOpen: () -> Unit, onSave: () -> Unit,
+    exportOpen: Boolean, setExportOpen: (Boolean) -> Unit,
+    onExportDocx: () -> Unit, onExportTxt: () -> Unit, onPrint: () -> Unit, onCopyAll: () -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text("বাংলু লেখক", color = Sky, fontSize = 17.sp, fontFamily = BengaliFontFamily)
+        BarAction("নতুন", onNew); BarAction("খুলুন", onOpen); BarAction("সেভ", onSave)
+        Box {
+            BarAction("এক্সপোর্ট ▾") { setExportOpen(true) }
+            DropdownMenu(expanded = exportOpen, onDismissRequest = { setExportOpen(false) }) {
+                DropdownMenuItem(text = { MenuLabel("Word (.docx)") },
+                    onClick = { setExportOpen(false); onExportDocx() })
+                DropdownMenuItem(text = { MenuLabel("টেক্সট (.txt)") },
+                    onClick = { setExportOpen(false); onExportTxt() })
+                DropdownMenuItem(text = { MenuLabel("প্রিন্ট / PDF (⌘P)") },
+                    onClick = { setExportOpen(false); onPrint() })
+                DropdownMenuItem(text = { MenuLabel("সব কপি করুন (⇧⌘C)") },
+                    onClick = { setExportOpen(false); onCopyAll() })
+            }
+        }
         Spacer(Modifier.weight(1f))
-        Text(status, color = Muted, fontSize = 11.sp, fontFamily = BengaliFontFamily)
+        Text(
+            (fileName ?: "নতুন লেখা") + if (dirty) " ●" else "",
+            color = if (dirty) SkySoft else Muted, fontSize = 12.sp, fontFamily = BengaliFontFamily,
+        )
+        Text(status, color = Muted, fontSize = 11.sp, fontFamily = BengaliFontFamily,
+            modifier = Modifier.padding(start = 12.dp))
     }
+}
+
+@Composable
+private fun BarAction(label: String, onClick: () -> Unit) {
+    Text(label, color = SkySoft, fontSize = 13.sp, fontFamily = BengaliFontFamily,
+        modifier = Modifier.clickable(onClick = onClick).padding(4.dp))
+}
+
+@Composable
+private fun MenuLabel(text: String) {
+    Text(text, fontSize = 13.sp, fontFamily = BengaliFontFamily)
 }
 
 @Composable
