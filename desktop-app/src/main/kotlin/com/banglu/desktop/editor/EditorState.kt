@@ -231,6 +231,7 @@ class EditorState(
 
     /** Swaps a committed word; a different choice is an explicit correction. */
     fun replaceCommitted(range: IntRange, replacement: String) {
+        if (range.first < 0 || range.last >= committed.length) return
         val word = committed.substring(range.first, range.last + 1)
         if (replacement == word) return
         pushUndo()

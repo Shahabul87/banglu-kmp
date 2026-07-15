@@ -62,6 +62,7 @@ fun FrameWindowScope.EditorScreen() {
     // Committed-word fix popup (spec §4): range + candidates, opened by click.
     var fixRange by remember { mutableStateOf<IntRange?>(null) }
     var fixCandidates by remember { mutableStateOf<List<String>>(emptyList()) }
+    var fixToken by remember { mutableStateOf(0L) }
     var lastPointerUp by remember { mutableStateOf(0L) }
 
     fun syncFromState(sel: TextRange = TextRange(state.cursor)) {
@@ -69,7 +70,7 @@ fun FrameWindowScope.EditorScreen() {
         highlight = 0
     }
 
-    fun closeFix() { fixRange = null; fixCandidates = emptyList() }
+    fun closeFix() { fixToken++; fixRange = null; fixCandidates = emptyList() }
 
     // Engine boot — identical init to the old App(), plus the persistence
     // scope (without it learned words were silently never written to disk).
@@ -143,11 +144,14 @@ fun FrameWindowScope.EditorScreen() {
                                 if (wasClick && moveOnly) {
                                     // click inside a committed Bengali word → fix popup
                                     state.wordRangeAt(v.selection.end)?.let { range ->
+                                        val token = ++fixToken
                                         scope.launch {
                                             val cands = withContext(Dispatchers.Default) {
                                                 state.candidatesForCommitted(range)
                                             }
-                                            fixRange = range; fixCandidates = cands; highlight = 0
+                                            if (token == fixToken) {
+                                                fixRange = range; fixCandidates = cands; highlight = 0
+                                            }
                                         }
                                     }
                                 }

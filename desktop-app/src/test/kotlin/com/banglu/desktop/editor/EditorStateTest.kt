@@ -270,4 +270,14 @@ class EditorStateTest {
         assertEquals(null, s.wordRangeAt(4))               // the space
         assertEquals(0..3, s.wordRangeAt(2))
     }
+
+    @Test
+    fun replaceCommittedIgnoresStaleOutOfBoundsRange() {
+        val s = newState()
+        s.setAll("কেমন আছো")
+        val range = s.wordRangeAt(6)!!      // আছো = 5..7
+        s.setAll("কম")                       // document shrank; old range now invalid
+        s.replaceCommitted(range, "ভালো")    // must be a safe no-op, not a crash
+        assertEquals("কম", s.committed)
+    }
 }
