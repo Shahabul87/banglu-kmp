@@ -206,4 +206,29 @@ class EditorStateTest {
         s.type("3")
         assertTrue(s.committed.endsWith("৩"))              // digit, not a pick
     }
+
+    @Test
+    fun undoOfACommitRestoresTheFormingWord() {
+        val s = newState()
+        s.type("kemon")
+        s.settle()
+        s.type(" ")
+        assertEquals("কেমন ", s.committed)
+        s.undo()                                           // un-commit
+        assertEquals("kemon", s.formingRaw)
+        assertEquals("", s.committed)
+        s.redo()
+        assertEquals("কেমন ", s.committed)
+        assertEquals("", s.formingRaw)
+    }
+
+    @Test
+    fun undoRestoresDeletedText() {
+        val s = newState()
+        s.setAll("কেমন আছো")
+        s.applyEdit("কেমন", 4)                             // selection-delete " আছো"
+        assertEquals("কেমন", s.committed)
+        s.undo()
+        assertEquals("কেমন আছো", s.committed)
+    }
 }

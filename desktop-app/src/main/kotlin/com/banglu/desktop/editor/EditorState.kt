@@ -1,5 +1,7 @@
 package com.banglu.desktop.editor
 
+import java.util.ArrayDeque
+
 /**
  * The editor's document + typing state machine. Pure Kotlin, no Compose —
  * the JVM regression wall drives it keystroke-by-keystroke against the real
@@ -15,6 +17,11 @@ class EditorState(
     private val engine: EngineFacade,
     var banglaDigits: Boolean = true,
 ) {
+    data class Snapshot(val committed: String, val commitPos: Int, val formingRaw: String)
+
+    private val undoStack = ArrayDeque<Snapshot>()
+    private val redoStack = ArrayDeque<Snapshot>()
+
     var committed: String = ""
         private set
     var commitPos: Int = 0
@@ -59,6 +66,7 @@ class EditorState(
                 backspace()
             else -> {                                  // paste / selection replace
                 commitFormingInternal()
+                pushUndo()
                 committed = newText
                 commitPos = newCursor.coerceIn(0, committed.length)
             }
@@ -81,6 +89,7 @@ class EditorState(
                     (commitPos < 2 || committed[commitPos - 2] !in " ।\n")
                 ) {
                     // Double space after a word → দাঁড়ি (spec §4, Android rule)
+                    pushUndo()
                     committed = committed.replaceRange(commitPos - 1, commitPos, "। ")
                     commitPos += 1
                 } else {
@@ -91,10 +100,12 @@ class EditorState(
                 pickCandidate(c - '1')
             c.isDigit() -> {
                 commitFormingInternal()
+                pushUndo()
                 insertCommitted(if (banglaDigits) bengaliDigit(c) else c.toString())
             }
             else -> {
                 commitFormingInternal()
+                pushUndo()
                 insertCommitted(c.toString())
             }
         }
@@ -107,6 +118,7 @@ class EditorState(
             if (!forming) { candidates = emptyList(); popupDismissed = false }
             generation++
         } else if (commitPos > 0) {
+            pushUndo()
             committed = committed.removeRange(commitPos - 1, commitPos)
             commitPos -= 1
         }
@@ -124,6 +136,7 @@ class EditorState(
 
     internal fun commitFormingInternal() {
         if (!forming) return
+        pushUndo()
         insertCommitted(formingBangla)
         formingRaw = ""
         formingBangla = ""
@@ -140,6 +153,7 @@ class EditorState(
     fun pickCandidate(index: Int) {
         val choice = candidates.getOrNull(index) ?: return
         if (!forming) return
+        pushUndo()
         if (choice != formingBangla) engine.selected(formingRaw, choice, explicit = true)
         formingBangla = choice
         commitFormingInternal()
@@ -166,6 +180,34 @@ class EditorState(
         candidates = emptyList()
         popupDismissed = false
         generation++
+    }
+
+    private fun pushUndo() {
+        undoStack.addLast(Snapshot(committed, commitPos, formingRaw))
+        if (undoStack.size > 200) undoStack.removeFirst()
+        redoStack.clear()
+    }
+
+    private fun restore(s: Snapshot) {
+        committed = s.committed
+        commitPos = s.commitPos
+        formingRaw = s.formingRaw
+        formingBangla = if (forming) engine.instant(formingRaw) else ""
+        candidates = emptyList()
+        popupDismissed = false
+        generation++
+    }
+
+    fun undo() {
+        val prev = undoStack.pollLast() ?: return
+        redoStack.addLast(Snapshot(committed, commitPos, formingRaw))
+        restore(prev)
+    }
+
+    fun redo() {
+        val next = redoStack.pollLast() ?: return
+        undoStack.addLast(Snapshot(committed, commitPos, formingRaw))
+        restore(next)
     }
 }
 
