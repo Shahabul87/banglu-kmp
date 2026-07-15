@@ -109,17 +109,31 @@ fun FrameWindowScope.EditorScreen() {
     fun doSaveAs(): Boolean {
         val f = saveDialog(window, fileState.file?.name ?: "লেখা.txt") ?: return false
         state.commitForming(); syncFromState()
-        f.writeText(state.committed)
-        fileState.file = f; fileState.savedText = state.committed
-        refreshTitle(); return true
+        return runCatching { f.writeText(state.committed) }.fold(
+            onSuccess = {
+                fileState.file = f; fileState.savedText = state.committed
+                refreshTitle(); status = "সেভ হয়েছে ✓"; true
+            },
+            onFailure = { e ->
+                System.err.println("Banglu save failed: $e")
+                status = "সেভ ব্যর্থ হয়েছে"; false
+            },
+        )
     }
 
     fun doSave(): Boolean {
         val f = fileState.file ?: return doSaveAs()
         state.commitForming(); syncFromState()
-        f.writeText(state.committed)
-        fileState.savedText = state.committed
-        refreshTitle(); return true
+        return runCatching { f.writeText(state.committed) }.fold(
+            onSuccess = {
+                fileState.savedText = state.committed
+                refreshTitle(); status = "সেভ হয়েছে ✓"; true
+            },
+            onFailure = { e ->
+                System.err.println("Banglu save failed: $e")
+                status = "সেভ ব্যর্থ হয়েছে"; false
+            },
+        )
     }
 
     /** Runs [action] directly when clean; else asks সেভ করুন / সেভ ছাড়াই / বাতিল. */
@@ -136,7 +150,12 @@ fun FrameWindowScope.EditorScreen() {
         openDialog(window)?.let { f ->
             // Normalize CRLF → LF: Windows-authored .txt would otherwise push
             // stray \r into committed text and docx runs.
-            state.setAll(f.readText().replace("\r\n", "\n"))
+            val text = runCatching { f.readText().replace("\r\n", "\n") }.getOrElse { e ->
+                System.err.println("Banglu open failed: $e")
+                status = "ফাইল খোলা যায়নি"
+                return@let
+            }
+            state.setAll(text)
             fileState.file = f; fileState.savedText = state.committed
             syncFromState(); refreshTitle()
             val prefs = drafts.loadPrefs()
@@ -154,8 +173,13 @@ fun FrameWindowScope.EditorScreen() {
     fun exportDocx() {
         saveDialog(window, (fileState.file?.nameWithoutExtension ?: "লেখা") + ".docx")?.let { f ->
             state.commitForming(); syncFromState()
-            DocxWriter.write(state.committed, f)
-            status = "Word ফাইল তৈরি ✓"
+            runCatching { DocxWriter.write(state.committed, f) }.fold(
+                onSuccess = { status = "Word ফাইল তৈরি ✓" },
+                onFailure = { e ->
+                    System.err.println("Banglu docx export failed: $e")
+                    status = "এক্সপোর্ট ব্যর্থ হয়েছে"
+                },
+            )
         }
     }
 
@@ -182,7 +206,9 @@ fun FrameWindowScope.EditorScreen() {
         drafts.loadDraft()?.let { d ->
             state.setAll(d.text, d.cursor.coerceIn(0, d.text.length))
             d.filePath?.let { p -> File(p).takeIf(File::exists)?.let { f ->
-                fileState.file = f; fileState.savedText = d.savedText ?: f.readText()
+                // Unreadable file → treat as never-saved rather than crash the launch effect.
+                fileState.file = f
+                fileState.savedText = d.savedText ?: runCatching { f.readText() }.getOrDefault("")
             } }
             syncFromState(); refreshTitle()
             // Empty scratch text restoring "clean" shouldn't surface a banner.
