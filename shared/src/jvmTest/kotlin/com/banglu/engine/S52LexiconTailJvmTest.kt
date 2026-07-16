@@ -1,7 +1,6 @@
 package com.banglu.engine
 
 import java.io.File
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -22,17 +21,10 @@ import kotlin.test.assertTrue
  *
  * 2. [repairedWordsResolveCorrectlyViaEngine] and [cutoffAddedWordsResolveViaEngine] —
  *    runtime pins against `ConjunctSolutionRoundJvmTest.engine`, which loads
- *    `./dictionary.sqlite` (repo root). That db stays 3.8.4 (the PRE-S52-Task-2 build)
- *    until Task 3 regenerates and ships it, per the S52 plan's Global Constraints ("db
- *    changes bump ... AND REQUIRED_DB_VERSION together" — a Task 3 concern). Enabling
- *    these assertions now would be RED against the still-3.8.4 repo-root db (verified
- *    this session: `motivation`/`semester`/`callback`/`simple` all resolve to their OLD
- *    garbage/pre-fix forms against `./dictionary.sqlite`). They were verified GREEN this
- *    session against a scratch trial build
- *    (`BANGLU_DICT_SQLITE_PATH`-pointed, see `JvmSqliteDictionaryLoader.findDictionarySqlite`,
- *    the S52 addition that makes this override possible) — see the Task 2 report for the
- *    exact per-word eval diff. `@Ignore`'d here with this rationale; Task 3 Step 3 removes
- *    the `@Ignore` once the rebuilt db 3.8.5 ships to `./dictionary.sqlite`.
+ *    `./dictionary.sqlite` (repo root). Task 3 regenerated and shipped db 3.8.5 to the
+ *    repo root (english_lexicon COUNT=39390, callback -> কলব্যাক verified directly via
+ *    sqlite3 against the shipped db; see `.superpowers/sdd/s52-task-3-report.md`), so
+ *    these assertions are enabled and green against the real repo-root db.
  */
 class S52LexiconTailJvmTest {
     private val engine get() = ConjunctSolutionRoundJvmTest.engine
@@ -92,7 +84,6 @@ class S52LexiconTailJvmTest {
         }
     }
 
-    @Ignore("Enable in Task 3 after db 3.8.5 (S52 lexicon tail) ships to repo-root dictionary.sqlite — see class doc + s52-task-2-report.md")
     @Test
     fun repairedWordsResolveCorrectlyViaEngine() {
         val expected = mapOf(
@@ -106,7 +97,6 @@ class S52LexiconTailJvmTest {
         }
     }
 
-    @Ignore("Enable in Task 3 after db 3.8.5 (S52 cutoff decision) ships to repo-root dictionary.sqlite — see class doc + s52-task-2-report.md")
     @Test
     fun cutoffAddedWordsResolveViaEngine() {
         // Sample of keys only present in english_lexicon once the frequency cutoff was
@@ -128,7 +118,8 @@ class S52LexiconTailJvmTest {
         // lexicon rescue can never fire for "late" — S52 adds it to
         // ENGLISH_PRIMARY_INTENT (the time/line mechanism). The root db
         // already carries late→লেট in english_lexicon, so this pin is
-        // active on 3.8.4 TODAY, unlike the @Ignore'd db-gated pins above.
+        // active on 3.8.4 TODAY, and remains active on 3.8.5 (Task 3) alongside
+        // the now-enabled db-gated pins above.
         assertEquals("লেট", engine.convertWord("late").bengali)
     }
 
