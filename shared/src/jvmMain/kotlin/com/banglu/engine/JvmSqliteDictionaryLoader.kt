@@ -26,8 +26,24 @@ open class JvmSqliteDictionaryLoader(
          * Locate dictionary.sqlite relative to the working directory.
          * Gradle runs tests with cwd = project root (banglu-kmp/) or module root (shared/).
          * We check both locations.
+         *
+         * S52: honors the `BANGLU_DICT_SQLITE_PATH` env var when set, pointing every
+         * JVM-test/desktop consumer of this loader at an alternate db (e.g. a scratch
+         * trial build for eval-gated experiments) without ever touching the repo-root
+         * `dictionary.sqlite`. Unset by default, so normal test/desktop runs are
+         * unaffected. Env var (not a system property) mirrors S24EvalJvm's existing
+         * EVAL_WORDS/EVAL_OUT convention — Gradle forks inherit the process
+         * environment automatically, no extra `systemProperties` wiring needed.
          */
         fun findDictionarySqlite(): File {
+            System.getenv("BANGLU_DICT_SQLITE_PATH")?.let { overridePath ->
+                val overrideFile = File(overridePath)
+                return if (overrideFile.exists()) {
+                    overrideFile
+                } else {
+                    error("BANGLU_DICT_SQLITE_PATH set but file not found: ${overrideFile.absolutePath}")
+                }
+            }
             val candidates = listOf(
                 File("dictionary.sqlite"),                           // repo root (cwd = banglu-kmp)
                 File("../dictionary.sqlite"),                        // cwd = shared/

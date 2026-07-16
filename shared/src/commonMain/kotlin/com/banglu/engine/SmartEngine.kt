@@ -254,7 +254,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         private val ENGLISH_PRIMARY_INTENT: Set<String> = setOf(
             "time", "common", "printer", "price", "single", "double",
             "simple", "share", "video", "table", "hotel", "note", "line",
-            "online", "offline"
+            "online", "offline",
+            // S52: "late" loses to fuzzy লাতে (freq 60, not junk-classified,
+            // so the lexicon rescue never fires) — vetted like time/line.
+            "late"
         )
 
         /**

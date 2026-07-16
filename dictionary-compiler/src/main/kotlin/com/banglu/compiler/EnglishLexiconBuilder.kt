@@ -81,7 +81,7 @@ object EnglishLexiconBuilder {
      * [limit] caps the number of **accepted** words (i.e. `take(limit)` is applied AFTER
      * filtering out rejected entries). Words beyond the limit are ignored.
      */
-    fun parseTopWords(lines: List<String>, limit: Int = 30_000): Set<String> =
+    fun parseTopWords(lines: List<String>, limit: Int = 50_000): Set<String> =
         lines.asSequence()
             .mapNotNull { it.trim().split(Regex("\\s+")).firstOrNull()?.lowercase() }
             .filter { KEY_RE.matches(it) && it.length >= 2 }
