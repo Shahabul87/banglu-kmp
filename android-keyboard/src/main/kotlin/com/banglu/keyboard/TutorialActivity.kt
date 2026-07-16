@@ -35,7 +35,10 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -341,6 +344,11 @@ private val phoneticMappingSteps = listOf(
 private fun BangluTutorialScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { remoteBangluPrefs(context) }
+    var gettingStartedSeen by remember { mutableStateOf(prefs.getBoolean("getting_started_seen", false)) }
+    fun dismissGettingStarted() {
+        gettingStartedSeen = true
+        prefs.edit().putBoolean("getting_started_seen", true).apply()
+    }
     val themeMode = prefs.getString("theme", "dark") ?: "dark"
     val systemDark = isSystemInDarkTheme()
     val darkTheme = themeMode == "dark" || themeMode == "amoled" || (themeMode == "auto" && systemDark)
@@ -383,6 +391,9 @@ private fun BangluTutorialScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item { TutorialHeader(onBack) }
+            if (!gettingStartedSeen) {
+                item { GettingStartedCard(onDismiss = ::dismissGettingStarted) }
+            }
             item { SectionTitle("প্রথমে টাইপিং শিখুন", "Typing tutorial") }
             typingSteps.forEach { step ->
                 item { TutorialStepCard(step) }
@@ -436,6 +447,46 @@ private fun SectionTitle(bengali: String, english: String) {
     Column(modifier = Modifier.padding(top = 12.dp)) {
         Text(bengali, color = TutorialSuccess, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text(english, color = TutorialMuted, fontSize = 15.sp)
+    }
+}
+
+/** First-run card (spec Part C): shown once at the top, dismiss persists via prefs. */
+@Composable
+private fun GettingStartedCard(onDismiss: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = TutorialCard),
+        border = BorderStroke(1.dp, TutorialBorder)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "৩ ধাপে শুরু করুন", color = TutorialPrimary, fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable { onDismiss() }
+                        .padding(6.dp)
+                ) {
+                    Text("✕", color = TutorialMuted, fontSize = 16.sp)
+                }
+            }
+            Text(
+                "১. Settings → Keyboard-এ বাংলু চালু করুন (অ্যাপ খুললেই বোতাম আছে)",
+                color = TutorialText, fontSize = 16.sp, lineHeight = 22.sp
+            )
+            Text(
+                "২. যেকোনো অ্যাপে কীবোর্ড খুলে ইংরেজি অক্ষরে লিখুন",
+                color = TutorialText, fontSize = 16.sp, lineHeight = 22.sp
+            )
+            Text(
+                "৩. kemon acho → কেমন আছো — Space চাপলেই বসে যাবে",
+                color = TutorialText, fontSize = 16.sp, lineHeight = 22.sp
+            )
+        }
     }
 }
 
