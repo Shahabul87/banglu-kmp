@@ -158,7 +158,10 @@ banglu-kmp/
 │                                     SwiftKey has NO iOS transliteration.
 │                                     NOT a base — seed-only, unparitied)
 ├── banglu-web (SIBLING REPO ../banglu-web)  ← wordlist source for compiler +
-│                                     TS web engine (NOT yet paritied with v3)
+│                                     web app — FULLY on the shared JS engine
+│                                     since S54 (lib/banglu-engine vendor +
+│                                     loader.ts; old TS engines decommissioned
+│                                     — see its CLAUDE.md engine-law section)
 ├── design/play-store/           ← STORE-LISTING.md (paste-ready), PRIVACY-
 │                                  POLICY.md (canonical), DATA-SAFETY-FORM.md,
 │                                  screenshots-1.5.24/, icons
@@ -274,12 +277,15 @@ the engine and which dictionary tier they carry:
 | Desktop editor     | JVM (Compose Desktop, jpackage) | full sqlite via JDBC  |
 | Browser extension  | Kotlin/JS in the page/worker    | slim JSON (17MB mem)  |
 | macOS input method | Kotlin/JS in JavaScriptCore     | slim JSON (17MB mem)  |
-| Web (banglu-web)   | legacy TS engine — NOT paritied | (parity decision open)|
+| Web (banglu-web)   | Kotlin/JS in page + Node routes | slim JSON (17MB mem)  |
 
 - JS artifact: `./gradlew :shared:jsBrowserProductionLibraryDistribution` →
   `shared/build/dist/js/productionLibrary/banglu-engine.js` → esbuild bundle
-  (extension: ESM; macOS IME: IIFE `--global-name=BangluNS`). JS access path:
-  `(ns.com ?? ns).banglu.engine.BangluWebEngine`.
+  (extension: ESM; macOS IME: IIFE `--global-name=BangluNS`; banglu-web
+  vendors the raw library + loader.ts). JS access path:
+  `(ns.com ?? ns).banglu.engine.BangluWebEngine`. S54 exports the full web
+  surface: parse, convertWithContext, suggestionsWithContext,
+  compositionPreview, nextWordPredictions, addCustomWord.
 - Parity walls: JVM = `:shared:jvmTest` (475) on ./dictionary.sqlite;
   JS = `:shared:jsNodeTest` (379, incl. S45 web-parity pins); macOS IME =
   `swift run BangluCoreTestRunner` (83 checks incl. WYSIWYG pins on the real
@@ -410,8 +416,9 @@ compiler version string AND REQUIRED_DB_VERSION together.
 8. New Prisma-style destructive ops don't exist here, but the same spirit:
    never delete learned-word storage; skip-on-load is the only sanitation.
 9. Conversion behavior lives ONLY in `shared` — no platform re-implements
-   rules (the old ios-keyboard-engine and banglu-web TS engine are cautionary
-   tales, not patterns).
+   rules (the old ios-keyboard-engine and the two decommissioned banglu-web
+   TS engines are cautionary tales, not patterns; banglu-web has been fully
+   on the shared engine since S54).
 10. `~/.banglu/learned.json` is the ONE learning brain for desktop + macOS
     IME — rows are `{p,b,f,t}` exactly (Storage.kt is the source of truth);
     every writer uses read-fresh → tmp → atomic replace.
@@ -436,8 +443,10 @@ compiler version string AND REQUIRED_DB_VERSION together.
 - Store submission pack: design/play-store/ (listing, privacy, data safety,
   screenshots). Privacy policy live at
   https://shahabul87.github.io/banglu-privacy-policy/ (source: PRIVACY-POLICY.md).
-- Pending strategic items: macOS IME manual gate + public signing decision,
-  Play upload (user-side), extension store uploads (user-side), web-engine
-  parity decision, corpus archiving, iOS phase, trigram quality round,
-  per-word "never learn this word" control (Release-A candidate).
+- Pending strategic items: macOS IME manual gate + one-click-assistant
+  verification + public signing decision, Play upload (user-side), extension
+  store uploads (user-side), banglu-web src/engine/smart deletion after its
+  uncommitted dictionary-override WIP is harvested into the compiler data,
+  corpus archiving, iOS phase, trigram quality round, per-word "never learn
+  this word" control (Release-A candidate).
 ```
