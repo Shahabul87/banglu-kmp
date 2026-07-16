@@ -7,6 +7,19 @@ body {
 header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .brand { font-weight: 700; color: #64d2ff; font-size: 16px; }
 .status { margin-left: auto; font-size: 11px; color: #64748b; }
+.getting-started {
+  border-radius: 12px; background: #0d1524; border: 1px solid #1e3a5f;
+  padding: 10px 12px; margin-bottom: 10px;
+}
+.gs-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.gs-head span { font-weight: 700; color: #64d2ff; font-size: 13px; }
+.gs-head button {
+  background: none; border: none; color: #64748b; font-size: 13px;
+  cursor: pointer; padding: 2px 4px; line-height: 1;
+}
+.gs-head button:hover { color: #e2e8f0; }
+.gs-steps { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.gs-steps li { font-size: 12px; color: #bae6fd; line-height: 1.5; }
 textarea {
   width: 100%; height: 84px; resize: none; border-radius: 12px;
   background: #101a2a; border: 1px solid #1e3a5f; color: #e2e8f0;

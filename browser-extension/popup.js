@@ -9,10 +9,26 @@ const ns = (mod.default ?? mod);
 const engine = (ns.com ?? ns).banglu.engine.BangluWebEngine;
 const $ = (id) => document.getElementById(id);
 const input = $("in"), out = $("out"), chipsEl = $("chips"),
-      status = $("status"), copyBtn = $("copy");
+      status = $("status"), copyBtn = $("copy"),
+      gettingStarted = $("gettingStarted"), gsClose = $("gsClose");
 
 let overrides = Object.create(null);
 let ready = false;
+
+// S53 Part C: first-open "৩ ধাপে শুরু করুন" panel, dismiss persists.
+if (globalThis.chrome?.storage?.local) {
+  chrome.storage.local.get(["gettingStartedSeen"], (r) => {
+    if (!r.gettingStartedSeen) gettingStarted.hidden = false;
+  });
+  gsClose.addEventListener("click", () => {
+    gettingStarted.hidden = true;
+    chrome.storage.local.set({ gettingStartedSeen: true });
+  });
+} else {
+  // dev mode outside the extension host: no storage API, show once per tab.
+  gettingStarted.hidden = false;
+  gsClose.addEventListener("click", () => { gettingStarted.hidden = true; });
+}
 
 function render() {
   if (!ready) return;
