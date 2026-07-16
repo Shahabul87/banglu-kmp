@@ -25,6 +25,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
@@ -92,6 +93,7 @@ fun FrameWindowScope.EditorScreen(startInTutorial: Boolean = false) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     var highlight by remember { mutableStateOf(0) }        // popup keyboard highlight
     var restoredBanner by remember { mutableStateOf(false) }
+    var gettingStartedSeen by remember { mutableStateOf(drafts.loadPrefs().gettingStartedSeen) }
     // Committed-word fix popup (spec §4): range + candidates, opened by click.
     var fixRange by remember { mutableStateOf<IntRange?>(null) }
     var fixCandidates by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -104,6 +106,11 @@ fun FrameWindowScope.EditorScreen(startInTutorial: Boolean = false) {
     }
 
     fun closeFix() { fixToken++; fixRange = null; fixCandidates = emptyList() }
+
+    fun dismissGettingStarted() {
+        gettingStartedSeen = true
+        drafts.savePrefs(drafts.loadPrefs().copy(gettingStartedSeen = true))
+    }
 
     val fileState = remember { FileState() }
     var fileName by remember { mutableStateOf<String?>(null) }
@@ -289,6 +296,7 @@ fun FrameWindowScope.EditorScreen(startInTutorial: Boolean = false) {
                 tutorialOpen = tutorialOpen, onToggleTutorial = { tutorialOpen = !tutorialOpen },
             )
             if (restoredBanner) Banner("আগের লেখা ফিরিয়ে আনা হয়েছে") { restoredBanner = false }
+            if (!gettingStartedSeen) GettingStartedCard(onDismiss = ::dismissGettingStarted)
 
             if (tutorialOpen) {
                 Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -558,6 +566,39 @@ private fun Banner(text: String, onDismiss: () -> Unit) {
         Text(text, color = SkySoft, fontSize = 12.sp, fontFamily = BengaliFontFamily)
         Spacer(Modifier.weight(1f))
         Text("✕", color = Muted, fontSize = 12.sp, modifier = Modifier.clickable(onClick = onDismiss))
+    }
+}
+
+/** First-run card (spec Part C): shown once above the page, dismiss persists. */
+@Composable
+private fun GettingStartedCard(onDismiss: () -> Unit) {
+    Surface(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        color = PageCard, shape = RoundedCornerShape(14.dp),
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "৩ ধাপে শুরু করুন", color = Green, fontSize = 15.sp,
+                    fontFamily = BengaliFontFamily, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                Text("✕", color = Muted, fontSize = 13.sp,
+                    modifier = Modifier.clickable(onClick = onDismiss).padding(4.dp))
+            }
+            Text(
+                "১. এখানেই ইংরেজি অক্ষরে লিখুন — kemon acho → কেমন আছো",
+                color = SkySoft, fontSize = 13.sp, fontFamily = BengaliFontFamily, lineHeight = 20.sp,
+            )
+            Text(
+                "২. শব্দের নিচের তালিকা থেকে ১-৬ চাপে বেছে নিন",
+                color = SkySoft, fontSize = 13.sp, fontFamily = BengaliFontFamily, lineHeight = 20.sp,
+            )
+            Text(
+                if (isMacOs) "৩. যেকোনো অ্যাপে লিখতে ⌘⇧B চাপুন" else "৩. যেকোনো অ্যাপে লিখতে Ctrl+Shift+B চাপুন",
+                color = SkySoft, fontSize = 13.sp, fontFamily = BengaliFontFamily, lineHeight = 20.sp,
+            )
+        }
     }
 }
 

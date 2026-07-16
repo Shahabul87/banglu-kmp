@@ -57,4 +57,12 @@ class DraftStoreTest {
         store.savePrefs(store.loadPrefs().copy(learningEnabled = false))
         assertEquals(false, store.loadPrefs().learningEnabled)
     }
+
+    @Test
+    fun gettingStartedSeenDefaultsFalseAndRoundTrips() {
+        val store = tempStore()
+        assertEquals(false, store.loadPrefs().gettingStartedSeen)
+        store.savePrefs(store.loadPrefs().copy(gettingStartedSeen = true))
+        assertEquals(true, store.loadPrefs().gettingStartedSeen)
+    }
 }

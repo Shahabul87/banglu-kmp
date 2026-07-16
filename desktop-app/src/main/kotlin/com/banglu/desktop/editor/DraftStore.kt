@@ -27,6 +27,7 @@ data class EditorPrefs(
     val winW: Int = 860,
     val winH: Int = 640,
     val learningEnabled: Boolean = true,
+    val gettingStartedSeen: Boolean = false,
 )
 
 class DraftStore(private val dir: File) {
