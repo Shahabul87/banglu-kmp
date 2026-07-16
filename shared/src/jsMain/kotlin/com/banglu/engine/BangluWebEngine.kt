@@ -51,6 +51,92 @@ object BangluWebEngine {
     fun instantPreview(input: String): String = engine.convertForInstantPreview(input)
 
     /**
+     * S54: multi-word conversion — converts each whitespace-separated token
+     * and preserves the original whitespace, same contract as the Android
+     * adapter's `parse()`. Use this (not per-word `convert`) when the caller
+     * has a full sentence, e.g. server-side API routes.
+     */
+    fun parse(input: String): String = engine.parse(input)
+
+    /**
+     * S54: context-aware conversion. [prev1] is the immediately preceding
+     * committed Bengali word, [prev2] the one before that (both optional —
+     * pass "" for missing context). Mirrors
+     * `SmartEngineAdapter.convertWordWithContext(word, listOf(prev2, prev1))`,
+     * reimplemented directly on this instance's own [engine] because the
+     * adapter is a separate singleton with its own engine/state that is
+     * never wired to the slim-dictionary-backed web engine.
+     */
+    fun convertWithContext(word: String, prev1: String, prev2: String): String {
+        val trimmed = word.trim()
+        val base = engine.convertWord(trimmed)
+        val ranked = engine.rerankWithContext(
+            prev2Bengali = prev2.trim().ifEmpty { null },
+            prev1Bengali = prev1.trim().ifEmpty { null },
+            result = base
+        )
+        return ranked.bengali
+    }
+
+    /**
+     * S54: suggestion strip re-ordered by the same context signal as
+     * [convertWithContext] — the context-promoted word (if any) leads,
+     * followed by the normal ranked suggestions, deduplicated, capped at
+     * [limit]. Adapted from `SmartEngineAdapter.getSuggestionsWithContext`
+     * (which also returns confidence/source/tier metadata this JS-facing
+     * surface deliberately drops — callers only need the ranked strings).
+     */
+    fun suggestionsWithContext(word: String, prev1: String, prev2: String, limit: Int): Array<String> {
+        val trimmed = word.trim()
+        val suggestions = engine.getSuggestions(trimmed, limit).map { it.bengali }
+        val contextBengali = convertWithContext(trimmed, prev1, prev2)
+        val ordered = LinkedHashSet<String>()
+        if (contextBengali.isNotBlank()) ordered.add(contextBengali)
+        ordered.addAll(suggestions)
+        return ordered.take(limit).toTypedArray()
+    }
+
+    /**
+     * S54: composing-text preview — deliberately more conservative than
+     * [convert] (no fuzzy/recovery dictionary jumps on incomplete words),
+     * matching the Android IME's live-typing behavior.
+     */
+    fun compositionPreview(word: String): String = engine.getCompositionPreview(word)
+
+    /**
+     * S54: next-word predictions after [prevBengali] (corpus bigrams/
+     * trigrams + user bigrams + a small static opener fallback — the SAME
+     * on-device mechanism Android uses for its prediction bar; this
+     * replaces the web app's neural-LM prediction bar, not a like-for-like
+     * port of it). The seed-only engine (no slim dictionary attached) has
+     * no bigram model loaded, so results come only from the static
+     * FALLBACK_NEXT_WORDS table and any picks recorded this session via
+     * [recordPick]/[applyLearnedWords]-driven usage — empty is a valid,
+     * non-crashing result for words outside that table.
+     */
+    fun nextWordPredictions(prevBengali: String, limit: Int): Array<String> =
+        engine.getNextWordPredictions(prevBengali.trim(), limit).map { it.bengali }.toTypedArray()
+
+    /**
+     * S54: add an explicit user dictionary entry (e.g. from a "teach a
+     * word" UI), at the same frequency
+     * (`SmartEngineAdapter.CUSTOM_CONVERSION_FREQUENCY` = 120) the adapter
+     * uses for `addCustomConversion` so explicit entries outrank ordinary
+     * learned picks (94) and dictionary defaults. Still routed through
+     * `SmartEngine.addWord` -> `isPlausibleDynamicMapping`: a pair whose
+     * phonetics don't plausibly reverse-transliterate to [bangla] is
+     * silently rejected (anti-poisoning guard, never bypassed).
+     */
+    fun addCustomWord(raw: String, bangla: String) {
+        initSeed()
+        val key = raw.trim().lowercase()
+        val bengali = bangla.trim()
+        if (key.isEmpty() || bengali.isEmpty()) return
+        engine.addWord(key, bengali, CUSTOM_CONVERSION_FREQUENCY)
+        engine.clearCache()
+    }
+
+    /**
      * S51: load the editor's ~/.banglu/learned.json (rows {p,b,f,t}; unknown
      * keys ignored, malformed input ignored — the IME must never crash on a
      * user-editable file).
@@ -83,6 +169,9 @@ object BangluWebEngine {
         engine.clearCache()
     }
 }
+
+/** S54: mirrors `SmartEngineAdapter.CUSTOM_CONVERSION_FREQUENCY` (private there). */
+private const val CUSTOM_CONVERSION_FREQUENCY = 120
 
 private val lenientJson = Json { ignoreUnknownKeys = true }
 
