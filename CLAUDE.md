@@ -32,7 +32,7 @@ packs). NO cloud API on the keystroke path — decided 2026-07-03 (latency,
 cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-07-15):** ONE ENGINE, FIVE SURFACES.
-- **Android** v1.5.33 (2070), db 3.8.4 — pre-launch; Play upload is the
+- **Android** v1.5.34 (2071), db 3.8.5 (S52: acronym layer + English tail) — pre-launch; Play upload is the
   pending user action (`releases/banglu-1.5.33-2070.aab`).
 - **Desktop editor (বাংলু এডিটর)** v1.1.0 — SHIPPED PUBLICLY (S48–S50):
   installers for macOS/Windows/Linux on the GitHub release `desktop-v1.1.0`,
