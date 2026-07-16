@@ -49,13 +49,23 @@ fun main(args: Array<String>) {
         }
     }
 
+    val isMac = remember { System.getProperty("os.name").lowercase().contains("mac") }
     Tray(
         icon = painterResource("tray.png"),
         tooltip = "Banglu",
         menu = {
             Item("বাংলু এডিটর খুলুন") { mainVisible = true }
-            Item(if (System.getProperty("os.name").lowercase().contains("mac"))
-                "মিনি কনভার্টার (⌘⇧B)" else "মিনি কনভার্টার (Ctrl+Shift+B)") { miniVisible = true }
+            Item(if (isMac) "মিনি কনভার্টার (⌘⇧B)" else "মিনি কনভার্টার (Ctrl+Shift+B)") { miniVisible = true }
+            Separator()
+            // S53 Effortless On: the global hotkey is one right-click away —
+            // no settings hunt to turn Banglu on or off system-wide.
+            CheckboxItem(
+                if (isMac) "গ্লোবাল হটকি চালু (⌘⇧B)" else "গ্লোবাল হটকি চালু (Ctrl+Shift+B)",
+                checked = Hotkey.registered,
+                onCheckedChange = { Hotkey.setEnabled(it) }
+            )
+            Item(if (isMac) "যেকোনো অ্যাপে লিখুন: ⌘⇧B চাপুন"
+                 else "যেকোনো অ্যাপে লিখুন: Ctrl+Shift+B চাপুন", enabled = false) {}
             Separator()
             Item("বন্ধ করুন") {
                 com.banglu.desktop.editor.DraftFlush.flush?.invoke()
