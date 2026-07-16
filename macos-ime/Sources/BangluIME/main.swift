@@ -34,9 +34,8 @@ enum AppState {
     }
 }
 
-guard let connectionName = Bundle.main.infoDictionary?["InputMethodConnectionName"] as? String
-else { fatalError("InputMethodConnectionName missing from Info.plist") }
-
-// Retained for the process lifetime — macOS connects clients through it.
-let server = IMKServer(name: connectionName, bundleIdentifier: Bundle.main.bundleIdentifier!)
+// S53: server creation + launch-context branching live in AppDelegate
+// (silent IMK server vs the one-click setup assistant).
+let delegate = AppDelegate()
+NSApplication.shared.delegate = delegate
 NSApplication.shared.run()
