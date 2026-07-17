@@ -110,4 +110,61 @@ class S55ComposingParityJvmTest {
         assertEquals("কলব্যাক", liteEngine.convertWord("callback").bengali)
         assertEquals("মোটিভেশন", liteEngine.convertWord("motivation").bengali)
     }
+
+    /**
+     * I3 (reviewer, post-approval hardening): in FULL mode (validator
+     * loaded), these keys exercise the validator-GATED rescue mirror
+     * (tryJunkLexiconRescue), not the validator-free unconditional lexicon
+     * fallback that liteModeComposingMatchesCommitForLexiconWords pins.
+     *
+     * NOTE on word selection: the reviewer's original suggestion cited
+     * "there"/"read"/"price". A full 20,000-key english_lexicon scan
+     * (S55ScanProbeJvm, not committed) showed those three do NOT exercise
+     * this mirror — convertForComposingCore's own dictionary/corpus layer
+     * already lands on the identical answer convertWord finds independently,
+     * so disabling the wrapper's rescue call left them passing. The scan
+     * found the real set: astrid/batten/breeder/burma/cato/cool/denial (and
+     * ~19 more) diverge from commit UNLESS the rescue mirror runs — pinned
+     * below with the ones verified by disabling the mirror locally.
+     *
+     * RED evidence (recorded, not fabricated): with
+     * `convertForComposing`'s wrapper temporarily forced to `return raw`
+     * (bypassing `tryJunkLexiconRescue` entirely), this test failed:
+     *   expected:<[অ্যাস্ট্রিড]> but was:<[আস্ট্রিদ]>  (astrid)
+     * Restoring the `tryJunkLexiconRescue(key, raw) ?: raw` call makes it
+     * pass again. Full RED/GREEN transcript in
+     * .superpowers/sdd/s55-task-1-report.md.
+     */
+    @Test
+    fun rescueMirrorFullModeEquality() {
+        val engine = ConjunctSolutionRoundJvmTest.engine
+        engine.clearCache()
+        for (w in listOf("astrid", "batten", "breeder", "burma", "cato", "cool", "denial")) {
+            assertEquals(
+                engine.convertWord(w).bengali, engine.convertForComposing(w).bengali,
+                "composing must equal commit for '$w' (validator-gated rescue mirror)"
+            )
+        }
+    }
+
+    /**
+     * I1 (reviewer, post-approval hardening): the SAME 20,000-key scan found
+     * the inverse failure mode — composing's rescue mirror, before the
+     * guards were shared, OVERRODE store-protected commit words with a
+     * different lexicon answer (antenna's commit correctly keeps the
+     * store-owned আনতেননা reading; an ungated rescue swapped in অ্যান্টেনা).
+     * Pinned here as the regression guard for [isProtectedFromJunkRescue]
+     * being consulted from both convertWord AND tryJunkLexiconRescue.
+     */
+    @Test
+    fun guardedResultsSurviveTheRescueMirrorUnchanged() {
+        val engine = ConjunctSolutionRoundJvmTest.engine
+        engine.clearCache()
+        for (w in listOf("antenna", "archer", "astro", "balle", "blade", "brian", "charles")) {
+            assertEquals(
+                engine.convertWord(w).bengali, engine.convertForComposing(w).bengali,
+                "guard-protected commit word for '$w' must not be overridden by the composing rescue mirror"
+            )
+        }
+    }
 }

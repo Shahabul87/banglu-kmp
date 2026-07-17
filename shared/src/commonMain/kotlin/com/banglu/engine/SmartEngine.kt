@@ -889,41 +889,16 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Legitimate results with no words-table row of their own: two-word
         // splits, attached-negation compounds, approved compositions, and
         // words the store assigns to this EXACT key (habit aliases). None of
-        // these are junk — never re-guess them.
-        if (' ' in raw.bengali) return raw
-        fun stemKnown(suffix: String): Boolean {
-            if (!raw.bengali.endsWith(suffix)) return false
-            val stem = raw.bengali.removeSuffix(suffix)
-            // S43: informal -ো verb stems (আসবো) live in the corpus words
-            // table but not always in the validator list — both are stem
-            // evidence here, or the typo layer "corrects" আসবোনে to আসনে.
-            return validator.isValid(stem) || phoneticIndex?.containsWord(
-                com.banglu.engine.util.ReverseTransliterator.foldNukta(stem)
-            ) == true
-        }
-        val negationStemValid = stemKnown("না") || stemKnown("নাই") || stemKnown("নে")
-        // Composition protection needs an EVIDENCED stem — the words table's
-        // junk tail makes isApprovedComposition alone too lenient (আময়দাের
-        // parses as junk-root আময়দা + ের and would be shielded).
-        val evidencedComposition = approvedCompositionSuffixes.any { sfx ->
-            raw.bengali.length > sfx.length && raw.bengali.endsWith(sfx) &&
-                raw.bengali.dropLast(sfx.length).removeSuffix("্").let { root ->
-                    root.isNotEmpty() && validator.getFrequency(root) >= 25
-                }
-        }
-        if (negationStemValid || evidencedComposition) return raw
-        if (storeLookup(key).any { it.bengali == raw.bengali && it.tier == PhoneticIndexHit.TIER_A }) {
-            return raw
-        }
-        // Rare-but-deliberate exact-key rows (tier-B ghumacco -> ঘুমাচ্ছ) are
-        // protected only when the raw result actually CAME from that row —
-        // i.e. the store owns the key AND the pipeline chose its word with
-        // conviction. Junk tier-B ownership (amdaer -> আময়দাের) does not
-        // shield a floor-frequency word from correction.
-        if (raw.confidence >= 0.9 &&
-            storeLookup(key).any { it.bengali == raw.bengali } &&
-            validator.getFrequency(raw.bengali) >= 10
-        ) return raw
+        // these are junk — never re-guess them. S55 (I1): extracted into
+        // isProtectedFromJunkRescue, ALSO checked inside tryJunkLexiconRescue
+        // itself, so convertForComposing's rescue call can never skip these
+        // guards. Scanning the full english_lexicon table proved this
+        // matters: without the guard mirror, composing's ungated rescue
+        // swapped store-protected commit words (antenna's store-owned
+        // আনতেননা reading) for a DIFFERENT lexicon answer than Space actually
+        // commits — a NEW divergence S55's own rescue mirror would have
+        // introduced.
+        if (isProtectedFromJunkRescue(key, raw)) return raw
         if (!isJunkPipelineResult(raw)) return raw
         // S24: an English word whose Bengali pipeline result is junk should
         // render as its loanword, not as whatever corpus-tail word squats on
@@ -1385,25 +1360,30 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             return corpusResult.copy(alternatives = emptyList())
         }
 
-        val sectionResult = if (sectionEngine.isReady() && key.length >= 4) convertBySection(key) else null
-        if (sectionResult != null && sectionResult.confidence >= 0.95) {
-            return sectionResult.copy(alternatives = emptyList())
-        }
-
-        // S55 mirror: convertWordRaw resolves lexicon-known English words with
-        // NO Bengali dictionary/corpus/section candidate via the English
-        // lexicon unconditionally (tryEnglishLexicon, called after the corpus
-        // lookup fails — no validator required, so it fires in lite/slim mode
-        // too). Without this mirror the preview fell through to the raw
-        // pattern/CLEAN_TRANSLITERATION floor (callback -> ছাল্ল্বাছ্ক,
-        // motivation -> মতিভাতিওন) while Space, via convertWordRaw's own
-        // identical step, committed the loanword (F-ANDROID-001/002,
-        // F-WEB-001/002 — reproduced on the real dictionary.sqlite AND with
-        // no validator loaded at all).
+        // S55 mirror (I2 precedence fix): convertWordRaw resolves lexicon-
+        // known English words with NO Bengali dictionary/corpus candidate via
+        // the English lexicon unconditionally, and does so BEFORE the section
+        // engine (tryEnglishLexicon runs right after tryCorpusPhoneticLookup
+        // fails, ahead of convertBySection) — no validator required, so it
+        // fires in lite/slim mode too. This mirror must sit at the SAME
+        // precedence position, not after the section check, or a
+        // dictionary-miss + corpus-miss + section-hit + lexicon-hit word
+        // would show the section engine's guess in preview while Space
+        // (convertWordRaw's identical, earlier-ordered step) commits the
+        // loanword. Without this mirror the preview fell through all the way
+        // to the raw pattern/CLEAN_TRANSLITERATION floor (callback ->
+        // ছাল্ল্বাছ্ক, motivation -> মতিভাতিওন) while Space committed the
+        // loanword (F-ANDROID-001/002, F-WEB-001/002 — reproduced on the
+        // real dictionary.sqlite AND with no validator loaded at all).
         if (key.length >= 4) {
             tryEnglishLexicon(key, trimmed)?.let { result ->
                 return result.copy(alternatives = emptyList())
             }
+        }
+
+        val sectionResult = if (sectionEngine.isReady() && key.length >= 4) convertBySection(key) else null
+        if (sectionResult != null && sectionResult.confidence >= 0.95) {
+            return sectionResult.copy(alternatives = emptyList())
         }
 
         // V2 parity: the live editor should still show the rule-composed Bangla
@@ -2524,6 +2504,61 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 !dictionary.containsBengali(raw.bengali))
 
     /**
+     * S55 (I1, reviewer hardening): shared protective-guard sequence —
+     * results that must NEVER be second-guessed by the junk-rescue,
+     * regardless of which pipeline produced them: two-word splits,
+     * attached-negation compounds with an evidenced stem, approved
+     * compositions with an evidenced root, and words the store assigns to
+     * this EXACT key with either TIER_A or (confidence>=0.9 + freq>=10)
+     * conviction. Extracted from convertWord's wrapper (pre-S55 these guards
+     * were inline, only reachable from the commit path) so
+     * [tryJunkLexiconRescue] applies the IDENTICAL sequence for
+     * convertForComposing — confirmed necessary by scanning the full
+     * english_lexicon table: without this guard, composing's rescue
+     * overrode store-protected commit words the guards exist to shield
+     * (e.g. "antenna": commit correctly kept the store-owned আনতেননা
+     * reading; an ungated composing rescue swapped in অ্যান্টেনা instead,
+     * a NEW preview/commit divergence).
+     */
+    private fun isProtectedFromJunkRescue(key: String, raw: ConversionResult): Boolean {
+        if (' ' in raw.bengali) return true
+        fun stemKnown(suffix: String): Boolean {
+            if (!raw.bengali.endsWith(suffix)) return false
+            val stem = raw.bengali.removeSuffix(suffix)
+            // S43: informal -ো verb stems (আসবো) live in the corpus words
+            // table but not always in the validator list — both are stem
+            // evidence here, or the typo layer "corrects" আসবোনে to আসনে.
+            return validator.isValid(stem) || phoneticIndex?.containsWord(
+                com.banglu.engine.util.ReverseTransliterator.foldNukta(stem)
+            ) == true
+        }
+        val negationStemValid = stemKnown("না") || stemKnown("নাই") || stemKnown("নে")
+        // Composition protection needs an EVIDENCED stem — the words table's
+        // junk tail makes isApprovedComposition alone too lenient (আময়দাের
+        // parses as junk-root আময়দা + ের and would be shielded).
+        val evidencedComposition = approvedCompositionSuffixes.any { sfx ->
+            raw.bengali.length > sfx.length && raw.bengali.endsWith(sfx) &&
+                raw.bengali.dropLast(sfx.length).removeSuffix("্").let { root ->
+                    root.isNotEmpty() && validator.getFrequency(root) >= 25
+                }
+        }
+        if (negationStemValid || evidencedComposition) return true
+        if (storeLookup(key).any { it.bengali == raw.bengali && it.tier == PhoneticIndexHit.TIER_A }) {
+            return true
+        }
+        // Rare-but-deliberate exact-key rows (tier-B ghumacco -> ঘুমাচ্ছ) are
+        // protected only when the raw result actually CAME from that row —
+        // i.e. the store owns the key AND the pipeline chose its word with
+        // conviction. Junk tier-B ownership (amdaer -> আময়দাের) does not
+        // shield a floor-frequency word from correction.
+        if (raw.confidence >= 0.9 &&
+            storeLookup(key).any { it.bengali == raw.bengali } &&
+            validator.getFrequency(raw.bengali) >= 10
+        ) return true
+        return false
+    }
+
+    /**
      * S55: junk-rescue gate shared by convertWord's wrapper and
      * convertForComposing (extracted from the pre-S55 wrapper-only inline
      * check so the two paths can never drift again). Requires the loaded
@@ -2534,10 +2569,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * candidate at all (callback, motivation) — this rescue instead replaces
      * a real-but-unevidenced Bengali guess the pipeline DID produce (corpus-
      * tail squatters: there -> থেরে, read -> রোড) with a strictly
-     * better-attested loanword reading.
+     * better-attested loanword reading. Checks [isProtectedFromJunkRescue]
+     * itself (I1) so composing's call site can never bypass the guards.
      */
     private fun tryJunkLexiconRescue(key: String, raw: ConversionResult): ConversionResult? {
-        if (!validator.isLoaded() || !isJunkPipelineResult(raw)) return null
+        if (!validator.isLoaded() || isProtectedFromJunkRescue(key, raw) || !isJunkPipelineResult(raw)) {
+            return null
+        }
         val en = phoneticIndex?.lookupEnglish(key) ?: return null
         if (en == raw.bengali || validator.getFrequency(en) <= validator.getFrequency(raw.bengali)) {
             return null
