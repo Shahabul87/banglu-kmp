@@ -924,36 +924,16 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             storeLookup(key).any { it.bengali == raw.bengali } &&
             validator.getFrequency(raw.bengali) >= 10
         ) return raw
-        val junkFloor = raw.source == ResolutionSource.CLEAN_TRANSLITERATION ||
-            raw.confidence < 0.82
-        val unevidencedWord = raw.confidence < 0.97 &&
-            validator.getFrequency(raw.bengali) < 25 &&
-            !dictionary.containsBengali(raw.bengali)
-        if (!junkFloor && !unevidencedWord) return raw
+        if (!isJunkPipelineResult(raw)) return raw
         // S24: an English word whose Bengali pipeline result is junk should
         // render as its loanword, not as whatever corpus-tail word squats on
         // the key (there -> থেরে, read -> রোড). The lexicon is consulted only
         // from this junk path — real Bengali words always win upstream.
-        run {
-            // Not gated on EnglishDetector: the detector is deliberately shy
-            // (Banglish protection), but on THIS path the Bengali reading is
-            // already junk — lexicon presence is evidence enough (price ->
-            // প্রাইস, there -> দেয়ার instead of corpus-tail থেরে). The lexicon
-            // must be MORE attested than the raw reading, or a correct-but-
-            // rare loanword the pipeline already found (ডেভেলপ) gets replaced
-            // by a worse generated one (ডিভেলপ).
-            phoneticIndex?.lookupEnglish(key)?.let { en ->
-                if (en != raw.bengali &&
-                    validator.getFrequency(en) > validator.getFrequency(raw.bengali)) {
-                    return ConversionResult(
-                        bengali = en,
-                        confidence = 0.9,
-                        source = ResolutionSource.ENGLISH_LEXICON,
-                        alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.7)))
-                    )
-                }
-            }
-        }
+        // S55: extracted into tryJunkLexiconRescue so convertForComposing
+        // (the live preview) shares the EXACT same rescue gate — a preview
+        // that can't reach this check would show junk while Space, running
+        // this same wrapper, commits the loanword (F-ANDROID-001/002).
+        tryJunkLexiconRescue(key, raw)?.let { return it }
         val corrected = tryStoreTypoCorrection(key) ?: return raw
         if (corrected.bengali == raw.bengali) return raw
         return corrected.copy(
@@ -1292,7 +1272,25 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             .copy(alternatives = emptyList())
     }
 
+    /**
+     * S55 (F-ANDROID-001/002, F-WEB-001/002): wraps [convertForComposingCore]
+     * with the SAME junk-rescue gate convertWord's wrapper applies
+     * ([tryJunkLexiconRescue]) — a store/pattern-composed preview that is
+     * junk by the shared definition gets the same better-attested lexicon
+     * swap Space would apply. Gated identically to convertWord's wrapper
+     * (recursion guards + key.length/alpha floor) so the two paths can never
+     * disagree on WHEN to reconsider, only HOW (convertForComposing stays
+     * deliberately conservative — no typo-correction/fuzzy jump mirror here).
+     */
     fun convertForComposing(input: String): ConversionResult {
+        val raw = convertForComposingCore(input)
+        if (inTypoCorrection || inCompoundSplit || inNegationCompound) return raw
+        val key = input.trim().lowercase()
+        if (key.length < 4 || !key.all { it in 'a'..'z' }) return raw
+        return tryJunkLexiconRescue(key, raw) ?: raw
+    }
+
+    private fun convertForComposingCore(input: String): ConversionResult {
         val trimmed = input.trim()
         val key = trimmed.lowercase()
         if (key.isEmpty()) return ConversionResult("", 0.0, ResolutionSource.RULE)
@@ -1390,6 +1388,22 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val sectionResult = if (sectionEngine.isReady() && key.length >= 4) convertBySection(key) else null
         if (sectionResult != null && sectionResult.confidence >= 0.95) {
             return sectionResult.copy(alternatives = emptyList())
+        }
+
+        // S55 mirror: convertWordRaw resolves lexicon-known English words with
+        // NO Bengali dictionary/corpus/section candidate via the English
+        // lexicon unconditionally (tryEnglishLexicon, called after the corpus
+        // lookup fails — no validator required, so it fires in lite/slim mode
+        // too). Without this mirror the preview fell through to the raw
+        // pattern/CLEAN_TRANSLITERATION floor (callback -> ছাল্ল্বাছ্ক,
+        // motivation -> মতিভাতিওন) while Space, via convertWordRaw's own
+        // identical step, committed the loanword (F-ANDROID-001/002,
+        // F-WEB-001/002 — reproduced on the real dictionary.sqlite AND with
+        // no validator loaded at all).
+        if (key.length >= 4) {
+            tryEnglishLexicon(key, trimmed)?.let { result ->
+                return result.copy(alternatives = emptyList())
+            }
         }
 
         // V2 parity: the live editor should still show the rule-composed Bangla
@@ -2492,6 +2506,47 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             confidence = 0.995,
             source = ResolutionSource.DICTIONARY,
             alternatives = alternatives
+        )
+    }
+
+    /**
+     * S55: shared "is this pipeline result junk enough to reconsider"
+     * predicate — used by convertWord's wrapper (via [tryJunkLexiconRescue])
+     * and by convertForComposing's identical wrapper, so the commit and
+     * live-preview paths can never drift on the definition (F-ANDROID-001/
+     * 002). A pure predicate: callers are responsible for the
+     * `validator.isLoaded()` gate (see [tryJunkLexiconRescue]).
+     */
+    private fun isJunkPipelineResult(raw: ConversionResult): Boolean =
+        raw.source == ResolutionSource.CLEAN_TRANSLITERATION || raw.confidence < 0.82 ||
+            (raw.confidence < 0.97 &&
+                validator.getFrequency(raw.bengali) < 25 &&
+                !dictionary.containsBengali(raw.bengali))
+
+    /**
+     * S55: junk-rescue gate shared by convertWord's wrapper and
+     * convertForComposing (extracted from the pre-S55 wrapper-only inline
+     * check so the two paths can never drift again). Requires the loaded
+     * 480K validator — frequency comparison needs it. This is DISTINCT from
+     * the validator-free unconditional lexicon fallback in [tryEnglishLexicon]
+     * (called directly from convertWordRaw and mirrored into
+     * convertForComposing) that resolves lexicon-known words with NO Bengali
+     * candidate at all (callback, motivation) — this rescue instead replaces
+     * a real-but-unevidenced Bengali guess the pipeline DID produce (corpus-
+     * tail squatters: there -> থেরে, read -> রোড) with a strictly
+     * better-attested loanword reading.
+     */
+    private fun tryJunkLexiconRescue(key: String, raw: ConversionResult): ConversionResult? {
+        if (!validator.isLoaded() || !isJunkPipelineResult(raw)) return null
+        val en = phoneticIndex?.lookupEnglish(key) ?: return null
+        if (en == raw.bengali || validator.getFrequency(en) <= validator.getFrequency(raw.bengali)) {
+            return null
+        }
+        return ConversionResult(
+            bengali = en,
+            confidence = 0.9,
+            source = ResolutionSource.ENGLISH_LEXICON,
+            alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.7)))
         )
     }
 

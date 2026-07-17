@@ -223,15 +223,20 @@ object SmartEngineAdapter {
      * Convert for live IME composing text. This is deliberately more
      * conservative than convertWord() so incomplete words do not jump through
      * fuzzy/recovery dictionary candidates while the user is still typing.
+     *
+     * S55 (F-ANDROID-003): must apply the SAME preference layer convertWord()
+     * does, or a learned/explicit pick (ki -> কী) previews the engine's
+     * unpreferred primary (কি) while Space commits the learned choice —
+     * the preference map is adapter-owned state the engine never sees.
      */
     fun convertForComposing(
         word: String,
         previousBengali: String? = null,
         secondPreviousBengali: String? = null
     ): ConversionResult =
-        getEngine().convertForComposing(word, previousBengali, secondPreviousBengali)
+        applyUserPreference(word, getEngine().convertForComposing(word, previousBengali, secondPreviousBengali))
 
-    fun getCompositionPreview(word: String): String = getEngine().getCompositionPreview(word)
+    fun getCompositionPreview(word: String): String = convertForComposing(word).bengali
 
     /** S28: rule-only instant echo — safe on the UI thread (see SmartEngine). */
     /**
