@@ -31,7 +31,12 @@ enum class VoiceInputState {
     /** S55 (F-ANDROID-006): the offline Bangla speech pack is not installed
      *  and no online recognizer is reachable — never leave a live listening
      *  chip on screen for this case, show the actionable message instead. */
-    OFFLINE_PACK_MISSING
+    OFFLINE_PACK_MISSING,
+    /** S55 (review follow-up): ERROR_CLIENT/ERROR_RECOGNIZER_BUSY kept
+     *  restarting past the busy-retry cap (a stolen recognition slot never
+     *  clears on its own) — give up with an actionable message instead of
+     *  destroy+recreate looping forever. */
+    BUSY_GIVEUP
 }
 
 enum class ThemeMode {

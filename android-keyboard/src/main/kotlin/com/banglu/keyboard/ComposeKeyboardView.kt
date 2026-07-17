@@ -739,6 +739,8 @@ private fun VoiceStatusPanel(
         VoiceInputState.WATCHDOG_TIMEOUT -> "\u09ad\u09df\u09c7\u09b8 \u099a\u09be\u09b2\u09c1 \u09b9\u09b2\u09cb \u09a8\u09be"
         // S55 (F-ANDROID-006): offline Bangla speech pack missing, no network
         VoiceInputState.OFFLINE_PACK_MISSING -> "\u0985\u09ab\u09b2\u09be\u0987\u09a8\u09c7 \u09ac\u09be\u0982\u09b2\u09be \u09ad\u09df\u09c7\u09b8 \u09aa\u09cd\u09af\u09be\u0995 \u09a8\u09c7\u0987"
+        // S55 (review follow-up): busy-retry cap exceeded
+        VoiceInputState.BUSY_GIVEUP -> "\u09ad\u09df\u09c7\u09b8 \u098f\u0996\u09a8 \u09ac\u09cd\u09af\u09b8\u09cd\u09a4"
         VoiceInputState.IDLE -> ""
     }
     val detail = when (state) {
@@ -748,12 +750,14 @@ private fun VoiceStatusPanel(
         VoiceInputState.ERROR -> "\u09ae\u09be\u0987\u0995 \u099a\u09c7\u0995 \u0995\u09b0\u09c7 \u0986\u09ac\u09be\u09b0 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8"
         VoiceInputState.WATCHDOG_TIMEOUT -> "\u0986\u09ac\u09be\u09b0 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8"
         VoiceInputState.OFFLINE_PACK_MISSING -> "\u0987\u09a8\u09cd\u099f\u09be\u09b0\u09a8\u09c7\u099f \u099a\u09be\u09b2\u09c1 \u0995\u09b0\u09c1\u09a8 \u09ac\u09be Google \u0985\u09cd\u09af\u09be\u09aa \u09a5\u09c7\u0995\u09c7 \u09ac\u09be\u0982\u09b2\u09be \u09aa\u09cd\u09af\u09be\u0995 \u09a8\u09be\u09ae\u09be\u09a8"
+        VoiceInputState.BUSY_GIVEUP -> "\u098f\u0995\u099f\u09c1 \u09aa\u09b0\u09c7 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8"
         else -> ""
     }
     val isActive = state == VoiceInputState.LISTENING || state == VoiceInputState.PROCESSING
     val isTrouble = state == VoiceInputState.ERROR ||
         state == VoiceInputState.PERMISSION_REQUIRED ||
         state == VoiceInputState.UNAVAILABLE ||
+        state == VoiceInputState.BUSY_GIVEUP ||
         state == VoiceInputState.WATCHDOG_TIMEOUT ||
         state == VoiceInputState.OFFLINE_PACK_MISSING
     Row(

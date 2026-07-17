@@ -236,6 +236,10 @@ class BangluIMEService : InputMethodService(),
         /** Consecutive no-speech listen cycles before dictation auto-stops. */
         private const val VOICE_MAX_FRUITLESS_RESTARTS = 3
 
+        /** S55 (review follow-up): consecutive ERROR_CLIENT/ERROR_RECOGNIZER_BUSY
+         *  restarts before giving up with BUSY_GIVEUP instead of looping. */
+        private const val VOICE_MAX_BUSY_RESTARTS = 2
+
         /** In-app signal from [VoicePermissionActivity]: disclosure accepted —
          *  resume dictation without a second mic tap. */
         const val ACTION_VOICE_DISCLOSURE_ACCEPTED = "com.banglu.keyboard.VOICE_DISCLOSURE_ACCEPTED"
@@ -1064,6 +1068,14 @@ class BangluIMEService : InputMethodService(),
      *  user walked away — after the cap we stop gracefully to STOPPED. */
     private var voiceFruitlessRestarts = 0
 
+    /** S55 (review follow-up): consecutive ERROR_CLIENT/ERROR_RECOGNIZER_BUSY
+     *  cycles. Unlike the watchdog (armed for a recognizer that never calls
+     *  back at all), a stuck-busy recognizer DOES call back every time — so
+     *  only a counted cap stops a device with a permanently stolen
+     *  recognition slot from destroy+recreate looping forever. Reset at
+     *  session start and on any real progress (onBeginningOfSpeech). */
+    private var voiceBusyRestarts = 0
+
     private val voiceDisclosureReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != ACTION_VOICE_DISCLOSURE_ACCEPTED) return
@@ -1690,6 +1702,7 @@ class BangluIMEService : InputMethodService(),
         voicePartialCommitJob = null
         voiceLastAutoCommittedPartial = null
         voiceFruitlessRestarts = 0
+        voiceBusyRestarts = 0
         voiceTokenRefineJob?.cancel()
         voiceTokenRefineJob = null
         voicePartialGeneration++
@@ -1753,6 +1766,11 @@ class BangluIMEService : InputMethodService(),
         voicePartialCommitJob?.cancel()
         voiceRestartJob?.cancel()
         voiceRestartJob = null
+        // S55 (review follow-up): a token-refine job from a partial that was
+        // still rendering when the watchdog fired would otherwise become an
+        // orphaned coroutine that could still patch text after teardown.
+        voiceTokenRefineJob?.cancel()
+        voiceTokenRefineJob = null
         releaseSpeechRecognizer()
         voiceDictationActive = false
         voiceStopRequested = false
@@ -1779,6 +1797,7 @@ class BangluIMEService : InputMethodService(),
                 disarmVoiceWatchdog()
                 log("voice: beginning")
                 voiceFruitlessRestarts = 0
+                voiceBusyRestarts = 0
                 voicePartialCommitJob?.cancel()
                 commitVoicePartialForMeasuredPause()
                 voiceInputState.value = VoiceInputState.LISTENING
@@ -1835,7 +1854,9 @@ class BangluIMEService : InputMethodService(),
                     error = error,
                     offlineRetryUsed = voiceOfflineRetryUsed,
                     fruitlessRestarts = voiceFruitlessRestarts,
-                    maxFruitlessRestarts = VOICE_MAX_FRUITLESS_RESTARTS
+                    maxFruitlessRestarts = VOICE_MAX_FRUITLESS_RESTARTS,
+                    busyRestarts = voiceBusyRestarts,
+                    maxBusyRestarts = VOICE_MAX_BUSY_RESTARTS
                 )
                 when (action) {
                     VoiceSessionPolicy.VoiceAction.RetryOffline -> {
@@ -1848,6 +1869,8 @@ class BangluIMEService : InputMethodService(),
                     VoiceSessionPolicy.VoiceAction.RestartSameMode -> {
                         if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
                             voiceFruitlessRestarts++
+                        } else if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+                            voiceBusyRestarts++
                         }
                         commitLiveVoicePartialBeforeRestart(error)
                         restartVoiceRecognitionSoon(afterError = true)
@@ -1860,6 +1883,10 @@ class BangluIMEService : InputMethodService(),
                         finishVoiceComposingText()
                     }
                     is VoiceSessionPolicy.VoiceAction.ShowMessage -> {
+                        if (action.state == VoiceInputState.BUSY_GIVEUP) {
+                            log("voice: busy-retry cap ($VOICE_MAX_BUSY_RESTARTS) exceeded, giving up")
+                        }
+                        voiceBusyRestarts = 0
                         voiceDictationActive = false
                         voiceInputState.value = action.state
                         if (action.state != VoiceInputState.IDLE) resetVoiceStateSoon()
@@ -2263,8 +2290,12 @@ class BangluIMEService : InputMethodService(),
                 if (refinedSegment.isEmpty() || refinedSegment == cleanSegment) return@launch
                 val refinedCommitted = punctuateVoiceSegment(refinedSegment, punctuation)
                 if (refinedCommitted == expectedCommitted) return@launch
-                if (sessionToken != imeTextSessionToken) {
-                    log("voice: final refine skipped — IME session changed")
+                // S55 (review follow-up): same guard set renderVoicePartialIncrementally's
+                // refine uses (imeSessionVisible + voiceDictationActive + session
+                // token) — a session that ended or moved on must not still be
+                // patched by a stale correction.
+                if (!imeSessionVisible || !voiceDictationActive || sessionToken != imeTextSessionToken) {
+                    log("voice: final refine skipped — IME session ended or changed")
                     return@launch
                 }
                 val patchIc = currentInputConnection ?: return@launch
@@ -2624,7 +2655,8 @@ class BangluIMEService : InputMethodService(),
                         voiceInputState.value == VoiceInputState.PERMISSION_REQUIRED ||
                         voiceInputState.value == VoiceInputState.UNAVAILABLE ||
                         voiceInputState.value == VoiceInputState.WATCHDOG_TIMEOUT ||
-                        voiceInputState.value == VoiceInputState.OFFLINE_PACK_MISSING
+                        voiceInputState.value == VoiceInputState.OFFLINE_PACK_MISSING ||
+                        voiceInputState.value == VoiceInputState.BUSY_GIVEUP
                     )
             ) {
                 voiceInputState.value = VoiceInputState.IDLE

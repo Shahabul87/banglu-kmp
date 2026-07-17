@@ -88,12 +88,20 @@ object VoiceSessionPolicy {
      * @param fruitlessRestarts consecutive NO_MATCH/SPEECH_TIMEOUT cycles
      *   already counted BEFORE this one
      * @param maxFruitlessRestarts session cap on consecutive silent cycles
+     * @param busyRestarts consecutive ERROR_CLIENT/ERROR_RECOGNIZER_BUSY
+     *   cycles already counted BEFORE this one — a device with a stolen
+     *   recognition slot (trace §5) can return BUSY forever; unlike the
+     *   watchdog (no callback at all), this IS a callback every time, so
+     *   only a counted cap stops the "restart forever" loop.
+     * @param maxBusyRestarts session cap on consecutive busy cycles
      */
     fun onError(
         error: Int,
         offlineRetryUsed: Boolean,
         fruitlessRestarts: Int,
-        maxFruitlessRestarts: Int
+        maxFruitlessRestarts: Int,
+        busyRestarts: Int,
+        maxBusyRestarts: Int
     ): VoiceAction {
         if (error in OFFLINE_PACK_MISSING_ERRORS) {
             return VoiceAction.ShowMessage(VoiceInputState.OFFLINE_PACK_MISSING)
@@ -114,7 +122,12 @@ object VoiceSessionPolicy {
             }
         }
         if (error in BUSY_CLASS_ERRORS) {
-            return VoiceAction.RestartSameMode
+            val nextBusyCount = busyRestarts + 1
+            return if (nextBusyCount > maxBusyRestarts) {
+                VoiceAction.ShowMessage(VoiceInputState.BUSY_GIVEUP)
+            } else {
+                VoiceAction.RestartSameMode
+            }
         }
         return when (error) {
             ERROR_INSUFFICIENT_PERMISSIONS -> VoiceAction.ShowMessage(VoiceInputState.PERMISSION_REQUIRED)
