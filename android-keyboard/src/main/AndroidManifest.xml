@@ -23,8 +23,13 @@
     <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
     <uses-permission android:name="com.android.vending.BILLING" tools:node="remove" />
-    <!-- Used by BangluIMEService.isNetworkAvailable(); previously only merged
-         in transitively from the billing/auth libraries. -->
+    <!-- S55 (F-ANDROID-006): BangluIMEService.isNetworkAvailable() was removed
+         — without this permission, ConnectivityManager.activeNetwork silently
+         degrades on some OEM builds instead of throwing, which had made voice
+         typing's offline/online guess wrong on those devices. The recognizer's
+         own errors now drive that decision instead. This removal stays
+         regardless (previously only merged in transitively from the
+         billing/auth libraries) — it is the "zero network capability" proof. -->
 
     <!-- Keep hardware features optional to preserve the old Play device reach. -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />

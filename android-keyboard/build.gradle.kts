@@ -93,6 +93,11 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling) {
         exclude(group = "androidx.activity", module = "activity-compose")
     }
+
+    // S55: pure-Kotlin unit tests (VoiceSessionPolicy) — no Robolectric/
+    // Android runtime needed, JUnit4 to match AGP's default unit-test runner.
+    testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlin.test.junit)
 }
 
 val verifyImePrivacyBoundary by tasks.registering {

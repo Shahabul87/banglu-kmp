@@ -179,6 +179,11 @@ fun BangluHomeScreen() {
 
     var demoInput by remember { mutableStateOf("") }
     var isEnabled by remember { mutableStateOf(isKeyboardEnabled(context)) }
+    // S55 (F-ANDROID-007): once the user has been sent to Android's keyboard
+    // settings at least once, a still-disabled toggle on return means they
+    // likely pressed Back on the second ("restart apps?") confirmation —
+    // the guide must say so instead of repeating the generic first-visit copy.
+    var attemptedKeyboardEnable by remember { mutableStateOf(false) }
     var isDefault by remember { mutableStateOf(isKeyboardDefault(context)) }
     var visible by remember { mutableStateOf(false) }
     val homeListState = rememberLazyListState()
@@ -399,9 +404,21 @@ fun BangluHomeScreen() {
                             !isEnabled -> {
                                 SetupCTA(
                                     label = "কীবোর্ড সক্রিয় করুন →",
-                                    sublabel = "ধাপ ১/৩ — সেটিংসে Banglu চালু করুন",
+                                    // S55 (F-ANDROID-007): Android shows TWO confirmations when
+                                    // enabling a keyboard — a novice who taps OK on the first and
+                                    // Back on the second leaves Banglu disabled with no explanation.
+                                    // First visit: warn about both up front. Return-still-disabled
+                                    // (existing isEnabled polling already detects this): say so.
+                                    sublabel = if (attemptedKeyboardEnable) {
+                                        "টগল এখনো বন্ধ আছে — সেটিংসে দ্বিতীয় নিশ্চিতকরণে Back চাপলে Banglu চালু হয় না, আবার চেষ্টা করে দুটি নিশ্চিতকরণেই OK চাপুন"
+                                    } else {
+                                        "ধাপ ১/৩ — সেটিংসে Banglu চালু করুন। দুটি নিশ্চিতকরণ আসবে — দুটোতেই OK চাপুন"
+                                    },
                                     color = Coral,
-                                    onClick = { context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) }
+                                    onClick = {
+                                        attemptedKeyboardEnable = true
+                                        context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+                                    }
                                 )
                             }
                             !isDefault -> {

@@ -735,6 +735,10 @@ private fun VoiceStatusPanel(
         VoiceInputState.PERMISSION_REQUIRED -> "\u09ae\u09be\u0987\u0995\u09cd\u09b0\u09cb\u09ab\u09cb\u09a8 \u09aa\u09be\u09b0\u09ae\u09bf\u09b6\u09a8 \u09a6\u09bf\u09a8"
         VoiceInputState.UNAVAILABLE -> "\u09ad\u09df\u09c7\u09b8 \u09b8\u09be\u09b0\u09cd\u09ad\u09bf\u09b8 \u09aa\u09be\u0993\u09df\u09be \u09af\u09be\u09df\u09a8\u09bf"
         VoiceInputState.ERROR -> "\u0986\u09ac\u09be\u09b0 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8"
+        // S55 (F-ANDROID-006): watchdog fired, no recognizer callback arrived
+        VoiceInputState.WATCHDOG_TIMEOUT -> "\u09ad\u09df\u09c7\u09b8 \u099a\u09be\u09b2\u09c1 \u09b9\u09b2\u09cb \u09a8\u09be"
+        // S55 (F-ANDROID-006): offline Bangla speech pack missing, no network
+        VoiceInputState.OFFLINE_PACK_MISSING -> "\u0985\u09ab\u09b2\u09be\u0987\u09a8\u09c7 \u09ac\u09be\u0982\u09b2\u09be \u09ad\u09df\u09c7\u09b8 \u09aa\u09cd\u09af\u09be\u0995 \u09a8\u09c7\u0987"
         VoiceInputState.IDLE -> ""
     }
     val detail = when (state) {
@@ -742,12 +746,16 @@ private fun VoiceStatusPanel(
         VoiceInputState.PERMISSION_REQUIRED -> "Banglu \u0985\u09cd\u09af\u09be\u09aa\u09c7 \u0985\u09a8\u09c1\u09ae\u09a4\u09bf \u099a\u09be\u09b2\u09c1 \u0995\u09b0\u09c1\u09a8"
         VoiceInputState.UNAVAILABLE -> "\u09a1\u09bf\u09ad\u09be\u0987\u09b8\u09c7 speech service \u09a8\u09c7\u0987"
         VoiceInputState.ERROR -> "\u09ae\u09be\u0987\u0995 \u099a\u09c7\u0995 \u0995\u09b0\u09c7 \u0986\u09ac\u09be\u09b0 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8"
+        VoiceInputState.WATCHDOG_TIMEOUT -> "\u0986\u09ac\u09be\u09b0 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8"
+        VoiceInputState.OFFLINE_PACK_MISSING -> "\u0987\u09a8\u09cd\u099f\u09be\u09b0\u09a8\u09c7\u099f \u099a\u09be\u09b2\u09c1 \u0995\u09b0\u09c1\u09a8 \u09ac\u09be Google \u0985\u09cd\u09af\u09be\u09aa \u09a5\u09c7\u0995\u09c7 \u09ac\u09be\u0982\u09b2\u09be \u09aa\u09cd\u09af\u09be\u0995 \u09a8\u09be\u09ae\u09be\u09a8"
         else -> ""
     }
     val isActive = state == VoiceInputState.LISTENING || state == VoiceInputState.PROCESSING
     val isTrouble = state == VoiceInputState.ERROR ||
         state == VoiceInputState.PERMISSION_REQUIRED ||
-        state == VoiceInputState.UNAVAILABLE
+        state == VoiceInputState.UNAVAILABLE ||
+        state == VoiceInputState.WATCHDOG_TIMEOUT ||
+        state == VoiceInputState.OFFLINE_PACK_MISSING
     Row(
         modifier = Modifier
             .fillMaxWidth()

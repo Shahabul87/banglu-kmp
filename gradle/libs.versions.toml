@@ -38,6 +38,7 @@ sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sq
 sqldelight-android = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
 sqldelight-native = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 material = { module = "com.google.android.material:material", version.ref = "material" }
 billing = { module = "com.android.billingclient:billing", version.ref = "billing" }
 credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }

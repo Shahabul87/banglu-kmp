@@ -8,8 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.inputmethodservice.InputMethodService
 import android.os.Bundle
 import android.os.Build
@@ -155,6 +153,19 @@ class BangluIMEService : InputMethodService(),
     private var voiceResetJob: Job? = null
     private var voiceLastAutoCommittedPartial: String? = null
     private var voicePreferOfflineForSession = false
+    /** S55: guards the ONE network-class (ERROR_NETWORK/_TIMEOUT/SERVER/
+     *  _DISCONNECTED) offline retry per dictation session — see
+     *  VoiceSessionPolicy. Reset at the top of every fresh onVoiceInput(). */
+    private var voiceOfflineRetryUsed = false
+    /** S55 (F-ANDROID-006): fires if startListening() gets no
+     *  RecognitionListener callback at all within the timeout — the
+     *  recognizer is dead, not slow. Disarmed by every callback. */
+    private var voiceWatchdogJob: Job? = null
+    /** S55: bumped each time a NEW partial arrives; the async token-refine
+     *  pass only applies its result if this is still the current generation
+     *  (buffer-guard, same idiom as updateComposingAsync's `buffer == snapshot`). */
+    private var voicePartialGeneration = 0
+    private var voiceTokenRefineJob: Job? = null
     private var rawCommitInputMode = false
     private var privateInputMode = false
     private var lastCommittedTextLength = 0
@@ -210,16 +221,17 @@ class BangluIMEService : InputMethodService(),
         private const val VOICE_POSSIBLY_COMPLETE_SILENCE_MS = 2_800
         private const val VOICE_RESTART_DELAY_MS = 250L
         private const val VOICE_ERROR_RESTART_DELAY_MS = 650L
+        /** S55 (F-ANDROID-006): if no RecognitionListener callback arrives
+         *  within this window after startListening(), assume the recognizer
+         *  is dead (battery-restricted service, stolen recognition slot, a
+         *  disabled/crashing OEM stub) and reset instead of hanging. */
+        private const val VOICE_WATCHDOG_TIMEOUT_MS = 6_000L
         private const val VOICE_COMMA_PAUSE_MS = 1_400L
         private const val VOICE_DARI_PAUSE_MS = 2_800L
         private const val VOICE_FINAL_PUNCTUATION_PAUSE_MS = 3_200L
         private const val VOICE_DELETE_SOURCE = "voice_delete"
         private const val PUNCTUATION_SOURCE = "gap_punctuation"
         private const val PREF_VOICE_DISCLOSURE_ACCEPTED = "voice_disclosure_accepted"
-
-        /** SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED / _UNAVAILABLE (API 31+ constants, stable ints). */
-        private const val VOICE_ERROR_LANGUAGE_NOT_SUPPORTED = 12
-        private const val VOICE_ERROR_LANGUAGE_UNAVAILABLE = 13
 
         /** Consecutive no-speech listen cycles before dictation auto-stops. */
         private const val VOICE_MAX_FRUITLESS_RESTARTS = 3
@@ -1106,6 +1118,8 @@ class BangluIMEService : InputMethodService(),
             voicePartialCommitJob = null
             voiceResetJob?.cancel()
             voiceResetJob = null
+            voiceTokenRefineJob?.cancel()
+            voiceTokenRefineJob = null
         }
     }
 
@@ -1638,10 +1652,15 @@ class BangluIMEService : InputMethodService(),
             return
         }
 
-        voicePreferOfflineForSession = prefs.getBoolean(PREF_VOICE_OFFLINE_PREFERRED, false) || !isNetworkAvailable()
-        if (voicePreferOfflineForSession) {
-            log("onVoiceInput: no network, trying offline-preferred recognizer")
-        }
+        // S55 (F-ANDROID-006): the first attempt is ALWAYS the default
+        // (online-capable) recognizer unless the user explicitly opted into
+        // offline in Settings. Deciding this from ConnectivityManager was the
+        // gamble that caused airplane-mode-shaped failures on devices that
+        // silently degrade instead of throwing without ACCESS_NETWORK_STATE
+        // (removed for privacy — see AndroidManifest.xml) — the recognizer's
+        // own onError now drives any offline fallback (see VoiceSessionPolicy).
+        voicePreferOfflineForSession = prefs.getBoolean(PREF_VOICE_OFFLINE_PREFERRED, false)
+        voiceOfflineRetryUsed = false
 
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             log("onVoiceInput: SpeechRecognizer unavailable")
@@ -1671,6 +1690,9 @@ class BangluIMEService : InputMethodService(),
         voicePartialCommitJob = null
         voiceLastAutoCommittedPartial = null
         voiceFruitlessRestarts = 0
+        voiceTokenRefineJob?.cancel()
+        voiceTokenRefineJob = null
+        voicePartialGeneration++
 
         startVoiceRecognition()
     }
@@ -1688,33 +1710,73 @@ class BangluIMEService : InputMethodService(),
             putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, voicePreferOfflineForSession || !isNetworkAvailable())
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, voicePreferOfflineForSession)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, VOICE_COMPLETE_SILENCE_MS)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, VOICE_POSSIBLY_COMPLETE_SILENCE_MS)
             putExtra(RecognizerIntent.EXTRA_PROMPT, "বাংলায় বলুন")
         }
 
         try {
-            log("onVoiceInput: startListening $VOICE_LANGUAGE offline=${voicePreferOfflineForSession || !isNetworkAvailable()}")
+            log("onVoiceInput: startListening $VOICE_LANGUAGE offline=$voicePreferOfflineForSession")
             voiceInputState.value = VoiceInputState.PROCESSING
             voiceInputLevel.value = 0f
+            armVoiceWatchdog()
             recognizer.startListening(intent)
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Voice typing failed to start", e)
+            disarmVoiceWatchdog()
             voiceDictationActive = false
             voiceInputState.value = VoiceInputState.ERROR
             resetVoiceStateSoon()
         }
     }
 
+    /** S55 (F-ANDROID-006): arms a timeout that fires if `startListening()`
+     *  gets NO RecognitionListener callback at all — the class of failure the
+     *  audit reproduced (a bound RecognitionService that never responds).
+     *  Every callback in [createVoiceRecognitionListener] disarms this. */
+    private fun armVoiceWatchdog() {
+        voiceWatchdogJob?.cancel()
+        voiceWatchdogJob = serviceScope.launch {
+            delay(VOICE_WATCHDOG_TIMEOUT_MS)
+            log("voice: watchdog fired — no recognizer callback within ${VOICE_WATCHDOG_TIMEOUT_MS}ms")
+            onVoiceWatchdogTimeout()
+        }
+    }
+
+    private fun disarmVoiceWatchdog() {
+        voiceWatchdogJob?.cancel()
+        voiceWatchdogJob = null
+    }
+
+    private fun onVoiceWatchdogTimeout() {
+        voicePartialCommitJob?.cancel()
+        voiceRestartJob?.cancel()
+        voiceRestartJob = null
+        releaseSpeechRecognizer()
+        voiceDictationActive = false
+        voiceStopRequested = false
+        voiceCancelRequested = false
+        voiceHasLiveComposing = false
+        voiceInputLevel.value = 0f
+        finishVoiceComposingText()
+        when (val action = VoiceSessionPolicy.onWatchdogTimeout()) {
+            is VoiceSessionPolicy.VoiceAction.ShowMessage -> voiceInputState.value = action.state
+            else -> voiceInputState.value = VoiceInputState.WATCHDOG_TIMEOUT
+        }
+        resetVoiceStateSoon()
+    }
+
     private fun createVoiceRecognitionListener(): RecognitionListener {
         return object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
+                disarmVoiceWatchdog()
                 log("voice: ready")
                 voiceInputState.value = VoiceInputState.LISTENING
             }
 
             override fun onBeginningOfSpeech() {
+                disarmVoiceWatchdog()
                 log("voice: beginning")
                 voiceFruitlessRestarts = 0
                 voicePartialCommitJob?.cancel()
@@ -1723,10 +1785,14 @@ class BangluIMEService : InputMethodService(),
             }
 
             override fun onRmsChanged(rmsdB: Float) {
+                disarmVoiceWatchdog()
                 voiceInputLevel.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
             }
-            override fun onBufferReceived(buffer: ByteArray?) = Unit
+            override fun onBufferReceived(buffer: ByteArray?) {
+                disarmVoiceWatchdog()
+            }
             override fun onEndOfSpeech() {
+                disarmVoiceWatchdog()
                 log("voice: end")
                 voiceLastSpeechEndedAt = System.currentTimeMillis()
                 voiceInputState.value = if (voiceStopRequested) VoiceInputState.STOPPED else VoiceInputState.PROCESSING
@@ -1735,69 +1801,74 @@ class BangluIMEService : InputMethodService(),
             }
 
             override fun onError(error: Int) {
+                disarmVoiceWatchdog()
                 log("voice: error=$error")
                 voicePartialCommitJob?.cancel()
                 voiceInputLevel.value = 0f
-                if (voiceStopRequested && !voiceCancelRequested) {
+                if (voiceCancelRequested) {
+                    // stopVoiceInput(cancel=true) already fully reset the UI
+                    // state and text synchronously; a late error callback for
+                    // an already-canceled session must not override it.
+                    log("voice: error=$error after cancel, ignoring")
+                    return
+                }
+                if (voiceStopRequested) {
                     voiceDictationActive = false
                     voiceInputState.value = VoiceInputState.STOPPED
                     finishVoiceComposingText()
                     showVoiceDeleteAction()
                     return
                 }
-                // Language not available for bn-BD on this recognizer: if we were
-                // forcing offline, drop the preference and retry online once;
-                // otherwise surface UNAVAILABLE instead of a generic error.
-                if (error == VOICE_ERROR_LANGUAGE_NOT_SUPPORTED || error == VOICE_ERROR_LANGUAGE_UNAVAILABLE) {
-                    if (voicePreferOfflineForSession && isNetworkAvailable()) {
-                        voicePreferOfflineForSession = false
-                        log("voice: bn model unavailable offline, retrying online")
-                        restartVoiceRecognitionSoon(afterError = true)
-                    } else {
-                        voiceDictationActive = false
-                        voiceInputState.value = VoiceInputState.UNAVAILABLE
-                        resetVoiceStateSoon()
-                    }
+                if (!voiceDictationActive) {
+                    // Stray callback after the session already finished on its
+                    // own (e.g. a late error racing a just-completed onResults)
+                    // — nothing to restart or report, the UI already moved on.
+                    log("voice: error=$error after session already ended, ignoring")
                     return
                 }
-                // Silence cap: NO_MATCH/SPEECH_TIMEOUT cycles with nothing heard.
-                if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                    voiceFruitlessRestarts++
-                    if (voiceFruitlessRestarts >= VOICE_MAX_FRUITLESS_RESTARTS) {
-                        log("voice: $voiceFruitlessRestarts silent cycles — stopping dictation")
+
+                // S55 (F-ANDROID-006): every branch below now comes from
+                // VoiceSessionPolicy's pure decision table (unit-pinned in
+                // VoiceSessionPolicyTest) instead of the old isNetworkAvailable()
+                // gamble — never leaves a listening chip that cannot deliver.
+                val action = VoiceSessionPolicy.onError(
+                    error = error,
+                    offlineRetryUsed = voiceOfflineRetryUsed,
+                    fruitlessRestarts = voiceFruitlessRestarts,
+                    maxFruitlessRestarts = VOICE_MAX_FRUITLESS_RESTARTS
+                )
+                when (action) {
+                    VoiceSessionPolicy.VoiceAction.RetryOffline -> {
+                        voiceOfflineRetryUsed = true
+                        voicePreferOfflineForSession = true
+                        log("voice: network-class error=$error, retrying once with offline preference")
+                        commitLiveVoicePartialBeforeRestart(error)
+                        restartVoiceRecognitionSoon(afterError = true)
+                    }
+                    VoiceSessionPolicy.VoiceAction.RestartSameMode -> {
+                        if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                            voiceFruitlessRestarts++
+                        }
+                        commitLiveVoicePartialBeforeRestart(error)
+                        restartVoiceRecognitionSoon(afterError = true)
+                    }
+                    VoiceSessionPolicy.VoiceAction.GracefulStop -> {
+                        log("voice: graceful stop after error=$error")
                         voiceFruitlessRestarts = 0
                         voiceDictationActive = false
                         voiceInputState.value = VoiceInputState.STOPPED
                         finishVoiceComposingText()
-                        return
+                    }
+                    is VoiceSessionPolicy.VoiceAction.ShowMessage -> {
+                        voiceDictationActive = false
+                        voiceInputState.value = action.state
+                        if (action.state != VoiceInputState.IDLE) resetVoiceStateSoon()
                     }
                 }
-                if (
-                    voiceDictationActive &&
-                    !voiceStopRequested &&
-                    !voiceCancelRequested &&
-                    isRestartableVoiceError(error)
-                ) {
-                    val partial = voiceCurrentPartial.trim()
-                    if (partial.isNotEmpty()) {
-                        log("voice: committing live partial before restart error=$error text='$partial'")
-                        voiceLastAutoCommittedPartial = partial
-                        commitVoiceFinalText(partial, " ")
-                    }
-                    restartVoiceRecognitionSoon(afterError = true)
-                    return
-                }
-
-                voiceDictationActive = false
-                voiceInputState.value = when (error) {
-                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> VoiceInputState.PERMISSION_REQUIRED
-                    SpeechRecognizer.ERROR_CLIENT -> VoiceInputState.IDLE
-                    else -> VoiceInputState.ERROR
-                }
-                if (voiceInputState.value != VoiceInputState.IDLE) resetVoiceStateSoon()
             }
 
             override fun onResults(results: Bundle?) {
+                disarmVoiceWatchdog()
                 voicePartialCommitJob?.cancel()
                 if (voiceCancelRequested) {
                     log("voice: ignored canceled result")
@@ -1856,6 +1927,7 @@ class BangluIMEService : InputMethodService(),
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
+                disarmVoiceWatchdog()
                 val partial = partialResults
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull()
@@ -1865,7 +1937,6 @@ class BangluIMEService : InputMethodService(),
                 if (partial.isNotEmpty()) {
                     log("voice: partial='$partial'")
                     suggestions.clear()
-                    voiceCurrentPartial = partial
                     renderVoicePartialIncrementally(partial)
                     if (voiceInputState.value == VoiceInputState.PROCESSING && voiceLastSpeechEndedAt > 0L) {
                         scheduleVoicePartialCommitAfterPause()
@@ -1893,26 +1964,22 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
-    private fun isRestartableVoiceError(error: Int): Boolean {
-        if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) {
-            if (!voicePreferOfflineForSession) {
-                voicePreferOfflineForSession = true
-                log("voice: network error, retrying once with offline preference")
-                return true
-            }
-            return false
+    /** S55: shared by every VoiceSessionPolicy retry/restart action — a
+     *  partial already visible on screen must not vanish just because the
+     *  recognizer is about to be torn down and recreated. */
+    private fun commitLiveVoicePartialBeforeRestart(error: Int) {
+        val partial = voiceCurrentPartial.trim()
+        if (partial.isNotEmpty()) {
+            log("voice: committing live partial before restart error=$error text='$partial'")
+            voiceLastAutoCommittedPartial = partial
+            commitVoiceFinalText(partial, " ")
         }
-        return error == SpeechRecognizer.ERROR_NO_MATCH ||
-            error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ||
-            error == SpeechRecognizer.ERROR_CLIENT ||
-            error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
-            error == SpeechRecognizer.ERROR_SERVER ||
-            error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED ||
-            error == SpeechRecognizer.ERROR_NETWORK ||
-            error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT
     }
 
     private fun stopVoiceInput(cancel: Boolean) {
+        disarmVoiceWatchdog()
+        voiceTokenRefineJob?.cancel()
+        voiceTokenRefineJob = null
         voiceRestartJob?.cancel()
         voiceRestartJob = null
         voiceResetJob?.cancel()
@@ -1946,6 +2013,7 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun releaseSpeechRecognizer() {
+        disarmVoiceWatchdog()
         val recognizer = speechRecognizer ?: return
         try {
             recognizer.cancel()
@@ -2001,12 +2069,48 @@ class BangluIMEService : InputMethodService(),
         suggestions.clear()
     }
 
-    private fun renderVoicePartialIncrementally(partial: String) {
-        val cleanPartial = normalizeVoiceSegment(partial)
-        if (cleanPartial.isEmpty()) return
+    /**
+     * S55 (F-ANDROID-006 / trace §4): renders the RAW recognizer partial
+     * instantly using the same zero-I/O rule-only preview the keystroke path
+     * uses (never a synchronous SQLite/dictionary lookup on the callback
+     * thread), then — only if the partial actually contains a Latin token —
+     * kicks off ONE coalesced async job that computes the dictionary-quality
+     * conversion off Dispatchers.Default and re-renders if this is still the
+     * current partial (buffer-guard via [voicePartialGeneration], exactly the
+     * `buffer == snapshot` idiom updateComposingAsync uses at :508-546). The
+     * correction reuses [commitVoiceLivePartialIncrementally]'s existing
+     * diff/replace logic — no new text-patching machinery needed.
+     */
+    private fun renderVoicePartialIncrementally(rawPartial: String) {
+        voicePartialGeneration++
+        val generation = voicePartialGeneration
 
-        voiceCurrentPartial = cleanPartial
-        commitVoiceLivePartialIncrementally(cleanPartial)
+        val instantPartial = normalizeVoiceSegment(rawPartial, useInstantPreview = true)
+        if (instantPartial.isEmpty()) return
+
+        voiceCurrentPartial = instantPartial
+        commitVoiceLivePartialIncrementally(instantPartial)
+
+        if (!containsLatinToken(rawPartial)) return
+        val sessionToken = imeTextSessionToken
+        voiceTokenRefineJob?.cancel()
+        voiceTokenRefineJob = serviceScope.launch {
+            val refinedPartial = try {
+                withContext(Dispatchers.Default) { normalizeVoiceSegment(rawPartial, useInstantPreview = false) }
+            } catch (e: Throwable) {
+                if (BuildConfig.DEBUG) Log.e(TAG, "Voice partial refine failed for '$rawPartial'", e)
+                return@launch
+            }
+            if (
+                imeSessionVisible && voiceDictationActive &&
+                sessionToken == imeTextSessionToken &&
+                voicePartialGeneration == generation &&
+                refinedPartial.isNotEmpty() && refinedPartial != voiceCurrentPartial
+            ) {
+                voiceCurrentPartial = refinedPartial
+                commitVoiceLivePartialIncrementally(refinedPartial)
+            }
+        }
     }
 
     private fun commitVoiceLivePartialIncrementally(partial: String) {
@@ -2104,7 +2208,7 @@ class BangluIMEService : InputMethodService(),
         val command = handleVoiceCommand(segment)
         if (command) return
 
-        val cleanSegment = normalizeVoiceSegment(segment)
+        val cleanSegment = normalizeVoiceSegment(segment, useInstantPreview = true)
         if (cleanSegment.isEmpty()) return
 
         val committed = punctuateVoiceSegment(cleanSegment, punctuation)
@@ -2138,6 +2242,45 @@ class BangluIMEService : InputMethodService(),
         voiceHasLiveComposing = false
         voiceLastSegmentText = committed
         lastVoiceCommitLength = committed.length
+
+        // S55 (trace §4): the instant preview above is zero-I/O and may be
+        // lower quality than the dictionary-backed conversion (same trade-off
+        // as the composing preview vs. space-commit). Refine off-thread and
+        // patch the just-committed text — but ONLY if the editor still ends
+        // with exactly what we committed (same data-loss guard as
+        // deleteLastVoiceCommit): further speech, an app switch, or the user
+        // editing the text must never be silently overwritten.
+        if (containsLatinToken(segment)) {
+            val expectedCommitted = committed
+            val sessionToken = imeTextSessionToken
+            serviceScope.launch {
+                val refinedSegment = try {
+                    withContext(Dispatchers.Default) { normalizeVoiceSegment(segment, useInstantPreview = false) }
+                } catch (e: Throwable) {
+                    if (BuildConfig.DEBUG) Log.e(TAG, "Voice final refine failed for '$segment'", e)
+                    return@launch
+                }
+                if (refinedSegment.isEmpty() || refinedSegment == cleanSegment) return@launch
+                val refinedCommitted = punctuateVoiceSegment(refinedSegment, punctuation)
+                if (refinedCommitted == expectedCommitted) return@launch
+                if (sessionToken != imeTextSessionToken) {
+                    log("voice: final refine skipped — IME session changed")
+                    return@launch
+                }
+                val patchIc = currentInputConnection ?: return@launch
+                val before = patchIc.getTextBeforeCursor(expectedCommitted.length, 0)?.toString().orEmpty()
+                if (before != expectedCommitted) {
+                    log("voice: final refine skipped — editor no longer ends with the committed segment")
+                    return@launch
+                }
+                patchIc.deleteSurroundingText(expectedCommitted.length, 0)
+                patchIc.commitText(refinedCommitted, 1)
+                if (voiceLastSegmentText == expectedCommitted) {
+                    voiceLastSegmentText = refinedCommitted
+                    lastVoiceCommitLength = refinedCommitted.length
+                }
+            }
+        }
     }
 
     private fun currentCursorPosition(): Int? {
@@ -2171,7 +2314,9 @@ class BangluIMEService : InputMethodService(),
 
     private fun chooseVoiceResult(phrases: List<String>): String? {
         if (phrases.isEmpty()) return null
-        val normalized = phrases.map { normalizeVoiceSegment(it) }.filter { it.isNotEmpty() }
+        // S55: instant preview only — this just picks/displays alternatives,
+        // the chosen phrase is fully (re-)normalized by commitVoiceFinalText.
+        val normalized = phrases.map { normalizeVoiceSegment(it, useInstantPreview = true) }.filter { it.isNotEmpty() }
         val best = normalized.firstOrNull { it.any { ch -> isBengaliChar(ch) } } ?: normalized.firstOrNull()
         showVoiceAlternatives(normalized.distinct().dropWhile { it == best }.take(4))
         return best
@@ -2211,7 +2356,17 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
-    private fun normalizeVoiceSegment(segment: String): String {
+    /**
+     * @param useInstantPreview S55 (F-ANDROID-006 / trace §4): true = rule-only,
+     *   zero-I/O ([SmartEngineAdapter.convertForInstantPreview], the same
+     *   function the keystroke path uses for its sync echo) — safe to call on
+     *   the RecognitionListener's callback thread with no dictionary/SQLite
+     *   work. false = the full dictionary-backed [SmartEngineAdapter.convertWord]
+     *   — callers MUST run this off the main thread (Dispatchers.Default);
+     *   see renderVoicePartialIncrementally / commitVoiceFinalText's async
+     *   refine passes, which are the only false-callers.
+     */
+    private fun normalizeVoiceSegment(segment: String, useInstantPreview: Boolean): String {
         return segment
             .trim()
             .replace(Regex("\\s+"), " ")
@@ -2219,24 +2374,33 @@ class BangluIMEService : InputMethodService(),
             .replace(" ,", ",")
             .replace(" ?", "?")
             .replace(" !", "!")
-            .let { normalizeVoiceLatinTokens(it) }
+            .let { normalizeVoiceLatinTokens(it, useInstantPreview) }
     }
 
-    private fun normalizeVoiceLatinTokens(text: String): String {
-        if (text.none { it in 'A'..'Z' || it in 'a'..'z' }) return text
+    private fun normalizeVoiceLatinTokens(text: String, useInstantPreview: Boolean): String {
+        if (!containsLatinToken(text)) return text
         return text.split(Regex("(\\s+)"))
             .joinToString("") { token ->
-                if (token.all { it.isWhitespace() }) token else normalizeVoiceToken(token)
+                if (token.all { it.isWhitespace() }) token else normalizeVoiceToken(token, useInstantPreview)
             }
     }
 
-    private fun normalizeVoiceToken(token: String): String {
+    private fun normalizeVoiceToken(token: String, useInstantPreview: Boolean): String {
         val core = token.trim { !it.isLetterOrDigit() }
         if (core.isEmpty() || core.any { isBengaliChar(it) } || core.any { it.isDigit() }) return token
-        val converted = try { SmartEngineAdapter.convertWord(core.lowercase(Locale.ROOT)).bengali } catch (_: Exception) { core }
+        val lower = core.lowercase(Locale.ROOT)
+        val converted = try {
+            if (useInstantPreview) {
+                SmartEngineAdapter.convertForInstantPreview(lower)
+            } else {
+                SmartEngineAdapter.convertWord(lower).bengali
+            }
+        } catch (_: Exception) { core }
         if (converted == core || converted.any { it in 'A'..'Z' || it in 'a'..'z' }) return token
         return token.replace(core, converted)
     }
+
+    private fun containsLatinToken(text: String): Boolean = text.any { it in 'A'..'Z' || it in 'a'..'z' }
 
     private fun handleVoiceCommand(segment: String): Boolean {
         val clean = segment.trim().lowercase(Locale.ROOT)
@@ -2275,23 +2439,6 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun isBengaliChar(ch: Char): Boolean = ch in '\u0980'..'\u09FF'
-
-    private fun isNetworkAvailable(): Boolean {
-        // S44: the launch build ships WITHOUT ACCESS_NETWORK_STATE (zero
-        // network posture) — activeNetwork then throws SecurityException.
-        // Assume online in that case: the OS speech recognizer does its own
-        // offline fallback, and assuming offline would silently force the
-        // much weaker offline Bangla model for everyone.
-        return try {
-            val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-                ?: return true
-            val network = manager.activeNetwork ?: return false
-            val capabilities = manager.getNetworkCapabilities(network) ?: return false
-            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-        } catch (_: SecurityException) {
-            true
-        }
-    }
 
     private fun clearVoiceComposingText() {
         val ic = currentInputConnection ?: return
@@ -2475,7 +2622,9 @@ class BangluIMEService : InputMethodService(),
                 imeSessionVisible && (
                     voiceInputState.value == VoiceInputState.ERROR ||
                         voiceInputState.value == VoiceInputState.PERMISSION_REQUIRED ||
-                        voiceInputState.value == VoiceInputState.UNAVAILABLE
+                        voiceInputState.value == VoiceInputState.UNAVAILABLE ||
+                        voiceInputState.value == VoiceInputState.WATCHDOG_TIMEOUT ||
+                        voiceInputState.value == VoiceInputState.OFFLINE_PACK_MISSING
                     )
             ) {
                 voiceInputState.value = VoiceInputState.IDLE

@@ -22,7 +22,16 @@ enum class VoiceInputState {
     STOPPED,
     PERMISSION_REQUIRED,
     UNAVAILABLE,
-    ERROR
+    ERROR,
+    /** S55 (F-ANDROID-006): startListening was called but no RecognitionListener
+     *  callback arrived within the watchdog window — the recognizer is dead,
+     *  not just slow. Distinct from ERROR so the UI can give the specific
+     *  "try again" message instead of a generic failure. */
+    WATCHDOG_TIMEOUT,
+    /** S55 (F-ANDROID-006): the offline Bangla speech pack is not installed
+     *  and no online recognizer is reachable — never leave a live listening
+     *  chip on screen for this case, show the actionable message instead. */
+    OFFLINE_PACK_MISSING
 }
 
 enum class ThemeMode {
