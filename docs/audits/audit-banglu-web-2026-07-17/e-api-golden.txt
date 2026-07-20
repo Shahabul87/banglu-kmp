@@ -1,0 +1,26 @@
+Endpoint: POST https://www.bangluweb.com/api/convert
+Header: Content-Type: application/json
+
+input              HTTP  result                  expected                 verdict
+kemon acho         200   কেমন আছো                কেমন আছো                 PASS
+issa               200   ইচ্ছা                    ইচ্ছা                     PASS
+korsi              200   করছি                    করছি                     PASS
+golp               200   গল্প                    গল্প                     PASS
+bujteparcina       200   বুজ্তেপার্ছিনা           বুঝতে পারছিনা            FAIL
+ssc                200   এসএসসি                  এসএসসি                   PASS
+phd                200   পিএইচডি                 পিএইচডি                  PASS
+otp                200   ওটিপি                    ওটিপি                     PASS
+callback           200   কলব্যাক                 কলব্যাক                  PASS
+motivation         200   মোটিভেশন                মোটিভেশন                 PASS
+kacci              200   কাচ্চি                   কাচ্চি                    PASS
+kacci<space><space> 200  কাচ্চি<space><space>    কাচ্চি।<space>           FAIL
+1234567890         200   ১২৩৪৫৬৭৮৯০              ১২৩৪৫৬৭৮৯০               PASS
+assignment         200   অ্যাসাইনমেন্ট            assignment               FAIL
+
+Repeat evidence:
+attempt 2 bujteparcina -> HTTP 200, বুজ্তেপার্ছিনা, total 0.121167 s
+attempt 2 kacci<space><space> -> HTTP 200, কাচ্চি<space><space>, total 0.121142 s
+attempt 2 assignment -> HTTP 200, অ্যাসাইনমেন্ট, total 0.197292 s
+attempt 3 bujteparcina -> HTTP 200, বুজ্তেপার্ছিনা, total 0.106793 s
+attempt 3 kacci<space><space> -> HTTP 200, কাচ্চি<space><space>, total 0.110846 s
+attempt 3 assignment -> HTTP 200, অ্যাসাইনমেন্ট, total 0.122301 s

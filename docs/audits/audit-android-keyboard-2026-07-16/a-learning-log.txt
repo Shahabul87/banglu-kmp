@@ -1,0 +1,20 @@
+Learning on, fresh ranking:
+1. `ki` preview/editor = কি; strip[0] = কি; strip[1] = কী.
+2. Selecting strip[1] committed `কী `.
+3. On the next `ki`, strip[0] became `কী` (promotion happened after one pick).
+
+After process stop/reopen and Banglu re-selection:
+preview/editor = কি
+strip[0] = কী
+Space commit = কী
+
+After full emulator reboot:
+preview/editor = কি
+strip[0] = কী
+Space commit = কী
+
+Learning off after clearing the fresh audit profile's learned choices:
+initial strip[0] = কি; strip[1] = কী
+picked কী twice
+third `ki`: editor = কি; strip[0] = কি; strip[1] = কী
+

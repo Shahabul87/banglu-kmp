@@ -1,0 +1,59 @@
+All input below was entered with visible lowercase phonetic keys. No paste and no `adb input text`.
+Space committed words; the explicit EN key was used for assignment.
+
+Warm main editor, attempt 1:
+kemon acho => কেমন আছো
+issa => ইচ্ছা
+korsi => করছি
+golp => গল্প
+bujteparcina => বুজ্তেপার্ছিনা
+ssc => এসএসসি
+phd => পিএইচডি
+otp => ওটিপি
+callback preview => ছাল্ল্বাছ্ক
+callback Space commit => কলব্যাক
+motivation preview => মতিভাতিওন
+motivation Space commit => মোটিভেশন
+kacci => কাচ্চি
+double-space => U+0020 U+0020
+digits 1-0 => ১২৩৪৫৬৭৮৯০
+assignment via EN => assignment
+
+Warm main editor, attempt 2:
+callback preview => ছাল্ল্বাছ্ক; Space commit => কলব্যাক
+motivation preview => মতিভাতিওন; Space commit => মোটিভেশন
+bujteparcina => বুজ্তেপার্ছিনা
+double-space => U+0020 U+0020
+
+128 MB heap profile on 2 GB AVD:
+kemon acho => কেমন আছো
+issa => ইচ্ছা
+korsi => করছি
+golp => গল্প
+bujteparcina => বুজ্তেপার্ছিনা
+ssc => এসএসসি
+phd => পিএইচডি
+otp => ওটিপি
+callback preview => ছাল্ল্বাছ্ক; Space commit => কলব্যাক
+motivation preview => মতিভাতিওন; Space commit => মোটিভেশন
+kacci => কাচ্চি
+double-space => U+0020 U+0020
+digits 1-0 => ১২৩৪৫৬৭৮৯০
+assignment via EN => assignment
+
+Airplane-mode main editor:
+kemon acho => কেমন আছো
+issa => ইচ্ছা
+korsi => করছি
+golp => গল্প
+bujteparcina => বুজ্তেপার্ছিনা
+ssc => এসএসসি
+phd => পিএইচডি
+otp => ওটিপি
+callback preview => ছাল্ল্বাছ্ক; Space commit => কলব্যাক
+motivation preview => মতিভাতিওন; Space commit => মোটিভেশন
+kacci => কাচ্চি
+double-space => U+0020 U+0020
+digits 1-0 => ১২৩৪৫৬৭৮৯০
+assignment via EN => assignment
+

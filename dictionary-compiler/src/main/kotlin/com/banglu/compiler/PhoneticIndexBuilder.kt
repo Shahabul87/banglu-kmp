@@ -314,6 +314,13 @@ object PhoneticIndexBuilder {
         // and the reverse: জ-words are reachable via "z" (জীবন → "zibon").
         HabitRule("z_to_j") { it.replace("z", "j") },
         HabitRule("j_to_z") { it.replace("j", "z") },
+        // S56 chat register: শ্ব is PRONOUNCED as a geminated শ-শ ("bishsho"),
+        // so typists double the s — বিশ্ব "bissho"→"bisso", বিশ্বকাপ
+        // "bissokap", বিশ্বাস "bissash". Canonical emits "shw" (bishwo);
+        // rewrite to "ssh" here so the h_lazy_sh pass right below composes the
+        // lazy double-s form ("bisshokap" → "bissokap"). MUST run before
+        // h_lazy_sh (a later rule never re-triggers an earlier one — S27).
+        HabitRule("shw_gemination") { it.replace("shw", "ssh") },
         // শ/ষ emit "sh"; lazy typists press a single "s" (শুরু → "suru").
         HabitRule("h_lazy_sh") { it.replace("sh", "s") },
         // ্ব: AVRO-style "b" spelling (sw→sb), or dropped entirely (spoken form).

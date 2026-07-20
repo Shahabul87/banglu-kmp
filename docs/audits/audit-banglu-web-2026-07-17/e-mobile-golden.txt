@@ -1,0 +1,37 @@
+Method: live Android Chrome; each Latin input was entered by tapping visible Gboard keys. No paste and no adb input text.
+
+Homepage live editor:
+kemon -> preview কেমন; Space -> কেমন
+acho -> আছো; Space -> আছো
+issa -> ইচ্ছা; Space -> ইচ্ছা
+korsi -> করছি; Space -> করছি
+golp -> গল্প; Space -> গল্প
+bujteparcina -> বুজ্তেপার্ছিনা (expected বুঝতে পারছিনা)
+ssc -> এসএসসি
+phd -> পিএইচডি
+otp -> ওটিপি
+callback attempt 1 -> preview ছাল্ল্বাছ্ক; strip[0] কলব্যাক; Space commit কলব্যাক
+callback attempt 2 -> preview ছাল্ল্বাছ্ক; strip[0] কলব্যাক; Space commit কলব্যাক
+motivation attempt 1 -> preview মতিভাতিওন; strip[0] মোটিভেশন; Space commit মোটিভেশন
+motivation attempt 2 -> preview মতিভাতিওন; strip[0] মোটিভেশন; Space commit মোটিভেশন
+kacci -> কাচ্চি
+double-space attempt 1 -> কাচ্চি<space><space> (no দাঁড়ি)
+double-space attempt 2 -> কাচ্চি<space><space> (no দাঁড়ি)
+assignment -> preview অ্যাসাইনমেন্ট; only visible engine candidate অ্যাসাইনমেন্ট; Space commit অ্যাসাইনমেন্ট
+digits -> not tested validly on homepage; invalid tester attempt discarded
+
+/type mobile route:
+Output after the typed set: কেমন আছো ইচ্ছা করছি গল্প বুজ্তেপার্ছিনা এসএসসি পিএইচডি ওটিপি কলব্যাক মোটিভেশন কাচ্চি। অ্যাসাইনমেন্ট ১২৩৪৫৬৭৮৯০
+double-space end-to-end -> দাঁড়ি appeared; Gboard changed the two raw spaces to a period before conversion
+assignment -> default output অ্যাসাইনমেন্ট; an English Assignment chip was visible, but chip selection was not validly completed and is not scored
+digits -> ১২৩৪৫৬৭৮৯০
+
+/phonetic mobile route:
+Output after the typed set: কেমন আছো ইচ্ছা করছি গল্প বুজ্তেপার্ছিনা এসএসসি পিএইচডি ওটিপি কলব্যাক মোটিভেশন কাচ্চি। অ্যাসাইনমেন্ট ১২৩৪৫৬৭৮৯০
+double-space end-to-end -> দাঁড়ি appeared; Gboard changed the two raw spaces to a period before conversion
+assignment -> অ্যাসাইনমেন্ট
+digits -> ১২৩৪৫৬৭৮৯০
+
+Responsive/mobile observations:
+Homepage editor, /type, /phonetic, and CraftsAI product page fit the 1080x2400 viewport and remained usable with the keyboard open.
+The test device was an emulator, not a real phone.

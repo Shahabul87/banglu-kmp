@@ -1,0 +1,22 @@
+Wi-Fi session (no real speech source available on emulator):
+RecognitionService#onStartListening
+online and offline recognizers started; audio opened
+SodaSpeechRecognizer: Failed to get language pack required locale, error 12
+
+Airplane attempt 1:
+07-16 22:00:43.761 RecognitionService#onStartListening
+07-16 22:00:43.775 NetworkSpeechRecognizer: Recognizer network error (net::ERR_INTERNET_DISCONNECTED)
+07-16 22:00:43.789 SodaSpeechRecognizer: Failed to get language pack required locale, error 12
+
+Airplane attempt 2:
+RecognitionService#onStartListening
+NetworkSpeechRecognizer: Recognizer network error
+SodaSpeechRecognizer: Failed to get language pack required locale, error 12
+
+Emulated cellular + battery saver session:
+RecognitionService#onStartListening
+audio opened and recognizers started
+SodaSpeechRecognizer: Failed to get language pack required locale, error 12
+
+The requested BangluIME tag emitted no lines in this perf build; provider logs above were captured instead.
+

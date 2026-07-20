@@ -1,0 +1,18 @@
+Audit date/time zone: 2026-07-17 America/Los_Angeles
+Auditor: AI agent (OpenAI Codex, GPT-5 family) operating a visible Android emulator; no source or product changes
+Web build: /api/version -> {"version":"1784181626056"}
+Mobile device: Google sdk_gphone64_arm64 emulator (Pixel 7 AVD), Android 14 / API 34
+RAM: MemTotal 2025916 kB (1.93 GiB); SwapTotal 1519432 kB
+Display: 1080x2400
+Locale: en-US
+Browser: Chrome 113.0.5672.136, versionCode 567263634
+Network: Wi-Fi connected and validated, SSID AndroidWifi; airplane mode 0
+Battery saver: low_power 0
+Input method used for web testing: Gboard com.google.android.inputmethod.latin/.LatinIME
+Typing method: every test word entered by tapping the visible on-screen keys; no paste and no adb input text
+Desktop host used for HTTP measurements: macOS 26.5, Mac Studio (Apple M4 Max), 36 GB RAM
+
+Observed version lines:
+versionCode=567263634 minSdk=29 targetSdk=34
+versionName=113.0.5672.136
+ro.product.locale=en-US

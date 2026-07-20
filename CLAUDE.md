@@ -31,9 +31,11 @@ Future revenue = optional premium (AI rewrite via the :ui process, power-user
 packs). NO cloud API on the keystroke path — decided 2026-07-03 (latency,
 cost, and privacy-promise reasons; see memory + git history).
 
-**Current status (2026-07-15):** ONE ENGINE, FIVE SURFACES.
-- **Android** v1.5.34 (2071), db 3.8.5 (S52: acronym layer + English tail) — pre-launch; Play upload is the
-  pending user action (`releases/banglu-1.5.33-2070.aab`).
+**Current status (2026-07-20):** ONE ENGINE, FIVE SURFACES.
+- **Android** v1.5.36 (2073), db 3.8.6 (S56: tester round — URI-field conversion,
+  voice liveness watchdog + word-level partial diff, likh preview parity,
+  emphatic-o layer, shw→ssh chat aliases, screenshot loanword) — pre-launch;
+  Play upload is the pending user action (`releases/banglu-1.5.36-2073.aab`).
 - **Desktop editor (বাংলু এডিটর)** v1.1.0 — SHIPPED PUBLICLY (S48–S50):
   installers for macOS/Windows/Linux on the GitHub release `desktop-v1.1.0`,
   download page live at https://www.craftsai.org/products/banglu.
@@ -249,7 +251,7 @@ tier 0 = suggestible corpus words; priority 0 = canonical romanization owner,
         ▼
 dictionary.sqlite (words, phonetic_index ~1.35M rows, english_lexicon,
                    trigram_triples, disambiguation)  — version gate:
-                   DictionaryCompiler "3.8.4" == AndroidDictionaryLoader
+                   DictionaryCompiler "3.8.6" == AndroidDictionaryLoader
                    REQUIRED_DB_VERSION
         ▼  cp to android-keyboard/src/main/assets/dictionary.sqlite
         ▼  cp to ./dictionary.sqlite   ← REPO ROOT — JVM tests read THIS

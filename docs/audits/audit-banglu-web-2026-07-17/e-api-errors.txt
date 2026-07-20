@@ -1,0 +1,20 @@
+Adversarial /api/convert checks, each repeated twice:
+
+GET /api/convert
+HTTP 405
+empty body
+
+POST body: {}
+HTTP 400
+{"success":false,"error":"Text is required"}
+
+POST body: {invalid JSON
+HTTP 500
+{"success":false,"error":"Expected property name or '}' in JSON at position 1 (line 1 column 2)"}
+
+POST body: {"text":123}
+HTTP 500
+{"success":false,"error":"a.a is not a function"}
+
+Repeat 2: malformed JSON -> HTTP 500, same parser detail
+Repeat 2: numeric text -> HTTP 500, same internal minified-function detail

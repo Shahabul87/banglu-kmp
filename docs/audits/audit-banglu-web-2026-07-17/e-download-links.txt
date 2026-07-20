@@ -1,0 +1,22 @@
+Live page: https://www.craftsai.org/products/banglu
+Page response: HTTP 200, 159801 bytes
+
+Windows card:
+Public URL: https://github.com/banglu-labs/banglu-releases/releases/download/desktop-v1.1.0/Banglu-1.1.0.msi
+Range request: final HTTP 206
+Content-Range total: 134,903,609 bytes
+Page label: 129 MB
+
+macOS card:
+Public URL: https://github.com/banglu-labs/banglu-releases/releases/download/desktop-v1.1.0/Banglu-1.1.0.dmg
+Range request: final HTTP 206
+Content-Range total: 150,845,885 bytes
+Page label: 144 MB
+
+Linux card:
+Public URL: https://github.com/banglu-labs/banglu-releases/releases/download/desktop-v1.1.0/banglu_1.1.0-1_amd64.deb
+Range request: final HTTP 206
+Content-Range total: 118,002,302 bytes
+Page label: 113 MB
+
+All three links resolved and the byte totals match the rounded labels. All three public artifacts are version 1.1.0, while the current desktop product version supplied for this audit and observed installed is 1.2.0.

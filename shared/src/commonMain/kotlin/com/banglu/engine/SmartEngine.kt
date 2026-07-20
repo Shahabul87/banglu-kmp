@@ -257,7 +257,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "online", "offline",
             // S52: "late" loses to fuzzy লাতে (freq 60, not junk-classified,
             // so the lexicon rescue never fires) — vetted like time/line.
-            "late"
+            "late",
+            // S56 (tester): "screenshot" split into স্ক্রিন শত ("screen
+            // hundred") by the compound layer before the lexicon could own it
+            // — vetted intent so the loanword wins in every mode.
+            "screenshot"
         )
 
         /**
@@ -842,7 +846,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      */
     fun convertWord(input: String): ConversionResult {
         val raw = convertWordRaw(input)
-        if (inTypoCorrection || inCompoundSplit || inNegationCompound) return raw
+        if (inTypoCorrection || inCompoundSplit || inNegationCompound || inEmphaticOCompound) return raw
         val key = input.trim().lowercase()
         if (key.length < 4 || !key.all { it in 'a'..'z' }) return raw
         // S24/S26: English-intent arbitration. When an English key collides
@@ -981,6 +985,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // requires the loaded validator, so seed-only engines fall through to
         // the productive-suffix table unchanged.
         tryNegationCompound(key)?.let { result ->
+            cacheResult(cacheKey, result); return result
+        }
+
+        // S56 (tester: ashiko -> আশিক dropped the typed o): attached emphatic/
+        // vocative "o" on an attested stem — same guard architecture as the
+        // negation compound directly above (whole-word store precedence, stem
+        // attestation, validator required).
+        tryEmphaticOCompound(key)?.let { result ->
             cacheResult(cacheKey, result); return result
         }
 
@@ -1259,7 +1271,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      */
     fun convertForComposing(input: String): ConversionResult {
         val raw = convertForComposingCore(input)
-        if (inTypoCorrection || inCompoundSplit || inNegationCompound) return raw
+        if (inTypoCorrection || inCompoundSplit || inNegationCompound || inEmphaticOCompound) return raw
         val key = input.trim().lowercase()
         if (key.length < 4 || !key.all { it in 'a'..'z' }) return raw
         return tryJunkLexiconRescue(key, raw) ?: raw
@@ -1306,6 +1318,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             return result.copy(alternatives = emptyList())
         }
 
+        // S56 mirror: the commit path resolves attached emphatic-o keys via
+        // tryEmphaticOCompound before the suffix/dictionary layers; the live
+        // preview must show the same form (ashiko previews আশিকও, not the
+        // fuzzy-stolen আশিক that space would then "fix").
+        tryEmphaticOCompound(key)?.let { result ->
+            return result.copy(alternatives = emptyList())
+        }
+
         tryProductiveVerbSuffixConversion(key)?.let { result ->
             // Composed root+suffix string — gate like the committed path. Short
             // fragments stay live (same key.length >= 4 guard as the fallback).
@@ -1349,7 +1369,24 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     return corpusResult.copy(alternatives = emptyList())
                 }
             }
-            return applyCandidateLatticeRanking(key, dictionaryResult)
+            val ranked = applyCandidateLatticeRanking(key, dictionaryResult)
+            // S56 store-precedence parity (tester: "likh produces likhy words"):
+            // the commit path resolves the exact key via the store BEFORE the
+            // dictionary lattice can promote a stale extended-dict twin (likh:
+            // extended carries লিখয়@68 > লিখ@60, but Space commits the store-
+            // canonical লিখ). If the lattice moved the primary away from a
+            // word the store attests for this exact key to one it does NOT,
+            // the preview would diverge from commit — keep the store-agreeing
+            // primary and let the promotion survive only as an alternative.
+            if (ranked.bengali != dictionaryResult.bengali) {
+                val storeHits = storeLookup(key)
+                if (storeHits.any { it.bengali == dictionaryResult.bengali } &&
+                    storeHits.none { it.bengali == ranked.bengali }
+                ) {
+                    return dictionaryResult.copy(alternatives = ranked.alternatives)
+                }
+            }
+            return ranked
         }
 
         // Live composing should follow the V2 rule layer for short syllables.
@@ -1677,7 +1714,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 if (withoutOkar.isNotEmpty() && seen.add(withoutOkar)) {
                     suggestions.add(SmartSuggestion(withoutOkar, 0.90, "okar_variant", key, "tier0_okar"))
                 }
-            } else {
+            } else if (bengali.last() in 'ক'..'হ') {
+                // S56: only a bare consonant can take the -ো kar; appending it
+                // after a vowel letter (আশিকও + ো) fabricates invalid text.
                 val withOkar = bengali + "ো"
                 if (seen.add(withOkar)) {
                     suggestions.add(SmartSuggestion(withOkar, 0.88, "okar_variant", key, "tier0_okar"))
@@ -1918,6 +1957,32 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             if (acronymIndex in (maxAcronymIndex + 1) until ordered.size) {
                 val promoted = ordered.removeAt(acronymIndex)
                 ordered.add(minOf(maxAcronymIndex, ordered.size), promoted)
+            }
+        }
+
+        // S56: the emphatic-o layer's paired spelling (আশিকও primary / আশিকো
+        // vocative, or vice versa) is a second READING of the key — the tester
+        // contract is both on the strip. Match the exact ও/ো pair shape so
+        // generic high-confidence swap variants (asar -> আশার, deliberately
+        // filtered by the sibilant rules) can never ride this promotion.
+        // Same guaranteed-slot pattern as the acronym chip above.
+        val emphaticPair = primary.alternatives.filter { alt ->
+            key.endsWith("o") && (
+                (primary.bengali.endsWith("ও") && alt.bengali == primary.bengali.dropLast(1) + "ো") ||
+                    (primary.bengali.endsWith("ো") && alt.bengali == primary.bengali.dropLast(1) + "ও")
+                )
+        }
+        for (alt in emphaticPair) {
+            val altIndex = ordered.indexOfFirst { it.bengali == alt.bengali }
+            val maxAltIndex = limit - 1
+            if (altIndex in (maxAltIndex + 1) until ordered.size) {
+                val promoted = ordered.removeAt(altIndex)
+                ordered.add(minOf(maxAltIndex, ordered.size), promoted)
+            } else if (altIndex == -1 && alt.bengali.isNotEmpty()) {
+                ordered.add(
+                    minOf(maxAltIndex, ordered.size),
+                    SmartSuggestion(alt.bengali, alt.confidence, "alternative", key, "tier0")
+                )
             }
         }
         return ordered.take(limit)
@@ -3293,6 +3358,92 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             )
         }
     }
+
+    /**
+     * S56: attached emphatic/vocative "o" (tester report: ashiko -> আশিক
+     * silently dropped the typed o; the drawing asked for BOTH আশিকো and
+     * আশিকও). Productive Bengali grammar: ও attaches to any noun/pronoun
+     * ("also/too" — আমারও, আশিকও); consonant-final stems can also carry the
+     * vocative/nickname -ো (আশিকো). This layer fires ONLY when nothing owns
+     * the whole key (store guard identical to [tryNegationCompound]) and the
+     * stem resolves confidently AND is attested. The corpus frequency of the
+     * two spellings arbitrates which is primary; the other always ships as
+     * an alternative so both reach the suggestion strip.
+     */
+    private fun tryEmphaticOCompound(key: String): ConversionResult? {
+        if (inNegationCompound || inEmphaticOCompound || inCompoundSplit) return null
+        if (key.length < 5 || !key.endsWith("o") || key.endsWith("oo")) return null
+        // -to keys belong to the negation/past-habitual family (dekhto ->
+        // দেখত): tryNegationCompound returning null there means "normal
+        // pipeline", never "compose stem+ো".
+        if (key.endsWith("to")) return null
+        if (!validator.isLoaded()) return null
+
+        // Whole-word precedence: attested full-key words (amio, bhalo, holo,
+        // korbo...) belong to the store/dictionary layers, never to this one.
+        storeLookup(key).firstOrNull()?.let { top ->
+            if (top.tier == PhoneticIndexHit.TIER_A || validator.isValid(top.bengali)) {
+                return null
+            }
+        }
+        if (dictionary.lookup(key).isNotEmpty()) return null
+
+        val stemKey = key.dropLast(1)
+        inEmphaticOCompound = true
+        val prefix = try {
+            convertWord(stemKey)
+        } finally {
+            inEmphaticOCompound = false
+        }
+        if (prefix.confidence < 0.9) return null
+        val stem = prefix.bengali
+        if (stem.isEmpty()) return null
+        val stemAttested = validator.isValid(stem) ||
+            phoneticIndex?.containsWord(
+                com.banglu.engine.util.ReverseTransliterator.foldNukta(stem)
+            ) == true
+        if (!stemAttested) return null
+
+        // ও (separate letter) is always grammatical; the -ো kar spelling only
+        // exists when the stem ends in a bare consonant (no vowel sign).
+        val emphatic = stem + "ও"
+        val vocative = if (stem.last() in 'ক'..'হ') stem + "ো" else null
+        // At least one spelling must itself be corpus-attested: an unattested
+        // composition (dharmo -> ধার্মও@0) is junk by the engine's own
+        // definition and gets mangled by the wrapper's junk-rescue downstream
+        // — the old pipeline answer was better. আশিকও@1 qualifies.
+        fun attested(w: String?): Boolean = w != null && (
+            validator.isValid(w) || phoneticIndex?.containsWord(
+                com.banglu.engine.util.ReverseTransliterator.foldNukta(w)
+            ) == true
+            )
+        val emphaticAttested = attested(emphatic)
+        val vocativeAttested = attested(vocative)
+        if (!emphaticAttested && !vocativeAttested) return null
+        val primary: String
+        val alternative: String?
+        if (vocative != null && vocativeAttested &&
+            (!emphaticAttested ||
+                validator.getFrequency(vocative) > validator.getFrequency(emphatic))
+        ) {
+            primary = vocative
+            alternative = emphatic
+        } else {
+            primary = emphatic
+            alternative = vocative
+        }
+        return ConversionResult(
+            bengali = primary,
+            confidence = 0.93,
+            source = ResolutionSource.DICTIONARY,
+            // 0.95: the paired spelling is the second reading of the key
+            // (tester contract: BOTH আশিকও and আশিকো on the strip) — it must
+            // outrank fuzzy stem inflections (আশিকা/আশিকি @0.90-0.94).
+            alternatives = alternative?.let { listOf(Alternative(it, 0.95)) } ?: emptyList()
+        )
+    }
+
+    private var inEmphaticOCompound = false
 
     private fun convertByRootDecomposition(key: String): ConversionResult? {
         if (key.length < 4) return null // Too short for meaningful decomposition

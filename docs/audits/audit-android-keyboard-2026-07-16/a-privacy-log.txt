@@ -1,0 +1,19 @@
+Before typing:
+airplane_mode_on=1
+Active default network: none
+package:com.banglu.keyboard uid:10198
+`dumpsys netstats detail` contained no byte-counter history row for uid 10198 (only the UID set marker).
+
+After the full visible-key golden set:
+airplane_mode_on=1
+Active default network: none
+`dumpsys netstats detail` still contained no byte-counter history row for uid 10198.
+Process-scoped logcat filter for http/socket/network/cronet/okhttp/urlconnection returned no lines.
+
+Final editor accessibility value:
+কেমন আছো ইচ্ছা করছি গল্প বুজ্তেপার্ছিনা এসএসসি পিএইচডি ওটিপি কলব্যাক মোটিভেশন কাচ্চি  ১২৩৪৫৬৭৮৯০assignment 
+
+Restored after test:
+airplane_mode_on=0
+Active default network restored
+

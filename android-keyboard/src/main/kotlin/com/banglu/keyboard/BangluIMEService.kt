@@ -167,6 +167,11 @@ class BangluIMEService : InputMethodService(),
     private var voicePartialGeneration = 0
     private var voiceTokenRefineJob: Job? = null
     private var rawCommitInputMode = false
+
+    /** S56: URI fields (browser omnibox) — conversion stays ON but দাঁড়ি
+     *  behaviors (double-space danda, '.'→।) are suppressed so URLs stay
+     *  typeable; personal learning stays off via shouldDisablePersonalLearning. */
+    private var uriInputMode = false
     private var privateInputMode = false
     private var lastCommittedTextLength = 0
     private var lastAutoCorrectOriginal = ""
@@ -226,6 +231,18 @@ class BangluIMEService : InputMethodService(),
          *  is dead (battery-restricted service, stolen recognition slot, a
          *  disabled/crashing OEM stub) and reset instead of hanging. */
         private const val VOICE_WATCHDOG_TIMEOUT_MS = 6_000L
+
+        /** S56 (F-ONDEVICE-001): rolling liveness deadline. On real hardware
+         *  the Google recognizer can deliver ONE early callback (disarming the
+         *  start watchdog) and then wedge silently forever — mic closed after
+         *  75 ms while the chip still said "বাংলায় বলুন". Every callback
+         *  re-arms this deadline; silence past it = wedged binding. Generous
+         *  (12 s) because final-result computation on a slow network can
+         *  legitimately pause callbacks for several seconds. */
+        private const val VOICE_LIVENESS_TIMEOUT_MS = 12_000L
+
+        /** Wedge recoveries per dictation session before giving up honestly. */
+        private const val VOICE_MAX_WEDGE_RESTARTS = 2
         private const val VOICE_COMMA_PAUSE_MS = 1_400L
         private const val VOICE_DARI_PAUSE_MS = 2_800L
         private const val VOICE_FINAL_PUNCTUATION_PAUSE_MS = 3_200L
@@ -422,6 +439,7 @@ class BangluIMEService : InputMethodService(),
 
     private fun configureInputSafety(info: EditorInfo?) {
         rawCommitInputMode = shouldUseRawCommitMode(info)
+        uriInputMode = isUriInput(info)
         privateInputMode = shouldDisablePersonalLearning(info)
         if (privateInputMode || rawCommitInputMode) {
             suggestions.clear()
@@ -439,15 +457,25 @@ class BangluIMEService : InputMethodService(),
         val inputType = info?.inputType ?: return false
         val typeClass = inputType and InputType.TYPE_MASK_CLASS
         val variation = inputType and InputType.TYPE_MASK_VARIATION
+        // S56 (tester, Chrome omnibox 0x80011): TYPE_TEXT_VARIATION_URI is
+        // deliberately NOT in this list anymore — the browser address bar is
+        // where Bengali users search the most, and Gboard's transliteration
+        // converts there too. URI fields instead get uriInputMode: conversion
+        // ON, but no দাঁড়ি behaviors and (unchanged) no personal learning.
         return inputType == InputType.TYPE_NULL ||
             typeClass == InputType.TYPE_CLASS_NUMBER ||
             typeClass == InputType.TYPE_CLASS_PHONE ||
             typeClass == InputType.TYPE_CLASS_DATETIME ||
             variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
             variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS ||
-            variation == InputType.TYPE_TEXT_VARIATION_URI ||
             isPasswordInput(inputType) ||
             isOneTimeCodeInput(info)
+    }
+
+    private fun isUriInput(info: EditorInfo?): Boolean {
+        val inputType = info?.inputType ?: return false
+        return (inputType and InputType.TYPE_MASK_CLASS) == InputType.TYPE_CLASS_TEXT &&
+            (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_URI
     }
 
     private fun shouldDisablePersonalLearning(info: EditorInfo?): Boolean {
@@ -1076,6 +1104,9 @@ class BangluIMEService : InputMethodService(),
      *  session start and on any real progress (onBeginningOfSpeech). */
     private var voiceBusyRestarts = 0
 
+    /** S56: consecutive silent-wedge recoveries (see VOICE_LIVENESS_TIMEOUT_MS). */
+    private var voiceWedgeRestarts = 0
+
     private val voiceDisclosureReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != ACTION_VOICE_DISCLOSURE_ACCEPTED) return
@@ -1251,7 +1282,7 @@ class BangluIMEService : InputMethodService(),
         commitPendingBuffer()
 
         val ic = currentInputConnection ?: return
-        val output = if (keyboardMode.value == KeyboardMode.BANGLU && char == '.') '\u0964' else char
+        val output = if (keyboardMode.value == KeyboardMode.BANGLU && char == '.' && !uriInputMode) '\u0964' else char
         if (keyboardMode.value == KeyboardMode.BANGLU && isBanglaTightPunctuation(output)) {
             deleteSingleSpaceBeforeCursor(ic)
         }
@@ -1391,7 +1422,8 @@ class BangluIMEService : InputMethodService(),
                     commitBufferedWordFast(ic, appendText = " ")
                 } else {
                     // Feature 1.1: Double-space → Bengali danda + space
-                    if (doubleSpacePeriodEnabled.value && now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
+                    // (S56: never in URI fields — a danda corrupts URLs/queries)
+                    if (doubleSpacePeriodEnabled.value && !uriInputMode && now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
                         ic.deleteSurroundingText(1, 0)
                         ic.commitText("\u0964 ", 1)  // Bengali danda (।) + space
                         lastCommittedTextLength = 2
@@ -1703,6 +1735,7 @@ class BangluIMEService : InputMethodService(),
         voiceLastAutoCommittedPartial = null
         voiceFruitlessRestarts = 0
         voiceBusyRestarts = 0
+        voiceWedgeRestarts = 0
         voiceTokenRefineJob?.cancel()
         voiceTokenRefineJob = null
         voicePartialGeneration++
@@ -1711,6 +1744,10 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun startVoiceRecognition() {
+        // S56: a recognizer session's transcript starts from silence — the
+        // auto-committed prefix of the PREVIOUS session must not strip (i.e.
+        // swallow) new speech that happens to begin with the same words.
+        voiceLastAutoCommittedPartial = null
         val recognizer = speechRecognizer ?: SpeechRecognizer.createSpeechRecognizer(this).also {
             speechRecognizer = it
             it.setRecognitionListener(createVoiceRecognitionListener())
@@ -1762,7 +1799,34 @@ class BangluIMEService : InputMethodService(),
         voiceWatchdogJob = null
     }
 
+    /** S56: mid-session callbacks re-arm a rolling liveness deadline instead
+     *  of just disarming — a session that goes permanently silent after one
+     *  early callback (F-ONDEVICE-001) is a wedged recognizer binding, not a
+     *  healthy listening state. */
+    private fun pokeVoiceWatchdog() {
+        voiceWatchdogJob?.cancel()
+        voiceWatchdogJob = serviceScope.launch {
+            delay(VOICE_LIVENESS_TIMEOUT_MS)
+            log("voice: liveness deadline passed — recognizer silent mid-session")
+            onVoiceWatchdogTimeout()
+        }
+    }
+
     private fun onVoiceWatchdogTimeout() {
+        // S56 (F-ONDEVICE-001): a wedged binding is recoverable — destroy and
+        // recreate the recognizer (fresh service binding un-wedges Google's
+        // side) up to the cap, keeping any live partial. Only after the cap
+        // does the session end with a visible message.
+        if (voiceDictationActive && !voiceStopRequested && !voiceCancelRequested &&
+            voiceWedgeRestarts < VOICE_MAX_WEDGE_RESTARTS
+        ) {
+            voiceWedgeRestarts++
+            log("voice: wedge recovery $voiceWedgeRestarts/$VOICE_MAX_WEDGE_RESTARTS — recreating recognizer")
+            commitLiveVoicePartialBeforeRestart(error = -1)
+            releaseSpeechRecognizer()
+            restartVoiceRecognitionSoon(afterError = true)
+            return
+        }
         voicePartialCommitJob?.cancel()
         voiceRestartJob?.cancel()
         voiceRestartJob = null
@@ -1788,30 +1852,31 @@ class BangluIMEService : InputMethodService(),
     private fun createVoiceRecognitionListener(): RecognitionListener {
         return object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
-                disarmVoiceWatchdog()
+                pokeVoiceWatchdog()
                 log("voice: ready")
                 voiceInputState.value = VoiceInputState.LISTENING
             }
 
             override fun onBeginningOfSpeech() {
-                disarmVoiceWatchdog()
+                pokeVoiceWatchdog()
                 log("voice: beginning")
                 voiceFruitlessRestarts = 0
                 voiceBusyRestarts = 0
+                voiceWedgeRestarts = 0
                 voicePartialCommitJob?.cancel()
                 commitVoicePartialForMeasuredPause()
                 voiceInputState.value = VoiceInputState.LISTENING
             }
 
             override fun onRmsChanged(rmsdB: Float) {
-                disarmVoiceWatchdog()
+                pokeVoiceWatchdog()
                 voiceInputLevel.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
             }
             override fun onBufferReceived(buffer: ByteArray?) {
-                disarmVoiceWatchdog()
+                pokeVoiceWatchdog()
             }
             override fun onEndOfSpeech() {
-                disarmVoiceWatchdog()
+                pokeVoiceWatchdog()
                 log("voice: end")
                 voiceLastSpeechEndedAt = System.currentTimeMillis()
                 voiceInputState.value = if (voiceStopRequested) VoiceInputState.STOPPED else VoiceInputState.PROCESSING
@@ -1954,7 +2019,7 @@ class BangluIMEService : InputMethodService(),
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
-                disarmVoiceWatchdog()
+                pokeVoiceWatchdog()
                 val partial = partialResults
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull()
@@ -2142,26 +2207,20 @@ class BangluIMEService : InputMethodService(),
 
     private fun commitVoiceLivePartialIncrementally(partial: String) {
         val previous = voiceLiveCommittedPartial
+        // S56: word-level revision law lives in VoicePartialDiff (unit-pinned).
+        // A non-prefix hypothesis deletes AT MOST the diverging word tail; a
+        // fresh segment (no common word) appends and deletes nothing — the old
+        // whole-region replace erased entire sentences after long dictation.
+        val patch = VoicePartialDiff.diff(previous, partial) ?: return
         when {
-            previous.isEmpty() -> {
-                commitVoiceTextAtInsertion(partial, ensureBoundary = true)
-                voiceLiveCommittedPartial = partial
-                voiceLiveCommitLength = partial.length
+            patch.deleteCount == 0 -> {
+                commitVoiceTextAtInsertion(patch.insert, ensureBoundary = previous.isEmpty())
+                voiceLiveCommittedPartial = patch.newLiveText
+                voiceLiveCommitLength = patch.newLiveText.length
             }
-            partial == previous || previous.startsWith(partial) -> {
-                // Recognition engines sometimes send a shorter interim hypothesis.
-                // Do not delete visible text for those temporary regressions.
-                return
-            }
-            partial.startsWith(previous) -> {
-                val suffix = partial.removePrefix(previous)
-                commitVoiceTextAtInsertion(suffix)
-                voiceLiveCommittedPartial = partial
-                voiceLiveCommitLength = partial.length
-            }
-            replaceVoiceLiveText(partial) -> {
-                voiceLiveCommittedPartial = partial
-                voiceLiveCommitLength = partial.length
+            replaceVoiceLiveTail(patch) -> {
+                voiceLiveCommittedPartial = patch.newLiveText
+                voiceLiveCommitLength = patch.newLiveText.length
             }
             else -> {
                 // If the cursor moved or the host app changed the text, avoid destructive
@@ -2171,6 +2230,34 @@ class BangluIMEService : InputMethodService(),
         }
         voiceHasLiveComposing = false
         voiceLastLivePartialUpdateAt = System.currentTimeMillis()
+    }
+
+    /** S56: bounded tail replacement — deletes exactly [VoicePartialDiff.Patch.deleteCount]
+     *  chars (the diverging word tail), equality-guarded against the editor
+     *  text so a moved cursor or host-app edit can never be clobbered. */
+    private fun replaceVoiceLiveTail(patch: VoicePartialDiff.Patch): Boolean {
+        val ic = currentInputConnection ?: return false
+        val previous = voiceLiveCommittedPartial
+        if (patch.deleteCount <= 0 || patch.deleteCount > previous.length) return false
+
+        moveVoiceCursorToInsertionPoint(ic)
+        val tail = previous.takeLast(patch.deleteCount)
+        val before = ic.getTextBeforeCursor(patch.deleteCount, 0)?.toString().orEmpty()
+        if (before != tail) return false
+
+        ic.finishComposingText()
+        ic.deleteSurroundingText(patch.deleteCount, 0)
+        voiceInsertionCursor = voiceInsertionCursor?.minus(patch.deleteCount)?.coerceAtLeast(0)
+        currentVoiceSessionCommitLength =
+            (currentVoiceSessionCommitLength - patch.deleteCount).coerceAtLeast(0)
+        if (patch.insert.isNotEmpty()) {
+            ic.commitText(patch.insert, 1)
+            ic.finishComposingText()
+            voiceInsertionCursor = voiceInsertionCursor?.plus(patch.insert.length)
+            currentVoiceSessionCommitLength += patch.insert.length
+        }
+        lastVoiceCommitLength = currentVoiceSessionCommitLength
+        return true
     }
 
     private fun commitVoiceTextAtInsertion(text: String, ensureBoundary: Boolean = false) {
@@ -2243,12 +2330,21 @@ class BangluIMEService : InputMethodService(),
 
         val livePartial = voiceLiveCommittedPartial
         if (livePartial.isNotEmpty()) {
+            // S56: same word-level revision law as the partial renderer — a
+            // final transcript scoped to the recognizer's LAST segment must
+            // never replace (and thereby erase) the whole live sentence.
+            val patch = VoicePartialDiff.diff(livePartial, committed)
             when {
-                committed.startsWith(livePartial) -> {
-                    commitVoiceTextAtInsertion(committed.removePrefix(livePartial))
+                patch == null -> {
+                    // Identical, or a final SHORTER than what's on screen —
+                    // keep the screen text (data preservation beats transcript
+                    // fidelity for already-visible words).
                 }
-                replaceVoiceLiveText(committed) -> {
-                    // Replaced the visible interim text with the final transcript.
+                patch.deleteCount == 0 -> {
+                    if (patch.insert.isNotEmpty()) commitVoiceTextAtInsertion(patch.insert)
+                }
+                replaceVoiceLiveTail(patch) -> {
+                    // Tail-replaced the diverging words with the final form.
                 }
                 else -> {
                     log("voice: final does not match live partial, appending final safely")

@@ -1,0 +1,12 @@
+Rotation mid-word:
+before rotation editor/composition = কেম
+landscape editor = empty placeholder (composition cleared)
+portrait restored editor = empty placeholder; no duplicate observed
+
+Switch apps mid-word:
+before Home/Messages editor/composition = কেম
+after returning to MainActivity editor/composition = কেম
+duplicate count = 0; lost fragments = 0
+
+Incoming call interruption was not available on this emulator.
+

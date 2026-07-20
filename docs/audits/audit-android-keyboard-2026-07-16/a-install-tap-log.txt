@@ -1,0 +1,21 @@
+Fresh install to first Bangla word, personally executed through visible UI:
+1 Start
+2 Setup / enable Banglu
+3 Banglu toggle in Android settings
+4 First Android warning: OK
+5 Back accidentally dismissed the second Android reboot confirmation; Banglu remained disabled
+6 Banglu toggle retry
+7 First Android warning: OK
+8 Second Android reboot confirmation: OK
+9 Back to Banglu
+10 Set default keyboard
+11 Select Banglu
+12 Focus the in-app editor
+13-17 Tap k,e,m,o,n on visible Banglu keys
+18 Space to commit
+
+Observed lines:
+tap 4: Android displayed the standard data-collection warning.
+tap 5: dismissing the second confirmation left the Banglu switch off.
+tap 18: preview "কেমন" committed as "কেমন ".
+

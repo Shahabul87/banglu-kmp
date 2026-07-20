@@ -1,0 +1,30 @@
+07-19 00:54:22.160 27904 27904 I RecognitionServiceImpl: Create an attribution context to skip platform permission check
+07-19 00:54:22.161 27904 27904 I RecognitionServiceImpl: RecognitionService#logStartListening: callingApp: com.banglu.keyboard, locale: bn-BD
+07-19 00:54:22.193 27904 27932 I SodaSpeechRecognizer: Offline recognizer - start listening
+07-19 00:54:22.196 27904 27932 I SodaSpeechRecognizer: Initialize Soda [locale: bn-BD], [applicationDomain: AMBIENT_CONTINUOUS], [aicore streaming: false]
+07-19 00:54:22.246 27904 27934 E SodaSpeechRecognizer: Failed to get language pack of required locale: error 12
+07-19 00:54:22.324 27904 27936 I RecognitionServiceImpl: RecognitionService#onMicrophoneOpened
+07-19 00:54:27.326 27904 27938 I RecognitionServiceImpl: RecognitionService#onMicrophoneCloseRequested
+07-19 00:54:27.433 27904 27934 W RecognitionClient: #onError space agsa_transcription_NO_SPEECH_DETECTED code -1!
+07-19 00:54:27.433 27904 27934 W RecognitionServiceImpl: Speech recognition error type NO_SPEECH_DETECTED with error code -1
+07-19 00:54:28.093 27904 27904 I RecognitionServiceImpl: RecognitionService#onDestroy
+07-19 00:54:28.114 27904 27904 I RecognitionServiceImpl: RecognitionService#onStartListening
+07-19 00:54:28.115 27904 27904 I RecognitionServiceImpl: Create an attribution context to skip platform permission check
+07-19 00:54:28.117 27904 27904 I RecognitionServiceImpl: RecognitionService#logStartListening: callingApp: com.banglu.keyboard, locale: bn-BD
+07-19 00:54:28.127 27904 27925 I SodaSpeechRecognizer: Offline recognizer - start listening
+07-19 00:54:28.128 27904 27925 I SodaSpeechRecognizer: Initialize Soda [locale: bn-BD], [applicationDomain: AMBIENT_CONTINUOUS], [aicore streaming: false]
+07-19 00:54:28.169 27904 27937 E SodaSpeechRecognizer: Failed to get language pack of required locale: error 12
+07-19 00:54:28.177 27904 27936 I RecognitionServiceImpl: RecognitionService#onMicrophoneOpened
+07-19 00:54:28.779 27904 27904 I RecognitionServiceImpl: RecognitionService#onDestroy
+07-19 00:54:28.779 27904 27904 I RecognitionServiceImpl: RecognitionService#onMicrophoneCloseRequested
+07-19 00:54:28.787 27904 27937 W RecognitionServiceImpl: Speech recognition error type CANCELLED with error code -1
+07-19 00:54:28.790 27904 27933 I SodaSpeechRecognizer: Offline recognizer - stop detection
+07-19 00:54:28.800 27904 27904 I RecognitionServiceImpl: RecognitionService#onStartListening
+07-19 00:54:28.801 27904 27904 I RecognitionServiceImpl: Create an attribution context to skip platform permission check
+07-19 00:54:28.801 27904 27904 I RecognitionServiceImpl: RecognitionService#logStartListening: callingApp: com.banglu.keyboard, locale: bn-BD
+07-19 00:54:28.807 27904 27932 I SodaSpeechRecognizer: Offline recognizer - start listening
+07-19 00:54:28.808 27904 27932 I SodaSpeechRecognizer: Initialize Soda [locale: bn-BD], [applicationDomain: AMBIENT_CONTINUOUS], [aicore streaming: false]
+07-19 00:54:28.853 27904 27934 E SodaSpeechRecognizer: Failed to get language pack of required locale: error 12
+07-19 00:54:28.853 27904 27934 I RecognitionServiceImpl: RecognitionService#onMicrophoneCloseRequested
+07-19 00:54:28.856 27904 27934 W RecognitionServiceImpl: Speech recognition error type LANGUAGE_PACK_ERROR with error code 12
+07-19 00:54:28.894 27904 27939 I RecognitionServiceImpl: RecognitionService#onMicrophoneOpened

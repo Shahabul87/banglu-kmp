@@ -1,0 +1,15 @@
+Audit start: 2026-07-16 21:41:54 America/Los_Angeles
+Audit end of device work: 2026-07-16 22:33:34 America/Los_Angeles
+Device: Android Emulator sdk_gphone64_arm64 (Pixel 7 AVD), Android 14 / API 34
+Display: 1080x2400, 420 dpi
+RAM: 2,025,916 kB (~2 GB)
+Locale: en-US
+App: com.banglu.keyboard versionName=1.5.34 versionCode=2071
+Dictionary target: 3.8.5 (product/build target; not exposed in the tested UI)
+Installed artifact: releases/banglu-1.5.34-2071-perf.apk
+Artifact SHA-256: 3a658...5a0 (abbreviated in report; full value captured during install session)
+Initial network: emulator Wi-Fi with emulated cellular available
+Initial battery: 100%, battery saver off
+Final restored state: airplane=0, battery saver=0, accelerometer_rotation=1, user_rotation=0,
+heapgrowthlimit=192m, learning=true
+

@@ -1,0 +1,38 @@
+Cold MainActivity launches observed with `adb shell am start -W`:
+fresh-process launch: 353 ms
+first launch after full emulator reboot: TotalTime=621 ms, WaitTime=630 ms
+Exact cold-keyboard-to-typable endpoint was not independently timed.
+
+Memory before 30-second burst (`dumpsys meminfo`):
+Java heap: 10,332 KB
+Native heap: 27,360 KB
+Total PSS: 72,784 KB
+Total RSS: 134,968 KB
+Swap PSS: 23,148 KB
+
+Memory after 30-second burst:
+Java heap: 25,360 KB
+Native heap: 30,244 KB
+Total PSS: 90,321 KB
+Total RSS: 161,064 KB
+Swap PSS: 16,259 KB
+
+30-second visible-key burst:
+attempted words: 272 x `kemon` + Space
+committed words: 272 x `কেমন`
+dropped/stuck keys: 0 observed
+
+`dumpsys gfxinfo` for the burst:
+frames: 879
+janky frames: 286 (32.54%)
+50th/90th/95th/99th percentile: 16/16/17/31 ms
+missed vsync: 6
+high input latency: 485
+slow UI thread: 37
+deadline missed: 286
+
+Low-end profile:
+device RAM: 2,025,916 kB
+temporary heapgrowthlimit: 128m
+restored heapgrowthlimit after reboot: 192m
+

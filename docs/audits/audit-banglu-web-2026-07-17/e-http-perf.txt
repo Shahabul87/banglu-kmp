@@ -1,0 +1,22 @@
+Live HTTP measurements, 2026-07-17 (cold curl process; timings in seconds):
+
+URL                                             HTTP  bytes      TTFB      total
+https://www.bangluweb.com/                      200   22484      0.2176    0.2195
+https://www.bangluweb.com/type                  200   22711      0.2021    0.2023
+https://www.bangluweb.com/phonetic              200   34039      0.1660    0.1663
+https://www.craftsai.org/products/banglu        200   159801     0.2359    0.2682
+
+Dictionary fetch:
+URL: https://www.bangluweb.com/banglu-slim.json
+HTTP: 200
+Content-Type: application/json
+Cache-Control: public, max-age=0, must-revalidate
+Last-Modified: Thu, 16 Jul 2026 06:00:15 GMT
+Compressed transfer: 1,924,806 bytes; TTFB 0.1163; total 0.4234
+Uncompressed transfer: 17,571,321 bytes; TTFB 0.1499; total 0.9402
+
+API version:
+GET /api/version -> HTTP 200
+{"version":"1784181626056"}
+
+First visual conversion timing and the duration of the on-page loading state were not measured independently.
