@@ -144,7 +144,8 @@ object PhoneticIndexBuilder {
             // Visarga words are geminated by reverseWord itself (দুঃখ ->
             // "dukkh" -> alias "dukkho"); the ungeminated key ("dukh") is
             // intentionally NOT indexed — it belongs to the exact word দুখ.
-            val aliases = aliasesFor(canonical)
+            val manualKeys = foldedManualAliases[word].orEmpty()
+            val aliases = aliasesFor(canonical) + manualKeys
             var rowsForWord = 0
             for (key in aliases) {
                 if (key.length !in 2..24 || !ROMAN_ONLY.matches(key)) {
@@ -152,7 +153,10 @@ object PhoneticIndexBuilder {
                     continue
                 }
                 if (!seen.add("$key $word")) continue
-                val priority = if (key == canonical) PRIORITY_CANONICAL else PRIORITY_HABIT
+                // Curated manual aliases are deliberate ownership decisions —
+                // canonical priority, or an extended-dict junk twin on the
+                // same key outranks them (মুস্কিল@65 vs মুশকিল@70 class).
+                val priority = if (key == canonical || key in manualKeys) PRIORITY_CANONICAL else PRIORITY_HABIT
                 rows.add(PhoneticIndexRow(key, word, freq, tier, priority))
                 if (priority == PRIORITY_CANONICAL) canonicalRows++ else habitAliasRows++
                 rowsForWord++
@@ -251,6 +255,27 @@ object PhoneticIndexBuilder {
     private val SYA_BEFORE_VOWEL = Regex("sy([aeiou])")
 
     private const val VOWELS = "aeiou"
+
+    /**
+     * S59: curated per-word extra keys the habit-rule chains cannot derive —
+     * casual spellings real typists use for specific words. Inserted at
+     * habit-alias priority; the word must exist in the corpus or the row is
+     * silently skipped. Keep this list SMALL and evidence-backed (each entry
+     * came from a reproduced miss on the slim/full tier).
+     */
+    private val MANUAL_ALIASES: Map<String, List<String>> = mapOf(
+        // মূর্ধন্য-ষ round (tester drawing, 2026-07-21): word-initial ষ.
+        "ষাঁড়" to listOf("shar", "shnar"),
+        "মুশকিল" to listOf("mushkil", "muskil"),
+        "ঐতিহ্য" to listOf("oitijjho", "oitijho"),
+        "ঔষুধ" to listOf("oushud"),
+    )
+
+    /** MANUAL_ALIASES with nukta-folded keys, matching the folded words the
+     *  build loop iterates (ড়/ঢ়/য় normalization). */
+    private val foldedManualAliases: Map<String, List<String>> by lazy {
+        MANUAL_ALIASES.mapKeys { ReverseTransliterator.foldNukta(it.key) }
+    }
 
     private class HabitRule(val name: String, val transform: (String) -> String)
 
