@@ -2640,12 +2640,15 @@ private fun EmojiGrid(
     }
 }
 
-/** S57: sectioned everyday-phrase tab (বাক্য). */
+/** S57b: accordion everyday-phrase tab (বাক্য) — every section is a
+ *  tappable dropdown row, so all 9 categories are reachable without
+ *  scrolling through the full phrase list. One section open at a time. */
 @Composable
 private fun PhraseGrid(
     colors: KeyboardColors,
     onPhraseClick: (String) -> Unit
 ) {
+    var expandedSection by remember { mutableIntStateOf(0) }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = Modifier.fillMaxSize(),
@@ -2653,23 +2656,60 @@ private fun PhraseGrid(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        BanglaPhrases.sections.forEach { section ->
+        BanglaPhrases.sections.forEachIndexed { index, section ->
+            val expanded = index == expandedSection
             item(span = { GridItemSpan(2) }) {
-                Text(
-                    text = section.title,
-                    color = colors.suggestionHighlight,
-                    fontSize = scaledSp(13),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 4.dp, top = 6.dp, bottom = 2.dp)
-                )
-            }
-            section.phrases.forEach { phrase ->
-                item {
-                    PhraseCard(
-                        text = phrase.text,
-                        colors = colors,
-                        onClick = { onPhraseClick(phrase.text) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (expanded) colors.suggestionHighlight.copy(alpha = 0.16f)
+                            else colors.suggestionChipBg
+                        )
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = "Phrase section ${section.title}"
+                            stateDescription = if (expanded) "Expanded" else "Collapsed"
+                        }
+                        .clickable {
+                            expandedSection = if (expanded) -1 else index
+                        }
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = section.title,
+                        color = if (expanded) colors.suggestionHighlight else colors.keyText,
+                        fontSize = scaledSp(14),
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
+                    Text(
+                        text = "${section.phrases.size}",
+                        color = colors.subText,
+                        fontSize = scaledSp(12),
+                        modifier = Modifier.padding(end = 10.dp)
+                    )
+                    Text(
+                        text = if (expanded) "\u25BE" else "\u25B8",
+                        color = if (expanded) colors.suggestionHighlight else colors.subText,
+                        fontSize = scaledSp(16)
+                    )
+                }
+            }
+            if (expanded) {
+                section.phrases.forEach { phrase ->
+                    item {
+                        PhraseCard(
+                            text = phrase.text,
+                            colors = colors,
+                            onClick = { onPhraseClick(phrase.text) }
+                        )
+                    }
                 }
             }
         }

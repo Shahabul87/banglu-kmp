@@ -32,13 +32,13 @@ packs). NO cloud API on the keystroke path — decided 2026-07-03 (latency,
 cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-07-20):** ONE ENGINE, FIVE SURFACES.
-- **Android** v1.5.37 (2074), db 3.8.6 (S56: tester round — URI-field conversion,
+- **Android** v1.5.38 (2075), db 3.8.6 (S56: tester round — URI-field conversion,
   voice liveness watchdog + word-level partial diff, likh preview parity,
   emphatic-o layer, shw→ssh chat aliases, screenshot loanword; S57: emoji
   overhaul — fake procedural GIFs removed, WhatsApp-style two-row panel,
   ~90 everyday Bengali phrases on the বাক্য tab (BanglaPhrases.kt), 330+
   three-script search keywords (EmojiKeywords.kt)) — pre-launch; Play upload
-  is the pending user action (`releases/banglu-1.5.37-2074.aab`).
+  is the pending user action (`releases/banglu-1.5.38-2075.aab`).
 - **Desktop editor (বাংলু এডিটর)** v1.1.0 — SHIPPED PUBLICLY (S48–S50):
   installers for macOS/Windows/Linux on the GitHub release `desktop-v1.1.0`,
   download page live at https://www.craftsai.org/products/banglu.
