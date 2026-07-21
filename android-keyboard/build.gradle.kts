@@ -22,8 +22,8 @@ android {
         applicationId = "com.banglu.keyboard"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2073
-        versionName = "1.5.36"
+        versionCode = 2074
+        versionName = "1.5.37"
     }
 
     signingConfigs {
@@ -121,7 +121,8 @@ val verifyImePrivacyBoundary by tasks.registering {
             "KeyboardState.kt",
             "AndroidDictionaryLoader.kt",
             "EmojiData.kt",
-            "ReactionGifFactory.kt",
+            "EmojiKeywords.kt",
+            "BanglaPhrases.kt",
             "BangluComposeHost.kt",
             "BangluProcessGuards.kt"
         )

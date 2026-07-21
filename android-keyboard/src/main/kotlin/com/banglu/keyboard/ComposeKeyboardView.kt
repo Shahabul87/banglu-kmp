@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -2402,98 +2403,85 @@ private fun EmojiPanel(
     val view = LocalView.current
     val hapticOn = LocalHapticEnabled.current
     val soundOn = LocalSoundEnabled.current
-    val recentEmojis = recentEmojisProvider()
-    val currentCategory = EmojiData.categories.getOrNull(selectedCategory)
-    val currentEmojis = if (searchQuery.isNotBlank()) {
-        EmojiData.search(searchQuery)
-    } else if (selectedCategory == 0 && recentEmojis.isNotEmpty()) {
-        recentEmojis
-    } else {
-        currentCategory?.emojis.orEmpty()
+    // S57: drop stale recents from older builds (removed sticker texts
+    // rendered as broken emoji cells).
+    val recentEmojis = recentEmojisProvider().filter { EmojiData.isKnownEmoji(it) }
+    val searching = searchQuery.isNotBlank()
+    val showingPhrases = !searching && selectedCategory == EmojiData.PHRASES_CATEGORY_INDEX
+    val currentEmojis = when {
+        searching -> EmojiData.search(searchQuery)
+        selectedCategory == 0 && recentEmojis.isNotEmpty() -> recentEmojis
+        else -> EmojiData.categories.getOrNull(selectedCategory)?.emojis.orEmpty()
     }
-    val showingGifStickers = currentEmojis.any { EmojiData.isGifSticker(it) }
-    val showingTextStickers = !showingGifStickers && currentEmojis.any { EmojiData.isTextSticker(it) }
-    val showingExpressionCards = showingGifStickers || showingTextStickers
+
+    val commitItem: (String) -> Unit = { item ->
+        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
+        onEmojiClick(item)
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(colors.keyboardBg)
     ) {
-        // Compact Samsung-style category rail.
+        // S57: single search pill row — the old top category rail is gone; the
+        // panel has exactly two chrome rows like WhatsApp/Gboard.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp)
-                .background(colors.suggestionBg)
-                .padding(horizontal = 4.dp),
+                .height(48.dp)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .height(36.dp)
-                    .width(54.dp)
-                    .semantics {
-                        role = Role.Button
-                        contentDescription = "Back to keyboard"
-                    }
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(colors.specialKeyBg)
-                    .clickable { onBackToKeyboard() },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("ABC", color = colors.suggestionHighlight, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            LazyRow(
+            Row(
                 modifier = Modifier
                     .weight(1f)
-                    .height(40.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(colors.suggestionChipBg)
+                    .clickable { searchActive = true }
+                    .padding(horizontal = 14.dp)
+                    .semantics {
+                        contentDescription = "Search emoji. Tap to type with keyboard search keys"
+                    },
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                itemsIndexed(EmojiData.categories) { index, category ->
-                    Box(
+                Text("\uD83D\uDD0D", fontSize = scaledSp(14), color = Color.Unspecified)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = searchQuery.ifBlank {
+                        if (searchActive) "নিচের কী দিয়ে লিখুন" else "খুঁজুন: hasi, love, দোয়া…"
+                    },
+                    color = if (searchQuery.isBlank()) colors.subText else colors.keyText,
+                    fontSize = scaledSp(14),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (searchQuery.isNotBlank()) {
+                    Text(
+                        "\u00D7",
+                        color = colors.subText,
+                        fontSize = scaledSp(20),
+                        fontWeight = FontWeight.Bold,
                         modifier = Modifier
-                            .size(38.dp)
+                            .padding(start = 8.dp)
                             .semantics {
                                 role = Role.Button
-                                contentDescription = "Emoji category ${category.name}"
-                                if (index == selectedCategory) stateDescription = "Selected"
+                                contentDescription = "Clear search"
                             }
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (index == selectedCategory)
-                                    colors.suggestionHighlight.copy(alpha = 0.85f)
-                                else Color.Transparent
-                            )
                             .clickable {
-                                selectedCategory = index
                                 searchQuery = ""
-                                searchActive = false
                                 searchRecorded = false
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            category.icon,
-                            color = if (category.isTextIcon) {
-                                if (index == selectedCategory) Color.White else colors.subText
-                            } else {
-                                Color.Unspecified
-                            },
-                            fontSize = if (category.isTextIcon) 16.sp else 20.sp,
-                            fontWeight = if (category.isTextIcon) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
+                            }
+                    )
                 }
             }
-
             Box(
                 modifier = Modifier
-                    .size(38.dp)
+                    .padding(start = 6.dp)
+                    .size(36.dp)
                     .semantics {
                         role = Role.Button
                         contentDescription = "Hide emoji panel"
@@ -2506,127 +2494,47 @@ private fun EmojiPanel(
             }
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(40.dp)
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(colors.suggestionChipBg)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .clickable { searchActive = true }
-                .semantics {
-                    contentDescription = "Search emoji. Tap to type with keyboard search keys"
-                },
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = searchQuery.ifBlank {
-                    if (searchActive) "Type with the keys below" else "Search emoji, stickers, GIF"
-                },
-                color = if (searchQuery.isBlank()) colors.subText else colors.keyText,
-                fontSize = scaledSp(14),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            if (searchQuery.isNotBlank()) {
-                Text(
-                    "\u00D7",
-                    color = colors.subText,
-                    fontSize = scaledSp(20),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .padding(start = 8.dp)
-                        .semantics {
-                            role = Role.Button
-                            contentDescription = "Clear search"
-                        }
-                        .clickable {
-                            searchQuery = ""
-                            searchRecorded = false
-                        }
-                )
-            }
-        }
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (searchActive) 132.dp else 242.dp)
-                .padding(horizontal = 6.dp)
+                .height(if (searchActive) 132.dp else 286.dp)
+                .padding(horizontal = 8.dp)
         ) {
-            if (searchQuery.isNotBlank() && currentEmojis.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 18.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "\"$searchQuery\" পাওয়া যায়নি",
-                        color = colors.keyText,
-                        fontSize = scaledSp(15),
-                        fontWeight = FontWeight.Medium,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "লিখে দেখুন: hasi, rag, love, birthday",
-                        color = colors.subText,
-                        fontSize = scaledSp(13),
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(if (showingExpressionCards) 2 else 8),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = 6.dp, bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(if (showingExpressionCards) 8.dp else 2.dp),
-                    verticalArrangement = Arrangement.spacedBy(if (showingExpressionCards) 8.dp else 2.dp)
-                ) {
-                    items(currentEmojis.size) { index ->
-                        val emoji = currentEmojis[index]
-                        Box(
-                            modifier = Modifier
-                                .then(
-                                    if (showingExpressionCards) {
-                                        Modifier
-                                            .height(if (EmojiData.isGifSticker(emoji)) 102.dp else 52.dp)
-                                            .fillMaxWidth()
-                                    } else {
-                                        Modifier.aspectRatio(1f)
-                                    }
-                                )
-                                .semantics {
-                                    role = Role.Button
-                                    contentDescription = when {
-                                        EmojiData.isGifSticker(emoji) -> "GIF $emoji"
-                                        showingExpressionCards -> "Sticker $emoji"
-                                        else -> "Emoji $emoji"
-                                    }
-                                }
-                                .clickable {
-                                    if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    onEmojiClick(emoji)
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            when {
-                                EmojiData.isGifSticker(emoji) -> GifStickerCard(emoji, colors)
-                                showingExpressionCards -> TextStickerCard(emoji, colors)
-                                else -> EmojiCell(emoji, colors)
-                            }
-                        }
+            when {
+                searching && currentEmojis.isEmpty() -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 18.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "\"$searchQuery\" পাওয়া যায়নি",
+                            color = colors.keyText,
+                            fontSize = scaledSp(15),
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "লিখে দেখুন: hasi, mon kharap, dua, eid, love",
+                            color = colors.subText,
+                            fontSize = scaledSp(13),
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
+                showingPhrases -> PhraseGrid(colors = colors, onPhraseClick = commitItem)
+                else -> EmojiGrid(
+                    emojis = currentEmojis,
+                    colors = colors,
+                    onItemClick = commitItem
+                )
             }
         }
 
@@ -2653,16 +2561,16 @@ private fun EmojiPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
-                    .background(colors.keyboardBg)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .background(colors.suggestionBg)
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 KeyButton(
                     label = "ABC",
-                    modifier = Modifier.width(64.dp),
+                    modifier = Modifier.width(56.dp),
                     height = 40.dp,
                     bgColor = colors.specialKeyBg,
-                    fontSize = 15,
+                    fontSize = 14,
                     onClick = onBackToKeyboard
                 )
                 EmojiBottomCategoryRail(
@@ -2675,10 +2583,10 @@ private fun EmojiPanel(
                     },
                     modifier = Modifier
                         .weight(1f)
-                        .padding(horizontal = 6.dp)
+                        .padding(horizontal = 4.dp)
                 )
                 BackspaceKey(
-                    modifier = Modifier.width(56.dp),
+                    modifier = Modifier.width(52.dp),
                     onBackspace = onBackspace,
                     onBackspaceWord = onBackspace
                 )
@@ -2687,74 +2595,80 @@ private fun EmojiPanel(
     }
 }
 
-private val BottomEmojiCategoryNames = listOf(
-    "Frequent",
-    "Smileys",
-    "Animals",
-    "Food",
-    "Activities",
-    "Travel",
-    "Objects",
-    "Symbols",
-    "Flags"
-)
-
-private fun bottomEmojiCategories(): List<Pair<Int, EmojiData.EmojiCategory>> {
-    return BottomEmojiCategoryNames.mapNotNull { name ->
-        val index = EmojiData.categories.indexOfFirst { it.name == name }
-        if (index >= 0) index to EmojiData.categories[index] else null
+/** S57: emoji grid (search results may mix in phrase cards at half-row span). */
+@Composable
+private fun EmojiGrid(
+    emojis: List<String>,
+    colors: KeyboardColors,
+    onItemClick: (String) -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(8),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 6.dp, bottom = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        items(
+            count = emojis.size,
+            span = { index -> GridItemSpan(if (BanglaPhrases.isPhrase(emojis[index])) 4 else 1) }
+        ) { index ->
+            val item = emojis[index]
+            if (BanglaPhrases.isPhrase(item)) {
+                PhraseCard(text = item, colors = colors, onClick = { onItemClick(item) })
+            } else {
+                Box(
+                    modifier = Modifier
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = "Emoji $item"
+                        }
+                        .clickable { onItemClick(item) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        item,
+                        fontSize = 28.sp,
+                        color = Color.Unspecified,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
     }
 }
 
+/** S57: sectioned everyday-phrase tab (বাক্য). */
 @Composable
-private fun EmojiBottomCategoryRail(
-    selectedCategory: Int,
-    onCategorySelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
+private fun PhraseGrid(
+    colors: KeyboardColors,
+    onPhraseClick: (String) -> Unit
 ) {
-    val colors = LocalKeyboardColors.current
-    val categories = remember { bottomEmojiCategories() }
-    Row(
-        modifier = modifier
-            .fillMaxHeight(),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalAlignment = Alignment.CenterVertically
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        categories.forEach { (index, category) ->
-            val selected = selectedCategory == index
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .semantics {
-                        role = Role.Button
-                        contentDescription = "Emoji category ${category.name}"
-                        if (selected) stateDescription = "Selected"
-                    }
-                    .clip(RoundedCornerShape(9.dp))
-                    .clickable { onCategorySelected(index) },
-                contentAlignment = Alignment.Center
-            ) {
+        BanglaPhrases.sections.forEach { section ->
+            item(span = { GridItemSpan(2) }) {
                 Text(
-                    text = if (category.name == "Frequent") "\u25F7" else category.icon,
-                    color = if (category.isTextIcon || category.name == "Frequent") {
-                        if (selected) colors.suggestionHighlight else colors.subText
-                    } else {
-                        Color.Unspecified
-                    },
-                    fontSize = if (category.isTextIcon) scaledSp(18) else scaledSp(20),
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                    maxLines = 1,
-                    textAlign = TextAlign.Center
+                    text = section.title,
+                    color = colors.suggestionHighlight,
+                    fontSize = scaledSp(13),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 4.dp, top = 6.dp, bottom = 2.dp)
                 )
-                if (selected) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .height(3.dp)
-                            .width(22.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(colors.suggestionHighlight)
+            }
+            section.phrases.forEach { phrase ->
+                item {
+                    PhraseCard(
+                        text = phrase.text,
+                        colors = colors,
+                        onClick = { onPhraseClick(phrase.text) }
                     )
                 }
             }
@@ -2763,41 +2677,27 @@ private fun EmojiBottomCategoryRail(
 }
 
 @Composable
-private fun EmojiCell(
-    emoji: String,
-    colors: KeyboardColors
+private fun PhraseCard(
+    text: String,
+    colors: KeyboardColors,
+    onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
-            .fillMaxSize()
-            .clip(RoundedCornerShape(10.dp))
-            .background(colors.keyBg.copy(alpha = 0.28f)),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            emoji,
-            fontSize = 27.sp,
-            color = Color.Unspecified,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun TextStickerCard(
-    sticker: String,
-    colors: KeyboardColors
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clip(RoundedCornerShape(8.dp))
+            .height(44.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
             .background(colors.suggestionChipBg)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .semantics {
+                role = Role.Button
+                contentDescription = "Phrase $text"
+            }
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
-            sticker,
+            text,
             color = colors.keyText,
             fontSize = scaledSp(14),
             fontWeight = FontWeight.Medium,
@@ -2809,81 +2709,61 @@ private fun TextStickerCard(
 }
 
 @Composable
-private fun GifStickerCard(
-    sticker: String,
-    colors: KeyboardColors
+private fun EmojiBottomCategoryRail(
+    selectedCategory: Int,
+    onCategorySelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val gif = EmojiData.gifStickerFor(sticker)
-    val preview = gifPreviewToken(gif?.fallbackText.orEmpty())
-    val label = sticker
-        .replace("GIF", "")
-        .replace(Regex("\\s+"), " ")
-        .trim()
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clip(RoundedCornerShape(8.dp))
-            .background(colors.suggestionChipBg)
-            .padding(8.dp)
+    val colors = LocalKeyboardColors.current
+    LazyRow(
+        modifier = modifier.fillMaxHeight(),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
+        itemsIndexed(EmojiData.categories) { index, category ->
+            val selected = selectedCategory == index
             Box(
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(colors.keyBg),
+                    .width(if (category.name == "\u09AC\u09BE\u0995\u09CD\u09AF") 52.dp else 38.dp)
+                    .fillMaxHeight()
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = "Emoji category ${category.name}"
+                        if (selected) stateDescription = "Selected"
+                    }
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(
+                        if (selected) colors.suggestionHighlight.copy(alpha = 0.16f)
+                        else Color.Transparent
+                    )
+                    .clickable { onCategorySelected(index) },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = preview.ifBlank { "\u25B6" },
-                    fontSize = 30.sp,
-                    color = Color.Unspecified,
+                    text = category.icon,
+                    color = if (category.isTextIcon) {
+                        if (selected) colors.suggestionHighlight else colors.subText
+                    } else {
+                        Color.Unspecified
+                    },
+                    fontSize = if (category.isTextIcon) scaledSp(14) else scaledSp(20),
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
                     textAlign = TextAlign.Center
                 )
+                if (selected) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .height(3.dp)
+                            .width(20.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(colors.suggestionHighlight)
+                    )
+                }
             }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = label,
-                color = colors.keyText,
-                fontSize = scaledSp(13),
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .clip(RoundedCornerShape(7.dp))
-                .background(colors.suggestionHighlight.copy(alpha = 0.92f))
-                .padding(horizontal = 5.dp, vertical = 2.dp)
-        ) {
-            Text(
-                "GIF",
-                color = Color.White,
-                fontSize = scaledSp(10),
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
         }
     }
-}
-
-private fun gifPreviewToken(fallbackText: String): String {
-    return fallbackText
-        .trim()
-        .split(Regex("\\s+"))
-        .lastOrNull()
-        .orEmpty()
-        .ifBlank { "\u25B6" }
 }
 
 @Composable

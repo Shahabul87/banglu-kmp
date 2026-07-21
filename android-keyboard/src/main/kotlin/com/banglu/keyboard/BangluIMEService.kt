@@ -2,7 +2,6 @@ package com.banglu.keyboard
 
 import android.Manifest
 import android.app.ActivityManager
-import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -27,10 +26,6 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.core.content.FileProvider
-import androidx.core.view.inputmethod.EditorInfoCompat
-import androidx.core.view.inputmethod.InputConnectionCompat
-import androidx.core.view.inputmethod.InputContentInfoCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -192,9 +187,6 @@ class BangluIMEService : InputMethodService(),
     private var sessionAutoCorrectUndoCount = 0
     private var sessionEmojiCommitCount = 0
     private var sessionStickerCommitCount = 0
-    private var sessionGifStickerCommitCount = 0
-    private var sessionGifBinaryCommitCount = 0
-    private var sessionGifFallbackCommitCount = 0
     private var sessionExpressionSearchCount = 0
 
     // ── Settings (read from SharedPreferences) ──────────────────────────
@@ -268,9 +260,6 @@ class BangluIMEService : InputMethodService(),
         private const val MAX_RECENT_EMOJIS = 40
         private const val MAX_CLIPBOARD_HISTORY = 12
         private const val MAX_CLIPBOARD_ITEM_CHARS = 1_000
-        private const val GIF_MIME_TYPE = "image/gif"
-        private const val IMAGE_MIME_WILDCARD = "image/*"
-        private const val GIF_CACHE_DIR = "gif"
         private val GAP_PUNCTUATION_MARKS = listOf("\u0964", ",", "?", "!", "\u0983", ":")
     }
 
@@ -329,9 +318,6 @@ class BangluIMEService : InputMethodService(),
         recordImeCount("autocorrect_undo", sessionAutoCorrectUndoCount)
         recordImeCount("emoji_commit", sessionEmojiCommitCount)
         recordImeCount("sticker_commit", sessionStickerCommitCount)
-        recordImeCount("gif_sticker_commit", sessionGifStickerCommitCount)
-        recordImeCount("gif_binary_commit", sessionGifBinaryCommitCount)
-        recordImeCount("gif_fallback_commit", sessionGifFallbackCommitCount)
         recordImeCount("expression_search", sessionExpressionSearchCount)
         sessionBangluKeyCount = 0
         sessionRawCommitKeyCount = 0
@@ -343,9 +329,6 @@ class BangluIMEService : InputMethodService(),
         sessionAutoCorrectUndoCount = 0
         sessionEmojiCommitCount = 0
         sessionStickerCommitCount = 0
-        sessionGifStickerCommitCount = 0
-        sessionGifBinaryCommitCount = 0
-        sessionGifFallbackCommitCount = 0
         sessionExpressionSearchCount = 0
     }
 
@@ -2765,99 +2748,15 @@ class BangluIMEService : InputMethodService(),
     private fun onEmojiClick(emoji: String) {
         val ic = currentInputConnection ?: return
         commitPendingBuffer()
-        rememberRecentEmoji(emoji)
-
-        EmojiData.gifStickerFor(emoji)?.let { gifSticker ->
-            sessionEmojiCommitCount++
-            sessionStickerCommitCount++
-            sessionGifStickerCommitCount++
-
-            if (commitGifSticker(ic, gifSticker)) {
-                lastCommittedTextLength = 0
-                sessionGifBinaryCommitCount++
-            } else {
-                ic.commitText(gifSticker.fallbackText, 1)
-                lastCommittedTextLength = gifSticker.fallbackText.length
-                sessionGifFallbackCommitCount++
-            }
-            return
-        }
+        val isPhrase = BanglaPhrases.isPhrase(emoji)
+        // S57: quick phrases are full sentences, not emoji — they don't enter
+        // the recent-emoji row.
+        if (!isPhrase) rememberRecentEmoji(emoji)
 
         ic.commitText(emoji, 1)
         lastCommittedTextLength = emoji.length
         sessionEmojiCommitCount++
-        if (EmojiData.isTextSticker(emoji)) sessionStickerCommitCount++
-    }
-
-    private fun commitGifSticker(
-        ic: InputConnection,
-        gifSticker: EmojiData.GifSticker
-    ): Boolean {
-        val editorInfo = currentInputEditorInfo ?: return false
-        if (!supportsGifContent(editorInfo)) {
-            recordImeEvent("gif_unsupported_host")
-            return false
-        }
-
-        return try {
-            val gifFile = cachedBundledGif(gifSticker)
-            val contentUri = FileProvider.getUriForFile(
-                this,
-                "$packageName.fileprovider",
-                gifFile
-            )
-            val description = ClipDescription(gifSticker.text, arrayOf(GIF_MIME_TYPE))
-            val contentInfo = InputContentInfoCompat(contentUri, description, null)
-            val targetPackage = editorInfo.packageName
-            if (!targetPackage.isNullOrBlank()) {
-                grantUriPermission(
-                    targetPackage,
-                    contentUri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            }
-
-            val committed = InputConnectionCompat.commitContent(
-                ic,
-                editorInfo,
-                contentInfo,
-                InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION,
-                Bundle()
-            )
-            if (committed) {
-                recordImeEvent("gif_binary_commit")
-            } else {
-                recordImeEvent("gif_rejected_host")
-            }
-            committed
-        } catch (e: Exception) {
-            recordFailureEvent("gif_commit", e)
-            false
-        }
-    }
-
-    private fun supportsGifContent(editorInfo: EditorInfo): Boolean {
-        val supportedMimeTypes = EditorInfoCompat.getContentMimeTypes(editorInfo)
-        val supported = supportedMimeTypes.any { mimeType ->
-            mimeType.equals(GIF_MIME_TYPE, ignoreCase = true) ||
-                mimeType.equals(IMAGE_MIME_WILDCARD, ignoreCase = true)
-        }
-        log(
-            "gifContentSupport: supported=$supported " +
-                "mimeTypes=${supportedMimeTypes.joinToString()} " +
-                "package=${editorInfo.packageName} privateImeOptions=${editorInfo.privateImeOptions}"
-        )
-        return supported
-    }
-
-    private fun cachedBundledGif(gifSticker: EmojiData.GifSticker): File {
-        val gifDir = File(cacheDir, GIF_CACHE_DIR).apply { mkdirs() }
-        val gifFile = File(gifDir, "${gifSticker.assetName}_v7.gif")
-        if (!gifFile.exists() || gifFile.length() == 0L) {
-            val bytes = ReactionGifFactory.build(gifSticker.assetName)
-            gifFile.outputStream().use { output -> output.write(bytes) }
-        }
-        return gifFile
+        if (isPhrase) sessionStickerCommitCount++
     }
 
     private fun onEmojiSearch() {
@@ -2871,10 +2770,7 @@ class BangluIMEService : InputMethodService(),
 
     private fun onStickerOpen() {
         ensureRecentEmojisLoaded()
-        val stickerCategory = EmojiData.categories.indexOfFirst { it.name == "Stickers" }
-            .takeIf { it >= 0 }
-            ?: 1
-        openEmojiPanel(initialCategory = stickerCategory)
+        openEmojiPanel(initialCategory = EmojiData.PHRASES_CATEGORY_INDEX)
     }
 
     private fun openEmojiPanel(initialCategory: Int) {
