@@ -264,6 +264,8 @@ class BangluIMEService : InputMethodService(),
          *  resume dictation without a second mic tap. */
         const val ACTION_VOICE_DISCLOSURE_ACCEPTED = "com.banglu.keyboard.VOICE_DISCLOSURE_ACCEPTED"
         private const val PREF_VOICE_TYPING_ENABLED = "voice_typing_enabled"
+        /** S72: >0 forces lite dictionary for that many more cold starts. */
+        private const val PREF_FORCED_LITE_LAUNCHES = "forced_lite_launches"
         private const val PREF_VOICE_OFFLINE_PREFERRED = "voice_offline_preferred"
         private const val PREF_RECENT_EMOJIS = "recent_emojis"
         private const val PREF_CLIPBOARD_HISTORY = "clipboard_history"
@@ -737,6 +739,10 @@ class BangluIMEService : InputMethodService(),
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
 
         prefs = getSharedPreferences("banglu_prefs", Context.MODE_PRIVATE)
+        // S72: consume one forced-lite launch per cold start — after
+        // FORCED_LITE_LAUNCHES starts, full mode is retried automatically.
+        val forcedLite = prefs.getInt(PREF_FORCED_LITE_LAUNCHES, 0)
+        if (forcedLite > 0) prefs.edit().putInt(PREF_FORCED_LITE_LAUNCHES, forcedLite - 1).apply()
         installCrashDiagnostics()
         installImeRuntimePolicy()
         prefs.registerOnSharedPreferenceChangeListener(preferenceListener)
@@ -775,6 +781,7 @@ class BangluIMEService : InputMethodService(),
                 loadedDictionaryLiteMode = shouldUseLiteDictionary()
                 dictionaryReadyForLearning = true
                 log("onCreate: Learned words loaded")
+                degradeIfNoHeapHeadroom()
             } catch (t: Throwable) {
                 if (BuildConfig.DEBUG) Log.e(TAG, "onCreate: Failed to load learned words", t)
             }
@@ -898,7 +905,48 @@ class BangluIMEService : InputMethodService(),
         val memoryClass = activityManager?.memoryClass ?: Int.MAX_VALUE
         // < 256 (not <=): modern flagships (S22/Pixel class) report exactly 256m
         // heapgrowthlimit and must qualify for full mode.
+        // S72: a recent memory-pressure degrade forces lite for the next few
+        // cold starts (self-healing counter — see onTrimMemory). The tester
+        // Samsung's exit history showed repeated OS LOW_MEMORY kills of the
+        // full-mode process (~172MB heap on a 256m limit).
+        if (::prefs.isInitialized && prefs.getInt(PREF_FORCED_LITE_LAUNCHES, 0) > 0) return true
         return liteModeEnabled.value || lowRamDevice || memoryClass < 256
+    }
+
+    /** S72: react to real OS memory pressure instead of waiting to be
+     *  LOW_MEMORY-killed (which users experience as the keyboard vanishing
+     *  and restarting mid-chat). */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        val alreadyLite = shouldUseLiteDictionary()
+        when (MemoryPressurePolicy.onTrim(level, alreadyLite)) {
+            MemoryPressurePolicy.Action.DEGRADE_TO_LITE -> degradeToLiteForMemoryPressure("trim_level_$level")
+            MemoryPressurePolicy.Action.CLEAR_CACHES -> SmartEngineAdapter.clearTransientCaches()
+            MemoryPressurePolicy.Action.NONE -> Unit
+        }
+    }
+
+    /** S72: shed the full dictionary under genuine kill pressure — rebuilds
+     *  the engine in lite mode (store-backed conversions keep working) and
+     *  arms the forced-lite counter so the next cold starts come up lite. */
+    private fun degradeToLiteForMemoryPressure(reason: String) {
+        if (!::prefs.isInitialized) return
+        if (prefs.getInt(PREF_FORCED_LITE_LAUNCHES, 0) > 0) return // already degraded
+        prefs.edit().putInt(PREF_FORCED_LITE_LAUNCHES, MemoryPressurePolicy.FORCED_LITE_LAUNCHES).apply()
+        recordImeEvent("memory_degrade_to_lite_$reason")
+        Log.w(TAG, "Memory pressure ($reason): degrading dictionary profile to lite")
+        SmartEngineAdapter.clearTransientCaches()
+        reloadUserLearningAsync()
+    }
+
+    /** S72: adaptive post-load guard — full profile just loaded; if the heap
+     *  is already nearly exhausted, this device cannot sustain it. */
+    private fun degradeIfNoHeapHeadroom() {
+        val runtime = Runtime.getRuntime()
+        val used = runtime.totalMemory() - runtime.freeMemory()
+        if (MemoryPressurePolicy.shouldDegradeAfterLoad(used, runtime.maxMemory(), shouldUseLiteDictionary())) {
+            degradeToLiteForMemoryPressure("post_load_headroom")
+        }
     }
 
     override fun onCreateInputView(): View {

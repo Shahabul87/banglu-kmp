@@ -46,6 +46,16 @@ object SmartEngineAdapter {
     }
 
     /**
+     * S72: shed the transient conversion caches (word LRU + store memos)
+     * under OS memory pressure. Never touches the dictionary, learned words,
+     * or the attached store — purely re-computable state. Safe no-op before
+     * the engine exists.
+     */
+    fun clearTransientCaches() {
+        engine?.clearCache()
+    }
+
+    /**
      * Synchronous initialization: loads seed dictionary (~4K words).
      * Safe to call multiple times. Call before any conversions.
      */
