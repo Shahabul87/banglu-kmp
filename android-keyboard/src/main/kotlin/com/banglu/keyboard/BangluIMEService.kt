@@ -503,12 +503,18 @@ class BangluIMEService : InputMethodService(),
     private fun isOneTimeCodeInput(info: EditorInfo?): Boolean {
         val hint = info?.hintText?.toString()?.lowercase().orEmpty()
         val privateOptions = info?.privateImeOptions?.lowercase().orEmpty()
+        // S70: the bare hint.contains("code") overreached — any field hinted
+        // "Promo code" / "Referral code" / "Postal code" silently entered
+        // raw-commit mode (no Bengali conversion, no suggestions), which a
+        // tester experiences as "the keyboard randomly types English". Only
+        // OTP-shaped signals remain; pure NUMBER-class OTP fields are already
+        // raw-commit via shouldUseRawCommitMode's input-class checks.
         return hint.contains("otp") ||
             hint.contains("one time") ||
             hint.contains("one-time") ||
             hint.contains("verification code") ||
             hint.contains("security code") ||
-            hint.contains("code") ||
+            hint.contains("sms code") ||
             privateOptions.contains("otp") ||
             privateOptions.contains("one_time_code") ||
             privateOptions.contains("sms_otp")
@@ -839,7 +845,12 @@ class BangluIMEService : InputMethodService(),
             return false
         }
         if (dbFile == null) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "attachPhoneticIndexStore: db file unavailable")
+            // S70: unconditional — a detached store silently downgrades every
+            // conversion to seed-only (heavy English fallback, "keyboard got
+            // dumb after the update") and DEBUG-only logging made that
+            // undiagnosable from tester bug reports.
+            Log.w(TAG, "attachPhoneticIndexStore: db file unavailable (copy failed or version mismatch)")
+            recordImeEvent("dictionary_attach_failed_no_db")
             return phoneticIndexStore?.isAvailable == true  // keep existing if available
         }
 
@@ -850,9 +861,8 @@ class BangluIMEService : InputMethodService(),
         if (!newStore.isAvailable) {
             withContext(Dispatchers.IO) { newStore.close() }
             val kept = phoneticIndexStore?.isAvailable == true
-            if (kept) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "attachPhoneticIndexStore: new store failed; keeping existing")
-            }
+            Log.w(TAG, "attachPhoneticIndexStore: new store failed (keepingExisting=$kept)")
+            recordImeEvent(if (kept) "dictionary_attach_failed_kept_old" else "dictionary_attach_failed_none")
             return kept
         }
 
@@ -2897,6 +2907,17 @@ class BangluIMEService : InputMethodService(),
         }
         lastCommittedBengali = committedBengali
         if (suggestionsAllowedForCurrentInput() && buffer.isEmpty() && keyboardMode.value == KeyboardMode.BANGLU) {
+            // S70: predictions are Bengali-only by design — for a non-Bengali
+            // commit (English word + দাঁড়ি) the async round-trip is guaranteed
+            // empty, and its clear→refill made the strip visibly flicker and
+            // swap identity right after the dot (tester: "dot after english
+            // shows a color change"). Settle on the punctuation bar directly.
+            if (committedBengali.none { isBengaliChar(it) }) {
+                suggestionJob?.cancel()
+                composingJob?.cancel()
+                if (suggestions.none { it.tier == "punctuation" }) showGapPunctuationSuggestions()
+                return
+            }
             suggestionJob?.cancel()
             composingJob?.cancel()
             suggestions.clear()
@@ -3106,21 +3127,36 @@ class BangluIMEService : InputMethodService(),
         if (result.bengali != committedNow) {
             val ic = currentInputConnection
             val expected = committedNow + appendText
+            // S70: a punctuation key right after the fast commit appends দাঁড়ি/
+            // comma to the editor before this reconcile lands, so the plain
+            // endsWith(expected) guard could NEVER match dot-terminated words
+            // — they permanently kept the preview spelling while
+            // space-terminated words self-corrected. Tolerate exactly one
+            // trailing tight-punctuation character and preserve it.
+            val before = ic?.getTextBeforeCursor(expected.length + 4, 0)?.toString()
+            val trailing = when {
+                before == null -> null
+                before.endsWith(expected) -> ""
+                before.length > expected.length &&
+                    isBanglaTightPunctuation(before.last()) &&
+                    before.dropLast(1).endsWith(expected) -> before.last().toString()
+                else -> null
+            }
             if (ic != null &&
                 sessionToken == imeTextSessionToken &&
                 buffer.isEmpty() &&
                 keyboardMode.value == KeyboardMode.BANGLU &&
                 !rawCommitInputMode &&
-                ic.getTextBeforeCursor(expected.length + 4, 0)?.toString()?.endsWith(expected) == true
+                trailing != null
             ) {
                 ic.beginBatchEdit()
-                ic.deleteSurroundingText(expected.length, 0)
-                ic.commitText(result.bengali + appendText, 1)
+                ic.deleteSurroundingText(expected.length + trailing.length, 0)
+                ic.commitText(result.bengali + appendText + trailing, 1)
                 ic.endBatchEdit()
-                lastCommittedTextLength = result.bengali.length + appendText.length
+                lastCommittedTextLength = result.bengali.length + appendText.length + trailing.length
                 maybeOfferAutoCorrectUndo(phonetic, committedNow, result.bengali, appendText)
                 finalWord = result.bengali
-                log("reconcileFastCommit: '$committedNow' -> '${result.bengali}'")
+                log("reconcileFastCommit: '$committedNow' -> '${result.bengali}' (trailing='$trailing')")
             }
         }
         // Learning always uses the ENGINE result, never a preview the engine

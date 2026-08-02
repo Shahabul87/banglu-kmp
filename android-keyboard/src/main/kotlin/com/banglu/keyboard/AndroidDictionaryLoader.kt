@@ -73,7 +73,10 @@ class AndroidDictionaryLoader(
                 }
                 if (BuildConfig.DEBUG) Log.d(TAG, "Copy complete (${file.length() / 1024 / 1024}MB)")
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "Failed to copy database from assets", e)
+                // S70: unconditional — a failed 151MB copy (usually low free
+                // storage) leaves the keyboard seed-only FOREVER with zero
+                // trace in release builds. No user data in this log.
+                Log.e(TAG, "Failed to copy database from assets", e)
             }
         }
         file
