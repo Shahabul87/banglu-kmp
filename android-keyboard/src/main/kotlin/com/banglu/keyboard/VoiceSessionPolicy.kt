@@ -36,12 +36,17 @@ object VoiceSessionPolicy {
     const val ERROR_LANGUAGE_UNAVAILABLE = 13
 
     /** Errors that plausibly mean "the online recognizer can't be reached
-     *  right now" — worth exactly ONE retry forcing the offline-capable
-     *  path before giving up. Includes ERROR_SERVER/_DISCONNECTED: the old
-     *  code let those retry forever (a latent bug — the guard only fired for
-     *  ERROR_NETWORK/_TIMEOUT), which is exactly the "listening chip that
-     *  can never deliver" failure mode this round closes. */
+     *  right now". S69 ladder: one PLAIN retry first (a transient server
+     *  hiccup usually succeeds online, and forcing offline on the first
+     *  hiccup was a trap — most devices have no bn-BD offline pack, so the
+     *  forced-offline retry died with a language-pack error and voice went
+     *  terminally dead, reproduced 2/2 in the 2026-07-19 on-device audit),
+     *  then one offline retry, then give up. Includes ERROR_SERVER/
+     *  _DISCONNECTED: the old code let those retry forever (S55). */
     private val NETWORK_CLASS_ERRORS = setOf(ERROR_NETWORK, ERROR_NETWORK_TIMEOUT, ERROR_SERVER, ERROR_SERVER_DISCONNECTED)
+
+    /** S69: the service marks its plain network retry used via this check. */
+    fun isNetworkClassError(error: Int): Boolean = error in NETWORK_CLASS_ERRORS
 
     /** Offline Bangla model missing / unsupported by this recognizer — no
      *  amount of retrying fixes this; only an actionable message does. */
@@ -60,6 +65,13 @@ object VoiceSessionPolicy {
          *  retry with EXTRA_PREFER_OFFLINE=true. Fires at most once per
          *  dictation session (guarded by the caller's `offlineRetryUsed`). */
         object RetryOffline : VoiceAction
+
+        /** S69: the forced-offline retry hit a missing-language-pack error —
+         *  drop the offline preference and retry ONLINE. Only reachable when
+         *  the offline preference was auto-forced by the ladder (not chosen
+         *  by the user), so it cannot loop: after this the session is online
+         *  again and a further pack error is terminal. */
+        object RetryOnline : VoiceAction
 
         /** Commit any live partial, then destroy+recreate the recognizer and
          *  retry with the SAME offline preference as before. */
@@ -83,8 +95,14 @@ object VoiceSessionPolicy {
      * of this pure table).
      *
      * @param error the recognizer error code
+     * @param networkRetryUsed S69: whether the plain same-mode network retry
+     *   has already fired once this dictation session
      * @param offlineRetryUsed whether [RetryOffline] has already fired once
      *   this dictation session
+     * @param offlineForcedBySession S69: true when the CURRENT offline
+     *   preference came from the ladder's own [RetryOffline] (not from the
+     *   user's "offline first" setting) — a pack-missing error then means
+     *   the ladder walked into a dead end and must walk back online.
      * @param fruitlessRestarts consecutive NO_MATCH/SPEECH_TIMEOUT cycles
      *   already counted BEFORE this one
      * @param maxFruitlessRestarts session cap on consecutive silent cycles
@@ -97,14 +115,25 @@ object VoiceSessionPolicy {
      */
     fun onError(
         error: Int,
+        networkRetryUsed: Boolean,
         offlineRetryUsed: Boolean,
+        offlineForcedBySession: Boolean,
         fruitlessRestarts: Int,
         maxFruitlessRestarts: Int,
         busyRestarts: Int,
         maxBusyRestarts: Int
     ): VoiceAction {
         if (error in OFFLINE_PACK_MISSING_ERRORS) {
-            return VoiceAction.ShowMessage(VoiceInputState.OFFLINE_PACK_MISSING)
+            // S69: if WE forced offline (the user didn't ask for it), the
+            // pack error is our own dead end — go back online instead of
+            // showing a terminal message about an offline pack the user
+            // never wanted. User-chosen offline-first keeps the honest
+            // terminal message: their setting genuinely cannot work.
+            return if (offlineForcedBySession) {
+                VoiceAction.RetryOnline
+            } else {
+                VoiceAction.ShowMessage(VoiceInputState.OFFLINE_PACK_MISSING)
+            }
         }
         if (error in SILENT_ERRORS) {
             val nextCount = fruitlessRestarts + 1
@@ -115,10 +144,11 @@ object VoiceSessionPolicy {
             }
         }
         if (error in NETWORK_CLASS_ERRORS) {
-            return if (!offlineRetryUsed) {
-                VoiceAction.RetryOffline
-            } else {
-                VoiceAction.ShowMessage(VoiceInputState.ERROR)
+            // S69 ladder: plain online retry → offline retry → give up.
+            return when {
+                !networkRetryUsed -> VoiceAction.RestartSameMode
+                !offlineRetryUsed -> VoiceAction.RetryOffline
+                else -> VoiceAction.ShowMessage(VoiceInputState.ERROR)
             }
         }
         if (error in BUSY_CLASS_ERRORS) {

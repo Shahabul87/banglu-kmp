@@ -152,6 +152,13 @@ class BangluIMEService : InputMethodService(),
      *  _DISCONNECTED) offline retry per dictation session — see
      *  VoiceSessionPolicy. Reset at the top of every fresh onVoiceInput(). */
     private var voiceOfflineRetryUsed = false
+    /** S69: one PLAIN same-mode retry for network-class errors before the
+     *  offline ladder step. Reset with the other session counters. */
+    private var voiceNetworkRetryUsed = false
+    /** S69: the current offline preference was forced by the error ladder
+     *  (not the user's setting) — lets a pack-missing error walk back online
+     *  instead of dead-ending. */
+    private var voiceOfflineForcedBySession = false
     /** S55 (F-ANDROID-006): fires if startListening() gets no
      *  RecognitionListener callback at all within the timeout — the
      *  recognizer is dead, not slow. Disarmed by every callback. */
@@ -218,6 +225,10 @@ class BangluIMEService : InputMethodService(),
         private const val VOICE_POSSIBLY_COMPLETE_SILENCE_MS = 2_800
         private const val VOICE_RESTART_DELAY_MS = 250L
         private const val VOICE_ERROR_RESTART_DELAY_MS = 650L
+        /** S69: terminal voice errors stay readable for 6s (was 1.8s — chips
+         *  vanished before anyone could read them, so testers reported
+         *  "voice does nothing" instead of the actual error text). */
+        private const val VOICE_ERROR_CHIP_MS = 6000L
         /** S55 (F-ANDROID-006): if no RecognitionListener callback arrives
          *  within this window after startListening(), assume the recognizer
          *  is dead (battery-restricted service, stolen recognition slot, a
@@ -1706,6 +1717,8 @@ class BangluIMEService : InputMethodService(),
         // own onError now drives any offline fallback (see VoiceSessionPolicy).
         voicePreferOfflineForSession = prefs.getBoolean(PREF_VOICE_OFFLINE_PREFERRED, false)
         voiceOfflineRetryUsed = false
+        voiceNetworkRetryUsed = false
+        voiceOfflineForcedBySession = false
 
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             log("onVoiceInput: SpeechRecognizer unavailable")
@@ -1765,6 +1778,10 @@ class BangluIMEService : InputMethodService(),
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, VOICE_COMPLETE_SILENCE_MS)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, VOICE_POSSIBLY_COMPLETE_SILENCE_MS)
             putExtra(RecognizerIntent.EXTRA_PROMPT, "বাংলায় বলুন")
+            // S69: several Google-app/OEM recognizer builds return
+            // ERROR_CLIENT or silently drop results without the calling
+            // package for attribution — AOSP LatinIME sets it too.
+            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
         }
 
         try {
@@ -1918,7 +1935,9 @@ class BangluIMEService : InputMethodService(),
                 // gamble — never leaves a listening chip that cannot deliver.
                 val action = VoiceSessionPolicy.onError(
                     error = error,
+                    networkRetryUsed = voiceNetworkRetryUsed,
                     offlineRetryUsed = voiceOfflineRetryUsed,
+                    offlineForcedBySession = voiceOfflineForcedBySession,
                     fruitlessRestarts = voiceFruitlessRestarts,
                     maxFruitlessRestarts = VOICE_MAX_FRUITLESS_RESTARTS,
                     busyRestarts = voiceBusyRestarts,
@@ -1928,7 +1947,17 @@ class BangluIMEService : InputMethodService(),
                     VoiceSessionPolicy.VoiceAction.RetryOffline -> {
                         voiceOfflineRetryUsed = true
                         voicePreferOfflineForSession = true
+                        voiceOfflineForcedBySession = true
                         log("voice: network-class error=$error, retrying once with offline preference")
+                        commitLiveVoicePartialBeforeRestart(error)
+                        restartVoiceRecognitionSoon(afterError = true)
+                    }
+                    VoiceSessionPolicy.VoiceAction.RetryOnline -> {
+                        // S69: the ladder's own offline retry hit a missing
+                        // bn-BD pack — walk back to the online recognizer.
+                        voicePreferOfflineForSession = false
+                        voiceOfflineForcedBySession = false
+                        log("voice: offline pack missing after forced-offline retry (error=$error), returning to online")
                         commitLiveVoicePartialBeforeRestart(error)
                         restartVoiceRecognitionSoon(afterError = true)
                     }
@@ -1937,6 +1966,12 @@ class BangluIMEService : InputMethodService(),
                             voiceFruitlessRestarts++
                         } else if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
                             voiceBusyRestarts++
+                        } else if (VoiceSessionPolicy.isNetworkClassError(error)) {
+                            // S69: this restart consumed the one plain
+                            // network retry; the next network error goes to
+                            // the offline ladder step.
+                            voiceNetworkRetryUsed = true
+                            log("voice: network-class error=$error, plain online retry first")
                         }
                         commitLiveVoicePartialBeforeRestart(error)
                         restartVoiceRecognitionSoon(afterError = true)
@@ -1955,7 +1990,21 @@ class BangluIMEService : InputMethodService(),
                         voiceBusyRestarts = 0
                         voiceDictationActive = false
                         voiceInputState.value = action.state
-                        if (action.state != VoiceInputState.IDLE) resetVoiceStateSoon()
+                        // S69: mid-session permission loss gets the SAME
+                        // remediation as the pre-flight gate — launch the
+                        // permission flow instead of a chip that just fades.
+                        if (action.state == VoiceInputState.PERMISSION_REQUIRED) {
+                            startActivity(
+                                Intent(this@BangluIMEService, VoicePermissionActivity::class.java)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                        // S69: terminal error chips hold long enough to READ
+                        // — the old 1.8s wipe is why every tester report says
+                        // "nothing happened" instead of quoting the message.
+                        if (action.state != VoiceInputState.IDLE) {
+                            resetVoiceStateSoon(VOICE_ERROR_CHIP_MS)
+                        }
                     }
                 }
             }
@@ -2607,6 +2656,13 @@ class BangluIMEService : InputMethodService(),
         voiceInputLevel.value = 0f
         voiceRestartJob?.cancel()
         voiceRestartJob = serviceScope.launch {
+            // S69: unbind the wedged recognizer FIRST, then let the delay
+            // give Google's RecognitionService time to settle before
+            // rebinding. The old order (delay → release+create in the same
+            // main-thread frame) matched the on-device audit's "session 2
+            // cancelled at 0.6s, session 3 dead mic" signature — the classic
+            // 'voice works once, then never again'.
+            if (afterError) releaseSpeechRecognizer()
             delay(if (afterError) VOICE_ERROR_RESTART_DELAY_MS else VOICE_RESTART_DELAY_MS)
             if (
                 imeSessionVisible &&
@@ -2614,9 +2670,7 @@ class BangluIMEService : InputMethodService(),
                 !voiceStopRequested &&
                 !voiceCancelRequested
             ) {
-                if (afterError) {
-                    releaseSpeechRecognizer()
-                } else {
+                if (!afterError) {
                     finishVoiceComposingText()
                 }
                 startVoiceRecognition()
@@ -2742,10 +2796,10 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
-    private fun resetVoiceStateSoon() {
+    private fun resetVoiceStateSoon(delayMs: Long = 1800) {
         voiceResetJob?.cancel()
         voiceResetJob = serviceScope.launch {
-            delay(1800)
+            delay(delayMs)
             if (
                 imeSessionVisible && (
                     voiceInputState.value == VoiceInputState.ERROR ||

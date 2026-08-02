@@ -21,12 +21,16 @@ class VoiceSessionPolicyTest {
 
     private fun onError(
         error: Int,
+        networkRetryUsed: Boolean = false,
         offlineRetryUsed: Boolean = false,
+        offlineForcedBySession: Boolean = false,
         fruitlessRestarts: Int = 0,
         busyRestarts: Int = 0
     ) = VoiceSessionPolicy.onError(
         error = error,
+        networkRetryUsed = networkRetryUsed,
         offlineRetryUsed = offlineRetryUsed,
+        offlineForcedBySession = offlineForcedBySession,
         fruitlessRestarts = fruitlessRestarts,
         maxFruitlessRestarts = maxFruitless,
         busyRestarts = busyRestarts,
@@ -43,37 +47,75 @@ class VoiceSessionPolicyTest {
     }
 
     @Test
-    fun `ERROR_NETWORK retries offline exactly once, not twice`() {
-        val first = onError(error = VoiceSessionPolicy.ERROR_NETWORK, offlineRetryUsed = false)
-        assertEquals(VoiceSessionPolicy.VoiceAction.RetryOffline, first)
+    fun `S69 network ladder - plain online retry first, then offline, then terminal`() {
+        // 1st network error: plain same-mode (online) retry — a transient
+        // server hiccup usually succeeds online, and forcing offline first
+        // was a trap on devices with no bn-BD offline pack.
+        val first = onError(error = VoiceSessionPolicy.ERROR_NETWORK)
+        assertEquals(VoiceSessionPolicy.VoiceAction.RestartSameMode, first)
 
-        // Second network-class failure in the SAME session (offlineRetryUsed
-        // now true, as the caller would set after acting on `first`) must be
-        // terminal, not another retry — otherwise a flaky network loops the
-        // listening chip forever.
-        val second = onError(error = VoiceSessionPolicy.ERROR_NETWORK, offlineRetryUsed = true)
-        assertEquals(VoiceSessionPolicy.VoiceAction.ShowMessage(VoiceInputState.ERROR), second)
+        // 2nd: now the offline-capable step.
+        val second = onError(error = VoiceSessionPolicy.ERROR_NETWORK, networkRetryUsed = true)
+        assertEquals(VoiceSessionPolicy.VoiceAction.RetryOffline, second)
+
+        // 3rd: terminal — otherwise a flaky network loops the chip forever.
+        val third = onError(
+            error = VoiceSessionPolicy.ERROR_NETWORK,
+            networkRetryUsed = true,
+            offlineRetryUsed = true
+        )
+        assertEquals(VoiceSessionPolicy.VoiceAction.ShowMessage(VoiceInputState.ERROR), third)
     }
 
     @Test
-    fun `ERROR_SERVER also retries offline exactly once (closes the old unconditional-retry bug)`() {
-        val first = onError(error = VoiceSessionPolicy.ERROR_SERVER, offlineRetryUsed = false)
-        assertEquals(VoiceSessionPolicy.VoiceAction.RetryOffline, first)
-
-        val second = onError(error = VoiceSessionPolicy.ERROR_SERVER, offlineRetryUsed = true)
-        assertEquals(VoiceSessionPolicy.VoiceAction.ShowMessage(VoiceInputState.ERROR), second)
+    fun `ERROR_SERVER walks the same S69 ladder (closes the old unconditional-retry bug)`() {
+        assertEquals(
+            VoiceSessionPolicy.VoiceAction.RestartSameMode,
+            onError(error = VoiceSessionPolicy.ERROR_SERVER)
+        )
+        assertEquals(
+            VoiceSessionPolicy.VoiceAction.RetryOffline,
+            onError(error = VoiceSessionPolicy.ERROR_SERVER, networkRetryUsed = true)
+        )
+        assertEquals(
+            VoiceSessionPolicy.VoiceAction.ShowMessage(VoiceInputState.ERROR),
+            onError(error = VoiceSessionPolicy.ERROR_SERVER, networkRetryUsed = true, offlineRetryUsed = true)
+        )
     }
 
     @Test
-    fun `ERROR_LANGUAGE_NOT_SUPPORTED shows the offline-pack-missing message`() {
-        val action = onError(error = VoiceSessionPolicy.ERROR_LANGUAGE_NOT_SUPPORTED, offlineRetryUsed = true)
+    fun `S69 - pack-missing during LADDER-forced offline walks back online instead of dead-ending`() {
+        // The 2026-07-19 on-device audit: server hiccup → forced offline →
+        // code 12 (no bn-BD pack) → terminal message, even though online
+        // recognition worked. Now: back to online.
+        val action = onError(
+            error = VoiceSessionPolicy.ERROR_LANGUAGE_NOT_SUPPORTED,
+            networkRetryUsed = true,
+            offlineRetryUsed = true,
+            offlineForcedBySession = true
+        )
+        assertEquals(VoiceSessionPolicy.VoiceAction.RetryOnline, action)
+    }
+
+    @Test
+    fun `pack-missing under the USER's offline-first setting stays an honest terminal message`() {
+        val action = onError(
+            error = VoiceSessionPolicy.ERROR_LANGUAGE_NOT_SUPPORTED,
+            offlineForcedBySession = false
+        )
         assertEquals(VoiceSessionPolicy.VoiceAction.ShowMessage(VoiceInputState.OFFLINE_PACK_MISSING), action)
     }
 
     @Test
-    fun `ERROR_LANGUAGE_UNAVAILABLE also shows the offline-pack-missing message`() {
-        val action = onError(error = VoiceSessionPolicy.ERROR_LANGUAGE_UNAVAILABLE, offlineRetryUsed = false)
-        assertEquals(VoiceSessionPolicy.VoiceAction.ShowMessage(VoiceInputState.OFFLINE_PACK_MISSING), action)
+    fun `ERROR_LANGUAGE_UNAVAILABLE follows the same forced-vs-chosen split`() {
+        assertEquals(
+            VoiceSessionPolicy.VoiceAction.RetryOnline,
+            onError(error = VoiceSessionPolicy.ERROR_LANGUAGE_UNAVAILABLE, offlineForcedBySession = true)
+        )
+        assertEquals(
+            VoiceSessionPolicy.VoiceAction.ShowMessage(VoiceInputState.OFFLINE_PACK_MISSING),
+            onError(error = VoiceSessionPolicy.ERROR_LANGUAGE_UNAVAILABLE, offlineForcedBySession = false)
+        )
     }
 
     @Test

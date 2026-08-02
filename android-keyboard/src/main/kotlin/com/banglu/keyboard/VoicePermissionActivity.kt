@@ -35,30 +35,56 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 class VoicePermissionActivity : ComponentActivity() {
+    /** S69: permanently-denied mic (twice "Don't allow" / device policy) —
+     *  the request returns instantly with no dialog. The old code just
+     *  finish()ed, so the tester's experience was: tap mic → flash →
+     *  nothing, forever, with zero in-app path out. */
+    private val showSettingsEscape = mutableStateOf(false)
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) {
-            markVoiceDisclosureAccepted()
+        when {
+            granted -> {
+                markVoiceDisclosureAccepted()
+                setResult(Activity.RESULT_OK)
+                finish()
+            }
+            !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) -> {
+                showSettingsEscape.value = true
+            }
+            else -> {
+                setResult(Activity.RESULT_CANCELED)
+                finish()
+            }
         }
-        setResult(if (granted) Activity.RESULT_OK else Activity.RESULT_CANCELED)
-        finish()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setFinishOnTouchOutside(true)
-        val hasPermission = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         setBangluContent {
             VoicePermissionScreen(
+                showSettingsEscape = showSettingsEscape.value,
                 onAllow = {
-                    if (hasPermission) {
+                    // S69: re-check at tap time — the old onCreate-captured
+                    // value could go stale across activity recreation.
+                    if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                         markVoiceDisclosureAccepted()
                         setResult(Activity.RESULT_OK)
                         finish()
                     } else {
                         permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
+                },
+                onOpenSettings = {
+                    startActivity(
+                        android.content.Intent(
+                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            android.net.Uri.fromParts("package", packageName, null)
+                        )
+                    )
+                    finish()
                 },
                 onCancel = {
                     setResult(Activity.RESULT_CANCELED)
@@ -83,7 +109,12 @@ class VoicePermissionActivity : ComponentActivity() {
 }
 
 @Composable
-private fun VoicePermissionScreen(onAllow: () -> Unit, onCancel: () -> Unit) {
+private fun VoicePermissionScreen(
+    showSettingsEscape: Boolean = false,
+    onAllow: () -> Unit,
+    onOpenSettings: () -> Unit = {},
+    onCancel: () -> Unit
+) {
     val accepted = remember { mutableStateOf(false) }
     Box(
         modifier = Modifier
@@ -115,7 +146,13 @@ private fun VoicePermissionScreen(onAllow: () -> Unit, onCancel: () -> Unit) {
                     color = Color(0xFF5B6278)
                 )
                 Text(
-                    text = if (accepted.value) "আমি বুঝেছি" else "চালু করতে Allow চাপুন।",
+                    text = when {
+                        showSettingsEscape ->
+                            "মাইক্রোফোন অনুমতি বন্ধ করা আছে — Android আর জিজ্ঞেস করবে না। " +
+                                "চালু করতে Settings → Permissions → Microphone থেকে Allow করুন।"
+                        accepted.value -> "আমি বুঝেছি"
+                        else -> "চালু করতে Allow চাপুন।"
+                    },
                     fontSize = 14.sp,
                     color = Color(0xFF9A4D3D),
                     fontWeight = FontWeight.SemiBold
@@ -129,16 +166,27 @@ private fun VoicePermissionScreen(onAllow: () -> Unit, onCancel: () -> Unit) {
                     ) {
                         Text("বাতিল")
                     }
-                    Button(
-                        onClick = {
-                            accepted.value = true
-                            onAllow()
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFA34F3F))
-                    ) {
-                        Text("Allow")
+                    if (showSettingsEscape) {
+                        Button(
+                            onClick = onOpenSettings,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFA34F3F))
+                        ) {
+                            Text("সেটিংস খুলুন")
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                accepted.value = true
+                                onAllow()
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFA34F3F))
+                        ) {
+                            Text("Allow")
+                        }
                     }
                 }
             }
