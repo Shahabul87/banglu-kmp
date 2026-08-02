@@ -48,6 +48,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -152,6 +153,15 @@ class BangluIMEService : InputMethodService(),
      *  _DISCONNECTED) offline retry per dictation session — see
      *  VoiceSessionPolicy. Reset at the top of every fresh onVoiceInput(). */
     private var voiceOfflineRetryUsed = false
+    /** S73: generation stamp for recognizer instances — bumped on create and
+     *  on release; listeners reject callbacks whose stamp is stale. */
+    private var recognizerGeneration = 0
+    /** S73: deadline-based watchdog state (single ticker coroutine instead
+     *  of cancel+relaunch per recognizer callback). 0 = disarmed. */
+    @Volatile
+    private var voiceWatchdogDeadlineAt = 0L
+    /** S73: last mic-level UI write — RMS callbacks are throttled to ~15Hz. */
+    private var lastRmsUiUpdateAt = 0L
     /** S69: one PLAIN same-mode retry for network-class errors before the
      *  offline ladder step. Reset with the other session counters. */
     private var voiceNetworkRetryUsed = false
@@ -229,6 +239,8 @@ class BangluIMEService : InputMethodService(),
          *  vanished before anyone could read them, so testers reported
          *  "voice does nothing" instead of the actual error text). */
         private const val VOICE_ERROR_CHIP_MS = 6000L
+        /** S73: watchdog ticker period — one coroutine checking a deadline. */
+        private const val VOICE_WATCHDOG_TICK_MS = 1000L
         /** S55 (F-ANDROID-006): if no RecognitionListener callback arrives
          *  within this window after startListening(), assume the recognizer
          *  is dead (battery-restricted service, stolen recognition slot, a
@@ -1822,7 +1834,12 @@ class BangluIMEService : InputMethodService(),
         voiceLastAutoCommittedPartial = null
         val recognizer = speechRecognizer ?: SpeechRecognizer.createSpeechRecognizer(this).also {
             speechRecognizer = it
-            it.setRecognitionListener(createVoiceRecognitionListener())
+            // S73: every recognizer instance gets a generation stamp; its
+            // listener rejects callbacks once the instance is released, so a
+            // destroyed recognizer's late callbacks can never mutate a newer
+            // session (production-audit finding).
+            recognizerGeneration++
+            it.setRecognitionListener(createVoiceRecognitionListener(recognizerGeneration))
         }
 
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -1862,15 +1879,12 @@ class BangluIMEService : InputMethodService(),
      *  audit reproduced (a bound RecognitionService that never responds).
      *  Every callback in [createVoiceRecognitionListener] disarms this. */
     private fun armVoiceWatchdog() {
-        voiceWatchdogJob?.cancel()
-        voiceWatchdogJob = serviceScope.launch {
-            delay(VOICE_WATCHDOG_TIMEOUT_MS)
-            log("voice: watchdog fired — no recognizer callback within ${VOICE_WATCHDOG_TIMEOUT_MS}ms")
-            onVoiceWatchdogTimeout()
-        }
+        voiceWatchdogDeadlineAt = System.currentTimeMillis() + VOICE_WATCHDOG_TIMEOUT_MS
+        ensureVoiceWatchdogTicker()
     }
 
     private fun disarmVoiceWatchdog() {
+        voiceWatchdogDeadlineAt = 0L
         voiceWatchdogJob?.cancel()
         voiceWatchdogJob = null
     }
@@ -1878,13 +1892,31 @@ class BangluIMEService : InputMethodService(),
     /** S56: mid-session callbacks re-arm a rolling liveness deadline instead
      *  of just disarming — a session that goes permanently silent after one
      *  early callback (F-ONDEVICE-001) is a wedged recognizer binding, not a
-     *  healthy listening state. */
+     *  healthy listening state.
+     *  S73: deadline WRITE only. The old implementation cancelled and
+     *  relaunched a coroutine on every onRmsChanged (10-20/s for the whole
+     *  dictation, all on the IME main thread) — one ticker now checks the
+     *  deadline once a second instead. */
     private fun pokeVoiceWatchdog() {
-        voiceWatchdogJob?.cancel()
+        if (voiceWatchdogDeadlineAt != 0L) {
+            voiceWatchdogDeadlineAt = System.currentTimeMillis() + VOICE_LIVENESS_TIMEOUT_MS
+        }
+    }
+
+    private fun ensureVoiceWatchdogTicker() {
+        if (voiceWatchdogJob?.isActive == true) return
         voiceWatchdogJob = serviceScope.launch {
-            delay(VOICE_LIVENESS_TIMEOUT_MS)
-            log("voice: liveness deadline passed — recognizer silent mid-session")
-            onVoiceWatchdogTimeout()
+            while (isActive) {
+                delay(VOICE_WATCHDOG_TICK_MS)
+                val deadline = voiceWatchdogDeadlineAt
+                if (deadline == 0L) break
+                if (System.currentTimeMillis() >= deadline) {
+                    voiceWatchdogDeadlineAt = 0L
+                    log("voice: watchdog deadline passed — recognizer silent")
+                    onVoiceWatchdogTimeout()
+                    break
+                }
+            }
         }
     }
 
@@ -1925,15 +1957,25 @@ class BangluIMEService : InputMethodService(),
         resetVoiceStateSoon()
     }
 
-    private fun createVoiceRecognitionListener(): RecognitionListener {
+    private fun createVoiceRecognitionListener(generation: Int): RecognitionListener {
         return object : RecognitionListener {
+            /** S73: true once this listener's recognizer instance has been
+             *  released — its late callbacks must not touch newer sessions. */
+            private fun isStale(): Boolean {
+                val stale = generation != recognizerGeneration
+                if (stale) log("voice: ignoring callback from released recognizer (gen $generation != $recognizerGeneration)")
+                return stale
+            }
+
             override fun onReadyForSpeech(params: Bundle?) {
+                if (isStale()) return
                 pokeVoiceWatchdog()
                 log("voice: ready")
                 voiceInputState.value = VoiceInputState.LISTENING
             }
 
             override fun onBeginningOfSpeech() {
+                if (isStale()) return
                 pokeVoiceWatchdog()
                 log("voice: beginning")
                 voiceFruitlessRestarts = 0
@@ -1945,13 +1987,22 @@ class BangluIMEService : InputMethodService(),
             }
 
             override fun onRmsChanged(rmsdB: Float) {
+                if (isStale()) return
                 pokeVoiceWatchdog()
-                voiceInputLevel.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
+                // S73: RMS fires 10-20x/s — throttle the Compose state write
+                // (each one recomposes the mic level UI) to ~15Hz.
+                val now = System.currentTimeMillis()
+                if (now - lastRmsUiUpdateAt >= 66) {
+                    lastRmsUiUpdateAt = now
+                    voiceInputLevel.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
+                }
             }
             override fun onBufferReceived(buffer: ByteArray?) {
+                if (isStale()) return
                 pokeVoiceWatchdog()
             }
             override fun onEndOfSpeech() {
+                if (isStale()) return
                 pokeVoiceWatchdog()
                 log("voice: end")
                 voiceLastSpeechEndedAt = System.currentTimeMillis()
@@ -1961,6 +2012,7 @@ class BangluIMEService : InputMethodService(),
             }
 
             override fun onError(error: Int) {
+                if (isStale()) return
                 disarmVoiceWatchdog()
                 log("voice: error=$error")
                 voicePartialCommitJob?.cancel()
@@ -2068,8 +2120,17 @@ class BangluIMEService : InputMethodService(),
             }
 
             override fun onResults(results: Bundle?) {
+                if (isStale()) return
                 disarmVoiceWatchdog()
                 voicePartialCommitJob?.cancel()
+                // S73 (production audit): a delayed Latin-token partial refine
+                // could land AFTER the final commit and re-append the old
+                // partial — the results path never invalidated it (stop,
+                // error, and watchdog paths did). Cancel + bump the partial
+                // generation so any in-flight refine's guard fails.
+                voiceTokenRefineJob?.cancel()
+                voiceTokenRefineJob = null
+                voicePartialGeneration++
                 if (voiceCancelRequested) {
                     log("voice: ignored canceled result")
                     suggestions.clear()
@@ -2127,6 +2188,7 @@ class BangluIMEService : InputMethodService(),
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
+                if (isStale()) return
                 pokeVoiceWatchdog()
                 val partial = partialResults
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
@@ -2214,6 +2276,9 @@ class BangluIMEService : InputMethodService(),
 
     private fun releaseSpeechRecognizer() {
         disarmVoiceWatchdog()
+        // S73: invalidate the released instance's listener — its in-flight
+        // callbacks must not mutate whatever session comes next.
+        recognizerGeneration++
         val recognizer = speechRecognizer ?: return
         try {
             recognizer.cancel()
@@ -2429,6 +2494,12 @@ class BangluIMEService : InputMethodService(),
     private fun commitVoiceFinalText(segment: String, punctuation: String) {
         val command = handleVoiceCommand(segment)
         if (command) return
+
+        // S73: a final commit supersedes any in-flight partial refine — bump
+        // the generation so a slow refine's guard fails instead of
+        // re-appending the last partial after this commit (covers the
+        // pause-commit path; onResults also cancels the job directly).
+        voicePartialGeneration++
 
         val cleanSegment = normalizeVoiceSegment(segment, useInstantPreview = true)
         if (cleanSegment.isEmpty()) return
