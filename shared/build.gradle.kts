@@ -23,7 +23,16 @@ kotlin {
     // (not Wasm) so old Android Chrome in BD still runs the converter page.
     js(IR) {
         moduleName = "banglu-engine"
-        browser()
+        browser {
+            // S74 (production audit): the JS test suites are Node-only BY
+            // DESIGN — they load the 17MB slim dictionary from disk via
+            // require('fs') (S45WebParityJsTest and probes), which webpack
+            // cannot even bundle for a browser run, so jsBrowserTest has
+            // never been runnable and only turned `check` red. The browser()
+            // target itself stays: it produces the library distribution the
+            // extension/macOS-IME/web consume. The JS wall is jsNodeTest.
+            testTask { enabled = false }
+        }
         nodejs()
         binaries.library()
         generateTypeScriptDefinitions()

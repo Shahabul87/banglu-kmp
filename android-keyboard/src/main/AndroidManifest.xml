@@ -60,11 +60,16 @@
 
         <!-- S44: keep AndroidX auto-init out of the IME process — these
              initializers (emoji2/lifecycle/profileinstaller) add cold-start
-             work the keyboard does not need; release gate enforces this. -->
+             work the keyboard does not need; release gate enforces this.
+             S74: MissingClass is EXPECTED here — this element is a removal
+             marker (tools:node="remove"), so the class deliberately does not
+             exist on the classpath; lint can't see removal semantics. Scoped
+             ignore, not a baseline entry, per the production audit. -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
-            tools:node="remove" />
+            tools:node="remove"
+            tools:ignore="MissingClass" />
 
         <!-- IME Service -->
         <service
