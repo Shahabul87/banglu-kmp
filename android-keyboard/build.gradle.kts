@@ -22,8 +22,8 @@ android {
         applicationId = "com.banglu.keyboard"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2077
-        versionName = "1.5.40"
+        versionCode = 2078
+        versionName = "1.5.41"
     }
 
     signingConfigs {
