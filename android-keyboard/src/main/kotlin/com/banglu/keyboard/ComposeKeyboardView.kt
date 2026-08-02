@@ -171,6 +171,11 @@ private val KeyVisualPaddingV = 5.5.dp
 private val KeyCorner = 7.dp
 private val KeyboardPadding = 6.dp
 
+/** S68: a light 30-50ms tap must still show a visible press flash — below
+ *  this floor the highlight cleared within 2-3 frames and light taps felt
+ *  unregistered (testers pressed again, harder). */
+private const val MIN_PRESS_FLASH_MS = 90L
+
 // ── Symbol Layouts ───────────────────────────────────────────────────────────────
 private val SYMBOLS_1_ROWS = listOf(
     listOf("+", "\u00D7", "\u00F7", "=", "/", "_", "<", ">", "[", "]"),
@@ -1538,26 +1543,37 @@ private fun LetterRows(
 
     Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
 
-    // Row 2: a s d f g h j k l (indented)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = middleLetterRowIndent())
-    ) {
-        for (key in LETTER_ROW_2) {
-            val display = letterKeyLabel(key, shiftState, useShiftedLetterInput)
-            val input = letterKeyInput(key, shiftState, useShiftedLetterInput)
-            KeyButton(
-                label = display,
-                modifier = Modifier.weight(1f),
-                height = keyHeight,
-                bgColor = colors.keyBg,
-                longPressOptions = longPressAlternatives(key[0]),
-                onTextInput = onTextInput,
-                hitPaddingH = letterHitPad,
-                onReplaceLast = { alt -> onBackspace(); onTextInput(alt) },
-                onClick = { onKeyPress(input) }
-            )
+    // Row 2: a s d f g h j k l (indented). S68: the indent used to be Row
+    // .padding — OUTSIDE every touch cell, leaving a dead strip ~2/3 of a
+    // key wide hugging 'a' and 'l' (testers: "a needs a hard press" — their
+    // slightly-off-center taps landed on nothing). The indent is now folded
+    // INTO the edge keys' touch cells (extra weight + asymmetric hit
+    // padding): pixel-identical rendering, but the whole row is touchable
+    // edge-to-edge like rows 1 and 3.
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val indent = middleLetterRowIndent()
+        val baseKeyWidth = (maxWidth - indent * 2) / LETTER_ROW_2.size
+        val edgeWeight = (baseKeyWidth + indent) / baseKeyWidth
+        Row(modifier = Modifier.fillMaxWidth()) {
+            for ((index, key) in LETTER_ROW_2.withIndex()) {
+                val isFirst = index == 0
+                val isLast = index == LETTER_ROW_2.size - 1
+                val display = letterKeyLabel(key, shiftState, useShiftedLetterInput)
+                val input = letterKeyInput(key, shiftState, useShiftedLetterInput)
+                KeyButton(
+                    label = display,
+                    modifier = Modifier.weight(if (isFirst || isLast) edgeWeight else 1f),
+                    height = keyHeight,
+                    bgColor = colors.keyBg,
+                    longPressOptions = longPressAlternatives(key[0]),
+                    onTextInput = onTextInput,
+                    hitPaddingH = letterHitPad,
+                    hitPaddingStart = if (isFirst) letterHitPad + indent else null,
+                    hitPaddingEnd = if (isLast) letterHitPad + indent else null,
+                    onReplaceLast = { alt -> onBackspace(); onTextInput(alt) },
+                    onClick = { onKeyPress(input) }
+                )
+            }
         }
     }
 
@@ -1925,6 +1941,11 @@ private fun KeyButton(
     /** S11: keeps the visual key gap INSIDE the touch cell so rows tile
      *  edge-to-edge with no dead strips between keys. */
     hitPaddingH: Dp = 0.dp,
+    /** S68: asymmetric overrides so an edge key can absorb a row indent into
+     *  its touch cell (row 2's 'a'/'l') while rendering identically. Null =
+     *  use [hitPaddingH]. */
+    hitPaddingStart: Dp? = null,
+    hitPaddingEnd: Dp? = null,
     /** S11: with commit-on-press the base character is already committed when
      *  the long-press popup opens; selecting an alternative must REPLACE it. */
     onReplaceLast: ((String) -> Unit)? = null,
@@ -1940,12 +1961,29 @@ private fun KeyButton(
     var isPressed by remember { mutableStateOf(false) }
     var showAlternatives by remember { mutableStateOf(false) }
 
+    // S68: minimum-duration press flash. A light 30-50ms tap cleared
+    // isPressed within 2-3 frames — the highlight was invisible, so light
+    // taps FELT unregistered even though the character committed (testers
+    // then pressed again, harder). The visual state latches for ≥90ms.
+    var pressVisual by remember { mutableStateOf(false) }
+    var pressedAtMs by remember { mutableStateOf(0L) }
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            pressedAtMs = System.currentTimeMillis()
+            pressVisual = true
+        } else if (pressVisual) {
+            val held = System.currentTimeMillis() - pressedAtMs
+            if (held < MIN_PRESS_FLASH_MS) delay(MIN_PRESS_FLASH_MS - held)
+            pressVisual = false
+        }
+    }
+
     // Feature 1.4: Scale UP on press for single-character keys (key preview effect)
     val isCharKey = label.length == 1
     val scale by animateFloatAsState(
-        targetValue = if (isPressed && previewOn) {
+        targetValue = if (pressVisual && previewOn) {
             if (isCharKey) 1.04f else 0.97f
-        } else if (isPressed) 0.97f else 1f,
+        } else if (pressVisual) 0.97f else 1f,
         animationSpec = tween(durationMillis = 50)
     )
     val keyShape = RoundedCornerShape(KeyCorner)
@@ -1978,7 +2016,10 @@ private fun KeyButton(
                     var released = false
                     if (longPressOptions.isNotEmpty()) {
                         try {
-                            withTimeout(viewConfiguration.longPressTimeoutMillis) {
+                            // S68: 1.5x the system threshold — deliberate slow
+                            // pressers were opening the variants popup by
+                            // accident, and the popup then ate their next tap.
+                            withTimeout(viewConfiguration.longPressTimeoutMillis * 3 / 2) {
                                 while (true) {
                                     val event = awaitPointerEvent()
                                     event.changes.forEach { it.consume() }
@@ -2019,20 +2060,25 @@ private fun KeyButton(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = hitPaddingH + KeyVisualPaddingH, vertical = KeyVisualPaddingV)
-                .shadow(if (isPressed) 0.dp else 1.5.dp, keyShape, clip = false)
+                .padding(
+                    start = (hitPaddingStart ?: hitPaddingH) + KeyVisualPaddingH,
+                    end = (hitPaddingEnd ?: hitPaddingH) + KeyVisualPaddingH,
+                    top = KeyVisualPaddingV,
+                    bottom = KeyVisualPaddingV
+                )
+                .shadow(if (pressVisual) 0.dp else 1.5.dp, keyShape, clip = false)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
                 }
                 .clip(keyShape)
-                .background(if (isPressed) colors.keyPressed else bgColor),
+                .background(if (pressVisual) colors.keyPressed else bgColor),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = label,
                 color = colors.keyText,
-            fontSize = if (isPressed && isCharKey && previewOn) scaledSp(fontSize + 2) else scaledSp(fontSize),
+            fontSize = if (pressVisual && isCharKey && previewOn) scaledSp(fontSize + 2) else scaledSp(fontSize),
                 fontWeight = if (label.length <= 2) FontWeight.Medium else FontWeight.Normal,
                 textAlign = TextAlign.Center,
                 maxLines = 1
@@ -2042,7 +2088,12 @@ private fun KeyButton(
             Popup(
                 alignment = Alignment.TopCenter,
                 offset = IntOffset(0, -96),
-                properties = PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true),
+                // S68: focusable=false — a focusable popup is its own window
+                // and CONSUMED the tap that dismissed it, so the user's next
+                // keystroke after an (often accidental) long-press vanished.
+                // Non-focusable popups get ACTION_OUTSIDE: the outside tap
+                // dismisses AND still reaches the key underneath.
+                properties = PopupProperties(focusable = false, dismissOnBackPress = true, dismissOnClickOutside = true),
                 onDismissRequest = { showAlternatives = false }
             ) {
                 Row(
