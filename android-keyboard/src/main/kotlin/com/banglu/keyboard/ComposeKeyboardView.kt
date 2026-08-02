@@ -438,6 +438,7 @@ fun BangluKeyboardLayout(
                         spaceLabel = "English (EN)",
                         globeLabel = "BN",
                         enterLabel = enterLabel,
+                        englishAccent = true,
                         onLeftPress = onSymbolsPress,
                         onGlobePress = onGlobePress,
                         onSpace = onSpace,
@@ -1727,6 +1728,10 @@ private fun BottomRow(
     globeLabel: String = "EN",
     enterLabel: String = "\u21B5",
     periodLabel: String = ".",
+    /** S67: English mode must be visually unmistakable \u2014 testers mis-tapped
+     *  the toggle (it sits beside the comma) and then typed "Bengali" into a
+     *  raw-English keyboard that looks identical to the Bangla one. */
+    englishAccent: Boolean = false,
     onLeftPress: () -> Unit,
     onGlobePress: () -> Unit,
     onSpace: () -> Unit,
@@ -1756,7 +1761,7 @@ private fun BottomRow(
             label = globeLabel,
             modifier = Modifier.weight(0.8f),
             height = keyHeight,
-            bgColor = colors.specialKeyBg,
+            bgColor = if (englishAccent) colors.suggestionHighlight.copy(alpha = 0.35f) else colors.specialKeyBg,
             fontSize = 16,
             hitPaddingH = hitPad,
             onClick = onGlobePress
@@ -1780,6 +1785,7 @@ private fun BottomRow(
             modifier = Modifier.weight(3.4f),
             height = keyHeight,
             hitPaddingH = hitPad,
+            accent = englishAccent,
             onClick = onSpace,
             onCursorMove = onCursorMove
         )
@@ -2084,6 +2090,8 @@ private fun SpaceBar(
     modifier: Modifier = Modifier,
     height: Dp = BottomKeyRowHeight,
     hitPaddingH: Dp = 0.dp,
+    /** S67: bold accent styling while the keyboard is in raw-English mode. */
+    accent: Boolean = false,
     onClick: () -> Unit,
     onCursorMove: (Int) -> Unit = {}
 ) {
@@ -2175,14 +2183,22 @@ private fun SpaceBar(
                 .shadow(if (isPressed) 0.dp else 1.5.dp, keyShape, clip = false)
                 .graphicsLayer { scaleX = scale; scaleY = scale }
                 .clip(keyShape)
-                .background(if (isPressed) colors.keyPressed else colors.keyBg),
+                .background(if (isPressed) colors.keyPressed else colors.keyBg)
+                .then(
+                    if (accent) Modifier.border(1.5.dp, colors.suggestionHighlight, keyShape)
+                    else Modifier
+                ),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = if (isCursorMode) "\u25C4 \u25BA cursor" else label,
-                color = if (isCursorMode) colors.keyText else colors.keyText.copy(alpha = 0.68f),
+                color = when {
+                    isCursorMode -> colors.keyText
+                    accent -> colors.suggestionHighlight
+                    else -> colors.keyText.copy(alpha = 0.68f)
+                },
                 fontSize = scaledSp(13),
-                fontWeight = FontWeight.Medium,
+                fontWeight = if (accent) FontWeight.Bold else FontWeight.Medium,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

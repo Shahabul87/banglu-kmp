@@ -980,6 +980,13 @@ class BangluIMEService : InputMethodService(),
         configureInputSafety(info)
         buffer = ""
         suggestions.clear()
+        // S67: fresh keyboard open → settings-default language mode
+        // (reloadSettings just refreshed letterModeBeforeSymbols from the
+        // default_mode pref). Field switches while visible keep the mode.
+        if (resetModeOnNextShow) {
+            resetModeOnNextShow = false
+            keyboardMode.value = letterModeBeforeSymbols
+        }
         collapseTransientKeyboardUi()
         clearCommitCaches()
         if (pendingVoiceStart) {
@@ -1061,9 +1068,20 @@ class BangluIMEService : InputMethodService(),
     }
 
     override fun onWindowHidden() {
+        // S67: the language toggle was sticky for the LIFE OF THE PROCESS —
+        // one (often accidental) tap put every field in every app in
+        // raw-English mode until the user found the toggle again, reported
+        // as "I type Bengali and get English". The mode now survives field
+        // switches within one visible session, but a fresh keyboard open
+        // returns to the settings default.
+        resetModeOnNextShow = true
         cleanupImeSession("window_hidden", cancelVoice = true)
         super.onWindowHidden()
     }
+
+    /** S67: consume-once flag — set when the keyboard window hides, applied
+     *  on the next onStartInputView so reopening starts in the default mode. */
+    private var resetModeOnNextShow = true
 
     /** First-run flow: the disclosure activity still has focus when its accept
      *  broadcast lands, so dictation must start when the keyboard next shows. */

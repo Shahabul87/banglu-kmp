@@ -1274,6 +1274,26 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (inTypoCorrection || inCompoundSplit || inNegationCompound || inEmphaticOCompound) return raw
         val key = input.trim().lowercase()
         if (key.length < 4 || !key.all { it in 'a'..'z' }) return raw
+        // S67 mirror of convertWord's S24 4x-margin arbitration: an English
+        // key whose preview result is a weakly-attested corpus squatter must
+        // flip to the loanword HERE too, or the editor shows উসের while
+        // Space commits ইউজার (user/size class — WYSIWYG break the tester
+        // reads as the keyboard swapping their word). Identical conditions:
+        // validator loaded, detector hit, sub-1.0 confidence, 4x frequency.
+        if (validator.isLoaded() && EnglishDetector.isEnglish(key) && raw.confidence < 1.0) {
+            phoneticIndex?.lookupEnglish(key)?.let { en ->
+                if (en != raw.bengali &&
+                    validator.getFrequency(en) > maxOf(validator.getFrequency(raw.bengali), 6) * 4
+                ) {
+                    return ConversionResult(
+                        bengali = en,
+                        confidence = 0.93,
+                        source = ResolutionSource.ENGLISH_LEXICON,
+                        alternatives = emptyList()
+                    )
+                }
+            }
+        }
         return tryJunkLexiconRescue(key, raw) ?: raw
     }
 
@@ -1387,6 +1407,25 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 }
             }
             return ranked
+        }
+
+        // S67 mirror (tester: "typing Bengali, getting English"): the commit
+        // path resolves English-detected keys via curated variant → english
+        // lexicon BEFORE its corpus layer (convertWordRaw's EnglishDetector
+        // branch), so a rare corpus word squatting on an English key can
+        // never win at Space. The preview ran its corpus check FIRST — size
+        // previewed শিজে / user previewed উসের while Space committed সাইজ /
+        // ইউজার, a WYSIWYG break the user reads as the keyboard "changing
+        // the word". Same precedence position, same ≥4 stability guard.
+        // Deliberately NOT mirrored: the raw-Latin passthrough — V2 parity
+        // law keeps the live preview Bangla even for lexicon-miss English.
+        if (key.length >= 4 && EnglishDetector.isEnglish(key)) {
+            tryCuratedEnglishVariant(key, trimmed)?.let { result ->
+                return result.copy(alternatives = emptyList())
+            }
+            tryEnglishLexicon(key, trimmed)?.let { result ->
+                return result.copy(alternatives = emptyList())
+            }
         }
 
         // Live composing should follow the V2 rule layer for short syllables.
