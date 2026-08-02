@@ -352,10 +352,10 @@ object SmartEngineAdapter {
         if (count <= 0) return
         val s = storage ?: return
         val scope = persistenceScope ?: return
-        // Dispatchers.Default: the IME's persistenceScope is Main-dispatched,
-        // and AndroidStorage reparses the full learned-words/bigram prefs blob
-        // (500/300/800-line caps) on every save — keep that off the UI thread.
-        scope.launch(Dispatchers.Default) {
+        // S66: single-lane persistence dispatcher — off the UI thread AND off
+        // Dispatchers.Default, so blob re-serialization never competes with
+        // the latency-critical conversion pool (see persistenceDispatcher).
+        scope.launch(com.banglu.engine.util.persistenceDispatcher) {
             try {
                 s.saveUserBigram(prev, next, count)
             } catch (_: Exception) {
@@ -431,7 +431,7 @@ object SmartEngineAdapter {
         val s = storage ?: return
         val scope = persistenceScope ?: return
         // Off the Main-dispatched persistenceScope — see recordNextWordUsage.
-        scope.launch(Dispatchers.Default) {
+        scope.launch(com.banglu.engine.util.persistenceDispatcher) {
             try {
                 s.saveLearnedWord(phonetic, bengali, frequency)
             } catch (_: Exception) {
@@ -468,7 +468,9 @@ object SmartEngineAdapter {
         selectedPreferenceMap[key] = cleanBengali
         // Suggestion taps are preferences, not dictionary mutations. Explicit
         // user dictionary formulas still go through addCustomConversion().
-        getEngine().clearCache()
+        // S66: a preference affects only this key — evict it alone instead of
+        // wiping the whole cache on every explicit tap (cache-thrash fix).
+        getEngine().evictCachedWord(key)
         persistLearnedWord(key, cleanBengali, baseFrequency)
     }
 

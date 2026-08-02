@@ -5595,7 +5595,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         // 1. Personal pairs first: the user's own repeated (prev, next) commits
         // are the strongest signal and correct the corpus's formal register.
-        userBigrams[previous]?.entries
+        // S66: snapshot under the same lock recordUserBigram writes with —
+        // iterating the live inner map races the background persistence path.
+        val personalFollowers = com.banglu.engine.util.runSynchronized(userBigrams) {
+            userBigrams[previous]?.let { HashMap(it) }
+        }
+        personalFollowers?.entries
             ?.filter { it.value >= USER_BIGRAM_MIN_COUNT }
             ?.sortedByDescending { it.value }
             ?.take(limit)
@@ -5667,15 +5672,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val next = nextBengali.trim()
         if (prev.isEmpty() || next.isEmpty() || prev == next) return 0
 
-        val followers = userBigrams.getOrPut(prev) { mutableMapOf() }
-        val updated = (followers[next] ?: 0) + 1
-        followers[next] = updated
-        if (followers.size > USER_BIGRAM_MAX_FOLLOWERS) {
-            followers.entries
-                .minByOrNull { it.value }
-                ?.let { followers.remove(it.key) }
+        // S66: written from the background persistence path while the
+        // prediction path reads — same lock on both sides.
+        return com.banglu.engine.util.runSynchronized(userBigrams) {
+            val followers = userBigrams.getOrPut(prev) { mutableMapOf() }
+            val updated = (followers[next] ?: 0) + 1
+            followers[next] = updated
+            if (followers.size > USER_BIGRAM_MAX_FOLLOWERS) {
+                followers.entries
+                    .minByOrNull { it.value }
+                    ?.let { followers.remove(it.key) }
+            }
+            updated
         }
-        return updated
     }
 
     /**
@@ -5804,6 +5813,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         wordCache.clear()
         storeLookupMemo.clear()
         containsWordMemo.clear()
+    }
+
+    /**
+     * S66: evict ONE key's cached conversion. Ranking preferences change only
+     * that key's result, so the preference path uses this instead of
+     * [clearCache] — a full wipe on every explicit suggestion tap kept the
+     * cache permanently cold in long sessions (every keystroke then paid the
+     * full conversion + store cost). Word ADDITIONS still use [clearCache]:
+     * a new dictionary word can change compound-split gating of other keys.
+     */
+    fun evictCachedWord(phonetic: String) {
+        wordCache.remove(phonetic.lowercase().trim())
     }
 
     /**
