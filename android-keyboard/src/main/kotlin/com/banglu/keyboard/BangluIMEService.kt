@@ -44,6 +44,7 @@ import com.banglu.engine.types.SmartSuggestion
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -108,6 +109,22 @@ class BangluIMEService : InputMethodService(),
         recordFailureEvent("coroutine_exception", throwable)
     }
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main + coroutineExceptionHandler)
+
+    /** S75 (production audit): ONE serialized lane for every keystroke-path
+     *  engine call (composing, suggestions, commit prep, reconcile,
+     *  predictions, voice token refines) AND for learning mutations. A
+     *  cancelled conversion job cannot stop its synchronous CPU/SQLite work
+     *  mid-flight — on the shared Default pool, rapid typing left several
+     *  stale conversions competing with the newest key for cores (uneven
+     *  smoothness, CPU spikes, GC churn) and racing the engine's unguarded
+     *  recursion flags. On a single lane at most ONE engine call runs at a
+     *  time; jobs cancelled before their turn never run at all (natural
+     *  conflation), and learning serializes with conversions. Engine
+     *  REBUILDS deliberately stay off this lane — the adapter's engine swap
+     *  is atomic, and queueing conversions behind a seconds-long rebuild
+     *  would freeze typing. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val engineLane = Dispatchers.Default.limitedParallelism(1)
     private val strictModePenaltyExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "BangluImePolicy").apply { isDaemon = true }
     }
@@ -578,7 +595,7 @@ class BangluIMEService : InputMethodService(),
 
         composingJob?.cancel()
         composingJob = serviceScope.launch {
-            val result = withContext(Dispatchers.Default) { safeComposingConvert(snapshot) }
+            val result = withContext(engineLane) { safeComposingConvert(snapshot) }
             if (keyboardMode.value == KeyboardMode.BANGLU && buffer == snapshot) {
                 composingInput = snapshot
                 composingResult = result
@@ -660,7 +677,7 @@ class BangluIMEService : InputMethodService(),
         suggestionJob = serviceScope.launch {
             delay(70)
             if (keyboardMode.value != KeyboardMode.BANGLU || buffer != snapshot) return@launch
-            val newSuggestions = withContext(Dispatchers.Default) {
+            val newSuggestions = withContext(engineLane) {
                 safeSuggestions(snapshot, 8)
             }
             if (keyboardMode.value == KeyboardMode.BANGLU && buffer == snapshot) {
@@ -683,7 +700,7 @@ class BangluIMEService : InputMethodService(),
 
         val snapshot = input
         commitConversionJob = serviceScope.launch {
-            val result = withContext(Dispatchers.Default) {
+            val result = withContext(engineLane) {
                 safeConvertWithContext(snapshot)
             }
             if (keyboardMode.value == KeyboardMode.BANGLU && buffer == snapshot) {
@@ -706,7 +723,8 @@ class BangluIMEService : InputMethodService(),
         // the store's resolution on that device forever.
         if (!dictionaryReadyForLearning) return
         serviceScope.launch {
-            withContext(Dispatchers.Default) {
+            // S75: learning mutates the dictionary — same lane as conversions.
+            withContext(engineLane) {
                 SmartEngineAdapter.onWordSelected(phonetic, bengali, learnAsWord, explicitChoice)
             }
         }
@@ -2361,7 +2379,7 @@ class BangluIMEService : InputMethodService(),
         voiceTokenRefineJob?.cancel()
         voiceTokenRefineJob = serviceScope.launch {
             val refinedPartial = try {
-                withContext(Dispatchers.Default) { normalizeVoiceSegment(rawPartial, useInstantPreview = false) }
+                withContext(engineLane) { normalizeVoiceSegment(rawPartial, useInstantPreview = false) }
             } catch (e: Throwable) {
                 if (BuildConfig.DEBUG) Log.e(TAG, "Voice partial refine failed for '$rawPartial'", e)
                 return@launch
@@ -2557,7 +2575,7 @@ class BangluIMEService : InputMethodService(),
             val sessionToken = imeTextSessionToken
             serviceScope.launch {
                 val refinedSegment = try {
-                    withContext(Dispatchers.Default) { normalizeVoiceSegment(segment, useInstantPreview = false) }
+                    withContext(engineLane) { normalizeVoiceSegment(segment, useInstantPreview = false) }
                 } catch (e: Throwable) {
                     if (BuildConfig.DEBUG) Log.e(TAG, "Voice final refine failed for '$segment'", e)
                     return@launch
@@ -3035,7 +3053,7 @@ class BangluIMEService : InputMethodService(),
             val snapshot = committedBengali
             val prev2Snapshot = secondLastCommittedBengali
             suggestionJob = serviceScope.launch {
-                val predictions = withContext(Dispatchers.Default) {
+                val predictions = withContext(engineLane) {
                     SmartEngineAdapter.getNextWordPredictions(prev2Snapshot, snapshot, 4)
                 }
                 if (
@@ -3212,7 +3230,7 @@ class BangluIMEService : InputMethodService(),
         // below re-runs them with the authoritative word if it differs.
         updatePredictions(committedNow)
         serviceScope.launch {
-            val result = withContext(Dispatchers.Default) { safeConvertWithContext(phonetic) }
+            val result = withContext(engineLane) { safeConvertWithContext(phonetic) }
             reconcileFastCommit(phonetic, committedNow, previousWord, sessionToken, result, appendText)
         }
     }
@@ -3312,7 +3330,8 @@ class BangluIMEService : InputMethodService(),
         if (boundaryIndex >= 0 && isBengaliChar(beforePrevious[boundaryIndex])) return
 
         serviceScope.launch {
-            withContext(Dispatchers.Default) {
+            // S75: bigram recording mutates engine state — conversions lane.
+            withContext(engineLane) {
                 SmartEngineAdapter.recordNextWordUsage(previous, committed)
             }
         }
