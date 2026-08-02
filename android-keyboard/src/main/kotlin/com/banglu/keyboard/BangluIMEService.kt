@@ -2564,30 +2564,22 @@ class BangluIMEService : InputMethodService(),
             .let { normalizeVoiceLatinTokens(it, useInstantPreview) }
     }
 
-    private fun normalizeVoiceLatinTokens(text: String, useInstantPreview: Boolean): String {
-        if (!containsLatinToken(text)) return text
-        return text.split(Regex("(\\s+)"))
-            .joinToString("") { token ->
-                if (token.all { it.isWhitespace() }) token else normalizeVoiceToken(token, useInstantPreview)
-            }
-    }
-
-    private fun normalizeVoiceToken(token: String, useInstantPreview: Boolean): String {
-        val core = token.trim { !it.isLetterOrDigit() }
-        if (core.isEmpty() || core.any { isBengaliChar(it) } || core.any { it.isDigit() }) return token
-        val lower = core.lowercase(Locale.ROOT)
-        val converted = try {
+    // S71: token normalization extracted to VoiceTextNormalizer (unit-pinned).
+    // The old inline version used text.split(Regex("(\\s+)")).joinToString("")
+    // — JS split semantics; Kotlin discards the captured delimiters, so ONE
+    // Latin token in a segment glued the entire sentence (tester screenshot:
+    // এটাকেনহচ্ছেএটাকেনবারবার…), and the glued text then re-appended as a
+    // "fresh segment" — the duplication half of the same report.
+    private fun normalizeVoiceLatinTokens(text: String, useInstantPreview: Boolean): String =
+        VoiceTextNormalizer.normalizeLatinTokens(text) { lower ->
             if (useInstantPreview) {
                 SmartEngineAdapter.convertForInstantPreview(lower)
             } else {
                 SmartEngineAdapter.convertWord(lower).bengali
             }
-        } catch (_: Exception) { core }
-        if (converted == core || converted.any { it in 'A'..'Z' || it in 'a'..'z' }) return token
-        return token.replace(core, converted)
-    }
+        }
 
-    private fun containsLatinToken(text: String): Boolean = text.any { it in 'A'..'Z' || it in 'a'..'z' }
+    private fun containsLatinToken(text: String): Boolean = VoiceTextNormalizer.containsLatinToken(text)
 
     private fun handleVoiceCommand(segment: String): Boolean {
         val clean = segment.trim().lowercase(Locale.ROOT)
