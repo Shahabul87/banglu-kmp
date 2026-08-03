@@ -571,10 +571,32 @@ class BangluIMEService : InputMethodService(),
         return try {
             SmartEngineAdapter.convertWord(input)
         } catch (e: Throwable) {
+            recordEngineFailure("convert", e)
             if (BuildConfig.DEBUG) Log.e(TAG, "Conversion failed for '$input'", e)
             ConversionResult(input, 0.0, ResolutionSource.RULE, emptyList())
         } finally {
             recordLatencyEvent("convert", (System.nanoTime() - start) / 1_000_000)
+        }
+    }
+
+    /** S77 (tester: "suggestions stop, only English letters show"): engine
+     *  exceptions were swallowed by the safe wrappers with DEBUG-only logs —
+     *  a failure STORM (the pre-S66 bigram/cache races) was completely
+     *  invisible in release builds, which is why tester reports could only
+     *  describe symptoms. Counts always; logs at most once a minute; never
+     *  includes what the user typed. */
+    private var engineFailureCount = 0
+    private var lastEngineFailureLogAt = 0L
+    private fun recordEngineFailure(where: String, e: Throwable) {
+        engineFailureCount++
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastEngineFailureLogAt >= 60_000) {
+            lastEngineFailureLogAt = now
+            Log.w(
+                TAG,
+                "engine failure #$engineFailureCount at $where: ${e::class.java.simpleName}: ${e.message?.take(120)}"
+            )
+            recordImeEvent("engine_failure_${where}_${e::class.java.simpleName}")
         }
     }
 
@@ -602,7 +624,8 @@ class BangluIMEService : InputMethodService(),
 
         composingJob?.cancel()
         composingJob = serviceScope.launch {
-            val result = withContext(engineLane) { safeComposingConvert(snapshot) }
+            // S77: refine failed → keep the Bangla instant echo on screen.
+            val result = withContext(engineLane) { safeComposingConvert(snapshot) } ?: return@launch
             if (keyboardMode.value == KeyboardMode.BANGLU && buffer == snapshot) {
                 composingInput = snapshot
                 composingResult = result
@@ -613,15 +636,22 @@ class BangluIMEService : InputMethodService(),
     }
 
     /** Conservative conversion for live composing text while the word is incomplete. */
-    private fun safeComposingConvert(input: String): ConversionResult {
+    /** S77: returns null on engine failure — the caller must then KEEP the
+     *  rule-only instant preview. The old fallback returned the raw Latin
+     *  input, and the async refine painted it over the Bangla echo: during
+     *  the pre-S66 exception storms the editor showed "only English
+     *  letters" while Space (whose fallback chain ends in the rule
+     *  transliteration) still committed Bangla — the tester report exactly. */
+    private fun safeComposingConvert(input: String): ConversionResult? {
         val start = System.nanoTime()
         return try {
             SmartEngineAdapter.convertForComposing(
                 input, lastCommittedBengali, secondLastCommittedBengali
             )
         } catch (e: Throwable) {
+            recordEngineFailure("compose", e)
             if (BuildConfig.DEBUG) Log.e(TAG, "Composing conversion failed for '$input'", e)
-            ConversionResult(input, 0.0, ResolutionSource.RULE, emptyList())
+            null
         } finally {
             recordLatencyEvent("compose", (System.nanoTime() - start) / 1_000_000)
         }
@@ -635,6 +665,7 @@ class BangluIMEService : InputMethodService(),
                 input, listOf(secondLastCommittedBengali, lastCommittedBengali), limit
             )
         } catch (e: Throwable) {
+            recordEngineFailure("suggestions", e)
             if (BuildConfig.DEBUG) Log.e(TAG, "Suggestions failed for '$input'", e)
             emptyList()
         } finally {
@@ -649,6 +680,7 @@ class BangluIMEService : InputMethodService(),
                 input, listOf(secondLastCommittedBengali, lastCommittedBengali)
             )
         } catch (e: Throwable) {
+            recordEngineFailure("context_convert", e)
             if (BuildConfig.DEBUG) Log.e(TAG, "Context conversion failed for '$input'", e)
             safeConvert(input)
         } finally {
