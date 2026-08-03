@@ -173,6 +173,11 @@ class BangluIMEService : InputMethodService(),
     /** S73: generation stamp for recognizer instances — bumped on create and
      *  on release; listeners reject callbacks whose stamp is stale. */
     private var recognizerGeneration = 0
+    /** S76 (audit): stopListening() was called and the terminal
+     *  onResults/onError has not arrived yet. Android's contract forbids
+     *  another startListening() on that instance until it does — a quick
+     *  Retry now destroys the awaiting instance and starts fresh. */
+    private var voiceAwaitingTerminal = false
     /** S73: deadline-based watchdog state (single ticker coroutine instead
      *  of cancel+relaunch per recognizer callback). 0 = disarmed. */
     @Volatile
@@ -295,6 +300,8 @@ class BangluIMEService : InputMethodService(),
         private const val PREF_VOICE_TYPING_ENABLED = "voice_typing_enabled"
         /** S72: >0 forces lite dictionary for that many more cold starts. */
         private const val PREF_FORCED_LITE_LAUNCHES = "forced_lite_launches"
+        /** S76: timestamp of the newest LOW_MEMORY exit already reacted to. */
+        private const val PREF_LAST_LOW_MEMORY_EXIT_TS = "last_low_memory_exit_ts"
         private const val PREF_VOICE_OFFLINE_PREFERRED = "voice_offline_preferred"
         private const val PREF_RECENT_EMOJIS = "recent_emojis"
         private const val PREF_CLIPBOARD_HISTORY = "clipboard_history"
@@ -769,9 +776,19 @@ class BangluIMEService : InputMethodService(),
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
 
         prefs = getSharedPreferences("banglu_prefs", Context.MODE_PRIVATE)
-        // S72: consume one forced-lite launch per cold start — after
+        // S76: Android 14+ no longer delivers the imminent-kill trim levels
+        // (deprecated, not sent since API 34), so onTrimMemory alone can
+        // never degrade on modern devices. The reliable signal is the
+        // PREVIOUS death: if the OS recently killed this process for
+        // memory while in full mode, come up lite.
+        maybeArmForcedLiteFromExitHistory()
+        // S72/S76: consume one forced-lite launch per cold start — after
         // FORCED_LITE_LAUNCHES starts, full mode is retried automatically.
+        // The value is captured BEFORE the decrement (the old order made a
+        // 5-launch grant behave as 4) and served from a field for the rest
+        // of this launch.
         val forcedLite = prefs.getInt(PREF_FORCED_LITE_LAUNCHES, 0)
+        forcedLiteActiveThisLaunch = forcedLite > 0
         if (forcedLite > 0) prefs.edit().putInt(PREF_FORCED_LITE_LAUNCHES, forcedLite - 1).apply()
         installCrashDiagnostics()
         installImeRuntimePolicy()
@@ -818,32 +835,51 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
+    /** S76: single-flight guard for engine rebuilds. Both flags are only
+     *  touched on the Main-dispatched serviceScope, so plain vars suffice.
+     *  A rebuild requested while one is running (pressure degrade racing a
+     *  preference flip) sets the pending flag; the running rebuild loops
+     *  once more with the LATEST profile instead of racing it. */
+    private var engineRebuildInFlight = false
+    private var engineRebuildPending = false
+
     private fun reloadUserLearningAsync() {
         // S44 (audit finding): the rebuild serves the seed engine for seconds —
         // learning must close for the whole window, not just the first boot.
         dictionaryReadyForLearning = false
         serviceScope.launch {
+            if (engineRebuildInFlight) {
+                engineRebuildPending = true
+                return@launch
+            }
+            engineRebuildInFlight = true
             try {
-                val liteMode = shouldUseLiteDictionary()
-                if (loadedDictionaryLiteMode != null && loadedDictionaryLiteMode != liteMode) {
-                    SmartEngineAdapter.reset()
-                    SmartEngineAdapter.configurePersistenceScope(serviceScope)
-                    SmartEngineAdapter.initializeSync()
-                    loadedDictionaryLiteMode = null
-                }
-                val dictionaryLoader = createDictionaryLoader()
-                // Pre-initialize attach: skip corpus-index build when db already present.
-                val preAttached = attachPhoneticIndexStore(dictionaryLoader, preInitialize = true)
-                SmartEngineAdapter.initialize(
-                    AndroidStorage(applicationContext),
-                    loader = dictionaryLoader
-                )
-                if (!preAttached) attachPhoneticIndexStore(dictionaryLoader, preInitialize = false)
-                loadedDictionaryLiteMode = liteMode
-                dictionaryReadyForLearning = true
-                log("reloadUserLearning: active profile preferences loaded")
+                do {
+                    engineRebuildPending = false
+                    val liteMode = shouldUseLiteDictionary()
+                    if (loadedDictionaryLiteMode != null && loadedDictionaryLiteMode != liteMode) {
+                        SmartEngineAdapter.reset()
+                        SmartEngineAdapter.configurePersistenceScope(serviceScope)
+                        // S76 (audit): the seed build is ~650ms — never on Main.
+                        withContext(Dispatchers.Default) { SmartEngineAdapter.initializeSync() }
+                        loadedDictionaryLiteMode = null
+                    }
+                    val dictionaryLoader = createDictionaryLoader()
+                    // Pre-initialize attach: skip corpus-index build when db already present.
+                    val preAttached = attachPhoneticIndexStore(dictionaryLoader, preInitialize = true)
+                    SmartEngineAdapter.initialize(
+                        AndroidStorage(applicationContext),
+                        loader = dictionaryLoader
+                    )
+                    if (!preAttached) attachPhoneticIndexStore(dictionaryLoader, preInitialize = false)
+                    loadedDictionaryLiteMode = liteMode
+                    dictionaryReadyForLearning = true
+                    log("reloadUserLearning: active profile preferences loaded")
+                } while (engineRebuildPending)
             } catch (t: Throwable) {
                 if (BuildConfig.DEBUG) Log.e(TAG, "reloadUserLearning: failed", t)
+            } finally {
+                engineRebuildInFlight = false
             }
         }
     }
@@ -935,12 +971,44 @@ class BangluIMEService : InputMethodService(),
         val memoryClass = activityManager?.memoryClass ?: Int.MAX_VALUE
         // < 256 (not <=): modern flagships (S22/Pixel class) report exactly 256m
         // heapgrowthlimit and must qualify for full mode.
-        // S72: a recent memory-pressure degrade forces lite for the next few
-        // cold starts (self-healing counter — see onTrimMemory). The tester
-        // Samsung's exit history showed repeated OS LOW_MEMORY kills of the
-        // full-mode process (~172MB heap on a 256m limit).
-        if (::prefs.isInitialized && prefs.getInt(PREF_FORCED_LITE_LAUNCHES, 0) > 0) return true
+        // S72/S76: a recent memory-pressure degrade (trim signal, exit
+        // history, or post-load guard) forces lite for this launch. Served
+        // from a field captured at onCreate so the launch counter's
+        // decrement can't race the reads. The tester Samsung's exit history
+        // showed repeated OS LOW_MEMORY kills of the full-mode process
+        // (~172MB heap on a 256m limit).
+        if (forcedLiteActiveThisLaunch) return true
         return liteModeEnabled.value || lowRamDevice || memoryClass < 256
+    }
+
+    /** S72/S76: true while this launch must run the lite profile. */
+    private var forcedLiteActiveThisLaunch = false
+
+    /** S76: check ApplicationExitInfo (API 30+) for a recent LOW_MEMORY kill
+     *  of the IME process that we have not reacted to yet. */
+    private fun maybeArmForcedLiteFromExitHistory() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) return
+        if (prefs.getInt(PREF_FORCED_LITE_LAUNCHES, 0) > 0) return
+        try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return
+            val lastHandled = prefs.getLong(PREF_LAST_LOW_MEMORY_EXIT_TS, 0L)
+            val kill = am.getHistoricalProcessExitReasons(packageName, 0, 8).firstOrNull { exit ->
+                exit.processName == packageName && // IME process, not :ui
+                    MemoryPressurePolicy.isRecentLowMemoryExit(
+                        exit.reason, exit.timestamp, lastHandled, System.currentTimeMillis()
+                    )
+            } ?: return
+            // commit(), not apply(): this is the exact state that must
+            // survive the next kill.
+            prefs.edit()
+                .putInt(PREF_FORCED_LITE_LAUNCHES, MemoryPressurePolicy.FORCED_LITE_LAUNCHES)
+                .putLong(PREF_LAST_LOW_MEMORY_EXIT_TS, kill.timestamp)
+                .commit()
+            recordImeEvent("memory_degrade_from_exit_history")
+            Log.w(TAG, "Previous process death was LOW_MEMORY — starting in lite mode")
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "exit-history check failed", e)
+        }
     }
 
     /** S72: react to real OS memory pressure instead of waiting to be
@@ -961,8 +1029,10 @@ class BangluIMEService : InputMethodService(),
      *  arms the forced-lite counter so the next cold starts come up lite. */
     private fun degradeToLiteForMemoryPressure(reason: String) {
         if (!::prefs.isInitialized) return
-        if (prefs.getInt(PREF_FORCED_LITE_LAUNCHES, 0) > 0) return // already degraded
-        prefs.edit().putInt(PREF_FORCED_LITE_LAUNCHES, MemoryPressurePolicy.FORCED_LITE_LAUNCHES).apply()
+        if (forcedLiteActiveThisLaunch) return // already degraded
+        forcedLiteActiveThisLaunch = true
+        // S76: commit(), not apply() — this write races an imminent kill.
+        prefs.edit().putInt(PREF_FORCED_LITE_LAUNCHES, MemoryPressurePolicy.FORCED_LITE_LAUNCHES).commit()
         recordImeEvent("memory_degrade_to_lite_$reason")
         Log.w(TAG, "Memory pressure ($reason): degrading dictionary profile to lite")
         SmartEngineAdapter.clearTransientCaches()
@@ -1079,11 +1149,16 @@ class BangluIMEService : InputMethodService(),
         configureInputSafety(info)
         buffer = ""
         suggestions.clear()
-        // S67: fresh keyboard open → settings-default language mode
-        // (reloadSettings just refreshed letterModeBeforeSymbols from the
-        // default_mode pref). Field switches while visible keep the mode.
-        if (resetModeOnNextShow) {
-            resetModeOnNextShow = false
+        // S67/S76: the language mode resets to the settings default when the
+        // user enters a DIFFERENT app — that kills the original "one
+        // accidental toggle left every app in raw English forever" bug.
+        // Within the SAME app it persists across keyboard hide/show (S76,
+        // tester: typing English in Google search, tapping search, then
+        // returning to the box snapped the keyboard back to Bengali — a
+        // deliberate mode choice must survive same-app round trips).
+        val inputPackage = info?.packageName
+        if (inputPackage != lastInputPackage) {
+            lastInputPackage = inputPackage
             keyboardMode.value = letterModeBeforeSymbols
         }
         collapseTransientKeyboardUi()
@@ -1167,20 +1242,13 @@ class BangluIMEService : InputMethodService(),
     }
 
     override fun onWindowHidden() {
-        // S67: the language toggle was sticky for the LIFE OF THE PROCESS —
-        // one (often accidental) tap put every field in every app in
-        // raw-English mode until the user found the toggle again, reported
-        // as "I type Bengali and get English". The mode now survives field
-        // switches within one visible session, but a fresh keyboard open
-        // returns to the settings default.
-        resetModeOnNextShow = true
         cleanupImeSession("window_hidden", cancelVoice = true)
         super.onWindowHidden()
     }
 
-    /** S67: consume-once flag — set when the keyboard window hides, applied
-     *  on the next onStartInputView so reopening starts in the default mode. */
-    private var resetModeOnNextShow = true
+    /** S76: package of the last edited field — the language mode resets on
+     *  APP change only (null-start forces a reset on the first field). */
+    private var lastInputPackage: String? = null
 
     /** First-run flow: the disclosure activity still has focus when its accept
      *  broadcast lands, so dictation must start when the keyboard next shows. */
@@ -1850,6 +1918,13 @@ class BangluIMEService : InputMethodService(),
         // auto-committed prefix of the PREVIOUS session must not strip (i.e.
         // swallow) new speech that happens to begin with the same words.
         voiceLastAutoCommittedPartial = null
+        // S76: never reuse an instance whose terminal callback is still
+        // outstanding (SpeechRecognizer contract) — destroy it and bind
+        // fresh; the generation bump makes its late callbacks inert.
+        if (voiceAwaitingTerminal) {
+            releaseSpeechRecognizer()
+            voiceAwaitingTerminal = false
+        }
         val recognizer = speechRecognizer ?: SpeechRecognizer.createSpeechRecognizer(this).also {
             speechRecognizer = it
             // S73: every recognizer instance gets a generation stamp; its
@@ -1897,7 +1972,8 @@ class BangluIMEService : InputMethodService(),
      *  audit reproduced (a bound RecognitionService that never responds).
      *  Every callback in [createVoiceRecognitionListener] disarms this. */
     private fun armVoiceWatchdog() {
-        voiceWatchdogDeadlineAt = System.currentTimeMillis() + VOICE_WATCHDOG_TIMEOUT_MS
+        // S76 (audit): elapsedRealtime — wall clock jumps with NTP/user edits.
+        voiceWatchdogDeadlineAt = android.os.SystemClock.elapsedRealtime() + VOICE_WATCHDOG_TIMEOUT_MS
         ensureVoiceWatchdogTicker()
     }
 
@@ -1917,7 +1993,7 @@ class BangluIMEService : InputMethodService(),
      *  deadline once a second instead. */
     private fun pokeVoiceWatchdog() {
         if (voiceWatchdogDeadlineAt != 0L) {
-            voiceWatchdogDeadlineAt = System.currentTimeMillis() + VOICE_LIVENESS_TIMEOUT_MS
+            voiceWatchdogDeadlineAt = android.os.SystemClock.elapsedRealtime() + VOICE_LIVENESS_TIMEOUT_MS
         }
     }
 
@@ -1928,7 +2004,7 @@ class BangluIMEService : InputMethodService(),
                 delay(VOICE_WATCHDOG_TICK_MS)
                 val deadline = voiceWatchdogDeadlineAt
                 if (deadline == 0L) break
-                if (System.currentTimeMillis() >= deadline) {
+                if (android.os.SystemClock.elapsedRealtime() >= deadline) {
                     voiceWatchdogDeadlineAt = 0L
                     log("voice: watchdog deadline passed — recognizer silent")
                     onVoiceWatchdogTimeout()
@@ -2009,7 +2085,7 @@ class BangluIMEService : InputMethodService(),
                 pokeVoiceWatchdog()
                 // S73: RMS fires 10-20x/s — throttle the Compose state write
                 // (each one recomposes the mic level UI) to ~15Hz.
-                val now = System.currentTimeMillis()
+                val now = android.os.SystemClock.elapsedRealtime()
                 if (now - lastRmsUiUpdateAt >= 66) {
                     lastRmsUiUpdateAt = now
                     voiceInputLevel.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
@@ -2031,6 +2107,7 @@ class BangluIMEService : InputMethodService(),
 
             override fun onError(error: Int) {
                 if (isStale()) return
+                voiceAwaitingTerminal = false
                 disarmVoiceWatchdog()
                 log("voice: error=$error")
                 voicePartialCommitJob?.cancel()
@@ -2139,6 +2216,7 @@ class BangluIMEService : InputMethodService(),
 
             override fun onResults(results: Bundle?) {
                 if (isStale()) return
+                voiceAwaitingTerminal = false
                 disarmVoiceWatchdog()
                 voicePartialCommitJob?.cancel()
                 // S73 (production audit): a delayed Latin-token partial refine
@@ -2170,6 +2248,10 @@ class BangluIMEService : InputMethodService(),
                 val best = chooseVoiceResult(phrases)?.let { stripAutoCommittedVoicePrefix(it) }
                 if (best == null) {
                     log("voice: empty results")
+                    // S76 (audit): this terminal path left voiceDictationActive
+                    // true — an ended session that still claimed to be running.
+                    voiceDictationActive = false
+                    finishVoiceComposingText()
                     voiceInputState.value = VoiceInputState.ERROR
                     resetVoiceStateSoon()
                     return
@@ -2284,7 +2366,10 @@ class BangluIMEService : InputMethodService(),
             clearVoiceComposingText()
             voiceHasLiveComposing = false
         }
-        if (cancel) recognizer.cancel() else recognizer.stopListening()
+        if (cancel) recognizer.cancel() else {
+            recognizer.stopListening()
+            voiceAwaitingTerminal = true
+        }
         voiceInputLevel.value = 0f
         if (cancel) suggestions.clear()
         if (voiceInputState.value != VoiceInputState.IDLE) {
@@ -2297,6 +2382,8 @@ class BangluIMEService : InputMethodService(),
         // S73: invalidate the released instance's listener — its in-flight
         // callbacks must not mutate whatever session comes next.
         recognizerGeneration++
+        // S76: a destroyed instance can never deliver its terminal callback.
+        voiceAwaitingTerminal = false
         val recognizer = speechRecognizer ?: return
         try {
             recognizer.cancel()
@@ -2510,14 +2597,16 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun commitVoiceFinalText(segment: String, punctuation: String) {
-        val command = handleVoiceCommand(segment)
-        if (command) return
-
         // S73: a final commit supersedes any in-flight partial refine — bump
         // the generation so a slow refine's guard fails instead of
         // re-appending the last partial after this commit (covers the
         // pause-commit path; onResults also cancels the job directly).
+        // S76 (audit): bumped BEFORE the voice-command early return too — a
+        // spoken command ends the segment just as finally as text does.
         voicePartialGeneration++
+
+        val command = handleVoiceCommand(segment)
+        if (command) return
 
         val cleanSegment = normalizeVoiceSegment(segment, useInstantPreview = true)
         if (cleanSegment.isEmpty()) return
@@ -2527,6 +2616,24 @@ class BangluIMEService : InputMethodService(),
 
         val livePartial = voiceLiveCommittedPartial
         if (livePartial.isNotEmpty()) {
+            // S76 (tester: a দাঁড়ি appears in the EMPTY field after sending a
+            // dictated message): this commit can arrive from the 3.2s pause
+            // timer AFTER the user already hit Send — the field is empty (or
+            // holds new text), yet the append path would still stamp the
+            // trailing "। " into it. If the editor no longer ends with the
+            // live dictation text, the user has moved on: drop the commit
+            // and clear the live-tracking state instead of writing anything.
+            moveVoiceCursorToInsertionPoint(ic)
+            val editorTail = ic.getTextBeforeCursor(livePartial.length, 0)?.toString().orEmpty()
+            if (editorTail != livePartial) {
+                log("voice: final commit dropped — editor no longer ends with the live partial (field sent/cleared)")
+                voiceCurrentPartial = ""
+                voiceLiveCommittedPartial = ""
+                voiceLiveCommitLength = 0
+                voiceLastLivePartialUpdateAt = 0L
+                voiceHasLiveComposing = false
+                return
+            }
             // S56: same word-level revision law as the partial renderer — a
             // final transcript scoped to the recognizer's LAST segment must
             // never replace (and thereby erase) the whole live sentence.

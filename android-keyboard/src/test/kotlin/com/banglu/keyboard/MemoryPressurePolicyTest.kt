@@ -59,6 +59,52 @@ class MemoryPressurePolicyTest {
     }
 
     @Test
+    fun `S76 - range comparisons cover future intermediate and above-COMPLETE levels`() {
+        // Platform guidance: new levels may be added — 12 sits between
+        // RUNNING_LOW and RUNNING_CRITICAL, 90 above COMPLETE.
+        assertEquals(
+            MemoryPressurePolicy.Action.DEGRADE_TO_LITE,
+            MemoryPressurePolicy.onTrim(12, alreadyLite = false)
+        )
+        assertEquals(
+            MemoryPressurePolicy.Action.DEGRADE_TO_LITE,
+            MemoryPressurePolicy.onTrim(90, alreadyLite = false)
+        )
+        assertEquals(
+            MemoryPressurePolicy.Action.CLEAR_CACHES,
+            MemoryPressurePolicy.onTrim(25, alreadyLite = false)
+        )
+    }
+
+    @Test
+    fun `S76 - exit-history trigger fires only for recent unhandled LOW_MEMORY exits`() {
+        val now = 1_000_000_000_000L
+        val hour = 60L * 60 * 1000
+        // Recent LOW_MEMORY kill, never handled → fire.
+        assertTrue(
+            MemoryPressurePolicy.isRecentLowMemoryExit(
+                MemoryPressurePolicy.EXIT_REASON_LOW_MEMORY, now - hour, 0L, now
+            )
+        )
+        // Same exit already handled → never fire twice.
+        assertFalse(
+            MemoryPressurePolicy.isRecentLowMemoryExit(
+                MemoryPressurePolicy.EXIT_REASON_LOW_MEMORY, now - hour, now - hour, now
+            )
+        )
+        // Old kill outside the 72h lookback → ignore.
+        assertFalse(
+            MemoryPressurePolicy.isRecentLowMemoryExit(
+                MemoryPressurePolicy.EXIT_REASON_LOW_MEMORY, now - 80 * hour, 0L, now
+            )
+        )
+        // Other exit reasons (crash/update/user) → ignore.
+        assertFalse(
+            MemoryPressurePolicy.isRecentLowMemoryExit(16, now - hour, 0L, now)
+        )
+    }
+
+    @Test
     fun `post-load guard - tester Samsung at 67 percent stays in full mode`() {
         // 172MB used of a 256MB limit — the observed steady state must NOT
         // trip the guard (that would be a blanket flagship quality loss).

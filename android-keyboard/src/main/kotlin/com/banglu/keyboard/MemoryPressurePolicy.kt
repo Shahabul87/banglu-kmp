@@ -40,21 +40,46 @@ object MemoryPressurePolicy {
      *
      * DEGRADE only on signals that mean "this process is genuinely about to
      * be killed for memory" (RUNNING_LOW / RUNNING_CRITICAL while active,
-     * COMPLETE at the tail of the cached-LRU list). Routine trims
+     * COMPLETE-or-above at the tail of the cached-LRU list). Routine trims
      * (UI_HIDDEN / BACKGROUND fire on every keyboard hide) only shed caches
      * — degrading on those would put every device in lite mode within a day.
+     *
+     * S76 (audit follow-up): Android 14+ DEPRECATED the imminent-kill levels
+     * and no longer delivers them — on modern devices this path is a legacy
+     * safety net only, and the RELIABLE trigger is the previous process
+     * death reason ([isRecentLowMemoryExit], checked at cold start).
+     * Comparisons are ranges, not exact values, per the platform guidance
+     * that intermediate levels may be added.
      */
     fun onTrim(level: Int, alreadyLite: Boolean): Action = when {
-        level == TRIM_MEMORY_RUNNING_LOW ||
-            level == TRIM_MEMORY_RUNNING_CRITICAL ||
-            level == TRIM_MEMORY_COMPLETE ->
+        level >= TRIM_MEMORY_COMPLETE ||
+            (level in TRIM_MEMORY_RUNNING_LOW until TRIM_MEMORY_UI_HIDDEN) ->
             if (alreadyLite) Action.CLEAR_CACHES else Action.DEGRADE_TO_LITE
-        level == TRIM_MEMORY_RUNNING_MODERATE ||
-            level == TRIM_MEMORY_UI_HIDDEN ||
-            level == TRIM_MEMORY_BACKGROUND ||
-            level == TRIM_MEMORY_MODERATE -> Action.CLEAR_CACHES
+        level >= TRIM_MEMORY_RUNNING_MODERATE -> Action.CLEAR_CACHES
         else -> Action.NONE
     }
+
+    /** ApplicationExitInfo.REASON_LOW_MEMORY (API 30+, stable value). */
+    const val EXIT_REASON_LOW_MEMORY = 3
+
+    /** Only a RECENT low-memory kill should force lite — an exit record
+     *  from weeks ago says nothing about today's memory situation. */
+    const val EXIT_LOOKBACK_MS: Long = 72L * 60 * 60 * 1000
+
+    /**
+     * S76: the modern (Android 14+) replacement trigger — at cold start,
+     * did the OS recently kill THIS process for memory, and is that exit
+     * newer than the one we already reacted to?
+     */
+    fun isRecentLowMemoryExit(
+        reason: Int,
+        exitTimestampMs: Long,
+        lastHandledTimestampMs: Long,
+        nowMs: Long
+    ): Boolean =
+        reason == EXIT_REASON_LOW_MEMORY &&
+            exitTimestampMs > lastHandledTimestampMs &&
+            nowMs - exitTimestampMs <= EXIT_LOOKBACK_MS
 
     /** Adaptive post-load guard: full dictionary just loaded — is there
      *  enough heap headroom left to actually run in it? */
