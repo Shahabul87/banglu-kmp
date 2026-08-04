@@ -145,7 +145,14 @@ object PhoneticIndexBuilder {
             // "dukkh" -> alias "dukkho"); the ungeminated key ("dukh") is
             // intentionally NOT indexed — it belongs to the exact word দুখ.
             val manualKeys = foldedManualAliases[word].orEmpty()
-            val aliases = aliasesFor(canonical) + manualKeys
+            // S78 (chandrabindu round): ঁ romanizes to "n" (বেঁচে -> "benche"),
+            // but casual typists drop the nasal entirely ("beche", "pach",
+            // "dat"). Seed the alias chains with the nasal-dropped
+            // romanization so every habit rule composes on it too.
+            val nasalSeed = if ('ঁ' in word) {
+                ReverseTransliterator.reverseWord(word.replace("ঁ", "")).lowercase()
+            } else null
+            val aliases = aliasesFor(canonical, nasalSeed) + manualKeys
             var rowsForWord = 0
             for (key in aliases) {
                 if (key.length !in 2..24 || !ROMAN_ONLY.matches(key)) {
@@ -164,6 +171,7 @@ object PhoneticIndexBuilder {
             if (rowsForWord == 0) wordsWithNoRows++
         }
         promoteModernChhOverArchaicCc(rows)
+        promoteNasalTwinOverPlain(rows)
         lastReport = IndexBuildReport(
             totalWords = total,
             roundTripOk = roundTripOk,
@@ -214,6 +222,42 @@ object PhoneticIndexBuilder {
             println("  chh-promote: '${row.key}' ${owner.bengali}@${owner.frequency} -> ${row.bengali}@${row.frequency}")
         }
         if (promoted > 0) println("  chh-promote: $promoted key(s) now surface the modern চ্ছ form first")
+    }
+
+    /**
+     * S78: the nasal-drop seed above gives chandrabindu words habit-alias rows
+     * under the key casual typists actually press ("beche", "pach", "dat") —
+     * but the plain twin owns that key at canonical priority (পাচ@64 shadows
+     * পাঁচ@95 on "pach"). Mirror of the S33 chh-promote guard: when a habit
+     * row differs from the same-key canonical owner ONLY by chandrabindu and
+     * is strictly more frequent, promote it to canonical priority so the
+     * engine's (tier, priority, freq) order surfaces the nasal word first
+     * while the plain twin stays one slot down. বেচে/বেছে-style keys where
+     * the plain owner is genuinely more frequent are untouched.
+     */
+    private fun promoteNasalTwinOverPlain(rows: ArrayList<PhoneticIndexRow>) {
+        val plainOwners = HashMap<String, PhoneticIndexRow>()
+        for (row in rows) {
+            if (row.priority == PRIORITY_CANONICAL && 'ঁ' !in row.bengali) {
+                val existing = plainOwners[row.key]
+                if (existing == null || row.frequency > existing.frequency) {
+                    plainOwners[row.key] = row
+                }
+            }
+        }
+        if (plainOwners.isEmpty()) return
+        var promoted = 0
+        for (i in rows.indices) {
+            val row = rows[i]
+            if (row.priority != PRIORITY_HABIT || 'ঁ' !in row.bengali) continue
+            val owner = plainOwners[row.key] ?: continue
+            if (row.tier != owner.tier) continue
+            if (row.frequency <= owner.frequency) continue
+            if (row.bengali.replace("ঁ", "") != owner.bengali) continue
+            rows[i] = row.copy(priority = PRIORITY_CANONICAL)
+            promoted++
+        }
+        if (promoted > 0) println("  nasal-promote: $promoted key(s) now surface the chandrabindu form first")
     }
 
     // =========================================================================
@@ -373,10 +417,16 @@ object PhoneticIndexBuilder {
     /**
      * Canonical key first, then habit aliases in rule-table order, deduped,
      * capped at [MAX_KEYS_PER_WORD].
+     *
+     * S78: [nasalSeed] (the nasal-dropped romanization of a chandrabindu
+     * word) joins the set before the rules run, so every habit chain also
+     * composes on it (কাঁদছে -> "kadchhe" -> kadche/kadce/kadse). It shares
+     * the same key budget; the seed itself is always in.
      */
-    internal fun aliasesFor(canonical: String): List<String> {
+    internal fun aliasesFor(canonical: String, nasalSeed: String? = null): List<String> {
         val aliases = LinkedHashSet<String>()
         aliases.add(canonical)
+        if (nasalSeed != null && nasalSeed != canonical) aliases.add(nasalSeed)
         for (rule in HABIT_RULES) expand(aliases, rule.transform)
         return aliases.toList()
     }

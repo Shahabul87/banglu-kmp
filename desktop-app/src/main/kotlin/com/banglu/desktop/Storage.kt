@@ -41,6 +41,16 @@ object FileStorage : PlatformStorage {
         }
     }
 
+    override suspend fun removeLearnedWord(phonetic: String) {
+        // S78 explicit user correction (tap on the engine primary): drop this
+        // key's sub-custom preference rows; custom formulas (f >= 120) stay.
+        synchronized(lock) {
+            val rows = readAll()
+            val kept = rows.filterNot { it.p == phonetic && it.f < 120 }
+            if (kept.size != rows.size) file.writeText(json.encodeToString(kept))
+        }
+    }
+
     override suspend fun clearLearnedWords() {
         synchronized(lock) { file.delete() }
     }

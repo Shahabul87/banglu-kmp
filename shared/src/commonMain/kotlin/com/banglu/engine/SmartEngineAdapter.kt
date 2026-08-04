@@ -450,6 +450,19 @@ object SmartEngineAdapter {
         }
     }
 
+    /** S78: durable half of the primary-tap preference clear. */
+    private fun removeLearnedPreference(phonetic: String) {
+        val s = storage ?: return
+        val scope = persistenceScope ?: return
+        scope.launch(com.banglu.engine.util.persistenceDispatcher) {
+            try {
+                s.removeLearnedWord(phonetic)
+            } catch (_: Exception) {
+                // Persistence failure is non-critical
+            }
+        }
+    }
+
     /**
      * In-session preferences are deliberately NOT run through the F5b
      * sanitation oracle: a tapped suggestion is the user's explicit choice
@@ -474,7 +487,21 @@ object SmartEngineAdapter {
         if (!learningEnabled || !personalDictionaryEnabled) return
 
         val primaryResult = getEngine().convertWord(key)
-        if (cleanBengali == primaryResult.bengali) return
+        if (cleanBengali == primaryResult.bengali) {
+            // S78: tapping the engine's own primary back is the user's
+            // correction signal — clear a stored divergent preference (memory
+            // AND storage) instead of silently keeping it. Pre-S78 this
+            // branch just returned, which made a preference un-undoable: the
+            // stale pick kept resurfacing first forever (tester: "লাস্টবার
+            // যেটা সিলেক্ট করেছিলাম সেটাই বার বার আসছে"). Recording the
+            // primary as a preference stays forbidden (S26 — it would freeze
+            // this build's ranking against future engine fixes).
+            if (selectedPreferenceMap.remove(key) != null) {
+                getEngine().evictCachedWord(key)
+                removeLearnedPreference(key)
+            }
+            return
+        }
         selectedPreferenceMap[key] = cleanBengali
         // Suggestion taps are preferences, not dictionary mutations. Explicit
         // user dictionary formulas still go through addCustomConversion().
@@ -542,6 +569,14 @@ object SmartEngineAdapter {
         if (result.source == com.banglu.engine.types.ResolutionSource.ENGLISH_LEXICON &&
             SmartEngine.isEnglishPrimaryIntentKey(key)
         ) {
+            return result
+        }
+        // S78: USER_HISTORY means the personal-bigram rerank promoted this
+        // word from the user's OWN repeated commits after the current previous
+        // word ("boi pore" -> পড়ে). That per-context signal outranks the
+        // context-blind last-tap preference — otherwise one tap on পরে
+        // anywhere would undo the বই-specific correction forever.
+        if (result.source == com.banglu.engine.types.ResolutionSource.USER_HISTORY) {
             return result
         }
 

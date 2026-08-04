@@ -37,6 +37,10 @@ class InMemoryStorage : PlatformStorage {
         }
     }
 
+    override suspend fun removeLearnedWord(phonetic: String) {
+        learnedWords.removeAll { it.phonetic == phonetic && it.frequency < 120 }
+    }
+
     override suspend fun clearLearnedWords() {
         learnedWords.clear()
     }

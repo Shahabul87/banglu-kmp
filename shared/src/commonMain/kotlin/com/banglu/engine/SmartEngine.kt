@@ -333,6 +333,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "নিবন্ধ", "নিবন্ধটি", "নিবন্ধের",
             "উইকিপিডিয়া", "উইকিপিডিয়ার", "উইকি",
             "তথ্যসূত্র", "বিষয়শ্রেণী", "টেমপ্লেট", "প্রবেশদ্বার",
+            // S78: citation-template artifact — বই→উদ্ধৃতি@931 is wiki markup,
+            // not language ("বই উদ্ধৃতি" cite-book templates).
+            "উদ্ধৃতি", "উদ্ধৃতির",
             "অ্যান্ড", "এন্ড", "দ্য", "দি", "অব", "অভ"
         )
 
@@ -1045,7 +1048,16 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 // does not own this key at all — the seed mapping is a legacy
                 // fuzzy shortcut (ghuma -> ঘুমায়, he -> হয়ে) and must not beat
                 // the word the user literally spelled (ঘুমা, হে).
-                val seedOwnsKey = storeLookup(key).any { it.bengali == result.bengali }
+                // S78: ownership means CANONICAL priority. Habit-alias rows
+                // (incl. the nasal-drop class) are reachability, not
+                // ownership — without this distinction the new হ্যাঁ p1 row
+                // on "ha" defeated exact-spelling fidelity and dethroned হা,
+                // the word the user literally spelled. Promoted nasal twins
+                // (বেঁচে on "beche") are p0 and legitimately own their keys.
+                val seedOwnsKey = storeLookup(key).any {
+                    it.bengali == result.bengali &&
+                        it.priority == PhoneticIndexHit.PRIORITY_CANONICAL
+                }
                 val exactSpellingFidelity = storeCanonicalFirst &&
                     storeTop.priority == PhoneticIndexHit.PRIORITY_CANONICAL && !seedOwnsKey
                 val corpusClearlyBetter = if (corpusExactKey && typedExtendsDictPhonetic) {
@@ -5727,6 +5739,66 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     /**
+     * S78: personal (previous → next) commit count, for context arbitration.
+     * Reads under the same lock recordUserBigram writes with.
+     */
+    fun userBigramCount(prevBengali: String, nextBengali: String): Int {
+        val prev = prevBengali.trim()
+        val next = nextBengali.trim()
+        if (prev.isEmpty() || next.isEmpty()) return 0
+        return com.banglu.engine.util.runSynchronized(userBigrams) {
+            userBigrams[prev]?.get(next) ?: 0
+        }
+    }
+
+    /**
+     * S78 (tester round: "boi pore" kept committing বই পরে): the user's OWN
+     * repeated (previous, next) commits are the strongest context signal we
+     * have — the corpus tables are wiki-register and have no evidence for
+     * everyday chat collocations (বই→পড়ে has zero corpus rows). When the user
+     * has committed (prev1, alternative) at least [USER_BIGRAM_MIN_COUNT]
+     * times AND strictly more often than (prev1, primary), promote that
+     * alternative. Poisoning surface is minimal: userBigrams only ever
+     * contain words the engine itself produced and the user committed, and
+     * the promotion still only reorders existing alternatives.
+     */
+    private fun promoteByUserBigram(prev1Bengali: String?, result: ConversionResult): ConversionResult? {
+        val prev1 = prev1Bengali?.trim().orEmpty()
+        if (prev1.isEmpty() || result.alternatives.isEmpty()) return null
+        val primaryCount = userBigramCount(prev1, result.bengali)
+        var bestAlt: Alternative? = null
+        var bestCount = primaryCount
+        for (alt in result.alternatives) {
+            if (alt.bengali == result.bengali || alt.confidence < 0.35) continue
+            val count = userBigramCount(prev1, alt.bengali)
+            if (count >= USER_BIGRAM_MIN_COUNT && count > bestCount) {
+                bestAlt = alt
+                bestCount = count
+            }
+        }
+        val promoted = bestAlt
+            ?: return if (primaryCount >= USER_BIGRAM_MIN_COUNT) {
+                // Personal evidence CONFIRMS the primary for this context —
+                // stamp it USER_HISTORY so the adapter's context-blind
+                // last-tap preference cannot override it (the user keeps
+                // committing "বই পরে"; a stale পড়ে tap must not win here).
+                result.copy(source = ResolutionSource.USER_HISTORY)
+            } else null
+        val alternatives = buildList {
+            add(Alternative(result.bengali, minOf(result.confidence, 0.88)))
+            result.alternatives
+                .filter { it.bengali != promoted.bengali && it.bengali != result.bengali }
+                .forEach { add(it) }
+        }
+        return result.copy(
+            bengali = promoted.bengali,
+            confidence = maxOf(result.confidence, promoted.confidence, 0.91),
+            source = ResolutionSource.USER_HISTORY,
+            alternatives = alternatives
+        )
+    }
+
+    /**
      * Re-rank a single word using the previously committed Bengali word.
      *
      * This is intentionally conservative: it only chooses between the primary
@@ -5747,6 +5819,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         prev1Bengali: String?,
         result: ConversionResult
     ): ConversionResult {
+        // S78: the user's own repeated pairs outrank corpus evidence — and
+        // work even when the corpus model is absent (lite mode).
+        promoteByUserBigram(prev1Bengali, result)?.let { return it }
         val prev1 = prev1Bengali?.trim().orEmpty()
         val prev2 = prev2Bengali?.trim().orEmpty()
         if (prev1.isEmpty() || !bigramModel.isLoaded() || result.alternatives.isEmpty()) {
@@ -5799,6 +5874,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     fun rerankWithPreviousContext(prevBengali: String?, result: ConversionResult): ConversionResult {
+        // S78: personal pairs first — this path is also called directly.
+        promoteByUserBigram(prevBengali, result)?.let { return it }
         val prev = prevBengali?.trim().orEmpty()
         if (prev.isEmpty() || !bigramModel.isLoaded() || result.alternatives.isEmpty()) return result
 

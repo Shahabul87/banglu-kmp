@@ -99,6 +99,21 @@ class AndroidStorage(context: Context) : PlatformStorage {
             .apply()
     }
 
+    override suspend fun removeLearnedWord(phonetic: String) {
+        // S78 explicit user correction: drop this key's sub-custom learned
+        // rows. Custom-frequency rows (>= 120, user-authored formulas — they
+        // reach the learned lines via addCustomConversion's persist) stay.
+        val learnedRaw = getScopedString(KEY_LEARNED_WORDS) ?: return
+        val kept = learnedRaw.lines().filter { line ->
+            if (line.isBlank()) return@filter false
+            val parts = line.split(SEPARATOR)
+            parts.firstOrNull() != phonetic || (parts.getOrNull(2)?.toIntOrNull() ?: 1) >= 120
+        }
+        prefs.edit()
+            .putString(scopedKey(KEY_LEARNED_WORDS), kept.joinToString("\n"))
+            .apply()
+    }
+
     override suspend fun clearLearnedWords() {
         prefs.edit()
             .remove(scopedKey(KEY_LEARNED_WORDS))

@@ -356,4 +356,52 @@ class PhoneticIndexBuilderTest {
             assertTrue(wordRows.size <= 32, "$word emitted ${wordRows.size} keys (> 32)")
         }
     }
+
+    // -------------------------------------------------------------------------
+    // S78: chandrabindu nasal-drop aliases + nasal-twin promotion
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun chandrabinduWordsGetNasalDroppedAliases() {
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf("বেঁচে", "পাঁচ", "দাঁত", "কাঁদছে"),
+            frequencies = mapOf("বেঁচে" to 80, "পাঁচ" to 95, "দাঁত" to 85, "কাঁদছে" to 70)
+        )
+        fun keysOf(word: String) = rows.filter { it.bengali == word }.map { it.key }
+        assertTrue("beche" in keysOf("বেঁচে"), "expected nasal-dropped 'beche', got ${keysOf("বেঁচে")}")
+        assertTrue("pach" in keysOf("পাঁচ"), "expected nasal-dropped 'pach', got ${keysOf("পাঁচ")}")
+        assertTrue("dat" in keysOf("দাঁত"), "expected nasal-dropped 'dat', got ${keysOf("দাঁত")}")
+        // Habit chains must compose on the nasal seed too (chh -> ch).
+        assertTrue("kadche" in keysOf("কাঁদছে"), "expected chained 'kadche', got ${keysOf("কাঁদছে")}")
+        // The canonical nasal key stays priority 0.
+        assertEquals(0, rows.first { it.bengali == "বেঁচে" && it.key == "benche" }.priority)
+        // The nasal-dropped key is a habit alias unless promoted (no plain
+        // twin in this word list, so no promotion target exists).
+        assertEquals(1, rows.first { it.bengali == "পাঁচ" && it.key == "pach" }.priority)
+    }
+
+    @Test
+    fun nasalTwinPromotedOverLessFrequentPlainOwner() {
+        // পাঁচ@95 differs from the canonical owner পাচ@64 only by ঁ and is
+        // strictly more frequent -> promoted to canonical priority on "pach".
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf("পাচ", "পাঁচ"),
+            frequencies = mapOf("পাচ" to 64, "পাঁচ" to 95)
+        )
+        val promoted = rows.first { it.bengali == "পাঁচ" && it.key == "pach" }
+        assertEquals(0, promoted.priority, "nasal twin must be promoted to canonical priority")
+        // The plain owner keeps its row — reachable one slot down on frequency.
+        assertEquals(0, rows.first { it.bengali == "পাচ" && it.key == "pach" }.priority)
+    }
+
+    @Test
+    fun nasalTwinNotPromotedWhenPlainOwnerMoreFrequent() {
+        // বেচে@169 (inflated for the test) outranks বেঁচে@80: no promotion,
+        // the plain owner keeps the key.
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf("বেচে", "বেঁচে"),
+            frequencies = mapOf("বেচে" to 169, "বেঁচে" to 80)
+        )
+        assertEquals(1, rows.first { it.bengali == "বেঁচে" && it.key == "beche" }.priority)
+    }
 }

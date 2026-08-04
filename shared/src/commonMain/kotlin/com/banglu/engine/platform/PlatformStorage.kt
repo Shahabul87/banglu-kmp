@@ -22,6 +22,16 @@ interface PlatformStorage {
     suspend fun clearLearnedWords()
 
     /**
+     * S78: remove the learned rows for ONE phonetic key. This is NOT
+     * sanitation (which is skip-on-load only, F5b) — it is the user's explicit
+     * correction: tapping the engine's own primary back means "stop overriding
+     * this key", and the stored divergent preference must not resurrect on the
+     * next initialize. Custom user-dictionary entries are never touched.
+     * Default: no-op (platforms without a preference surface).
+     */
+    suspend fun removeLearnedWord(phonetic: String) {}
+
+    /**
      * Retrieve user-typed next-word pairs: previous word -> (next word -> count).
      * Powers personalized next-word prediction. Default: no persistence.
      */
