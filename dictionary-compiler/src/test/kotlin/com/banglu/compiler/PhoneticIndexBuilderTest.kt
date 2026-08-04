@@ -394,6 +394,29 @@ class PhoneticIndexBuilderTest {
         assertEquals(0, rows.first { it.bengali == "পাচ" && it.key == "pach" }.priority)
     }
 
+    // -------------------------------------------------------------------------
+    // S79: verb inherent-o drop for the -l / -b suffix morphology
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun verbInherentODropAliasesForLAndBSuffixes() {
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf("পারলে", "পারলেন", "করলাম", "পারবে", "পারবোনা"),
+            frequencies = mapOf(
+                "পারলে" to 76, "পারলেন" to 71, "করলাম" to 70,
+                "পারবে" to 85, "পারবোনা" to 60
+            )
+        )
+        fun keysOf(word: String) = rows.filter { it.bengali == word }.map { it.key }
+        assertTrue("parle" in keysOf("পারলে"), "expected o-drop 'parle', got ${keysOf("পারলে")}")
+        assertTrue("parlen" in keysOf("পারলেন"), "expected o-drop 'parlen', got ${keysOf("পারলেন")}")
+        assertTrue("korlam" in keysOf("করলাম"), "expected o-drop 'korlam', got ${keysOf("করলাম")}")
+        assertTrue("parbe" in keysOf("পারবে"), "expected o-drop 'parbe', got ${keysOf("পারবে")}")
+        assertTrue("parbona" in keysOf("পারবোনা"), "expected o-drop 'parbona', got ${keysOf("পারবোনা")}")
+        // O-drop keys are habit aliases — never canonical ownership.
+        assertEquals(1, rows.first { it.bengali == "পারলে" && it.key == "parle" }.priority)
+    }
+
     @Test
     fun nasalTwinNotPromotedWhenPlainOwnerMoreFrequent() {
         // বেচে@169 (inflated for the test) outranks বেঁচে@80: no promotion,

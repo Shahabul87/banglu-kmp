@@ -724,13 +724,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private fun applyEvidenceMargin(hits: List<PhoneticIndexHit>): List<PhoneticIndexHit> {
         if (hits.size < 2) return hits
         val top = hits.first()
-        if (top.tier != PhoneticIndexHit.TIER_A ||
-            top.priority != PhoneticIndexHit.PRIORITY_CANONICAL
-        ) return hits
-        // Sorted (tier, priority, freq desc): the first tier-A alias hit is
-        // the strongest challenger.
+        if (top.priority != PhoneticIndexHit.PRIORITY_CANONICAL) return hits
+        // S79: the margin arbitrates WITHIN the top hit's tier band (it was
+        // tier-A-only before). All-tier-B keys have the same squatter shape —
+        // জাবনা@1 (cattle feed, canonical owner of "jabona") shadowed the
+        // chat form যাবোনা@50 sitting one priority down on the same key.
+        // Cross-tier hits never compete here: the (tier, priority, freq)
+        // sort already settled those.
         val challenger = hits.firstOrNull {
-            it.tier == PhoneticIndexHit.TIER_A && it.priority > PhoneticIndexHit.PRIORITY_CANONICAL
+            it.tier == top.tier && it.priority > PhoneticIndexHit.PRIORITY_CANONICAL
         } ?: return hits
         if (challenger.frequency < top.frequency + ALIAS_EVIDENCE_MARGIN) return hits
         return listOf(challenger) + hits.filter { it !== challenger }
@@ -3325,6 +3327,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             key.endsWith("nai") -> "nai" to "নাই"
             key.endsWith("na") -> "na" to "না"
             key.endsWith("to") -> "to" to "তো"
+            // S79: the stacked softener নানে (parbonane = পারবোনানে,
+            // bolbonane = বলবোনানে) — the -bona negation plus the নে
+            // softener, one suffix so the same stem guards apply.
+            key.endsWith("bonane") -> "nane" to "নানে"
             // S43: the dialect softener নে (bolbone = বলবোনে, asbone =
             // আসবোনে) — same guards; attested -ne words (মনে, দোকানে)
             // never reach here thanks to the whole-word store guard.
@@ -3339,6 +3345,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "nai" -> 6
             "to" -> 6   // hobeto -> হবে তো; store guard keeps dekhto/gosto safe
             "ne" -> 6   // asbone -> আসবোনে; store guard keeps mone/dokane safe
+            "nane" -> 8 // asbonane -> আসবোনানে
             else -> 7
         }
         if (key.length < minLen) return null
@@ -3347,10 +3354,22 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Whole-word precedence: if the store attests the FULL key (মন্ত্রণা,
         // করছিনা as a real corpus word, ...), the store layer must resolve it —
         // this layer only serves keys nothing else owns.
-        storeLookup(key).firstOrNull()?.let { top ->
-            if (top.tier == PhoneticIndexHit.TIER_A || validator.isValid(top.bengali)) {
-                return null
+        // S79 (ownership law, same as the S78 fidelity fix): only a
+        // CANONICAL-priority row is ownership — the verb_o_drop aliases put
+        // glued formal spellings (করবনা, বলবনা) on these exact keys at habit
+        // priority, and deferring to those would kill the chat compounds
+        // (korbona must stay করবোনা with করবনা one slot down).
+        // For the নে softener classes the guard is evidence-competitive
+        // instead of absolute — deferral is decided below, once the stem's
+        // own frequency is known (পার্বণে@65 must not silence পারবো, but a
+        // genuinely dominant real word still wins its key).
+        val storeTopReal = storeLookup(key)
+            .firstOrNull { it.priority == PhoneticIndexHit.PRIORITY_CANONICAL }
+            ?.takeIf { top ->
+                top.tier == PhoneticIndexHit.TIER_A || validator.isValid(top.bengali)
             }
+        if (storeTopReal != null && suffix.first != "ne" && suffix.first != "nane") {
+            return null
         }
 
         val prefixKey = key.dropLast(suffix.first.length)
@@ -3385,6 +3404,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             ) {
                 stem = top.bengali
             }
+        }
+
+        // S79 (নে classes): the deferred whole-word decision. The chat
+        // register is the product's first promise — a rare real word on the
+        // key (পার্বণে@65 on parbone) defers the softener only when it CLEARLY
+        // dominates the stem's own evidence; ties and weaker owners lose the
+        // primary but stay one slot away via the store suggestion path.
+        if (storeTopReal != null) {
+            val stemFreq = maxOf(
+                validator.getFrequency(stem),
+                storeFrequencyOf(prefixKey, stem)
+            )
+            if (storeTopReal.frequency > stemFreq + ALIAS_EVIDENCE_MARGIN) return null
         }
 
         // "to" only: the -ত past-habitual reading owns the key when attested

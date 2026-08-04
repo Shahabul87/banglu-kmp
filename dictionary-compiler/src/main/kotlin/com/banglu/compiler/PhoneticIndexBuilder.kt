@@ -374,6 +374,19 @@ object PhoneticIndexBuilder {
         // -te verb morphology only — a general medial-o drop was rejected for
         // collision noise (same reasoning as the final-o-drop rejection below).
         HabitRule("verb_o_drop_te") { it.replace("ote", "te") },
+        // S79 (tester: parle -> পার্লে, verb missing from its own key): the
+        // same inherent-o appears before the past/conditional -l suffixes
+        // (পারলে -> "parole", পারলেন -> "parolen", করলাম -> "korolam") and the
+        // future -b suffixes (পারবে -> "parobe", পারবোনা -> "parobona");
+        // typists never write it ("parle", "korlam", "parbe"). Same targeted
+        // scope as verb_o_drop_te — suffix-onset o only, never a general
+        // medial-o drop.
+        HabitRule("verb_o_drop_l") {
+            it.replace("ole", "le").replace("olo", "lo").replace("ola", "la")
+        },
+        HabitRule("verb_o_drop_b") {
+            it.replace("obo", "bo").replace("obe", "be")
+        },
         // ঝ emits "jh"; users drop the h (বুঝি → "buji", ঝাল → "jal").
         // Must run BEFORE j_to_z: that rule doubles the alias set with
         // z-variants and would starve the 32-key budget for jh chains
