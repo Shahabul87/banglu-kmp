@@ -329,6 +329,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
          * (ভালো -> নিবন্ধ comes from "good article" wiki badges; তুমি -> অ্যান্ড
          * from song/movie titles).
          */
+        /** S80: sources whose candidates are typo-recovery substitutions —
+         *  held to the seed-known rule during the cold-start window when no
+         *  real-word oracle is loaded. The curated generators stay exempt:
+         *  candidate_lattice (দরযা-class spelling disambiguation, own gates)
+         *  and ambiguous_variant (ত/ট-swap UX) are deliberate offerings. */
+        private val COLD_START_GENERATED_SOURCES = setOf(
+            "pattern",
+            "pattern_alternative",
+            "alternative",
+            "bengali_variant"
+        )
+
         private val PREDICTION_STOPLIST = setOf(
             "নিবন্ধ", "নিবন্ধটি", "নিবন্ধের",
             "উইকিপিডিয়া", "উইকিপিডিয়ার", "উইকি",
@@ -2212,8 +2224,29 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (suggestion.source == "acronym_suggestion") return true
         if (suggestion.source == "english_passthrough") return suggestion.bengali.lowercase() == key
         if (Regex("[A-Za-z]").containsMatchIn(suggestion.bengali)) return false
+        // S80 (tester screenshot: পাদ়লে on the strip): nukta composes only
+        // ড়/ঢ়/য় — any other base carrying U+09BC is not Bengali orthography.
+        // Generated substitution variants can invent such strings; no gate
+        // below checks grapheme validity, so kill them here for every source.
+        if (hasImpossibleNukta(suggestion.bengali)) return false
         if (!respectsSibilantKeyBoundary(key, suggestion.bengali, primary, suggestion.source)) return false
         if (suggestion.source == "orthographic_variant") return true
+        // S80 cold-start window (no validator AND no store): the real-word
+        // oracle is absent, so generated variants pass the phonetic-fit gates
+        // unchecked (parle -> পাড়েল/পার্লৈ junk strip). Until either oracle
+        // loads, a generated candidate must be a seed-known string — a brief
+        // honest strip beats a full junk strip. Lite mode and the JS slim
+        // tier attach a store, so only the first seconds are affected.
+        // Short keys (1-2 letters) stay exempt: their strip IS the deliberate
+        // retroflex/dental chip offering (t -> ত/ট), not recovery output.
+        if (key.length >= 3 &&
+            !validator.isLoaded() && phoneticIndex == null &&
+            suggestion.source in COLD_START_GENERATED_SOURCES &&
+            !dictionary.containsBengali(suggestion.bengali) &&
+            !disambiguator.isKnownWord(suggestion.bengali)
+        ) {
+            return false
+        }
         if (
             key.length < 3 &&
             suggestion.source in setOf("dictionary_prefix", "dictionary_fuzzy", "progressive_narrowing", "root_dictionary")
@@ -2243,6 +2276,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         return hasSuggestionPhoneticFit(key, suggestion.bengali, primary)
+    }
+
+    /**
+     * S80: nukta (U+09BC) composes only ড়, ঢ়, য় in Bengali. Any other base
+     * consonant carrying a combining nukta (the পাদ়লে-class generated junk)
+     * is orthographically impossible. Folded real words use the precomposed
+     * code points and never contain a combining nukta at all.
+     */
+    private fun hasImpossibleNukta(bengali: String): Boolean {
+        for (i in bengali.indices) {
+            if (bengali[i] == '়' && (i == 0 || bengali[i - 1] !in "ডঢয")) return true
+        }
+        return false
     }
 
     private fun respectsSibilantKeyBoundary(
