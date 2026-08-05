@@ -387,6 +387,15 @@ object PhoneticIndexBuilder {
         HabitRule("verb_o_drop_b") {
             it.replace("obo", "bo").replace("obe", "be")
         },
+        // S81 (tester: dolfin composed দল্ফিন — ডলফিন only reachable via
+        // "dolophin"): the inherent o before ফ is never typed (দলফিন,
+        // আলফাজ-class loanwords). MUST run before ph_to_f so the chain
+        // composes dolophin -> dolphin -> dolfin.
+        HabitRule("o_drop_ph") { it.replace("oph", "ph") },
+        // ফ emits "ph"; virtually everyone types "f" (ফোন "fon", ফল "fol",
+        // ডলফিন "dolfin"). The fon/fol keys were EMPTY before this rule —
+        // the whole ফ vocabulary depended on seed coverage for f-spellings.
+        HabitRule("ph_to_f") { it.replace("ph", "f") },
         // ঝ emits "jh"; users drop the h (বুঝি → "buji", ঝাল → "jal").
         // Must run BEFORE j_to_z: that rule doubles the alias set with
         // z-variants and would starve the 32-key budget for jh chains

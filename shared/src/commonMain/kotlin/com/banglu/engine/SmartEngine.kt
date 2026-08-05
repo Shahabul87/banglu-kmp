@@ -2283,10 +2283,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * consonant carrying a combining nukta (the পাদ়লে-class generated junk)
      * is orthographically impossible. Folded real words use the precomposed
      * code points and never contain a combining nukta at all.
+     * S81 (tester: কড়্বনে on an older build's strip): the nukta letters also
+     * never take hasanta — ড়/ঢ়/য় start no conjunct. Checked on both the
+     * precomposed code points and the combining-form sequence.
      */
     private fun hasImpossibleNukta(bengali: String): Boolean {
         for (i in bengali.indices) {
-            if (bengali[i] == '়' && (i == 0 || bengali[i - 1] !in "ডঢয")) return true
+            val c = bengali[i]
+            if (c == '়' && (i == 0 || bengali[i - 1] !in "ডঢয")) return true
+            if (c == '্' && i > 0) {
+                val prev = bengali[i - 1]
+                if (prev == 'ড়' || prev == 'ঢ়' || prev == 'য়' || prev == '়') return true
+            }
         }
         return false
     }
@@ -2758,7 +2766,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * tryCuratedEnglishVariant is always consulted first in convertWord.
      */
     private fun tryEnglishLexicon(key: String, rawInput: String): ConversionResult? {
-        val bengali = phoneticIndex?.lookupEnglish(key) ?: return null
+        val store = phoneticIndex ?: return null
+        // S81: f/ph are the same sound — Bengali typists spell English words
+        // either way (dolfin/dolphin, fone/phone). The lexicon stores the
+        // dictionary spelling; retry the swapped form on a direct miss so the
+        // f-spelling reaches the same entry. Direct hit always wins.
+        val bengali = store.lookupEnglish(key)
+            ?: (if ("f" in key) store.lookupEnglish(key.replace("f", "ph")) else null)
+            ?: (if ("ph" in key) store.lookupEnglish(key.replace("ph", "f")) else null)
+            ?: return null
         return ConversionResult(
             bengali = bengali,
             confidence = 0.97,
