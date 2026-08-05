@@ -721,6 +721,79 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     /**
+     * S83: the ONE dictionary-vs-store arbitration, shared by the commit path
+     * and the composing preview — parity by construction. The composing side
+     * previously carried a hand-copied SUBSET of this logic that drifted
+     * (missing the corpusFreq>dictFreq+5 and confidence<0.90 branches):
+     * 1,034 preview≠commit keys on the 100K study (কোন/বই/ঘোষ/ইসলামি class).
+     * Returns the store result when the store must win, else null (the
+     * dictionary-layer result stands).
+     */
+    private fun storeBeatsDictionary(key: String, result: ConversionResult): ConversionResult? {
+        val corpusResult = tryCorpusPhoneticLookup(key, minKeyLength = 2) ?: return null
+        val dictFreq = validator.getFrequency(result.bengali)
+        // Store words live outside the 480K validator: without the store
+        // frequency they would always score 0 here and could never win.
+        val corpusFreq = maxOf(
+            validator.getFrequency(corpusResult.bengali),
+            storeFrequencyOf(key, corpusResult.bengali)
+        )
+        // F3 exact-key weighting: when the corpus hit sits under the
+        // typed key EXACTLY (no ee/oo collapse) while the typed key
+        // EXTENDS the dictionary word's canonical phonetic (the user
+        // deliberately typed more letters than the dictionary word
+        // needs — dutii = duti + i), the exact index hit wins unless
+        // the dictionary word clearly dominates: +15 absolute AND 2x
+        // relative. dutii: exact দুটিই@47 beats variant দুটি@76
+        // (76 < 47*2). Abbreviated typing (ok vs canonical oke,
+        // ca vs cha) keeps the standard rule — ওকে/চা must not lose
+        // to rarer exact 2-char corpus keys.
+        val corpusExactKey = storeLookup(key).any { it.bengali == corpusResult.bengali }
+        val dictCanonical = dictionary.getPhoneticForBengali(result.bengali)
+        val typedExtendsDictPhonetic = dictCanonical != null &&
+            dictCanonical != key && key.startsWith(dictCanonical)
+        // S6 store-first arbitration (study W1): when the store's FIRST
+        // hit for the exact typed key is a canonical tier-A owner, it
+        // wins ties against the seed layer — seed frequencies are stale
+        // and carry archaic spellings (toiri: seed তৈরী@82 must lose to
+        // store-canonical তৈরি@82; modern usage 5,021 vs 531).
+        // Requires the loaded validator: without it dictFreq is 0 for
+        // every seed word and any tier-A store row would win the tie.
+        val storeTop = storeLookup(key).firstOrNull()
+        // priority is NOT required here: storeLookup's evidence margin
+        // (S8) only lets an alias sit first on ~25x usage, so a tier-A
+        // first hit is the store's verdict either way.
+        val storeCanonicalFirst = validator.isLoaded() && storeTop != null &&
+            storeTop.bengali == corpusResult.bengali &&
+            storeTop.tier == PhoneticIndexHit.TIER_A
+        // S12 exact-spelling fidelity: the user typed the store-first
+        // word's own canonical romanization, and the seed layer's word
+        // does not own this key at all — the seed mapping is a legacy
+        // fuzzy shortcut (ghuma -> ঘুমায়, he -> হয়ে) and must not beat
+        // the word the user literally spelled (ঘুমা, হে).
+        // S78: ownership means CANONICAL priority. Habit-alias rows
+        // (incl. the nasal-drop class) are reachability, not
+        // ownership — without this distinction the new হ্যাঁ p1 row
+        // on "ha" defeated exact-spelling fidelity and dethroned হা,
+        // the word the user literally spelled. Promoted nasal twins
+        // (বেঁচে on "beche") are p0 and legitimately own their keys.
+        val seedOwnsKey = storeLookup(key).any {
+            it.bengali == result.bengali &&
+                it.priority == PhoneticIndexHit.PRIORITY_CANONICAL
+        }
+        val exactSpellingFidelity = storeCanonicalFirst &&
+            storeTop.priority == PhoneticIndexHit.PRIORITY_CANONICAL && !seedOwnsKey
+        val corpusClearlyBetter = if (corpusExactKey && typedExtendsDictPhonetic) {
+            !(dictFreq > corpusFreq + 15 && dictFreq > corpusFreq * 2)
+        } else {
+            corpusFreq > dictFreq + 5 || result.confidence < 0.90 ||
+                (storeCanonicalFirst && corpusFreq >= dictFreq) ||
+                exactSpellingFidelity
+        }
+        return if (corpusClearlyBetter) corpusResult else null
+    }
+
+    /**
      * S9: append tier-A store hits for [key] as low-confidence alternatives
      * (deduped, capped) so downstream context reranking sees every real
      * homophone of the typed key, whichever layer produced the primary.
@@ -1036,69 +1109,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         val dictionaryLayer = convertByDictionary(key)?.takeUnless { isUnfaithfulFragmentMatch(key, it) }
         dictionaryLayer?.let { result ->
-            tryCorpusPhoneticLookup(key, minKeyLength = 2)?.let { corpusResult ->
-                val dictFreq = validator.getFrequency(result.bengali)
-                // Store words live outside the 480K validator: without the store
-                // frequency they would always score 0 here and could never win.
-                val corpusFreq = maxOf(
-                    validator.getFrequency(corpusResult.bengali),
-                    storeFrequencyOf(key, corpusResult.bengali)
-                )
-                // F3 exact-key weighting: when the corpus hit sits under the
-                // typed key EXACTLY (no ee/oo collapse) while the typed key
-                // EXTENDS the dictionary word's canonical phonetic (the user
-                // deliberately typed more letters than the dictionary word
-                // needs — dutii = duti + i), the exact index hit wins unless
-                // the dictionary word clearly dominates: +15 absolute AND 2x
-                // relative. dutii: exact দুটিই@47 beats variant দুটি@76
-                // (76 < 47*2). Abbreviated typing (ok vs canonical oke,
-                // ca vs cha) keeps the standard rule — ওকে/চা must not lose
-                // to rarer exact 2-char corpus keys.
-                val corpusExactKey = storeLookup(key).any { it.bengali == corpusResult.bengali }
-                val dictCanonical = dictionary.getPhoneticForBengali(result.bengali)
-                val typedExtendsDictPhonetic = dictCanonical != null &&
-                    dictCanonical != key && key.startsWith(dictCanonical)
-                // S6 store-first arbitration (study W1): when the store's FIRST
-                // hit for the exact typed key is a canonical tier-A owner, it
-                // wins ties against the seed layer — seed frequencies are stale
-                // and carry archaic spellings (toiri: seed তৈরী@82 must lose to
-                // store-canonical তৈরি@82; modern usage 5,021 vs 531).
-                // Requires the loaded validator: without it dictFreq is 0 for
-                // every seed word and any tier-A store row would win the tie.
-                val storeTop = storeLookup(key).firstOrNull()
-                // priority is NOT required here: storeLookup's evidence margin
-                // (S8) only lets an alias sit first on ~25x usage, so a tier-A
-                // first hit is the store's verdict either way.
-                val storeCanonicalFirst = validator.isLoaded() && storeTop != null &&
-                    storeTop.bengali == corpusResult.bengali &&
-                    storeTop.tier == PhoneticIndexHit.TIER_A
-                // S12 exact-spelling fidelity: the user typed the store-first
-                // word's own canonical romanization, and the seed layer's word
-                // does not own this key at all — the seed mapping is a legacy
-                // fuzzy shortcut (ghuma -> ঘুমায়, he -> হয়ে) and must not beat
-                // the word the user literally spelled (ঘুমা, হে).
-                // S78: ownership means CANONICAL priority. Habit-alias rows
-                // (incl. the nasal-drop class) are reachability, not
-                // ownership — without this distinction the new হ্যাঁ p1 row
-                // on "ha" defeated exact-spelling fidelity and dethroned হা,
-                // the word the user literally spelled. Promoted nasal twins
-                // (বেঁচে on "beche") are p0 and legitimately own their keys.
-                val seedOwnsKey = storeLookup(key).any {
-                    it.bengali == result.bengali &&
-                        it.priority == PhoneticIndexHit.PRIORITY_CANONICAL
-                }
-                val exactSpellingFidelity = storeCanonicalFirst &&
-                    storeTop.priority == PhoneticIndexHit.PRIORITY_CANONICAL && !seedOwnsKey
-                val corpusClearlyBetter = if (corpusExactKey && typedExtendsDictPhonetic) {
-                    !(dictFreq > corpusFreq + 15 && dictFreq > corpusFreq * 2)
-                } else {
-                    corpusFreq > dictFreq + 5 || result.confidence < 0.90 ||
-                        (storeCanonicalFirst && corpusFreq >= dictFreq) ||
-                        exactSpellingFidelity
-                }
-                if (corpusClearlyBetter) {
-                    cacheResult(cacheKey, corpusResult); return corpusResult
-                }
+            storeBeatsDictionary(key, result)?.let { corpusResult ->
+                cacheResult(cacheKey, corpusResult); return corpusResult
             }
 
             val ranked = if (shouldApplyEarlyCandidateLattice(key)) applyCandidateLatticeRanking(key, result) else result
@@ -1400,35 +1412,22 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         // For completed-looking exact dictionary words, show the smart primary
-        // in the editor. For incomplete prefixes, keep the literal pattern text
-        // stable and let the suggestion row show smart candidates.
-        val dictionaryResult = if (key.length >= 4) convertByDictionary(key) else null
+        // in the editor. For incomplete prefixes (length < 4), keep the
+        // literal pattern text stable and let the suggestion row show smart
+        // candidates — the V2 kar-composition contract (kri -> কৃ, di -> দি
+        // while typing) is pin-protected and deliberately outranks
+        // preview/commit parity for short syllables.
+        // S83: the hand-copied S6 mirror is replaced by the commit path's OWN
+        // arbitration (storeBeatsDictionary) — the 100K parity study found
+        // the copy had drifted (missing the corpusFreq>dictFreq+5 and
+        // confidence<0.90 branches: ghosh previewed ঘষ, Space committed
+        // ঘোষ). The fragment-faithfulness guard is the commit path's too.
+        val dictionaryResult = if (key.length >= 4) {
+            convertByDictionary(key)?.takeUnless { isUnfaithfulFragmentMatch(key, it) }
+        } else null
         if (dictionaryResult != null && dictionaryResult.confidence >= 0.88) {
-            // S6, composing side: the editor preview must not show a stale seed
-            // spelling (toiri -> তৈরী) when the store's canonical tier-A owner
-            // of the exact typed key is at least as common. Same arbitration
-            // rule as convertWord; without this the preview and the committed
-            // word diverge (editor তৈরী, space commits তৈরি).
-            tryCorpusPhoneticLookup(key)?.let { corpusResult ->
-                val storeTop = storeLookup(key).firstOrNull()
-                // Like convertWord's S6 check: margin-promoted alias tops
-                // (songkha → সংখ্যা) count — the preview must match the commit.
-                val canonicalFirst = validator.isLoaded() && storeTop != null &&
-                    storeTop.bengali == corpusResult.bengali &&
-                    storeTop.tier == PhoneticIndexHit.TIER_A
-                val corpusFreq = maxOf(
-                    validator.getFrequency(corpusResult.bengali),
-                    storeFrequencyOf(key, corpusResult.bengali)
-                )
-                val seedOwnsKey = storeLookup(key).any { it.bengali == dictionaryResult.bengali }
-                val exactSpellingFidelity = canonicalFirst &&
-                    storeTop.priority == PhoneticIndexHit.PRIORITY_CANONICAL && !seedOwnsKey
-                if (canonicalFirst && corpusResult.bengali != dictionaryResult.bengali &&
-                    (exactSpellingFidelity ||
-                        corpusFreq >= validator.getFrequency(dictionaryResult.bengali))
-                ) {
-                    return corpusResult.copy(alternatives = emptyList())
-                }
+            storeBeatsDictionary(key, dictionaryResult)?.let { corpusResult ->
+                return corpusResult.copy(alternatives = emptyList())
             }
             val ranked = applyCandidateLatticeRanking(key, dictionaryResult)
             // S56 store-precedence parity (tester: "likh produces likhy words"):
@@ -1471,7 +1470,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         // Live composing should follow the V2 rule layer for short syllables.
         // Corpus phonetic hits can contain rare/noisy exact forms (for example
-        // kuu -> কুউ) and must not override basic consonant + vowel-kar output.
+        // kuu -> কুউ) and must not override basic consonant + vowel-kar
+        // output — pin-protected (V2KarCompositionRegressionTest); the
+        // preview/commit divergence for 2-3 letter store words is the
+        // documented cost of mid-word kar stability (S83 study: 531 keys).
         val corpusResult = if (key.length >= 4) tryCorpusPhoneticLookup(key) else null
         if (corpusResult != null && corpusResult.confidence >= 0.94) {
             return corpusResult.copy(alternatives = emptyList())
