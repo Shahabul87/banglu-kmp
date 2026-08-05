@@ -341,6 +341,21 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "bengali_variant"
         )
 
+        /** S82: every channel whose strings are engine-GENERATED rather than
+         *  read from a dictionary — held to the real-word oracle whenever one
+         *  is loaded. (Seed-only engines have no oracle: the curated
+         *  generators keep their deliberate offerings there.) */
+        private val GENERATED_VARIANT_SOURCES = setOf(
+            "ambiguous_variant",
+            "candidate_lattice",
+            "pattern",
+            "pattern_alternative",
+            "alternative",
+            "bengali_variant",
+            "orthographic_variant",
+            "okar_variant"
+        )
+
         private val PREDICTION_STOPLIST = setOf(
             "নিবন্ধ", "নিবন্ধটি", "নিবন্ধের",
             "উইকিপিডিয়া", "উইকিপিডিয়ার", "উইকি",
@@ -2230,6 +2245,20 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // below checks grapheme validity, so kill them here for every source.
         if (hasImpossibleNukta(suggestion.bengali)) return false
         if (!respectsSibilantKeyBoundary(key, suggestion.bengali, primary, suggestion.source)) return false
+        // S82 (100K corpus study): 99.6% of strip garbage came from the
+        // variant generators (ambiguous_variant 78%, candidate_lattice 21%)
+        // emitting swapped strings held only to phonetic-fit gates. When ANY
+        // real-word oracle is loaded, a generated variant must BE real text —
+        // validator word, store word, or a seed/learned dictionary entry (the
+        // user's own OOV names live in the trie and pass). The primary is
+        // rank-0 exempt above; with no oracle at all the S80 cold-start rule
+        // is the only line of defense (seed-only pins rely on that fail-open).
+        if (suggestion.source in GENERATED_VARIANT_SOURCES &&
+            (validator.isLoaded() || phoneticIndex != null) &&
+            !isOracleRealText(suggestion.bengali)
+        ) {
+            return false
+        }
         if (suggestion.source == "orthographic_variant") return true
         // S80 cold-start window (no validator AND no store): the real-word
         // oracle is absent, so generated variants pass the phonetic-fit gates
@@ -2297,6 +2326,20 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
         return false
+    }
+
+    /**
+     * S82: corpus reality oracle for strip candidates — validator word, store
+     * word, or seed/learned dictionary entry; multi-word strings (negation's
+     * spaced alternative "পারবো নে") check every part.
+     */
+    private fun isOracleRealText(bengali: String): Boolean {
+        return bengali.split(' ').all { part ->
+            part.isEmpty() ||
+                validator.isValid(part) ||
+                phoneticIndex?.containsWord(ReverseTransliterator.foldNukta(part)) == true ||
+                dictionary.containsBengali(part)
+        }
     }
 
     private fun respectsSibilantKeyBoundary(
