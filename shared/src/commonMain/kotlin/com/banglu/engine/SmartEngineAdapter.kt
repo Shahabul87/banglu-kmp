@@ -564,6 +564,47 @@ object SmartEngineAdapter {
         return englishTyping.autocorrect(word)
     }
 
+    // ── S98: identity assist (emails / usernames — NEVER passwords) ──────
+    // The IME's sensitive-field gate keeps password and OTP fields out
+    // before any of these are called; recording additionally requires the
+    // personal-dictionary setting.
+
+    private val identityAssist = com.banglu.engine.assist.IdentityAssist()
+    private var identityLoaded = false
+
+    suspend fun ensureIdentityLoaded() {
+        if (identityLoaded) return
+        identityLoaded = true
+        storage?.loadIdentityUserData()?.let { identityAssist.load(it) }
+    }
+
+    fun identityDomainSuggestions(token: String, limit: Int = 3): List<String> =
+        identityAssist.domainSuggestions(token, limit)
+
+    fun identitySavedFills(limit: Int = 3): List<String> =
+        identityAssist.savedIdentities(limit)
+
+    fun identityIsEmailLikeToken(token: String): Boolean =
+        identityAssist.isEmailLikeToken(token)
+
+    fun recordIdentity(token: String) {
+        if (!personalDictionaryEnabled) return
+        identityAssist.recordIdentity(token)
+        val scope = persistenceScope ?: return
+        val snapshot = identityAssist.serialize()
+        scope.launch(com.banglu.engine.util.persistenceDispatcher) {
+            storage?.saveIdentityUserData(snapshot)
+        }
+    }
+
+    fun clearIdentity() {
+        identityAssist.clear()
+        val scope = persistenceScope ?: return
+        scope.launch(com.banglu.engine.util.persistenceDispatcher) {
+            storage?.saveIdentityUserData("")
+        }
+    }
+
     /**
      * A word the user committed in EN mode. Gated on the learning setting;
      * persistence is debounced onto the persistence lane (never the

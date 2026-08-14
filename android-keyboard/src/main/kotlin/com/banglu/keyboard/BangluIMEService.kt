@@ -217,6 +217,10 @@ class BangluIMEService : InputMethodService(),
     // S97: English corrections undo differently (teach-the-word semantics).
     private var lastAutoCorrectWasEnglish = false
 
+    // S98: identity assist field classification (see configureInputSafety).
+    private var emailInputMode = false
+    private var sensitiveInputMode = false
+
     // ── S94: referentially STABLE compose callbacks ──────────────────────
     // The old inline lambdas in setContent were recreated on every root
     // recomposition (they capture the service), which made every child
@@ -356,6 +360,9 @@ class BangluIMEService : InputMethodService(),
 
         /** S96: strip chips produced by the English typing suite. */
         private const val ENGLISH_WORD_SOURCE = "english_word"
+
+        /** S98: identity-assist chips (email fills / domain completions). */
+        private const val IDENTITY_FILL_SOURCE = "identity_fill"
         private const val MAX_RECENT_EMOJIS = 40
         private const val MAX_CLIPBOARD_HISTORY = 12
         private const val MAX_CLIPBOARD_ITEM_CHARS = 1_000
@@ -523,6 +530,19 @@ class BangluIMEService : InputMethodService(),
         rawCommitInputMode = shouldUseRawCommitMode(info)
         uriInputMode = isUriInput(info)
         privateInputMode = shouldDisablePersonalLearning(info)
+        // S98: identity assist runs in email fields and normal text, but the
+        // SENSITIVE set — passwords, OTP, no-personalized-learning — is
+        // excluded absolutely; nothing identity-related may fire there.
+        val inputType = info?.inputType ?: 0
+        val variation = inputType and InputType.TYPE_MASK_VARIATION
+        emailInputMode = (inputType and InputType.TYPE_MASK_CLASS) == InputType.TYPE_CLASS_TEXT &&
+            (
+                variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
+                    variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
+                )
+        sensitiveInputMode = isPasswordInput(inputType) ||
+            isOneTimeCodeInput(info) ||
+            ((info?.imeOptions ?: 0) and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0
         if (privateInputMode || rawCommitInputMode) {
             suggestions.clear()
             suggestionJob?.cancel()
@@ -1246,6 +1266,9 @@ class BangluIMEService : InputMethodService(),
         clearCommitCaches()
         // S96: an EN-mode field starts with the completion/prediction strip.
         if (keyboardMode.value == KeyboardMode.ENGLISH) refreshEnglishSuggestionsAsync()
+        // S98: an email field greets the user with their saved addresses
+        // (both language modes; sensitive fields never reach here).
+        else if (emailInputMode) maybeShowIdentityAssist()
         if (pendingVoiceStart) {
             pendingVoiceStart = false
             log("voice: starting deferred dictation after disclosure")
@@ -1459,6 +1482,9 @@ class BangluIMEService : InputMethodService(),
             ic.commitText(char.toString(), 1)
             sessionRawCommitKeyCount++
             suggestions.clear()
+            // S98: raw fields include email fields — identity chips are the
+            // one suggestion class that belongs there (BN mode included).
+            maybeShowIdentityAssist()
             if (shiftState.value == ShiftState.ON && char.isLetter()) {
                 shiftState.value = ShiftState.OFF
             }
@@ -1523,6 +1549,9 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun refreshEnglishSuggestionsAsync() {
+        // S98: an @-token takes precedence — domain completions replace the
+        // word suggestions while an email address is being typed.
+        if (maybeShowIdentityAssist()) return
         suggestionJob?.cancel()
         if (!suggestionsAllowedForCurrentInput()) {
             suggestions.clear()
@@ -1571,6 +1600,78 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
+    // ── S98: identity assist (emails/usernames — NEVER passwords) ────────
+
+    /** Sensitive fields (password/OTP/no-learning) are excluded absolutely. */
+    private fun identityAssistAllowed(): Boolean =
+        imeSessionVisible && suggestionsEnabled.value && !sensitiveInputMode
+
+    /** The whitespace-delimited token directly before the cursor. */
+    private fun identityTokenBeforeCursor(ic: InputConnection): String {
+        val before = ic.getTextBeforeCursor(80, 0)?.toString().orEmpty()
+        return before.takeLastWhile { !it.isWhitespace() }
+    }
+
+    /**
+     * Shows identity chips when they apply: domain completions for an
+     * @-containing token (any keyboard mode), or the saved addresses in an
+     * empty email field. Returns true when identity took the strip.
+     */
+    private fun maybeShowIdentityAssist(): Boolean {
+        if (!identityAssistAllowed()) return false
+        val ic = currentInputConnection ?: return false
+        val token = identityTokenBeforeCursor(ic)
+        val wantsDomains = token.contains('@')
+        val wantsSavedFills = emailInputMode && token.isEmpty()
+        if (!wantsDomains && !wantsSavedFills) return false
+        suggestionJob?.cancel()
+        suggestionJob = serviceScope.launch {
+            val items = withContext(engineLane) {
+                SmartEngineAdapter.ensureIdentityLoaded()
+                if (wantsDomains) {
+                    if (SmartEngineAdapter.identityIsEmailLikeToken(token)) {
+                        SmartEngineAdapter.identityDomainSuggestions(token, 3)
+                    } else emptyList()
+                } else {
+                    SmartEngineAdapter.identitySavedFills(3)
+                }
+            }
+            if (items.isNotEmpty()) {
+                suggestions.clear()
+                items.forEach { fill ->
+                    suggestions.add(SmartSuggestion(fill, 0.95, IDENTITY_FILL_SOURCE, token, "identity"))
+                }
+            }
+        }
+        return true
+    }
+
+    /** Chip tap: replace the current token with the chosen identity. */
+    private fun onIdentityFillTap(suggestion: SmartSuggestion) {
+        if (!identityAssistAllowed()) return
+        val ic = currentInputConnection ?: return
+        val token = identityTokenBeforeCursor(ic)
+        ic.beginBatchEdit()
+        if (token.isNotEmpty()) ic.deleteSurroundingText(token.length, 0)
+        // No trailing space — form fields validate the exact address.
+        ic.commitText(suggestion.bengali, 1)
+        ic.endBatchEdit()
+        lastCommittedTextLength = suggestion.bengali.length
+        sessionSuggestionTapCount++
+        recordIdentityAsync(suggestion.bengali)
+        suggestions.clear()
+    }
+
+    /** A committed token that may be a complete email — learn it off-lane. */
+    private fun recordIdentityAsync(token: String) {
+        if (!identityAssistAllowed()) return
+        if (!token.contains('@')) return
+        serviceScope.launch(engineLane) {
+            SmartEngineAdapter.ensureIdentityLoaded()
+            SmartEngineAdapter.recordIdentity(token)
+        }
+    }
+
     private fun onDirectCommit(char: Char) {
         log("onDirectCommit: char='$char'")
         clearVoiceUndoState()
@@ -1579,6 +1680,8 @@ class BangluIMEService : InputMethodService(),
 
         val ic = currentInputConnection ?: return
         ic.commitText(char.toString(), 1)
+        // S98: '@' from the symbols layer starts an email token in any mode.
+        if (char == '@' || emailInputMode) maybeShowIdentityAssist()
     }
 
     private fun onNumberPress(char: Char) {
@@ -1621,6 +1724,13 @@ class BangluIMEService : InputMethodService(),
         }
         ic.commitText(output.toString(), 1)
         lastCommittedTextLength = 1
+        // S98: '@' (long-press or symbols) starts an email token; a '.'
+        // mid-@-token continues one (sham@gmail<.>com).
+        if (output == '@' || (identityAssistAllowed() &&
+                identityTokenBeforeCursor(ic).contains('@'))
+        ) {
+            if (maybeShowIdentityAssist()) return
+        }
         showGapPunctuationSuggestions()
     }
 
@@ -1661,6 +1771,10 @@ class BangluIMEService : InputMethodService(),
                 // S96: keep the completion strip in sync while editing English.
                 if (keyboardMode.value == KeyboardMode.ENGLISH) {
                     refreshEnglishSuggestionsAsync()
+                } else if (rawCommitInputMode || emailInputMode) {
+                    // S98: identity chips track deletions in raw/email fields.
+                    suggestions.clear()
+                    maybeShowIdentityAssist()
                 }
             }
         }
@@ -1751,6 +1865,12 @@ class BangluIMEService : InputMethodService(),
         when (keyboardMode.value) {
             KeyboardMode.BANGLU -> {
                 if (rawCommitInputMode) {
+                    // S98: a space in a raw field (email fields included)
+                    // finishes any email token — learn it first.
+                    if (identityAssistAllowed()) {
+                        val token = identityTokenBeforeCursor(ic)
+                        if (token.contains('@')) recordIdentityAsync(token)
+                    }
                     ic.commitText(" ", 1)
                 } else if (buffer.isNotEmpty()) {
                     commitBufferedWordFast(ic, appendText = " ")
@@ -1774,6 +1894,11 @@ class BangluIMEService : InputMethodService(),
                 }
             }
             else -> {
+                // S98: space also finishes an email token in any mode.
+                if (identityAssistAllowed()) {
+                    val token = identityTokenBeforeCursor(ic)
+                    if (token.contains('@')) recordIdentityAsync(token)
+                }
                 // S96: space finishes an English word — learn it (with its
                 // previous word) BEFORE the separator lands. S97: mistyped
                 // unknown words auto-correct here, with an undo chip.
@@ -1832,6 +1957,13 @@ class BangluIMEService : InputMethodService(),
         log("onEnterPress: mode=${keyboardMode.value}, buffer='$buffer'")
         clearVoiceUndoState()
         val ic = currentInputConnection ?: return
+
+        // S98: enter/next/done is how email fields usually finish — learn a
+        // completed address before the action fires.
+        if (identityAssistAllowed()) {
+            val token = identityTokenBeforeCursor(ic)
+            if (token.contains('@')) recordIdentityAsync(token)
+        }
 
         // Commit any pending buffer
         if (keyboardMode.value == KeyboardMode.BANGLU && buffer.isNotEmpty() && !rawCommitInputMode) {
@@ -1899,6 +2031,13 @@ class BangluIMEService : InputMethodService(),
         if (suggestion.source == AUTOCORRECT_UNDO_SOURCE || suggestion.tier == "autocorrect_undo") {
             sessionAutoCorrectUndoCount++
             undoLastAutoCorrect()
+            return
+        }
+        // S98: identity chips live in email fields too, which are raw-commit
+        // by design — handle them BEFORE the raw/private guard (they can
+        // only exist when the sensitive-field gate already allowed them).
+        if (suggestion.source == IDENTITY_FILL_SOURCE) {
+            onIdentityFillTap(suggestion)
             return
         }
         if (privateInputMode || rawCommitInputMode) return

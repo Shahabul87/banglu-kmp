@@ -53,6 +53,15 @@ interface PlatformStorage {
     /** S96: load the English learning blob. Default: nothing saved. */
     suspend fun loadEnglishUserData(): String? = null
 
+    /**
+     * S98: the identity-assist blob (saved emails + domains, IdentityAssist
+     * serialize format). On-device only; cleared with learned words.
+     */
+    suspend fun saveIdentityUserData(data: String) {}
+
+    /** S98: load the identity-assist blob. Default: nothing saved. */
+    suspend fun loadIdentityUserData(): String? = null
+
     /** Get the version string of the cached dictionary, or null if not cached. */
     suspend fun getDictionaryVersion(): String?
 

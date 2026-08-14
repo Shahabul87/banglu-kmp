@@ -36,6 +36,7 @@ class AndroidStorage(context: Context) : PlatformStorage {
         private const val KEY_CUSTOM_CONVERSIONS = "custom_conversions"
         private const val KEY_USER_BIGRAMS = "user_bigrams"
         private const val KEY_ENGLISH_USER_DATA = "english_user_data"
+        private const val KEY_IDENTITY_USER_DATA = "identity_user_data"
         private const val KEY_DICT_VERSION = "dict_version"
         private const val SEPARATOR = "::"
         private const val MAX_LEARNED_WORDS = 500
@@ -193,6 +194,17 @@ class AndroidStorage(context: Context) : PlatformStorage {
 
     override suspend fun loadEnglishUserData(): String? =
         getScopedString(KEY_ENGLISH_USER_DATA)
+
+    // S98: identity-assist blob (saved emails + domains) — bounded by
+    // IdentityAssist before serialization, on-device only.
+    override suspend fun saveIdentityUserData(data: String) {
+        prefs.edit()
+            .putString(scopedKey(KEY_IDENTITY_USER_DATA), data)
+            .apply()
+    }
+
+    override suspend fun loadIdentityUserData(): String? =
+        getScopedString(KEY_IDENTITY_USER_DATA)
 
     fun getCustomConversions(): List<CustomConversion> {
         val raw = getScopedString(KEY_CUSTOM_CONVERSIONS) ?: return emptyList()
