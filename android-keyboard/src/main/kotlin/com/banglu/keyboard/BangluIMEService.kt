@@ -216,6 +216,46 @@ class BangluIMEService : InputMethodService(),
     private var lastAutoCorrectOriginal = ""
     // S97: English corrections undo differently (teach-the-word semantics).
     private var lastAutoCorrectWasEnglish = false
+
+    // ── S94: referentially STABLE compose callbacks ──────────────────────
+    // The old inline lambdas in setContent were recreated on every root
+    // recomposition (they capture the service), which made every child
+    // composable's args "changed" and defeated Compose skipping — one shift
+    // auto-unshift re-executed the whole key tree. Fields are created once.
+    private val kbSuggestionsProvider: () -> List<SmartSuggestion> = { suggestions.toList() }
+    private val kbVoiceLevelProvider: () -> Float = { voiceInputLevel.value }
+    private val kbClipboardItemsProvider: () -> List<String> = { clipboardHistory.toList() }
+    private val kbRecentEmojisProvider: () -> List<String> = { recentEmojis.toList() }
+    private val kbOnKeyPress: (Char) -> Unit = { onKeyPress(it) }
+    private val kbOnTextInput: (String) -> Unit = { onTextInput(it) }
+    private val kbOnBackspace: () -> Unit = { onBackspace() }
+    private val kbOnBackspaceRepeat: (Int) -> Unit = { onBackspaceRepeat(it) }
+    private val kbOnBackspaceWord: () -> Unit = { onBackspaceWord() }
+    private val kbOnSpace: () -> Unit = { onSpacePress() }
+    private val kbOnEnter: () -> Unit = { onEnterPress() }
+    private val kbOnShiftTap: () -> Unit = { onShiftTap() }
+    private val kbOnGlobePress: () -> Unit = { onGlobePress() }
+    private val kbOnSymbolsPress: () -> Unit = { onSymbolsPress() }
+    private val kbOnBackToLetters: () -> Unit = { onBackToLetters() }
+    private val kbOnSymbolPageToggle: () -> Unit = { onSymbolPageToggle() }
+    private val kbOnSuggestionClick: (SmartSuggestion) -> Unit = { onSuggestionTap(it) }
+    private val kbOnNumberPress: (Char) -> Unit = { onNumberPress(it) }
+    private val kbOnPunctuationPress: (Char) -> Unit = { onPunctuationPress(it) }
+    private val kbOnCursorMove: (Int) -> Unit = { onCursorMove(it) }
+    private val kbOnDismiss: () -> Unit = { requestHideSelf(0) }
+    private val kbOnSettingsClick: () -> Unit = { onSettingsClick() }
+    private val kbOnToggleToolbar: () -> Unit = { isToolbarExpanded.value = !isToolbarExpanded.value }
+    private val kbOnClipboardOpen: () -> Unit = { onClipboardOpen() }
+    private val kbOnClipboardPaste: (String) -> Unit = { onClipboardPaste(it) }
+    private val kbOnClipboardClear: () -> Unit = { clearClipboardHistory() }
+    private val kbOnVoiceInput: () -> Unit = { onVoiceInput() }
+    private val kbOnVoiceStop: () -> Unit = { stopVoiceInput(cancel = false) }
+    private val kbOnVoiceCancel: () -> Unit = { stopVoiceInput(cancel = true) }
+    private val kbOnEmojiClick: (String) -> Unit = { onEmojiClick(it) }
+    private val kbOnEmojiOpen: () -> Unit = { onEmojiOpen() }
+    private val kbOnStickerOpen: () -> Unit = { onStickerOpen() }
+    private val kbOnBackFromEmoji: () -> Unit = { onBackFromEmoji() }
+    private val kbOnEmojiSearch: () -> Unit = { onEmojiSearch() }
     private var lastAutoCorrectReplacement = ""
     private var lastAutoCorrectPhonetic = ""
     private val recentEmojis = mutableStateListOf<String>()
@@ -1099,11 +1139,11 @@ class BangluIMEService : InputMethodService(),
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
                     BangluKeyboardLayout(
-                        suggestionsProvider = { suggestions.toList() },
+                        suggestionsProvider = kbSuggestionsProvider,
                         keyboardMode = keyboardMode.value,
                         shiftState = shiftState.value,
                         voiceInputState = voiceInputState.value,
-                        voiceInputLevel = voiceInputLevel.value,
+                        voiceInputLevelProvider = kbVoiceLevelProvider,
                         enterLabel = enterKeyLabel.value,
                         isToolbarExpanded = isToolbarExpanded.value,
                         hapticEnabled = hapticEnabled.value,
@@ -1114,39 +1154,39 @@ class BangluIMEService : InputMethodService(),
                         themePref = themeMode.value,
                         keyboardHeightMode = keyboardHeightMode.value,
                         keyboardFontSizeMode = keyboardFontSizeMode.value,
-                        onKeyPress = { char -> onKeyPress(char) },
-                        onTextInput = { text -> onTextInput(text) },
-                        onBackspace = { onBackspace() },
-                        onBackspaceRepeat = { count -> onBackspaceRepeat(count) },
-                        onBackspaceWord = { onBackspaceWord() },
-                        onSpace = { onSpacePress() },
-                        onEnter = { onEnterPress() },
-                        onShiftTap = { onShiftTap() },
-                        onGlobePress = { onGlobePress() },
-                        onSymbolsPress = { onSymbolsPress() },
-                        onBackToLetters = { onBackToLetters() },
-                        onSymbolPageToggle = { onSymbolPageToggle() },
-                        onSuggestionClick = { onSuggestionTap(it) },
-                        onNumberPress = { char -> onNumberPress(char) },
-                        onPunctuationPress = { char -> onPunctuationPress(char) },
-                        onCursorMove = { direction -> onCursorMove(direction) },
-                        onDismiss = { requestHideSelf(0) },
-                        onSettingsClick = { onSettingsClick() },
-                        onToggleToolbar = { isToolbarExpanded.value = !isToolbarExpanded.value },
-                        onClipboardOpen = { onClipboardOpen() },
-                        onClipboardPaste = { text -> onClipboardPaste(text) },
-                        onClipboardClear = { clearClipboardHistory() },
-                        clipboardItemsProvider = { clipboardHistory.toList() },
-                        onVoiceInput = { onVoiceInput() },
-                        onVoiceStop = { stopVoiceInput(cancel = false) },
-                        onVoiceCancel = { stopVoiceInput(cancel = true) },
-                        onEmojiClick = { emoji -> onEmojiClick(emoji) },
-                        onEmojiOpen = { onEmojiOpen() },
-                        onStickerOpen = { onStickerOpen() },
-                        onBackFromEmoji = { onBackFromEmoji() },
-                        onEmojiSearch = { onEmojiSearch() },
+                        onKeyPress = kbOnKeyPress,
+                        onTextInput = kbOnTextInput,
+                        onBackspace = kbOnBackspace,
+                        onBackspaceRepeat = kbOnBackspaceRepeat,
+                        onBackspaceWord = kbOnBackspaceWord,
+                        onSpace = kbOnSpace,
+                        onEnter = kbOnEnter,
+                        onShiftTap = kbOnShiftTap,
+                        onGlobePress = kbOnGlobePress,
+                        onSymbolsPress = kbOnSymbolsPress,
+                        onBackToLetters = kbOnBackToLetters,
+                        onSymbolPageToggle = kbOnSymbolPageToggle,
+                        onSuggestionClick = kbOnSuggestionClick,
+                        onNumberPress = kbOnNumberPress,
+                        onPunctuationPress = kbOnPunctuationPress,
+                        onCursorMove = kbOnCursorMove,
+                        onDismiss = kbOnDismiss,
+                        onSettingsClick = kbOnSettingsClick,
+                        onToggleToolbar = kbOnToggleToolbar,
+                        onClipboardOpen = kbOnClipboardOpen,
+                        onClipboardPaste = kbOnClipboardPaste,
+                        onClipboardClear = kbOnClipboardClear,
+                        clipboardItemsProvider = kbClipboardItemsProvider,
+                        onVoiceInput = kbOnVoiceInput,
+                        onVoiceStop = kbOnVoiceStop,
+                        onVoiceCancel = kbOnVoiceCancel,
+                        onEmojiClick = kbOnEmojiClick,
+                        onEmojiOpen = kbOnEmojiOpen,
+                        onStickerOpen = kbOnStickerOpen,
+                        onBackFromEmoji = kbOnBackFromEmoji,
+                        onEmojiSearch = kbOnEmojiSearch,
                         emojiInitialCategory = emojiInitialCategory.value,
-                        recentEmojisProvider = { recentEmojis.toList() }
+                        recentEmojisProvider = kbRecentEmojisProvider
                     )
                 }
             }

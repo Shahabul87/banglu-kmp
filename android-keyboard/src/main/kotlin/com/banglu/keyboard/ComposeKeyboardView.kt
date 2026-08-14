@@ -244,7 +244,9 @@ fun BangluKeyboardLayout(
     keyboardMode: KeyboardMode,
     shiftState: ShiftState,
     voiceInputState: VoiceInputState = VoiceInputState.IDLE,
-    voiceInputLevel: Float = 0f,
+    // S94: provider — the 15Hz RMS updates repaint only the voice panel,
+    // never the whole keyboard tree.
+    voiceInputLevelProvider: () -> Float = { 0f },
     enterLabel: String = "\u21B5",
     isToolbarExpanded: Boolean = false,
     hapticEnabled: Boolean = true,
@@ -348,7 +350,7 @@ fun BangluKeyboardLayout(
             if (voiceInputState != VoiceInputState.IDLE) {
                 VoiceStatusPanel(
                     state = voiceInputState,
-                    level = voiceInputLevel,
+                    levelProvider = voiceInputLevelProvider,
                     onRetry = onVoiceInput,
                     onStop = onVoiceStop,
                     onCancel = onVoiceCancel
@@ -360,7 +362,8 @@ fun BangluKeyboardLayout(
                 KeyboardMode.BANGLU -> {
                     if (!isVoiceActive) {
                         AdaptiveTopStrip(
-                            suggestions = if (suggestionsEnabled) suggestionsProvider() else emptyList(),
+                            suggestionsProvider = suggestionsProvider,
+                            suggestionsEnabled = suggestionsEnabled,
                             onSuggestionClick = onSuggestionClick,
                             onSettingsClick = onSettingsClick,
                             onEmojiOpen = onEmojiOpen,
@@ -412,7 +415,8 @@ fun BangluKeyboardLayout(
                     // the old hardcoded action bar could never show the
                     // English completion/prediction chips.
                     AdaptiveTopStrip(
-                        suggestions = if (suggestionsEnabled) suggestionsProvider() else emptyList(),
+                        suggestionsProvider = suggestionsProvider,
+                        suggestionsEnabled = suggestionsEnabled,
                         onSuggestionClick = onSuggestionClick,
                         onSettingsClick = onSettingsClick,
                         onEmojiOpen = onEmojiOpen,
@@ -593,7 +597,13 @@ private fun BangluSuggestionHost(
 
 @Composable
 private fun AdaptiveTopStrip(
-    suggestions: List<SmartSuggestion>,
+    // S94: a PROVIDER, not a list — the snapshot-state read happens inside
+    // THIS composable's restart scope, so a per-keystroke strip update
+    // recomposes only this row instead of the whole keyboard (the read used
+    // to sit in the root scope; the 48-tap burst measured p95 27ms / 51%
+    // missed 120Hz deadlines against Samsung's 19ms / 6.3%).
+    suggestionsProvider: () -> List<SmartSuggestion>,
+    suggestionsEnabled: Boolean,
     onSuggestionClick: (SmartSuggestion) -> Unit,
     onSettingsClick: () -> Unit,
     onEmojiOpen: () -> Unit,
@@ -606,6 +616,9 @@ private fun AdaptiveTopStrip(
     isToolbarExpanded: Boolean,
 ) {
     val colors = LocalKeyboardColors.current
+    // The one snapshot-state read that changes per keystroke — deliberately
+    // inside this scope (see the parameter doc).
+    val suggestions = if (suggestionsEnabled) suggestionsProvider() else emptyList()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -733,12 +746,14 @@ private fun ToolbarRow(
 @Composable
 private fun VoiceStatusPanel(
     state: VoiceInputState,
-    level: Float,
+    levelProvider: () -> Float,
     onRetry: () -> Unit,
     onStop: () -> Unit,
     onCancel: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
+    // S94: the snapshot read lives here — RMS ticks stay panel-local.
+    val level = levelProvider()
     val configuration = LocalConfiguration.current
     val compact = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val message = when (state) {
