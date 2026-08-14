@@ -43,6 +43,16 @@ interface PlatformStorage {
     /** Clear all user bigram pairs. Default: no-op. */
     suspend fun clearUserBigrams() {}
 
+    /**
+     * S96: the English typing suite's learning blob (user word counts +
+     * next-word bigrams, EnglishTypingEngine.serialize format). One bounded
+     * string; platforms without an EN keyboard surface keep the no-op.
+     */
+    suspend fun saveEnglishUserData(data: String) {}
+
+    /** S96: load the English learning blob. Default: nothing saved. */
+    suspend fun loadEnglishUserData(): String? = null
+
     /** Get the version string of the cached dictionary, or null if not cached. */
     suspend fun getDictionaryVersion(): String?
 

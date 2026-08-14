@@ -35,6 +35,7 @@ class AndroidStorage(context: Context) : PlatformStorage {
         private const val KEY_LEARNED_WORDS = "learned_words"
         private const val KEY_CUSTOM_CONVERSIONS = "custom_conversions"
         private const val KEY_USER_BIGRAMS = "user_bigrams"
+        private const val KEY_ENGLISH_USER_DATA = "english_user_data"
         private const val KEY_DICT_VERSION = "dict_version"
         private const val SEPARATOR = "::"
         private const val MAX_LEARNED_WORDS = 500
@@ -181,6 +182,17 @@ class AndroidStorage(context: Context) : PlatformStorage {
             .remove(scopedKey(KEY_USER_BIGRAMS))
             .apply()
     }
+
+    // S96: the English typing suite's learning blob — one bounded string
+    // (EnglishTypingEngine caps words/bigrams before serializing).
+    override suspend fun saveEnglishUserData(data: String) {
+        prefs.edit()
+            .putString(scopedKey(KEY_ENGLISH_USER_DATA), data)
+            .apply()
+    }
+
+    override suspend fun loadEnglishUserData(): String? =
+        getScopedString(KEY_ENGLISH_USER_DATA)
 
     fun getCustomConversions(): List<CustomConversion> {
         val raw = getScopedString(KEY_CUSTOM_CONVERSIONS) ?: return emptyList()

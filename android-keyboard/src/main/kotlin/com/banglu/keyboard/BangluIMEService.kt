@@ -83,8 +83,13 @@ class BangluIMEService : InputMethodService(),
     private val voiceInputLevel = mutableStateOf(0f)
     private val emojiInitialCategory = mutableStateOf(0)
 
-    // Track the letter mode to return to from symbols
+    // S95: the user's CURRENT letter-mode choice (what transient layers
+    // return to). Only the globe toggle and the new-app reset may change it —
+    // settings reloads must NOT (that clobber was the EN snap-back bug).
     private var letterModeBeforeSymbols = KeyboardMode.BANGLU
+
+    // S95: the settings default, consulted ONLY when entering a different app.
+    private var defaultLetterMode = KeyboardMode.BANGLU
 
     // For double-tap shift detection
     private var lastShiftTapTime = 0L
@@ -306,6 +311,9 @@ class BangluIMEService : InputMethodService(),
         private const val PREF_RECENT_EMOJIS = "recent_emojis"
         private const val PREF_CLIPBOARD_HISTORY = "clipboard_history"
         private const val AUTOCORRECT_UNDO_SOURCE = "autocorrect_undo"
+
+        /** S96: strip chips produced by the English typing suite. */
+        private const val ENGLISH_WORD_SOURCE = "english_word"
         private const val MAX_RECENT_EMOJIS = 40
         private const val MAX_CLIPBOARD_HISTORY = 12
         private const val MAX_CLIPBOARD_ITEM_CHARS = 1_000
@@ -694,13 +702,7 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun collapseTransientKeyboardUi() {
-        if (keyboardMode.value == KeyboardMode.SYMBOLS_1 ||
-            keyboardMode.value == KeyboardMode.SYMBOLS_2 ||
-            keyboardMode.value == KeyboardMode.EMOJI ||
-            keyboardMode.value == KeyboardMode.CLIPBOARD
-        ) {
-            keyboardMode.value = letterModeBeforeSymbols
-        }
+        keyboardMode.value = LanguageModePolicy.collapseTransient(keyboardMode.value, letterModeBeforeSymbols)
         isToolbarExpanded.value = false
         emojiInitialCategory.value = 0
     }
@@ -795,7 +797,11 @@ class BangluIMEService : InputMethodService(),
         keyboardHeightMode.value = prefs.getString("keyboard_height", "normal") ?: "normal"
         keyboardFontSizeMode.value = prefs.getString("keyboard_font_size", "large") ?: "large"
         val defaultMode = prefs.getString("default_mode", "banglu") ?: "banglu"
-        letterModeBeforeSymbols = if (defaultMode == "english") KeyboardMode.ENGLISH else KeyboardMode.BANGLU
+        // S95: settings feed the DEFAULT only — never the user's live choice
+        // (reloadSettings runs on every keyboard show; writing
+        // letterModeBeforeSymbols here snapped deliberate EN sessions back to
+        // Bengali on every transient-layer return).
+        defaultLetterMode = if (defaultMode == "english") KeyboardMode.ENGLISH else KeyboardMode.BANGLU
         SmartEngineAdapter.configureLearning(
             enabled = typingLearningEnabled.value,
             personalDictionary = personalDictionaryEnabled.value
@@ -1181,20 +1187,23 @@ class BangluIMEService : InputMethodService(),
         configureInputSafety(info)
         buffer = ""
         suggestions.clear()
-        // S67/S76: the language mode resets to the settings default when the
-        // user enters a DIFFERENT app — that kills the original "one
-        // accidental toggle left every app in raw English forever" bug.
-        // Within the SAME app it persists across keyboard hide/show (S76,
-        // tester: typing English in Google search, tapping search, then
-        // returning to the box snapped the keyboard back to Bengali — a
-        // deliberate mode choice must survive same-app round trips).
+        // S67/S76/S95: same app -> the user's mode choice is sacred; new app
+        // -> reset to the settings default (see LanguageModePolicy).
         val inputPackage = info?.packageName
-        if (inputPackage != lastInputPackage) {
-            lastInputPackage = inputPackage
-            keyboardMode.value = letterModeBeforeSymbols
-        }
+        val samePackage = inputPackage == lastInputPackage
+        lastInputPackage = inputPackage
+        val modeResult = LanguageModePolicy.onFieldStart(
+            samePackage = samePackage,
+            current = keyboardMode.value,
+            letterMode = letterModeBeforeSymbols,
+            defaultMode = defaultLetterMode,
+        )
+        keyboardMode.value = modeResult.mode
+        letterModeBeforeSymbols = modeResult.letterMode
         collapseTransientKeyboardUi()
         clearCommitCaches()
+        // S96: an EN-mode field starts with the completion/prediction strip.
+        if (keyboardMode.value == KeyboardMode.ENGLISH) refreshEnglishSuggestionsAsync()
         if (pendingVoiceStart) {
             pendingVoiceStart = false
             log("voice: starting deferred dictation after disclosure")
@@ -1442,6 +1451,78 @@ class BangluIMEService : InputMethodService(),
 
         // Do NOT auto-capitalize here — only after space/enter
         // Auto-capitalizing after every keypress causes uppercase in middle of words
+
+        // S96: live word completions while typing English.
+        refreshEnglishSuggestionsAsync()
+    }
+
+    // ── S96: English typing suite (completions, predictions, learning) ────
+
+    private fun isEnglishWordChar(c: Char): Boolean =
+        c in 'a'..'z' || c in 'A'..'Z' || c == '\''
+
+    /**
+     * (word-in-progress, previous completed word) parsed from the text
+     * before the cursor. The prefix is the trailing letter run; the previous
+     * word is the letter run before the separators before it.
+     */
+    private fun englishContextFrom(before: String): Pair<String, String?> {
+        var i = before.length
+        while (i > 0 && isEnglishWordChar(before[i - 1])) i--
+        val prefix = before.substring(i)
+        var j = i
+        while (j > 0 && !isEnglishWordChar(before[j - 1])) j--
+        var k = j
+        while (k > 0 && isEnglishWordChar(before[k - 1])) k--
+        val prev = before.substring(k, j).takeIf { it.isNotBlank() }
+        return prefix to prev
+    }
+
+    private fun refreshEnglishSuggestionsAsync() {
+        suggestionJob?.cancel()
+        if (!suggestionsAllowedForCurrentInput()) {
+            suggestions.clear()
+            return
+        }
+        val before = currentInputConnection?.getTextBeforeCursor(48, 0)?.toString().orEmpty()
+        val (prefix, prev) = englishContextFrom(before)
+        suggestionJob = serviceScope.launch {
+            val items = withContext(engineLane) {
+                SmartEngineAdapter.ensureEnglishLearningLoaded()
+                if (prefix.isEmpty()) SmartEngineAdapter.englishPredictions(prev, 3)
+                else SmartEngineAdapter.englishCompletions(prefix, 3)
+            }
+            if (keyboardMode.value == KeyboardMode.ENGLISH) {
+                suggestions.clear()
+                items.forEach { w ->
+                    suggestions.add(SmartSuggestion(w, 0.9, ENGLISH_WORD_SOURCE, prefix, "en"))
+                }
+            }
+        }
+    }
+
+    private fun onEnglishSuggestionTap(suggestion: SmartSuggestion) {
+        val ic = currentInputConnection ?: return
+        val before = ic.getTextBeforeCursor(48, 0)?.toString().orEmpty()
+        val (prefix, prev) = englishContextFrom(before)
+        ic.beginBatchEdit()
+        if (prefix.isNotEmpty()) ic.deleteSurroundingText(prefix.length, 0)
+        ic.commitText(suggestion.bengali + " ", 1)
+        ic.endBatchEdit()
+        lastCommittedTextLength = suggestion.bengali.length + 1
+        sessionSuggestionTapCount++
+        recordEnglishCommitAsync(suggestion.bengali, prev)
+        refreshEnglishSuggestionsAsync()
+    }
+
+    /** A finished English word (space/punctuation/chip) — learn it off-lane. */
+    private fun recordEnglishCommitAsync(word: String, prev: String?) {
+        if (privateInputMode || rawCommitInputMode) return
+        if (word.isBlank()) return
+        serviceScope.launch(engineLane) {
+            SmartEngineAdapter.ensureEnglishLearningLoaded()
+            SmartEngineAdapter.recordEnglishCommit(word, prev)
+        }
     }
 
     private fun onDirectCommit(char: Char) {
@@ -1482,6 +1563,12 @@ class BangluIMEService : InputMethodService(),
         commitPendingBuffer()
 
         val ic = currentInputConnection ?: return
+        // S96: punctuation also finishes an English word \u2014 learn it first.
+        if (keyboardMode.value == KeyboardMode.ENGLISH) {
+            val before = ic.getTextBeforeCursor(48, 0)?.toString().orEmpty()
+            val (word, prev) = englishContextFrom(before)
+            if (word.isNotEmpty()) recordEnglishCommitAsync(word, prev)
+        }
         val output = if (keyboardMode.value == KeyboardMode.BANGLU && char == '.' && !uriInputMode) '\u0964' else char
         if (keyboardMode.value == KeyboardMode.BANGLU && isBanglaTightPunctuation(output)) {
             deleteSingleSpaceBeforeCursor(ic)
@@ -1525,6 +1612,10 @@ class BangluIMEService : InputMethodService(),
                 // Delete the previous user-visible character. This keeps emoji and Bengali
                 // combining clusters intact instead of deleting one UTF-16 code unit.
                 deletePreviousGraphemes(ic)
+                // S96: keep the completion strip in sync while editing English.
+                if (keyboardMode.value == KeyboardMode.ENGLISH) {
+                    refreshEnglishSuggestionsAsync()
+                }
             }
         }
     }
@@ -1637,6 +1728,13 @@ class BangluIMEService : InputMethodService(),
                 }
             }
             else -> {
+                // S96: space finishes an English word — learn it (with its
+                // previous word) BEFORE the separator lands.
+                if (keyboardMode.value == KeyboardMode.ENGLISH) {
+                    val before = ic.getTextBeforeCursor(48, 0)?.toString().orEmpty()
+                    val (word, prev) = englishContextFrom(before)
+                    if (word.isNotEmpty()) recordEnglishCommitAsync(word, prev)
+                }
                 // Feature 1.1: Double-space → period + space (English/Symbol modes)
                 if (doubleSpacePeriodEnabled.value && now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
                     ic.deleteSurroundingText(1, 0)
@@ -1645,6 +1743,11 @@ class BangluIMEService : InputMethodService(),
                 } else {
                     ic.commitText(" ", 1)
                     lastCommittedTextLength = 1
+                }
+                // S96: between words the strip switches to next-word
+                // predictions (personal bigrams first, common starters after).
+                if (keyboardMode.value == KeyboardMode.ENGLISH) {
+                    refreshEnglishSuggestionsAsync()
                 }
             }
         }
@@ -1732,6 +1835,13 @@ class BangluIMEService : InputMethodService(),
         }
         if (privateInputMode || rawCommitInputMode) return
 
+        // S96: English chips replace the word being typed (or commit a
+        // prediction) and feed the English learning store.
+        if (suggestion.source == ENGLISH_WORD_SOURCE) {
+            onEnglishSuggestionTap(suggestion)
+            return
+        }
+
         val ic = currentInputConnection ?: return
 
         if (buffer.isEmpty()) {
@@ -1789,33 +1899,18 @@ class BangluIMEService : InputMethodService(),
         // Commit any pending Banglu buffer
         commitPendingBuffer()
 
-        // Toggle between Banglu and English
-        val currentMode = keyboardMode.value
-        val newMode = when (currentMode) {
-            KeyboardMode.BANGLU -> KeyboardMode.ENGLISH
-            KeyboardMode.ENGLISH -> KeyboardMode.BANGLU
-            // From symbols or emoji, toggle the underlying letter mode
-            KeyboardMode.SYMBOLS_1, KeyboardMode.SYMBOLS_2 -> {
-                letterModeBeforeSymbols = if (letterModeBeforeSymbols == KeyboardMode.BANGLU) {
-                    KeyboardMode.ENGLISH
-                } else {
-                    KeyboardMode.BANGLU
-                }
-                // Stay in symbols mode, the label will update
-                currentMode
-            }
-            KeyboardMode.EMOJI -> {
-                // Return to the opposite letter mode
-                if (letterModeBeforeSymbols == KeyboardMode.BANGLU) KeyboardMode.ENGLISH
-                else KeyboardMode.BANGLU
-            }
-            KeyboardMode.CLIPBOARD -> letterModeBeforeSymbols
-        }
-
-        keyboardMode.value = newMode
+        // S95: the toggle must ALSO update the tracked letter mode, or every
+        // transient-layer return snaps a deliberate EN session back to
+        // Bengali (the tester's exact complaint). Decision table lives in
+        // LanguageModePolicy with its own pins.
+        val modeResult = LanguageModePolicy.globeToggle(keyboardMode.value, letterModeBeforeSymbols)
+        letterModeBeforeSymbols = modeResult.letterMode
+        keyboardMode.value = modeResult.mode
         resetShiftState()
         suggestions.clear()
-        log("onGlobePress: mode=$newMode")
+        // S96: entering EN mode surfaces predictions right away.
+        if (modeResult.mode == KeyboardMode.ENGLISH) refreshEnglishSuggestionsAsync()
+        log("onGlobePress: mode=${modeResult.mode}")
     }
 
     private fun onSymbolsPress() {

@@ -532,6 +532,42 @@ object SmartEngineAdapter {
         personalDictionaryEnabled = personalDictionary
     }
 
+    // ── S96: English typing suite ────────────────────────────────────────
+    // The engine object is cheap (wordlist rank map + one sorted copy) and
+    // platform-free; ALL calls must arrive on the platform's single engine
+    // lane (S75 law) — same contract as SmartEngine itself.
+
+    private val englishTyping = com.banglu.engine.english.EnglishTypingEngine()
+    private var englishLearningLoaded = false
+
+    /** Load the persisted English learning blob once (idempotent). */
+    suspend fun ensureEnglishLearningLoaded() {
+        if (englishLearningLoaded) return
+        englishLearningLoaded = true
+        storage?.loadEnglishUserData()?.let { englishTyping.load(it) }
+    }
+
+    fun englishCompletions(prefix: String, limit: Int = 3): List<String> =
+        englishTyping.completions(prefix, limit, personalDictionaryEnabled)
+
+    fun englishPredictions(prev: String?, limit: Int = 3): List<String> =
+        englishTyping.predictions(prev, limit)
+
+    /**
+     * A word the user committed in EN mode. Gated on the learning setting;
+     * persistence is debounced onto the persistence lane (never the
+     * keystroke path).
+     */
+    fun recordEnglishCommit(word: String, prev: String?) {
+        if (!learningEnabled) return
+        englishTyping.recordCommit(word, prev)
+        val scope = persistenceScope ?: return
+        val snapshot = englishTyping.serialize()
+        scope.launch(com.banglu.engine.util.persistenceDispatcher) {
+            storage?.saveEnglishUserData(snapshot)
+        }
+    }
+
     /**
      * Clear the word conversion cache.
      */
