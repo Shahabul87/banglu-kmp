@@ -1872,7 +1872,7 @@ private fun EnterActionKey(
                     val down = awaitFirstDown()
                     down.consume()
                     isPressed = true
-                    if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (hapticOn) view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                     if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
                     currentOnClick()
                     while (true) {
@@ -2009,7 +2009,12 @@ private fun KeyButton(
                     val down = awaitFirstDown()
                     down.consume()
                     isPressed = true
-                    if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    // S93 (tester: "key touch not smooth like Samsung"): the
+                    // platform KEYBOARD_TAP effect — the same crisp tick OEM
+                    // keyboards use — replaced Compose's TextHandleMove (the
+                    // weakest haptic constant) at every key-press site; the
+                    // cursor-drag ticks keep TextHandleMove deliberately.
+                    if (hapticOn) view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                     if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
                     currentOnClick()
                     var longPressed = false
@@ -2187,7 +2192,7 @@ private fun SpaceBar(
                     val down = awaitFirstDown()
                     down.consume()
                     isPressed = true
-                    if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (hapticOn) view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                     if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
                     val downTime = down.uptimeMillis
                     var totalDx = 0f
@@ -2297,7 +2302,7 @@ private fun BackspaceKey(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
-                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (hapticOn) view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                         if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
                         isPressed = true
                         currentOnBackspace()
@@ -2396,7 +2401,7 @@ private fun NumberKey(
                 detectTapGestures(
                     onPress = {
                         isPressed = true
-                        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (hapticOn) view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                         if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
 
                         val longPressJob = coroutineScope.launch {
@@ -2482,7 +2487,7 @@ private fun EmojiPanel(
     }
 
     val commitItem: (String) -> Unit = { item ->
-        if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (hapticOn) view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
         if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
         onEmojiClick(item)
     }

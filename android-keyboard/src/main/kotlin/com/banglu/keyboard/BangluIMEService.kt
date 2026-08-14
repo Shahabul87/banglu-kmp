@@ -1947,14 +1947,17 @@ class BangluIMEService : InputMethodService(),
         // auto-committed prefix of the PREVIOUS session must not strip (i.e.
         // swallow) new speech that happens to begin with the same words.
         voiceLastAutoCommittedPartial = null
-        // S76: never reuse an instance whose terminal callback is still
-        // outstanding (SpeechRecognizer contract) — destroy it and bind
-        // fresh; the generation bump makes its late callbacks inert.
-        if (voiceAwaitingTerminal) {
-            releaseSpeechRecognizer()
-            voiceAwaitingTerminal = false
-        }
-        val recognizer = speechRecognizer ?: SpeechRecognizer.createSpeechRecognizer(this).also {
+        // S92 (tester: "voice typing is slow after some uses"): NEVER reuse a
+        // recognizer instance across sessions. One long-lived client binding
+        // accumulates per-session state inside the platform RecognitionService
+        // and session starts get progressively slower; every reuse bug in this
+        // file's history (S69 wedged restart, S76 outstanding-terminal
+        // contract) traced to instance reuse. A fresh bind costs ~100-300ms,
+        // absorbed by the existing PROCESSING state and settle delays. This
+        // also subsumes the old S76 awaiting-terminal special case — the
+        // generation bump in release makes any late callbacks inert (S73).
+        if (speechRecognizer != null) releaseSpeechRecognizer()
+        val recognizer = SpeechRecognizer.createSpeechRecognizer(this).also {
             speechRecognizer = it
             // S73: every recognizer instance gets a generation stamp; its
             // listener rejects callbacks once the instance is released, so a
@@ -2283,6 +2286,7 @@ class BangluIMEService : InputMethodService(),
                     finishVoiceComposingText()
                     voiceInputState.value = VoiceInputState.ERROR
                     resetVoiceStateSoon()
+                    releaseSpeechRecognizer()
                     return
                 }
 
@@ -2302,6 +2306,9 @@ class BangluIMEService : InputMethodService(),
                     voiceInputState.value = VoiceInputState.STOPPED
                     finalizeVoiceComposingText()
                     showVoiceDeleteAction()
+                    // S92: session over — drop the binding now instead of
+                    // holding a stale instance until the next dictation.
+                    releaseSpeechRecognizer()
                     return
                 }
                 if (voiceDictationActive && !voiceStopRequested) {
@@ -2313,6 +2320,7 @@ class BangluIMEService : InputMethodService(),
                     voiceInputState.value = VoiceInputState.IDLE
                     finishVoiceComposingText()
                     showVoiceDeleteAction()
+                    releaseSpeechRecognizer()
                 }
             }
 
@@ -2931,13 +2939,15 @@ class BangluIMEService : InputMethodService(),
         voiceInputLevel.value = 0f
         voiceRestartJob?.cancel()
         voiceRestartJob = serviceScope.launch {
-            // S69: unbind the wedged recognizer FIRST, then let the delay
-            // give Google's RecognitionService time to settle before
-            // rebinding. The old order (delay → release+create in the same
-            // main-thread frame) matched the on-device audit's "session 2
-            // cancelled at 0.6s, session 3 dead mic" signature — the classic
-            // 'voice works once, then never again'.
-            if (afterError) releaseSpeechRecognizer()
+            // S69: unbind the recognizer FIRST, then let the delay give
+            // Google's RecognitionService time to settle before rebinding.
+            // The old order (delay → release+create in the same main-thread
+            // frame) matched the on-device audit's "session 2 cancelled at
+            // 0.6s, session 3 dead mic" signature — the classic 'voice works
+            // once, then never again'. S92: unconditional — sessions never
+            // reuse instances anymore, so every restart gets the full settle
+            // window, not just error restarts.
+            releaseSpeechRecognizer()
             delay(if (afterError) VOICE_ERROR_RESTART_DELAY_MS else VOICE_RESTART_DELAY_MS)
             if (
                 imeSessionVisible &&
