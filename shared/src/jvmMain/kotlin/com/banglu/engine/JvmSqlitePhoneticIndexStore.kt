@@ -1,5 +1,6 @@
 package com.banglu.engine
 
+import com.banglu.engine.platform.ExtendedDictionaryHit
 import com.banglu.engine.platform.PhoneticIndexHit
 import com.banglu.engine.platform.PhoneticIndexStore
 import java.io.File
@@ -66,6 +67,65 @@ class JvmSqlitePhoneticIndexStore(private val dbFile: File) : PhoneticIndexStore
         conn.prepareStatement("SELECT 1 FROM words WHERE bengali = ? LIMIT 1").use { st ->
             st.setString(1, bengali)
             st.executeQuery().use { rs -> rs.next() }
+        }
+
+    // ── S102: extended dictionary served from sqlite (trie retirement) ───
+
+    private val extendedAvailable: Boolean by lazy {
+        conn.prepareStatement(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='extended_phonetics' LIMIT 1"
+        ).use { st -> st.executeQuery().use { rs -> rs.next() } }
+    }
+
+    override fun hasExtendedData(): Boolean = extendedAvailable
+
+    override fun lookupExtendedExact(key: String): List<ExtendedDictionaryHit> =
+        conn.prepareStatement(
+            """SELECT p.phonetic, e.bengali, e.frequency
+               FROM extended_phonetics p JOIN extended_dictionary e ON e.id = p.entry_id
+               WHERE p.phonetic = ?
+               ORDER BY e.frequency DESC LIMIT 24"""
+        ).use { st ->
+            st.setString(1, key)
+            st.executeQuery().use { rs ->
+                buildList {
+                    while (rs.next()) add(
+                        ExtendedDictionaryHit(rs.getString(1), rs.getString(2), rs.getInt(3))
+                    )
+                }
+            }
+        }
+
+    override fun lookupExtendedPrefix(prefix: String, limit: Int): List<ExtendedDictionaryHit> {
+        if (limit <= 0) return emptyList()
+        // Range form instead of LIKE so the phonetic index is always used.
+        return conn.prepareStatement(
+            """SELECT p.phonetic, e.bengali, e.frequency
+               FROM extended_phonetics p JOIN extended_dictionary e ON e.id = p.entry_id
+               WHERE p.phonetic >= ? AND p.phonetic < ?
+               ORDER BY e.frequency DESC LIMIT ?"""
+        ).use { st ->
+            st.setString(1, prefix)
+            st.setString(2, prefix + '￿')
+            st.setInt(3, limit)
+            st.executeQuery().use { rs ->
+                buildList {
+                    while (rs.next()) add(
+                        ExtendedDictionaryHit(rs.getString(1), rs.getString(2), rs.getInt(3))
+                    )
+                }
+            }
+        }
+    }
+
+    override fun extendedPhoneticForBengali(bengali: String): String? =
+        conn.prepareStatement(
+            """SELECT p.phonetic FROM extended_dictionary e
+               JOIN extended_phonetics p ON p.entry_id = e.id
+               WHERE e.bengali = ? ORDER BY p.rowid LIMIT 1"""
+        ).use { st ->
+            st.setString(1, bengali)
+            st.executeQuery().use { rs -> if (rs.next()) rs.getString(1) else null }
         }
 
     fun close() = conn.close()

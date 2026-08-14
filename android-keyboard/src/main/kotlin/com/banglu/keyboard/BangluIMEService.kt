@@ -1101,7 +1101,14 @@ class BangluIMEService : InputMethodService(),
         return AndroidDictionaryLoader(
             context = applicationContext,
             loadFullWordList = !liteMode,
-            loadExtendedEntries = !liteMode,
+            // S102: the extended dictionary is served from the sqlite store
+            // (SqlitePhoneticIndexStore extended queries) — never materialized
+            // into the trie on Android. This was the largest full-mode heap
+            // structure (~70-90MB); the engine skips the trie load whenever
+            // the attached store has extended data, and on the first-install
+            // window (store not yet attached) a null here prevents a
+            // double-materialization when the store lands moments later.
+            loadExtendedEntries = false,
             loadFrequencyScores = !liteMode,
             loadDisambiguationData = !liteMode,
             loadBigramData = !liteMode

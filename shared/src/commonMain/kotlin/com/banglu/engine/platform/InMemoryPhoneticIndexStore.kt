@@ -3,7 +3,8 @@ package com.banglu.engine.platform
 class InMemoryPhoneticIndexStore(
     entries: List<Pair<PhoneticIndexHit, String>>, // hit to key
     private val english: Map<String, String> = emptyMap(),
-    words: Set<String> = emptySet()
+    words: Set<String> = emptySet(),
+    extendedEntries: List<ExtendedDictionaryHit> = emptyList()
 ) : PhoneticIndexStore {
 
     private val byKey: Map<String, List<PhoneticIndexHit>> =
@@ -47,4 +48,33 @@ class InMemoryPhoneticIndexStore(
     override fun lookupEnglish(key: String): String? = english[key]
 
     override fun containsWord(bengali: String): Boolean = bengali in dictionaryWords
+
+    // ── S102 extended-dictionary emulation (jvmTest runs the Android
+    //    store-served-extended configuration through this fixture) ────────
+    private val extendedByKey: Map<String, List<ExtendedDictionaryHit>> =
+        extendedEntries.groupBy { it.phonetic }
+            .mapValues { (_, hits) -> hits.sortedByDescending { it.frequency } }
+
+    private val extendedByBengali: Map<String, String> = buildMap {
+        for (hit in extendedEntries) {
+            if (hit.bengali !in this) put(hit.bengali, hit.phonetic)
+        }
+    }
+
+    override fun hasExtendedData(): Boolean = extendedByKey.isNotEmpty()
+
+    override fun lookupExtendedExact(key: String): List<ExtendedDictionaryHit> =
+        extendedByKey[key].orEmpty()
+
+    override fun lookupExtendedPrefix(prefix: String, limit: Int): List<ExtendedDictionaryHit> {
+        if (limit <= 0) return emptyList()
+        return extendedByKey.asSequence()
+            .filter { it.key.startsWith(prefix) }
+            .flatMap { it.value }
+            .sortedByDescending { it.frequency }
+            .take(limit)
+            .toList()
+    }
+
+    override fun extendedPhoneticForBengali(bengali: String): String? = extendedByBengali[bengali]
 }

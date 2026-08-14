@@ -90,6 +90,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     fun setPhoneticIndex(store: PhoneticIndexStore?) {
         phoneticIndex = store
         if (store != null) corpusPhoneticIndex = mutableMapOf()
+        // S102: a store that carries the extended tables serves them from
+        // sqlite — the dictionary merges those hits instead of holding the
+        // 130K-entry trie copy in RAM.
+        dictionary.attachExtendedStore(store)
         clearCache()
     }
 
@@ -629,9 +633,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             if (phoneticIndex == null) sortCorpusPhoneticIndex()
         }
 
-        // Load extended dictionary if available
-        loader?.loadExtendedDictionary()?.let { entries ->
-            dictionary.addEntries(entries)
+        // Load extended dictionary if available — S102: skipped when the
+        // attached store serves the extended tables from sqlite (Android,
+        // desktop, jvmTest); materializing them into the trie was the
+        // largest full-mode heap structure (~70-90MB). Storeless configs
+        // (seed-only engines, the storeless parity wall) still load it.
+        if (!dictionary.hasExtendedStore()) {
+            loader?.loadExtendedDictionary()?.let { entries ->
+                dictionary.addEntries(entries)
+            }
         }
 
         // Load disambiguation map
@@ -4456,7 +4466,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         if (path.literal) score += if (key.length <= 2) 1.2 else 0.20
 
-        if (dictionary.getPhoneticForBengali(path.bengali) != null) {
+        // S102: Fast variant — this scorer runs on the sync instant-preview
+        // path, where a store-extended sqlite read would break the
+        // keystroke law. Seeds + learned words keep the bonus; extended
+        // words fall through to the validator branch below (S102 study:
+        // 8/6088 canonical primary diffs, 5 composing).
+        if (dictionary.getPhoneticForBengaliFast(path.bengali) != null) {
             score += if (key.length <= 2) 0.40 else 2.4
         }
 

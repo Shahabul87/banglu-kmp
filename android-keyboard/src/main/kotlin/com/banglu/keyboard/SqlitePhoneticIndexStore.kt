@@ -2,6 +2,7 @@ package com.banglu.keyboard
 
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
+import com.banglu.engine.platform.ExtendedDictionaryHit
 import com.banglu.engine.platform.PhoneticIndexHit
 import com.banglu.engine.platform.PhoneticIndexStore
 import java.io.File
@@ -117,6 +118,66 @@ class SqlitePhoneticIndexStore(
     } catch (e: Exception) {
         if (BuildConfig.DEBUG) Log.e(TAG, "containsWord lookup failed", e)
         false
+    }
+
+    // ── S102: extended dictionary served from sqlite instead of the in-RAM
+    //    trie (~70-90MB of full-mode heap). Same fail-soft posture as every
+    //    other query; the engine memoizes on the async lane. ───────────────
+
+    private val extendedAvailable: Boolean by lazy {
+        try {
+            db?.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='extended_phonetics' LIMIT 1",
+                null
+            )?.use { c -> c.moveToFirst() } ?: false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    override fun hasExtendedData(): Boolean = extendedAvailable
+
+    override fun lookupExtendedExact(key: String): List<ExtendedDictionaryHit> = queryExtended(
+        """SELECT p.phonetic, e.bengali, e.frequency FROM extended_phonetics p
+           JOIN extended_dictionary e ON e.id = p.entry_id
+           WHERE p.phonetic = ? ORDER BY e.frequency DESC LIMIT 16""",
+        arrayOf(key)
+    )
+
+    override fun lookupExtendedPrefix(prefix: String, limit: Int): List<ExtendedDictionaryHit> {
+        if (limit <= 0 || prefix.isEmpty()) return emptyList()
+        return queryExtended(
+            """SELECT p.phonetic, e.bengali, e.frequency FROM extended_phonetics p
+               JOIN extended_dictionary e ON e.id = p.entry_id
+               WHERE p.phonetic >= ? AND p.phonetic < ?
+               ORDER BY e.frequency DESC LIMIT ?""",
+            arrayOf(prefix, prefix + KEY_UPPER_BOUND, limit.toString())
+        )
+    }
+
+    override fun extendedPhoneticForBengali(bengali: String): String? = try {
+        db?.rawQuery(
+            """SELECT p.phonetic FROM extended_dictionary e
+               JOIN extended_phonetics p ON p.entry_id = e.id
+               WHERE e.bengali = ? ORDER BY p.rowid LIMIT 1""",
+            arrayOf(bengali)
+        )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+    } catch (e: Exception) {
+        if (BuildConfig.DEBUG) Log.e(TAG, "extended reverse lookup failed", e)
+        null
+    }
+
+    private fun queryExtended(sql: String, args: Array<String>): List<ExtendedDictionaryHit> = try {
+        db?.rawQuery(sql, args)?.use { c ->
+            val hits = ArrayList<ExtendedDictionaryHit>()
+            while (c.moveToNext()) {
+                hits.add(ExtendedDictionaryHit(c.getString(0), c.getString(1), c.getInt(2)))
+            }
+            hits
+        } ?: emptyList()
+    } catch (e: Exception) {
+        if (BuildConfig.DEBUG) Log.e(TAG, "Extended query failed", e)
+        emptyList()
     }
 
     private fun query(sql: String, args: Array<String>): List<PhoneticIndexHit> = try {

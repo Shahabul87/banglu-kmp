@@ -62,7 +62,28 @@ class ConjunctSolutionRoundJvmTest {
                         while (rs.next()) words.add(rs.getString(1))
                     }
                 }
-                return InMemoryPhoneticIndexStore(entries, english, words)
+                // S102: extended tables ride along so the ENTIRE jvm wall
+                // exercises the store-served-extended configuration Android
+                // ships (trie retired). ORDER BY entry_id, rowid keeps the
+                // first phonetic per entry canonical for reverse lookups —
+                // the trie's addEntry(phonetics[0]) contract.
+                val extended = ArrayList<com.banglu.engine.platform.ExtendedDictionaryHit>(400_000)
+                conn.createStatement().use { st ->
+                    st.executeQuery(
+                        """SELECT p.phonetic, e.bengali, e.frequency
+                           FROM extended_phonetics p JOIN extended_dictionary e ON e.id = p.entry_id
+                           ORDER BY p.entry_id, p.rowid"""
+                    ).use { rs ->
+                        while (rs.next()) {
+                            extended.add(
+                                com.banglu.engine.platform.ExtendedDictionaryHit(
+                                    rs.getString(1), rs.getString(2), rs.getInt(3)
+                                )
+                            )
+                        }
+                    }
+                }
+                return InMemoryPhoneticIndexStore(entries, english, words, extended)
             }
         }
     }
