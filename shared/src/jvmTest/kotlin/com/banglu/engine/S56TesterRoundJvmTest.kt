@@ -86,7 +86,9 @@ class S56TesterRoundJvmTest {
         assertEquals("ভালো", engine.convertWord("valo").bengali)
         assertEquals("হলো", engine.convertWord("holo").bengali)
         assertEquals("করবো", engine.convertWord("korbo").bengali)
-        assertEquals("জাবো", engine.convertWord("jabo").bengali) // pre-existing j→জ default
+        // S100: the real verb যাবো finally outranks the j→জ artifact জাবো
+        // (subtitles evidence) — an accepted improvement, not a regression.
+        assertEquals("যাবো", engine.convertWord("jabo").bengali)
     }
 
     @Test

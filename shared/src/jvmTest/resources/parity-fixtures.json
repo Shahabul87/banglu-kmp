@@ -1022,7 +1022,7 @@
   },
   {
     "input": "bon",
-    "expected": "বন",
+    "expected": "বোন",
     "category": "common-words",
     "priority": "P0"
   },

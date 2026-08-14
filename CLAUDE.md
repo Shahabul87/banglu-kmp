@@ -414,7 +414,8 @@ compiler version string AND REQUIRED_DB_VERSION together.
    didn't rank first.
 4. IME process stays offline; account/billing stays in :ui.
 5. Suggestion strip[0] IS the commit contract (S19).
-6. Never break: kacci→কাচ্চি (dish), jos/hoise/dibi defaults (deliberate),
+6. Never break: kacci→কাচ্চি (dish), jos→জোস (slang default since S100,
+   was জস)/hoise/dibi defaults (deliberate),
    kassi→কাচছি (standard orthography), name→নামে class stays Bengali.
 7. Parity pin tests exist for a reason — a "fix" that flips a pin needs a
    documented decision, not a test edit.

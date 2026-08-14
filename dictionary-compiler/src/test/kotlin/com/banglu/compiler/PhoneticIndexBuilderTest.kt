@@ -467,6 +467,33 @@ class PhoneticIndexBuilderTest {
         assertTrue("thokieco" in keys, "expected 'thokieco', got $keys")
     }
 
+    // -------------------------------------------------------------------------
+    // S100: hasanta-twin promotion (marle: মার্লে canonically owned the key
+    // while the chat register proved মারলে more frequent)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun hasantaTwinPromotedWhenChatRegisterProvesItMoreFrequent() {
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf("মার্লে", "মারলে"),
+            frequencies = mapOf("মার্লে" to 67, "মারলে" to 73)
+        )
+        val promoted = rows.first { it.bengali == "মারলে" && it.key == "marle" }
+        assertEquals(0, promoted.priority, "the more-frequent hasanta-free twin takes canonical priority")
+        // The conjunct owner keeps its row, one slot down on frequency.
+        assertEquals(0, rows.first { it.bengali == "মার্লে" && it.key == "marle" }.priority)
+    }
+
+    @Test
+    fun hasantaTwinNotPromotedWhenConjunctOwnerMoreFrequent() {
+        // কর্তা@75 vs করতা@60 on "korta": the noun keeps its key.
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf("কর্তা", "করতা"),
+            frequencies = mapOf("কর্তা" to 75, "করতা" to 60)
+        )
+        assertEquals(1, rows.first { it.bengali == "করতা" && it.key == "korta" }.priority)
+    }
+
     @Test
     fun nasalTwinNotPromotedWhenPlainOwnerMoreFrequent() {
         // বেচে@169 (inflated for the test) outranks বেঁচে@80: no promotion,

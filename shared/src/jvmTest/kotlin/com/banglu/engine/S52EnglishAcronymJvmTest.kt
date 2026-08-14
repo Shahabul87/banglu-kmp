@@ -86,9 +86,16 @@ class S52EnglishAcronymJvmTest {
 
     @Test
     fun guardPinJosHoiseDibiDefaults() {
-        assertEquals("জস", engine.convertWord("jos").bengali)
+        // S100: chat register makes the slang জোস ("awesome") the default
+        // for jos — the corpus finally attests what testers meant.
+        assertEquals("জোস", engine.convertWord("jos").bengali)
         assertEquals("হইছে", engine.convertWord("hoise").bengali)
-        assertEquals("ডিবি", engine.convertWord("dibi").bengali)
+        // S100: the chat register attests the verb দিবি ("you'll give") as
+        // what dibi typers mean — the S52 ডিবি guard was protecting
+        // pre-acronym-round behavior, not a researched preference. The
+        // acronym stays one tap away.
+        assertEquals("দিবি", engine.convertWord("dibi").bengali)
+        assertTrue("ডিবি" in engine.getSuggestions("dibi", 4).map { it.bengali })
     }
 
     @Test

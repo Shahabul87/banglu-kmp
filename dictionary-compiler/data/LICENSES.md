@@ -58,3 +58,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+## corpus-2026-07/subtitles_*.tsv — OPUS OpenSubtitles v2018 (Bengali)
+
+Derived word/bigram/trigram counts computed from the OPUS OpenSubtitles
+v2018 Bengali monolingual corpus (https://opus.nlpl.eu/OpenSubtitles.php),
+built from user-contributed subtitles hosted at opensubtitles.org.
+
+Citation: P. Lison and J. Tiedemann, 2016. "OpenSubtitles2016: Extracting
+Large Parallel Corpora from Movie and TV Subtitles." LREC 2016.
+
+Only aggregate frequency counts are stored here — no subtitle text is
+redistributed.

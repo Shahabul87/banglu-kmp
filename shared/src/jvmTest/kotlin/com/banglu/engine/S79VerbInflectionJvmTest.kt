@@ -65,10 +65,13 @@ class S79VerbInflectionJvmTest {
     @Test
     fun sameTierEvidenceMarginUnseatsRareSquatters() {
         if (!hasVerbKeys()) return
-        // জাবনা@1 (cattle feed) canonically owns "jabona"; the chat form
-        // যাবোনা@50 sits one priority down in the same tier band — the
-        // generalized margin promotes it.
-        assertSame("যাবোনা", engine.convertWord("jabona").bengali)
+        // জাবনা@1 (cattle feed) canonically owns "jabona"; the real verb
+        // form sits one priority down in the same tier band — the
+        // generalized margin promotes it. S100: subtitles say the glued
+        // spelling যাবনা (38) beats যাবোনা (27), so the promoted twin is
+        // now the vowel-less form (the S79 essence — real word over junk
+        // squatter — is unchanged).
+        assertSame("যাবনা", engine.convertWord("jabona").bengali)
     }
 
     @Test

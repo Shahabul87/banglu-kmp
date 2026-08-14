@@ -21,6 +21,9 @@ import java.io.File
 object CorpusTrigrams {
 
     const val MODERN_WEIGHT = 4L
+
+    /** S100: conversational register authority — see CorpusBigrams.CHAT_WEIGHT. */
+    const val CHAT_WEIGHT = 16L
     const val MIN_TRIPLE_COUNT = 12L
     const val MAX_TRIPLES = 120_000
 

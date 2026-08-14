@@ -48,4 +48,28 @@ class CorpusAuthorityTest {
     fun emptyUsageKeepsLegacyUntouched() {
         assertEquals(legacy, CorpusAuthority.refreshFrequencies(legacy, emptyMap()))
     }
+
+    @Test
+    fun frequencyPinEnforcesWinnerWithReRankMargin() {
+        val pins = kotlin.io.path.createTempFile(suffix = ".tsv").toFile()
+        pins.writeText("# comment\nবিকেল\tবিকাল\nঅজানা\tঅনুপস্থিত\n")
+        val freqs = mapOf("বিকেল" to 77, "বিকাল" to 74)
+        val pinned = CorpusAuthority.applyFrequencyPins(pins, freqs)
+        // margin 6: the dictionary wordfreq re-rank needs a gap > 5
+        assertEquals(74 + CorpusAuthority.PIN_MARGIN, pinned["বিকেল"])
+        assertEquals(74, pinned["বিকাল"])
+        // pin for an absent loser is a no-op, never a crash
+        assertTrue("অজানা" !in pinned)
+        pins.delete()
+    }
+
+    @Test
+    fun frequencyPinIsNoOpWhenWinnerAlreadyClearsMargin() {
+        val pins = kotlin.io.path.createTempFile(suffix = ".tsv").toFile()
+        pins.writeText("বিশ\tবিষ\n")
+        val freqs = mapOf("বিশ" to 90, "বিষ" to 70)
+        val pinned = CorpusAuthority.applyFrequencyPins(pins, freqs)
+        assertEquals(90, pinned["বিশ"])
+        pins.delete()
+    }
 }

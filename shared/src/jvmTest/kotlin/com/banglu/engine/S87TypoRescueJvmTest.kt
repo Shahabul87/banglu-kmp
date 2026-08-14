@@ -28,22 +28,26 @@ class S87TypoRescueJvmTest {
     }
 
     @Test
-    fun voicingTypoGetsATapToFixChip() {
-        // thogieco (g for k) — the strip must offer the intended word even
-        // though the auto-replace gates (rightly) leave the primary alone.
+    fun voicingTypoResolvesToTheIntendedWord() {
+        // S100 repin: the S89 typo-tolerance layer + chat-register
+        // frequencies now resolve thogieco (g for k) DIRECTLY to the
+        // intended word as primary — strictly better than the original
+        // S87 tap-to-fix chip. The typo_rescue chip path remains as
+        // defense-in-depth for junk that resolution can't reach.
+        val primary = engine.convertWord("thogieco")
+        assertEquals(fold("ঠকিয়েছ"), fold(primary.bengali))
         val strip = engine.getSuggestions("thogieco", 6)
-        assertTrue(
-            strip.any { it.source == "typo_rescue" && fold(it.bengali) == fold("ঠকিয়েছ") },
-            "expected ঠকিয়েছ rescue chip, got ${strip.map { "${it.bengali}(${it.source})" }}"
-        )
+        assertEquals(fold("ঠকিয়েছ"), fold(strip.first().bengali), "strip[0] is the commit contract")
     }
 
     @Test
     fun rescueNeverReplacesThePrimary() {
-        // The literal stays the commit — a new name must remain typeable.
-        val primary = engine.convertWord("thogieco")
+        // The floor contract survives for junk BEYOND typo reach (2+ edits
+        // from every store key): the literal stays the commit — a new name
+        // must remain typeable, nothing auto-replaces.
+        val primary = engine.convertWord("thogieqo")
         assertTrue(primary.confidence <= 0.65, "primary must stay at the raw floor, was ${primary.source}@${primary.confidence}")
-        val strip = engine.getSuggestions("thogieco", 6)
+        val strip = engine.getSuggestions("thogieqo", 6)
         assertEquals(fold(primary.bengali), fold(strip.first().bengali), "strip[0] is the commit contract")
     }
 

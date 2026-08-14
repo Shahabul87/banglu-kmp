@@ -31,10 +31,12 @@ class ChatContinuousNegationJvmTest {
         for (key in listOf("bujtechi", "bujteci", "bujhtechi")) {
             assertEquals("বুঝতেছি", engine.convertWord(key).bengali, "key $key")
         }
-        // S18: bujtesi now yields the literal chat spelling (a real chat-
-        // lexicon word); বুঝতেছি stays in the strip.
-        assertEquals("বুঝতেসি", engine.convertWord("bujtesi").bengali)
-        assertTrue("বুঝতেছি" in engine.getSuggestions("bujtesi", 4).map { it.bengali })
+        // S100: the subtitles register proves the standard continuous
+        // (বুঝতেছি) is what -tesi typers mean; the sms spelling বুঝতেসি
+        // stays reachable in the strip (reverses the S18 literal-spelling
+        // call on corpus evidence).
+        assertEquals("বুঝতেছি", engine.convertWord("bujtesi").bengali)
+        assertTrue("বুঝতেসি" in engine.getSuggestions("bujtesi", 4).map { it.bengali })
     }
 
     @Test
@@ -42,9 +44,10 @@ class ChatContinuousNegationJvmTest {
         for (key in listOf("bujhtechhina")) {
             assertEquals("বুঝতেছিনা", engine.convertWord(key).bengali, "key $key")
         }
-        // S18: -tesi stems now resolve to the literal chat spelling.
-        assertEquals("বুঝতেসিনা", engine.convertWord("bujtesina").bengali)
-        assertEquals("বুঝতেসিনা", engine.convertWord("bujhtesina").bengali)
+        // S100: -tesi stems follow the standard continuous (see
+        // continuousAliases_allKeyTheRealWord).
+        assertEquals("বুঝতেছিনা", engine.convertWord("bujtesina").bengali)
+        assertEquals("বুঝতেছিনা", engine.convertWord("bujhtesina").bengali)
         assertEquals("পারতেছিনা", engine.convertWord("partesina").bengali)
         assertEquals("করতেছিনা", engine.convertWord("kortecina").bengali)
     }
@@ -85,10 +88,12 @@ class ChatContinuousNegationJvmTest {
     @Test
     fun chatLexicon_wordsResolve() {
         assertTrue("গেসি" in engine.getSuggestions("gesi", 3).map { it.bengali })
-        assertEquals("করতেসি", engine.convertWord("kortesi").bengali)
+        // S100: standard continuous primary; chat spelling stays reachable.
+        assertEquals("করতেছি", engine.convertWord("kortesi").bengali)
+        assertTrue("করতেসি" in engine.getSuggestions("kortesi", 4).map { it.bengali })
         assertEquals("ঠিকাছে", engine.convertWord("thikachhe").bengali)
         assertEquals("পুরাই", engine.convertWord("purai").bengali)
-        assertEquals("আছোস", engine.convertWord("achhos").bengali)
+        assertEquals("আছস", engine.convertWord("achhos").bengali) // S100 subtitles form
     }
 
     @Test
@@ -100,7 +105,10 @@ class ChatContinuousNegationJvmTest {
         // divergence/strip audit round.
         val paros = engine.getSuggestions("paros", 8).map { it.bengali }
         assertTrue("পারোস" in paros, "পারোস reachable for paros, got $paros")
-        assertEquals("আছোস", engine.convertWord("achhos").bengali)
+        // S100: subtitles evidence (আছস is the attested informal spelling)
+        // makes the vowel-less form primary; আছোস stays reachable.
+        assertEquals("আছস", engine.convertWord("achhos").bengali)
+        assertTrue("আছোস" in engine.getSuggestions("achhos", 8).map { it.bengali })
     }
 
     @Test

@@ -115,8 +115,13 @@ fun main(args: Array<String>) {
             println("Applying corpus authority from ${corpusDir.path}...")
             val modern = CorpusAuthority.addCounts(File(corpusDir, "modern_counts.tsv"), 1, 1, usageCounts)
             val literature = CorpusAuthority.addCounts(File(corpusDir, "bnwikisource_counts.tsv"), 1, 4, usageCounts)
+            // S100: the conversational register (OpenSubtitles dialogue,
+            // subtitles_counts.tsv) weighs 2x — chat verbs get their real
+            // authority (মারলে finally outranks the Bob-Marley artifact
+            // মার্লে) while the small corpus can't distort topical nouns.
+            val chat = CorpusAuthority.addCounts(File(corpusDir, "subtitles_counts.tsv"), 2, 1, usageCounts)
             println("  Corpus counts: $modern modern lines, $literature literature lines, " +
-                "${usageCounts.size} weighted words")
+                "$chat chat lines, ${usageCounts.size} weighted words")
         } else {
             println("WARNING: corpus-2026-07 not found — frequencies stay legacy")
         }
@@ -128,7 +133,13 @@ fun main(args: Array<String>) {
             val folded = com.banglu.engine.util.ReverseTransliterator.foldNukta(w.trim())
             usageCounts[folded] = maxOf(usageCounts[folded] ?: 0L, 3L)
         }
-        val frequenciesByWord = CorpusAuthority.refreshFrequencies(foldResult.frequencies, usageCounts)
+        var frequenciesByWord = CorpusAuthority.refreshFrequencies(foldResult.frequencies, usageCounts)
+        // S100: curated twin pins (deliberate S-round decisions) outrank
+        // whatever the latest corpus blend says — বিশ>বিষ, বিকেল>বিকাল.
+        sequenceOf(File("data"), File("dictionary-compiler/data"))
+            .map { File(it, "frequency_pins.tsv") }
+            .firstOrNull { it.exists() }
+            ?.let { frequenciesByWord = CorpusAuthority.applyFrequencyPins(it, frequenciesByWord) }
 
         // Vocabulary expansion: news-anchored corpus words the base list lacks
         // (names, modern spellings, compound inflections). They inherit their
@@ -341,7 +352,8 @@ fun main(args: Array<String>) {
                 modern = File(it, "bnwiki_bigrams.tsv"),
                 literature = File(it, "bnwikisource_bigrams.tsv"),
                 unigramCounts = usageCounts,
-                dictionaryWords = wordIdByBengali.keys
+                dictionaryWords = wordIdByBengali.keys,
+                chat = File(it, "subtitles_bigrams.tsv"),
             )
         }
         if (corpusBigrams != null && corpusBigrams.pairs.isNotEmpty()) {
@@ -416,7 +428,10 @@ fun main(args: Array<String>) {
                 sources = listOf(
                     File(dir, "news_trigrams.tsv") to CorpusTrigrams.MODERN_WEIGHT,
                     File(dir, "bnwiki_trigrams.tsv") to CorpusTrigrams.MODERN_WEIGHT,
-                    File(dir, "bnwikisource_trigrams.tsv") to 1L
+                    File(dir, "bnwikisource_trigrams.tsv") to 1L,
+                    // S100: conversational register — the two-word contexts a
+                    // chat keyboard actually predicts into.
+                    File(dir, "subtitles_trigrams.tsv") to CorpusTrigrams.CHAT_WEIGHT
                 ),
                 dictionaryWords = wordIdByBengali.keys
             )
@@ -443,7 +458,7 @@ fun main(args: Array<String>) {
         // 7. Insert metadata
         val insertMeta = connection.prepareStatement("INSERT INTO metadata (key, value) VALUES (?, ?)")
         val metadataEntries = mapOf(
-            "version" to "3.8.11",
+            "version" to "3.9.0",
             "word_count" to count.toString(),
             "disambiguation_count" to mappings.size.toString(),
             "extended_entry_count" to extendedEntryCount.toString(),

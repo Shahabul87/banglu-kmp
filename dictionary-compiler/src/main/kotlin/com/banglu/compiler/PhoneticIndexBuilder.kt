@@ -172,6 +172,7 @@ object PhoneticIndexBuilder {
         }
         promoteModernChhOverArchaicCc(rows)
         promoteNasalTwinOverPlain(rows)
+        promoteHasantaFreeTwinOverConjunct(rows)
         lastReport = IndexBuildReport(
             totalWords = total,
             roundTripOk = roundTripOk,
@@ -258,6 +259,42 @@ object PhoneticIndexBuilder {
             promoted++
         }
         if (promoted > 0) println("  nasal-promote: $promoted key(s) now surface the chandrabindu form first")
+    }
+
+    /**
+     * S100 (marle class, unlocked by the chat-register frequencies): a
+     * conjunct word can canonically own a key (মার্লে romanizes straight to
+     * "marle") while the everyday hasanta-free verb (মারলে) only reaches it
+     * through a habit alias — and priority outranks frequency, so the
+     * loanword squatter wins forever. Mirror of the S78 nasal-twin pass:
+     * when the habit row IS the owner minus its hasanta(s), same tier, and
+     * STRICTLY more frequent (the chat register finally makes this true for
+     * verbs), it takes canonical priority; the conjunct owner keeps its row
+     * one slot down. কর্তা@75 vs করতা@60 stays untouched — frequency gates.
+     */
+    private fun promoteHasantaFreeTwinOverConjunct(rows: ArrayList<PhoneticIndexRow>) {
+        val conjunctOwners = HashMap<String, PhoneticIndexRow>()
+        for (row in rows) {
+            if (row.priority == PRIORITY_CANONICAL && '্' in row.bengali) {
+                val existing = conjunctOwners[row.key]
+                if (existing == null || row.frequency > existing.frequency) {
+                    conjunctOwners[row.key] = row
+                }
+            }
+        }
+        if (conjunctOwners.isEmpty()) return
+        var promoted = 0
+        for (i in rows.indices) {
+            val row = rows[i]
+            if (row.priority != PRIORITY_HABIT || '্' in row.bengali) continue
+            val owner = conjunctOwners[row.key] ?: continue
+            if (row.tier != owner.tier) continue
+            if (row.frequency <= owner.frequency) continue
+            if (row.bengali != owner.bengali.filterNot { it == '্' }) continue
+            rows[i] = row.copy(priority = PRIORITY_CANONICAL)
+            promoted++
+        }
+        if (promoted > 0) println("  hasanta-promote: $promoted key(s) now surface the everyday form first")
     }
 
     // =========================================================================

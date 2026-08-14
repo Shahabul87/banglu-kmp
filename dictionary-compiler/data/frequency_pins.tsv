@@ -1,0 +1,8 @@
+# Curated frequency pins (S100): winner TAB loser.
+# Each row is a DELIBERATE twin decision from an S-round that corpus noise
+# must never flip. Applied after refreshFrequencies with PIN_MARGIN=6 so the
+# winner also clears SmartEngine's dictionary wordfreq re-rank gap (>5).
+# S59: bish -> বিশ (the number twenty is typed daily; বিষ=poison stays alt)
+বিশ	বিষ
+# S59: bikel -> বিকেল (standard spelling; বিকাল colloquial stays alt)
+বিকেল	বিকাল

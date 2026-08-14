@@ -118,4 +118,39 @@ object CorpusAuthority {
         }
         return out
     }
+
+    /**
+     * S100 curated frequency pins: `winner TAB loser` rows asserting a
+     * deliberate twin decision (S59 বিশ>বিষ, বিকেল>বিকাল) that corpus noise
+     * must never flip. Applied AFTER [refreshFrequencies], so a pin survives
+     * every future corpus blend without hand-tuning weights.
+     *
+     * Margin is [PIN_MARGIN], not 1: SmartEngine's dictionary wordfreq
+     * re-rank only fires when the challenger leads by strictly more than 5
+     * (convertByDictionary gap check), so a pinned winner must clear that
+     * threshold too, or seed-alias ordering silently decides instead.
+     */
+    const val PIN_MARGIN = 6
+
+    fun applyFrequencyPins(pinsFile: File, freqs: Map<String, Int>): Map<String, Int> {
+        if (!pinsFile.exists()) return freqs
+        val out = HashMap(freqs)
+        var applied = 0
+        pinsFile.forEachLine { line ->
+            val t = line.trim()
+            if (t.isEmpty() || t.startsWith("#")) return@forEachLine
+            val parts = t.split('\t')
+            if (parts.size != 2) return@forEachLine
+            val winner = ReverseTransliterator.foldNukta(parts[0].trim())
+            val loser = ReverseTransliterator.foldNukta(parts[1].trim())
+            val loserFreq = out[loser] ?: return@forEachLine
+            val floor = (loserFreq + PIN_MARGIN).coerceAtMost(100)
+            if ((out[winner] ?: 0) < floor) {
+                out[winner] = floor
+                applied++
+            }
+        }
+        if (applied > 0) println("  Frequency pins: $applied enforced from ${pinsFile.name}")
+        return out
+    }
 }

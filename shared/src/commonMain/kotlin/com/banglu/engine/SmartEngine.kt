@@ -312,6 +312,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "ok" to "ওকে",
             "hae" to "হ্যাঁ",
             "haa" to "হ্যাঁ",
+            // S100: the chat corpus made হইসে tier-A, and as the literal
+            // canonical romanization of "hoise" it now owns the store key at
+            // priority 0 — dethroning the deliberate tester default হইছে
+            // (invariant 6) that had won on frequency alone. Ownership can't
+            // be frequency-pinned (priority beats frequency), so the curated
+            // default is enumerated here; হইসে stays one tap away in the strip.
+            "hoise" to "হইছে",
             // S21: jac-/khac- continuous chat class (S17 leftover). The chat
             // stem is the -চ্ছ- form (যাচ্ছি "jacchi") but the continuous is
             // written with the dialect -তেছি/-তেসি tail: jactesi = যাইতেছি.
