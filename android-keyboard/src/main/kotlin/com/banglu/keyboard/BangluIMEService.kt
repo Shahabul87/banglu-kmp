@@ -380,6 +380,7 @@ class BangluIMEService : InputMethodService(),
         private const val PREF_VOICE_TYPING_ENABLED = "voice_typing_enabled"
         /** S72: >0 forces lite dictionary for that many more cold starts. */
         private const val PREF_FORCED_LITE_LAUNCHES = "forced_lite_launches"
+        private const val PREF_FORCED_LITE_VERSION = "forced_lite_version"
         /** S76: timestamp of the newest LOW_MEMORY exit already reacted to. */
         private const val PREF_LAST_LOW_MEMORY_EXIT_TS = "last_low_memory_exit_ts"
         private const val PREF_VOICE_OFFLINE_PREFERRED = "voice_offline_preferred"
@@ -910,6 +911,19 @@ class BangluIMEService : InputMethodService(),
         // never degrade on modern devices. The reliable signal is the
         // PREVIOUS death: if the OS recently killed this process for
         // memory while in full mode, come up lite.
+        // S101: a new build changes the memory envelope the forced-lite state
+        // was measured against — stale counters from an older build must not
+        // keep a capable device lite (the 1.5.58 guard bug left flagships
+        // stuck in a lite loop; installing the fixed build heals immediately).
+        if (MemoryPressurePolicy.shouldResetForcedLiteState(
+                prefs.getInt(PREF_FORCED_LITE_VERSION, 0), BuildConfig.VERSION_CODE
+            )
+        ) {
+            prefs.edit()
+                .putInt(PREF_FORCED_LITE_VERSION, BuildConfig.VERSION_CODE)
+                .putInt(PREF_FORCED_LITE_LAUNCHES, 0)
+                .apply()
+        }
         maybeArmForcedLiteFromExitHistory()
         // S72/S76: consume one forced-lite launch per cold start — after
         // FORCED_LITE_LAUNCHES starts, full mode is retried automatically.
@@ -1169,9 +1183,22 @@ class BangluIMEService : InputMethodService(),
     }
 
     /** S72: adaptive post-load guard — full profile just loaded; if the heap
-     *  is already nearly exhausted, this device cannot sustain it. */
-    private fun degradeIfNoHeapHeadroom() {
+     *  is already nearly exhausted, this device cannot sustain it.
+     *
+     *  S101: the naive reading right after a bulk load counts 50-80MB of
+     *  un-collected load debris (cursor strings, staging maps, the raw word
+     *  list) — on 256MB flagships that pushed a healthy ~150MB retained
+     *  profile past the 80% line and armed a forced-lite loop users saw as
+     *  wrong conversions. The guard now confirms with a GC before degrading:
+     *  a cheap pre-check keeps healthy launches GC-free, and only a reading
+     *  that stays high AFTER collection (genuine retention) degrades. */
+    private suspend fun degradeIfNoHeapHeadroom() {
         val runtime = Runtime.getRuntime()
+        val preUsed = runtime.totalMemory() - runtime.freeMemory()
+        if (!MemoryPressurePolicy.shouldDegradeAfterLoad(preUsed, runtime.maxMemory(), shouldUseLiteDictionary())) {
+            return
+        }
+        withContext(Dispatchers.Default) { runtime.gc() }
         val used = runtime.totalMemory() - runtime.freeMemory()
         if (MemoryPressurePolicy.shouldDegradeAfterLoad(used, runtime.maxMemory(), shouldUseLiteDictionary())) {
             degradeToLiteForMemoryPressure("post_load_headroom")

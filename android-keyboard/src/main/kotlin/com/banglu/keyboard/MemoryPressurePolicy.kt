@@ -82,9 +82,21 @@ object MemoryPressurePolicy {
             nowMs - exitTimestampMs <= EXIT_LOOKBACK_MS
 
     /** Adaptive post-load guard: full dictionary just loaded — is there
-     *  enough heap headroom left to actually run in it? */
+     *  enough heap headroom left to actually run in it?
+     *
+     *  S101 contract: callers must confirm a positive pre-GC reading with a
+     *  post-GC reading before degrading — the un-collected bulk-load debris
+     *  (~50-80MB) otherwise counts against the fraction and wrongly demotes
+     *  256MB-class flagships whose retained profile is healthy. */
     fun shouldDegradeAfterLoad(usedBytes: Long, maxBytes: Long, alreadyLite: Boolean): Boolean {
         if (alreadyLite || maxBytes <= 0L) return false
         return usedBytes.toDouble() / maxBytes.toDouble() > POST_LOAD_DEGRADE_FRACTION
     }
+
+    /** S101: forced-lite state is a measurement of ONE build's memory
+     *  envelope — a different build (bigger or smaller dictionary, fixed
+     *  guard) invalidates it. Any version change resets the counter so an
+     *  update never inherits a stale lite sentence. */
+    fun shouldResetForcedLiteState(lastVersionCode: Int, currentVersionCode: Int): Boolean =
+        lastVersionCode != currentVersionCode
 }

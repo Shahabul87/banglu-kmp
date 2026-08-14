@@ -133,4 +133,20 @@ class MemoryPressurePolicyTest {
         assertFalse(MemoryPressurePolicy.shouldDegradeAfterLoad(100, 100, alreadyLite = true))
         assertFalse(MemoryPressurePolicy.shouldDegradeAfterLoad(100, 0, alreadyLite = false))
     }
+
+    @Test
+    fun `S101 - forced-lite state resets on any version change`() {
+        assertTrue(MemoryPressurePolicy.shouldResetForcedLiteState(lastVersionCode = 2095, currentVersionCode = 2096))
+        assertTrue(MemoryPressurePolicy.shouldResetForcedLiteState(lastVersionCode = 0, currentVersionCode = 2096))
+        assertFalse(MemoryPressurePolicy.shouldResetForcedLiteState(lastVersionCode = 2096, currentVersionCode = 2096))
+    }
+
+    @Test
+    fun `S101 - the 1_5_58 flagship regression shape - garbage-inflated reading trips but post-GC retained does not`() {
+        val max = 256L * 1024 * 1024
+        // Pre-GC: ~150MB retained + ~60MB load debris = 210MB -> 82% trips the pre-check.
+        assertTrue(MemoryPressurePolicy.shouldDegradeAfterLoad(210L * 1024 * 1024, max, alreadyLite = false))
+        // Post-GC: 150MB retained = 59% -> the confirming reading must NOT degrade.
+        assertFalse(MemoryPressurePolicy.shouldDegradeAfterLoad(150L * 1024 * 1024, max, alreadyLite = false))
+    }
 }
