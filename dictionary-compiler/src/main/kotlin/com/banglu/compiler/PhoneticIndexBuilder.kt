@@ -334,6 +334,11 @@ object PhoneticIndexBuilder {
     /** A doubled consonant letter, for the lazy single-press habit (উত্তর "uttor" → "utor"). */
     private val DOUBLED_CONSONANT = Regex("([bcdfghjklmnpqrstvwxyz])\\1")
 
+    // S104 dialect -ba/-bi suffixes: word-final only (with optional trailing
+    // a/r — "korobaa", "korobar").
+    private val VERB_OBA_SUFFIX = Regex("o(baa?r?)$")
+    private val VERB_OBI_SUFFIX = Regex("obii?$")
+
     // S103 bo-fola: medial-only (never at index 0 — the initial class drops
     // the b instead of doubling).
     private val MEDIAL_TB = Regex("(?<=.)tb")
@@ -361,6 +366,12 @@ object PhoneticIndexBuilder {
         "মুশকিল" to listOf("mushkil", "muskil"),
         "ঐতিহ্য" to listOf("oitijjho", "oitijho"),
         "ঔষুধ" to listOf("oushud"),
+        // S104 (tester: korba -> করব): the legacy extended dict wrongly
+        // claims "korba" spells করব (its romanization is korbo/korob), and
+        // that exact hit beat the dialect verb করবা's habit-priority key in
+        // the S83 arbitration. "korba" IS করবা's typed form — a deliberate
+        // ownership decision, so exact-spelling fidelity settles it.
+        "করবা" to listOf("korba"),
     )
 
     /** MANUAL_ALIASES with nukta-folded keys, matching the folded words the
@@ -432,8 +443,17 @@ object PhoneticIndexBuilder {
         HabitRule("verb_o_drop_l") {
             it.replace("ole", "le").replace("olo", "lo").replace("ola", "la")
         },
+        // S104 (tester: korba -> করব, the করবা key gap): the dialect
+        // second-person forms -ba/-bi (করবা "korba", করবি "korbi", পারবা,
+        // বলবা) carry the same inherent o ("korobaa", "korobi") — the S79
+        // family covered obo/obe only. SUFFIX-ANCHORED, unlike obo/obe: a
+        // bare "obi"/"oba" replace fires inside the common অবি-/অবা- noun
+        // prefixes (অবিশ্বাস্য, অবাক), bloating those words' alias sets past
+        // the per-word cap and evicting their real keys (the wall caught
+        // অবিশ্বাস্য losing "obisasso"). "obar" serves করবার "korbar".
         HabitRule("verb_o_drop_b") {
             it.replace("obo", "bo").replace("obe", "be")
+                .replace(VERB_OBA_SUFFIX, "b$1").replace(VERB_OBI_SUFFIX, "bi")
         },
         // S84 (tester: kortam returned করিতাম/কর্তাম — করতাম only reachable via
         // "korotam"): the same inherent-o precedes the habitual-past -t
