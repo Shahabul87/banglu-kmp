@@ -284,6 +284,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "tmi" to "তুমি",
             "tomi" to "তুমি",
             "tmra" to "তোমরা",
+            // S105: the attached-রা layer composed তম+রা for "tomra" (তম is
+            // a real corpus morpheme, so no frequency floor separates it) —
+            // the pronoun spelling joins the enumerated closed class.
+            "tomra" to "তোমরা",
             "tmder" to "তোমাদের",
             "amder" to "আমাদের",
             // S87 (tester: "tumi amke thogieco" — amke degraded to আম্কে):
@@ -3537,6 +3541,20 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // আসবোনে) — same guards; attested -ne words (মনে, দোকানে)
             // never reach here thanks to the whole-word store guard.
             key.endsWith("bone") -> "ne" to "নে"
+            // S105 (tester: jaora -> জায়রা junk): attached রা — the dialect
+            // plural imperative (jaora = যাওরা, khaora = খাওরা) AND the
+            // regular plural -রা on stems whose glued form the corpus lacks
+            // (chelera = ছেলেরা). Same guards: canonical owners of the whole
+            // key (তারা, ধরা, তোমরা) defer via the store guard; the stem must
+            // resolve confidently and be attested. STORE-GATED: without the
+            // store the ownership guard is blind and the layer stole
+            // ঘোড়া/রাষ্ট্র on the storeless parity wall — every shipping
+            // surface has a store; seed-only configs just skip the layer.
+            key.endsWith("ra") && phoneticIndex != null -> "ra" to "রা"
+            // S105: attached vocative/objective রে (jaore = যাওরে, bondhure =
+            // বন্ধুরে) — the most common chat particle after তো. করে/ধরে/ঘুরে
+            // class canonical owners defer via the store guard.
+            key.endsWith("re") && phoneticIndex != null -> "re" to "রে"
             else -> return null
         }
         // Minimum lengths: "na" keeps the proven S16 floor (>= 7 — sona/kena
@@ -3548,6 +3566,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "to" -> 6   // hobeto -> হবে তো; store guard keeps dekhto/gosto safe
             "ne" -> 6   // asbone -> আসবোনে; store guard keeps mone/dokane safe
             "nane" -> 8 // asbonane -> আসবোনানে
+            "ra" -> 5   // jaora -> যাওরা; store guard keeps tara/dhora/tomra safe
+            "re" -> 5   // jaore -> যাওরে; store guard keeps kore/dhore/ghure safe
             else -> 7
         }
         if (key.length < minLen) return null
@@ -3624,6 +3644,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // "to" only: the -ত past-habitual reading owns the key when attested
         // (dekhto -> দেখত, not দেখ তো; hobeto composes — হবেত is not a word).
         if (suffix.first == "to" && validator.getFrequency(stem + "ত") >= 25) return null
+
+        // S105 (ra/re only): the stem must carry real usage evidence — the
+        // validator list is junk-tolerant (S16 lesson), and a floor-frequency
+        // squatter stem composes garbage (tomra: তম@junk + রা beat the fuzzy
+        // layer's তোমরা). Same ≥25 evidence bar as the S22 composition gate.
+        if (suffix.first == "ra" || suffix.first == "re") {
+            if (validator.getFrequency(stem) < 25) return null
+            // A dictionary exact hit with real evidence (≥40 — above the
+            // জায়রা@25 junk class this layer exists to displace) owns the
+            // key even when the store misses it (rashtra -> রাষ্ট্র).
+            val wholeDict = dictionary.lookup(key).firstOrNull()
+            if (wholeDict != null && validator.getFrequency(wholeDict.bengali) >= 40) return null
+        }
 
         // না/নাই attach glued by convention (করিনা attested); তো is written
         // as a separate word — primary and alternative swap for it.
