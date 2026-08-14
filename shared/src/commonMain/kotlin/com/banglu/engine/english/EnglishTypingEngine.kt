@@ -33,6 +33,15 @@ class EnglishTypingEngine {
         const val USER_COUNT_WEIGHT = 250.0
         /** Base score of a saved out-of-wordlist word (≈ rank 300 territory). */
         const val UNKNOWN_WORD_BASE = 300.0
+        /**
+         * S97: minimum weighted score for an autocorrect replacement.
+         * score = editWeight * (12 - ln(rank+10)) — log-scale, so commonness
+         * matters but doesn't steamroll the edit shape (linear scoring made
+         * help@132 beat hello@194 for "helo"). Admits roughly: trusted edits
+         * (transposition/doubled-letter) to rank ~6500, substitution to
+         * ~1400 — a rare word never replaces what the user typed.
+         */
+        const val MIN_AUTOCORRECT_SCORE = 3.2
     }
 
     private val ranks = HashMap<String, Int>(EnglishWordData.WORDS.size * 2)
@@ -100,6 +109,84 @@ class EnglishTypingEngine {
             out.add(EnglishWordData.WORDS[i]); i++
         }
         return out.map { displayWord(it) }
+    }
+
+    /**
+     * S97: autocorrect-on-commit. Returns the replacement for a mistyped
+     * word, or null when the typed word must be left alone. The contract:
+     *
+     *  - KNOWN words are never touched — wordlist membership, ANY personal
+     *    use (count ≥ 1, which is what the undo chip writes), contractions.
+     *  - ALL-CAPS tokens (acronyms) and words under 3 letters are never
+     *    touched.
+     *  - The replacement must be a COMMON word (or an established personal
+     *    word) within ONE weighted edit — deletion/transposition are the
+     *    most trusted typo shapes, substitution the least (S22 weighting);
+     *    apostrophe insertion is an edit too (dont -> don't).
+     *  - Case mirrors the typed word (Teh -> The).
+     */
+    fun autocorrect(typedRaw: String): String? {
+        val typed = normalize(typedRaw) ?: return null
+        if (typed.length < 3) return null
+        if (typed in ranks) return null
+        if ((userCounts[typed] ?: 0) > 0) return null
+        val trimmed = typedRaw.trim()
+        if (trimmed.length >= 2 && trimmed.all { it.isUpperCase() }) return null
+
+        var best: String? = null
+        var bestScore = 0.0
+        fun consider(candidate: String, editWeight: Double) {
+            if (candidate == typed || candidate.length < 2) return
+            val rank = ranks[candidate]
+            val userCount = userCounts[candidate] ?: 0
+            val effectiveRank = when {
+                rank != null -> rank
+                // The user's established words correct toward too (names).
+                userCount >= UNKNOWN_WORD_MIN_COUNT -> 300
+                else -> return
+            }
+            val score = editWeight * (12.0 - kotlin.math.ln((effectiveRank + 10).toDouble()))
+            if (score > bestScore) { bestScore = score; best = candidate }
+        }
+        forEachEditOneVariant(typed) { variant, weight -> consider(variant, weight) }
+        if (bestScore < MIN_AUTOCORRECT_SCORE) return null
+        return best?.let { applyCase(typedRaw, it) }
+    }
+
+    /**
+     * The S22-shaped weighted edit-distance-1 enumeration (deletion 0.9,
+     * doubled-letter deletion + transposition 1.0, substitution 0.7,
+     * insertion 0.95 vowel / 0.75 consonant / 0.95 apostrophe — the
+     * apostrophe is what turns dont into don't).
+     */
+    private inline fun forEachEditOneVariant(word: String, action: (variant: String, weight: Double) -> Unit) {
+        val n = word.length
+        val alphabet = "abcdefghijklmnopqrstuvwxyz'"
+        for (i in 0 until n) {
+            action(word.removeRange(i, i + 1), if (i > 0 && word[i] == word[i - 1]) 1.0 else 0.9)
+            if (i < n - 1 && word[i] != word[i + 1]) {
+                val t = word.toCharArray().also { val c = it[i]; it[i] = it[i + 1]; it[i + 1] = c }
+                action(t.concatToString(), 1.0)
+            }
+            for (ch in alphabet) if (ch != word[i] && ch != '\'') {
+                action(word.substring(0, i) + ch + word.substring(i + 1), 0.7)
+            }
+        }
+        for (i in 0..n) for (ch in alphabet) {
+            // Inserting a letter NEXT TO ITS TWIN is the missed-double-press
+            // typo (helo -> hello) — as trusted as a doubled-letter deletion.
+            // An OMITTED APOSTROPHE (wasnt -> wasn't) is the most common
+            // English typo of all — more trusted than any other edit, or the
+            // s-deletion reading (want) outscores the obvious contraction.
+            val doublesNeighbor = (i < n && word[i] == ch) || (i > 0 && word[i - 1] == ch)
+            val w = when {
+                ch == '\'' -> 1.15
+                doublesNeighbor -> 1.0
+                ch in "aeiou" -> 0.95
+                else -> 0.75
+            }
+            action(word.substring(0, i) + ch + word.substring(i), w)
+        }
     }
 
     // ── learning ─────────────────────────────────────────────────────────

@@ -554,6 +554,17 @@ object SmartEngineAdapter {
         englishTyping.predictions(prev, limit)
 
     /**
+     * S97: autocorrect-on-commit decision. Pure in-memory (safe on the
+     * keystroke path once warm). Returns null until the learning blob is
+     * loaded — correcting before the user's own words are known could
+     * replace a word they taught us.
+     */
+    fun englishAutocorrect(word: String): String? {
+        if (!englishLearningLoaded) return null
+        return englishTyping.autocorrect(word)
+    }
+
+    /**
      * A word the user committed in EN mode. Gated on the learning setting;
      * persistence is debounced onto the persistence lane (never the
      * keystroke path).

@@ -129,6 +129,60 @@ class EnglishTypingEngineTest {
         assertTrue(p.any { it == "I" || it == "you" || it == "the" }, "starters: $p")
     }
 
+    // ── autocorrect (S97) ────────────────────────────────────────────────
+
+    @Test
+    fun classicTyposAutocorrect() {
+        val e = fresh()
+        assertEquals("the", e.autocorrect("teh"))
+        assertEquals("this", e.autocorrect("thsi"))
+        assertEquals("hello", e.autocorrect("helo"))
+        assertEquals("world", e.autocorrect("wrold"))
+    }
+
+    @Test
+    fun apostropheTyposAutocorrect() {
+        val e = fresh()
+        // doesnt/wasnt are NOT wordlist tokens — the apostrophe edit fixes them.
+        assertEquals("doesn't", e.autocorrect("doesnt"))
+        assertEquals("wasn't", e.autocorrect("wasnt"))
+        // dont/cant ARE wordlist tokens (subtitle register) — the known-word
+        // guard leaves the informal spelling alone, deliberately.
+        assertEquals(null, e.autocorrect("dont"))
+        assertEquals(null, e.autocorrect("cant"))
+    }
+
+    @Test
+    fun caseMirrorsTheTypedWord() {
+        val e = fresh()
+        assertEquals("The", e.autocorrect("Teh"))
+    }
+
+    @Test
+    fun knownWordsAreNeverCorrected() {
+        val e = fresh()
+        assertEquals(null, e.autocorrect("hello"))
+        assertEquals(null, e.autocorrect("because"))
+        assertEquals(null, e.autocorrect("don't"))
+    }
+
+    @Test
+    fun usersOwnWordsAreNeverCorrected() {
+        val e = fresh()
+        // One use — exactly what the undo chip records — is enough.
+        e.recordCommit("sami")
+        assertEquals(null, e.autocorrect("sami"))
+    }
+
+    @Test
+    fun acronymsShortAndFarWordsAreLeftAlone() {
+        val e = fresh()
+        assertEquals(null, e.autocorrect("TEH"), "ALL-CAPS is deliberate")
+        assertEquals(null, e.autocorrect("te"), "too short to judge")
+        assertEquals(null, e.autocorrect("shahabul"), "no edit-1 common word")
+        assertEquals(null, e.autocorrect("xqzvk"), "junk with no near word")
+    }
+
     // ── persistence ──────────────────────────────────────────────────────
 
     @Test

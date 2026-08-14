@@ -214,6 +214,8 @@ class BangluIMEService : InputMethodService(),
     private var privateInputMode = false
     private var lastCommittedTextLength = 0
     private var lastAutoCorrectOriginal = ""
+    // S97: English corrections undo differently (teach-the-word semantics).
+    private var lastAutoCorrectWasEnglish = false
     private var lastAutoCorrectReplacement = ""
     private var lastAutoCorrectPhonetic = ""
     private val recentEmojis = mutableStateListOf<String>()
@@ -1447,6 +1449,8 @@ class BangluIMEService : InputMethodService(),
         }
 
         val ic = currentInputConnection ?: return
+        // S97: typing again closes the undo window for the last correction.
+        if (lastAutoCorrectWasEnglish) clearAutoCorrectUndoState()
         ic.commitText(char.toString(), 1)
 
         // Do NOT auto-capitalize here — only after space/enter
@@ -1494,6 +1498,8 @@ class BangluIMEService : InputMethodService(),
             }
             if (keyboardMode.value == KeyboardMode.ENGLISH) {
                 suggestions.clear()
+                // S97: a fresh correction leads with its undo chip.
+                autoCorrectUndoSuggestion()?.let { suggestions.add(it) }
                 items.forEach { w ->
                     suggestions.add(SmartSuggestion(w, 0.9, ENGLISH_WORD_SOURCE, prefix, "en"))
                 }
@@ -1729,11 +1735,33 @@ class BangluIMEService : InputMethodService(),
             }
             else -> {
                 // S96: space finishes an English word — learn it (with its
-                // previous word) BEFORE the separator lands.
+                // previous word) BEFORE the separator lands. S97: mistyped
+                // unknown words auto-correct here, with an undo chip.
                 if (keyboardMode.value == KeyboardMode.ENGLISH) {
                     val before = ic.getTextBeforeCursor(48, 0)?.toString().orEmpty()
                     val (word, prev) = englishContextFrom(before)
-                    if (word.isNotEmpty()) recordEnglishCommitAsync(word, prev)
+                    if (word.isNotEmpty()) {
+                        val correction = if (suggestionsAllowedForCurrentInput()) {
+                            SmartEngineAdapter.englishAutocorrect(word)
+                        } else null
+                        if (correction != null && correction != word) {
+                            ic.beginBatchEdit()
+                            ic.deleteSurroundingText(word.length, 0)
+                            ic.commitText("$correction ", 1)
+                            ic.endBatchEdit()
+                            lastCommittedTextLength = correction.length + 1
+                            lastAutoCorrectOriginal = word
+                            lastAutoCorrectReplacement = correction
+                            lastAutoCorrectPhonetic = word
+                            lastAutoCorrectWasEnglish = true
+                            recordImeEvent("autocorrect_offer")
+                            recordEnglishCommitAsync(correction, prev)
+                            lastSpaceTime = now
+                            refreshEnglishSuggestionsAsync()
+                            return
+                        }
+                        recordEnglishCommitAsync(word, prev)
+                    }
                 }
                 // Feature 1.1: Double-space → period + space (English/Symbol modes)
                 if (doubleSpacePeriodEnabled.value && now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
@@ -3610,6 +3638,7 @@ class BangluIMEService : InputMethodService(),
         val ic = currentInputConnection ?: return
         val original = lastAutoCorrectOriginal
         if (original.isEmpty() || lastCommittedTextLength <= 0) return
+        val wasEnglish = lastAutoCorrectWasEnglish
         ic.deleteSurroundingText(lastCommittedTextLength, 0)
         ic.commitText("$original ", 1)
         lastCommittedTextLength = original.length + 1
@@ -3617,13 +3646,22 @@ class BangluIMEService : InputMethodService(),
         clearAutoCorrectUndoState()
         suggestions.clear()
         recordImeEvent("autocorrect_undo")
-        showGapPunctuationSuggestions()
+        if (wasEnglish) {
+            // S97: undoing an English correction TEACHES the typed word —
+            // one recorded use makes it a known personal word, and known
+            // words are never corrected again (engine contract).
+            recordEnglishCommitAsync(original, null)
+            refreshEnglishSuggestionsAsync()
+        } else {
+            showGapPunctuationSuggestions()
+        }
     }
 
     private fun clearAutoCorrectUndoState() {
         lastAutoCorrectOriginal = ""
         lastAutoCorrectReplacement = ""
         lastAutoCorrectPhonetic = ""
+        lastAutoCorrectWasEnglish = false
     }
 
     private fun loadRecentEmojis() {
