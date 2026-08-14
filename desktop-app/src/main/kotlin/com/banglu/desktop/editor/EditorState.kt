@@ -116,11 +116,42 @@ class EditorState(
             if (!forming) { candidates = emptyList(); popupDismissed = false }
             generation++
         } else if (commitPos > 0) {
+            val deleted = committed[commitPos - 1]
             pushUndo()
             committed = committed.removeRange(commitPos - 1, commitPos)
             commitPos -= 1
+            // S88 (Android parity — tester: abaro -> backspace -> retype o
+            // gave আবারও): backspace INTO a committed Bengali word resumes
+            // roman forming on the remaining fragment, so the next letters
+            // re-convert the whole word (abar + o -> আবারো) instead of
+            // appending a fresh one-letter forming (আবার + ও). Gated on an
+            // exact instant-preview round-trip so nothing visibly changes.
+            if (isBengaliWordChar(deleted)) resumeFormingAfterBackspace()
         }
     }
+
+    private fun resumeFormingAfterBackspace() {
+        val before = committed.substring(0, commitPos)
+        var start = commitPos
+        while (start > 0 && isBengaliWordChar(before[start - 1])) start--
+        val word = before.substring(start)
+        if (word.isEmpty() || word.length > 24) return
+        val roman = runCatching {
+            com.banglu.engine.util.ReverseTransliterator.reverseWord(word).lowercase()
+        }.getOrNull() ?: return
+        if (roman.isEmpty() || roman.length > 24 || !roman.all { it in 'a'..'z' }) return
+        val echo = runCatching { engine.instant(roman) }.getOrNull() ?: return
+        if (echo != word) return
+        committed = committed.removeRange(start, commitPos)
+        commitPos = start
+        formingRaw = roman
+        formingBangla = word
+        popupDismissed = false
+        generation++
+    }
+
+    private fun isBengaliWordChar(ch: Char): Boolean =
+        ch in '\u0980'..'\u09FF' || ch == '\u200C' || ch == '\u200D'
 
     private fun insertCommitted(s: String) {
         committed = committed.substring(0, commitPos) + s + committed.substring(commitPos)

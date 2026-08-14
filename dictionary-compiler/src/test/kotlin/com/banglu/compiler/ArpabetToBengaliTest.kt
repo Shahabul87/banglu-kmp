@@ -146,6 +146,25 @@ class ArpabetToBengaliTest {
     }
 
     @Test
+    fun wordFinalConsonantAfterEr0TakesReph() {
+        // S85 (tester: pattern -> প্যাটারন): the Bangla loanword convention
+        // gives the WORD-FINAL consonant after ER a reph regardless of stress —
+        // প্যাটার্ন, মডার্ন, স্ট্যান্ডার্ড — while medial ER0 stays open
+        // (ইন্টারনেট, পারসেন্ট pins above are unaffected).
+        // pattern: P AE1 T ER0 N
+        assertEquals("প্যাটার্ন", conv("P AE1 T ER0 N"))
+        // modern: M AA1 D ER0 N
+        assertEquals("মডার্ন", conv("M AA1 D ER0 N"))
+        // standard: S T AE1 N D ER0 D
+        assertEquals("স্ট্যান্ডার্ড", conv("S T AE1 N D ER0 D"))
+        // iron: AY1 ER0 N — ER after a VOWEL takes no reph (আয়ারন, not আয়ার্ন)
+        assertEquals("আয়ারন", conv("AY1 ER0 N"))
+        // forward: F AO1 R W ER0 D — the W glide counts as ER's consonant
+        // context (ফরওয়ার্ড, ব্যাকওয়ার্ড convention)
+        assertEquals("ফরওয়ার্ড", conv("F AO1 R W ER0 D"))
+    }
+
+    @Test
     fun rColouredVowelsUseGlide() {
         // chair: CH EH1 R -> চেয়ার  (curated চেয়ার)
         assertEquals("চেয়ার", conv("CH EH1 R"))

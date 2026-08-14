@@ -121,7 +121,13 @@ class ChatContinuousNegationJvmTest {
         // real -to/-ত words never stolen
         assertEquals("মতো", engine.convertWord("moto").bengali)
         assertEquals("পোস্ট", engine.convertWord("posto").bengali)
-        assertEquals("হয়তো", engine.convertWord("hoyto").bengali)
+        // S86 note: hoyto is now ALSO a store alias of হয়তো (verb_o_drop_t on
+        // "hoyoto"), which serves the words-table য় encoding — same word,
+        // same rendering, different codepoints. Compare nukta-folded.
+        assertEquals(
+            com.banglu.engine.util.ReverseTransliterator.foldNukta("হয়তো"),
+            com.banglu.engine.util.ReverseTransliterator.foldNukta(engine.convertWord("hoyto").bengali)
+        )
         assertEquals("দেখত", engine.convertWord("dekhto").bengali)
     }
 

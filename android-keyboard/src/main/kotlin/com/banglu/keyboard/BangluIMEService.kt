@@ -1510,7 +1510,15 @@ class BangluIMEService : InputMethodService(),
                         prepareCommitConversionAsync(buffer)
                     }
                 } else {
-                    deletePreviousGraphemes(ic)
+                    // S88 (tester: abaro -> backspace -> retype o gave আবারও):
+                    // backspace into a committed Bengali word resumes roman
+                    // composition on the remaining fragment so the next
+                    // letters re-convert the WHOLE word. Falls back to plain
+                    // grapheme deletion whenever the fragment doesn't
+                    // round-trip losslessly.
+                    if (!tryResumeComposingOnBackspace(ic)) {
+                        deletePreviousGraphemes(ic)
+                    }
                 }
             }
             else -> {
@@ -1519,6 +1527,31 @@ class BangluIMEService : InputMethodService(),
                 deletePreviousGraphemes(ic)
             }
         }
+    }
+
+    /**
+     * S88: see [BackspaceResume]. Returns false when resume doesn't apply —
+     * the caller then deletes a plain grapheme (previous behavior).
+     */
+    private fun tryResumeComposingOnBackspace(ic: InputConnection): Boolean {
+        if (rawCommitInputMode || uriInputMode) return false
+        val before = ic.getTextBeforeCursor(48, 0)?.toString().orEmpty()
+        val plan = BackspaceResume.plan(
+            textBeforeCursor = before,
+            reverse = { com.banglu.engine.util.ReverseTransliterator.reverseWord(it) },
+            instantPreview = { SmartEngineAdapter.convertForInstantPreview(it) },
+        ) ?: return false
+        ic.beginBatchEdit()
+        ic.deleteSurroundingText(plan.deleteLength, 0)
+        buffer = plan.romanBuffer
+        ic.setComposingText(plan.visibleFragment, 1)
+        ic.endBatchEdit()
+        composingInput = plan.romanBuffer
+        composingResult = null
+        composingVisibleText = plan.visibleFragment
+        refreshSuggestionsAsync(buffer)
+        prepareCommitConversionAsync(buffer)
+        return true
     }
 
     private fun onBackspaceRepeat(count: Int) {
@@ -1567,46 +1600,10 @@ class BangluIMEService : InputMethodService(),
         return true
     }
 
-    private fun previousUserVisibleClusterBoundary(text: String, fromIndex: Int = text.length): Int {
-        if (text.isEmpty() || fromIndex <= 0) return 0
-
-        var index = fromIndex.coerceAtMost(text.length)
-        index = Character.offsetByCodePoints(text, index, -1)
-
-        while (index > 0) {
-            val cp = text.codePointAt(index)
-            if (!isTrailingClusterCodePoint(cp)) break
-            index = Character.offsetByCodePoints(text, index, -1)
-        }
-
-        var start = index
-        while (start > 0) {
-            val prev = Character.codePointBefore(text, start)
-            val current = text.codePointAt(start)
-            val prevIsVirama = prev == 0x09CD
-            val currentIsJoiner = current == 0x200D || current == 0x200C
-            if (!prevIsVirama && !currentIsJoiner) break
-            start = Character.offsetByCodePoints(text, start, -1)
-            while (start > 0 && isTrailingClusterCodePoint(text.codePointAt(start))) {
-                start = Character.offsetByCodePoints(text, start, -1)
-            }
-        }
-
-        return start.coerceAtLeast(0)
-    }
-
-    private fun isTrailingClusterCodePoint(cp: Int): Boolean {
-        return cp == 0x09BC || // nukta
-            cp == 0x09CD || // virama
-            cp == 0x200D ||
-            cp == 0x200C ||
-            cp == 0xFE0F ||
-            cp in 0x0981..0x0983 ||
-            cp in 0x09BE..0x09C4 ||
-            cp in 0x09C7..0x09C8 ||
-            cp in 0x09CB..0x09CC ||
-            cp in 0x1F3FB..0x1F3FF
-    }
+    // S88: single-sourced in BackspaceResume so the resume plan and deletion
+    // share ONE cluster-boundary definition (no drifted copies).
+    private fun previousUserVisibleClusterBoundary(text: String, fromIndex: Int = text.length): Int =
+        BackspaceResume.previousUserVisibleClusterBoundary(text, fromIndex)
 
     private fun onSpacePress() {
         log("onSpacePress: mode=${keyboardMode.value}, buffer='$buffer'")

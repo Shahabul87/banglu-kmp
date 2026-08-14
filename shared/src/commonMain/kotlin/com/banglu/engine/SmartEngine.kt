@@ -282,6 +282,16 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "tmra" to "তোমরা",
             "tmder" to "তোমাদের",
             "amder" to "আমাদের",
+            // S87 (tester: "tumi amke thogieco" — amke degraded to আম্কে):
+            // the dative pronouns typed with the medial a dropped. A general
+            // medial-a drop was rejected for collision noise (same reasoning
+            // as the final-o-drop rejection in the compiler), so the closed
+            // pronoun class is enumerated like amr/tmr above.
+            "amk" to "আমাকে",
+            "amke" to "আমাকে",
+            "tmk" to "তোমাকে",
+            "tmke" to "তোমাকে",
+            "tomke" to "তোমাকে",
             // S35: chat interjections (tester report 2026-07-12). No habit
             // chain can insert the vowel (hm -> হুম) and the raw pipeline
             // yields junk (হ্ম, হ্মণ, ওক "oak"). "ha" is deliberately NOT
@@ -1831,7 +1841,20 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
-        if (EnglishDetector.isEnglish(key) && suggestions.none { it.bengali.lowercase() == key }) {
+        // S85 (tester: pattern -> প্যাটারন with no english chip): the pipeline's
+        // own English verdict counts as detection — when the primary resolved
+        // through the English lexicon the raw word must be one tap away, even
+        // for keys the heuristic detector misses.
+        val primaryResolvedEnglish = primary.source == ResolutionSource.ENGLISH_LEXICON ||
+            primary.source == ResolutionSource.ENGLISH_PASSTHROUGH
+        // Presence check is against PASSTHROUGH-tagged entries only: an
+        // ENGLISH_LEXICON primary also carries the raw literal as a plain
+        // "alternative", which the Latin-character strip filter later kills —
+        // counting it here left pattern/because with no english chip at all.
+        if ((EnglishDetector.isEnglish(key) || primaryResolvedEnglish) &&
+            primary.bengali.lowercase() != key &&
+            suggestions.none { it.source == "english_passthrough" && it.bengali.lowercase() == key }
+        ) {
             suggestions.add(
                 SmartSuggestion(
                     bengali = input.trim(),
@@ -1841,6 +1864,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     tier = "tier0_english"
                 )
             )
+        }
+
+        // S87: raw-transliteration floor — nothing real owns this key, so the
+        // strip must offer edit-1 real words as tap-to-fix chips instead of
+        // stranding the user with garbage only (thogieco -> থগিএছ alone).
+        if (primary.confidence <= 0.65 && key.length >= 4) {
+            for (cand in storeTypoRescueCandidates(key, 3)) {
+                if (seen.add(cand)) {
+                    suggestions.add(SmartSuggestion(cand, 0.86, "typo_rescue", key, "tier0_typo"))
+                }
+            }
         }
 
         // ── Bengali variant search (matching web: find related words from 480K by Bengali prefix) ──
@@ -2239,6 +2273,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // NOT resemble the typed key the way a real transliteration would —
         // the generic phonetic-fit gate below would always reject them.
         if (suggestion.source == "acronym_suggestion") return true
+        // S87: rescue chips are oracle-real edit-1 words by construction; the
+        // generic phonetic-fit gates below would reject exactly the cases
+        // they exist for (the typed key differs from the word's phonetic).
+        if (suggestion.source == "typo_rescue") return true
         if (suggestion.source == "english_passthrough") return suggestion.bengali.lowercase() == key
         if (Regex("[A-Za-z]").containsMatchIn(suggestion.bengali)) return false
         // S80 (tester screenshot: পাদ়লে on the strip): nukta composes only
@@ -3332,6 +3370,63 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      *     through the full pipeline so alias- and negation-resolved words
      *     ("bujjtecina" -> bujtecina -> বুঝতেছিনা) are reachable too.
      */
+    /**
+     * S87: the ONE edit-distance-1 enumeration (delete / transpose /
+     * substitute / insert, weighted by how trusted each edit shape is) —
+     * shared by the commit-path typo correction and the strip's tap-to-fix
+     * rescue so the two can never drift apart.
+     */
+    private inline fun forEachEditOneVariant(key: String, action: (variant: String, weight: Double) -> Unit) {
+        val n = key.length
+        for (i in 0 until n) {
+            // deletion (doubled-letter deletions are the most trusted edit)
+            action(key.removeRange(i, i + 1), if (i > 0 && key[i] == key[i - 1]) 1.0 else 0.9)
+            // transposition
+            if (i < n - 1 && key[i] != key[i + 1]) {
+                val t = key.toCharArray().also { val c = it[i]; it[i] = it[i + 1]; it[i + 1] = c }
+                action(t.concatToString(), 1.0)
+            }
+            // substitution
+            for (ch in 'a'..'z') if (ch != key[i]) {
+                action(key.substring(0, i) + ch + key.substring(i + 1), 0.7)
+            }
+        }
+        for (i in 0..n) for (ch in 'a'..'z') {
+            action(key.substring(0, i) + ch + key.substring(i), if (ch in "aeiou") 0.95 else 0.75)
+        }
+    }
+
+    /**
+     * S87 (tester: "tumi amke thogieco" — thogieco stripped down to থগিএছ
+     * alone): when NOTHING real owns the typed key (raw-transliteration
+     * floor), edit-distance-1 REAL words become tap-to-fix strip chips.
+     * Deliberately NOT the commit-path correction: the primary stays the
+     * user's literal (new names must remain typeable), and the evidence bar
+     * is the reality oracle, not the 55-frequency auto-replace gate — a chip
+     * the user must tap may offer rarer words (ঠকিয়েছ@14) that an automatic
+     * replacement never could. Tier-B hits still need validator membership
+     * and a minimal frequency so corpus junk-tail rows never surface.
+     */
+    private fun storeTypoRescueCandidates(key: String, limit: Int): List<String> {
+        if (phoneticIndex == null || key.length < 4 || !key.all { it in 'a'..'z' }) return emptyList()
+        data class Cand(val bengali: String, val tierA: Boolean, val score: Double)
+        val best = HashMap<String, Cand>()
+        forEachEditOneVariant(key) { variant, weight ->
+            for (hit in storeLookup(variant).take(2)) {
+                val tierA = hit.tier == PhoneticIndexHit.TIER_A
+                if (!tierA && (!validator.isValid(hit.bengali) || hit.frequency < 8)) continue
+                val score = weight * (1.0 + kotlin.math.ln((hit.frequency + 1).toDouble()))
+                val cand = Cand(hit.bengali, tierA, score)
+                val prev = best[hit.bengali]
+                if (prev == null || cand.score > prev.score) best[hit.bengali] = cand
+            }
+        }
+        return best.values
+            .sortedWith(compareByDescending<Cand> { it.tierA }.thenByDescending { it.score })
+            .take(limit)
+            .map { it.bengali }
+    }
+
     private var inTypoCorrection = false
     private fun tryStoreTypoCorrection(key: String): ConversionResult? {
         if (inTypoCorrection || inCompoundSplit || inNegationCompound) return null
@@ -3354,24 +3449,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         val n = key.length
-        for (i in 0 until n) {
-            // deletion (doubled-letter deletions are the most trusted edit)
-            val del = key.removeRange(i, i + 1)
-            consider(del, if (i > 0 && key[i] == key[i - 1]) 1.0 else 0.9)
-            // transposition
-            if (i < n - 1 && key[i] != key[i + 1]) {
-                val t = key.toCharArray().also { val c = it[i]; it[i] = it[i + 1]; it[i + 1] = c }
-                consider(t.concatToString(), 1.0)
-            }
-            // substitution
-            for (ch in 'a'..'z') if (ch != key[i]) {
-                consider(key.substring(0, i) + ch + key.substring(i + 1), 0.7)
-            }
-        }
-        for (i in 0..n) for (ch in 'a'..'z') {
-            val w = if (ch in "aeiou") 0.95 else 0.75
-            consider(key.substring(0, i) + ch + key.substring(i), w)
-        }
+        forEachEditOneVariant(key) { variant, weight -> consider(variant, weight) }
 
         best?.let {
             return ConversionResult(

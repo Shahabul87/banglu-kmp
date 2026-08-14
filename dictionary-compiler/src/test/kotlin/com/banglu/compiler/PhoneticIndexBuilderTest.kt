@@ -417,6 +417,56 @@ class PhoneticIndexBuilderTest {
         assertEquals(1, rows.first { it.bengali == "পারলে" && it.key == "parle" }.priority)
     }
 
+    // -------------------------------------------------------------------------
+    // S84: verb inherent-o drop for the -t suffix morphology (tester 2026-08-13:
+    // kortam returned করিতাম/কর্তাম — করতাম was only reachable via "korotam")
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun verbInherentODropAliasesForTSuffixes() {
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf("করতাম", "করত", "করতো", "বলতাম", "মরতাম"),
+            frequencies = mapOf(
+                "করতাম" to 72, "করত" to 83, "করতো" to 78,
+                "বলতাম" to 64, "মরতাম" to 20
+            )
+        )
+        fun keysOf(word: String) = rows.filter { it.bengali == word }.map { it.key }
+        assertTrue("kortam" in keysOf("করতাম"), "expected o-drop 'kortam', got ${keysOf("করতাম")}")
+        assertTrue("korto" in keysOf("করত"), "expected o-drop 'korto', got ${keysOf("করত")}")
+        assertTrue("korto" in keysOf("করতো"), "expected o-drop 'korto', got ${keysOf("করতো")}")
+        assertTrue("boltam" in keysOf("বলতাম"), "expected o-drop 'boltam', got ${keysOf("বলতাম")}")
+        assertTrue("mortam" in keysOf("মরতাম"), "expected o-drop 'mortam', got ${keysOf("মরতাম")}")
+        // O-drop keys are habit aliases — never canonical ownership.
+        assertEquals(1, rows.first { it.bengali == "করতাম" && it.key == "kortam" }.priority)
+    }
+
+    // -------------------------------------------------------------------------
+    // S86: final_o output must feed the chh-collapse family (tester 2026-08-13:
+    // thokiyecho had zero store rows — composing showed raw থকিয়েচ)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun finalOAliasesComposeWithChhCollapses() {
+        val rows = PhoneticIndexBuilder.build(
+            words = listOf("ঠকিয়েছ"),
+            frequencies = mapOf("ঠকিয়েছ" to 14)
+        )
+        // Single-word build: every row belongs to ঠকিয়েছ (avoids the nukta
+        // fold-vs-literal encoding comparison trap).
+        val keys = rows.map { it.key }
+        // canonical + final_o (pre-existing)
+        assertTrue("thokiyechh" in keys, "canonical missing: $keys")
+        assertTrue("thokiyechho" in keys, "final_o missing: $keys")
+        // the collapsed o-forms typists actually produce
+        assertTrue("thokiyecho" in keys, "expected 'thokiyecho', got $keys")
+        assertTrue("thokiyeco" in keys, "expected 'thokiyeco', got $keys")
+        assertTrue("thokiyeso" in keys, "expected 'thokiyeso', got $keys")
+        // glide-dropped chat spellings (the tester's exact keys)
+        assertTrue("thokiecho" in keys, "expected 'thokiecho', got $keys")
+        assertTrue("thokieco" in keys, "expected 'thokieco', got $keys")
+    }
+
     @Test
     fun nasalTwinNotPromotedWhenPlainOwnerMoreFrequent() {
         // বেচে@169 (inflated for the test) outranks বেঁচে@80: no promotion,

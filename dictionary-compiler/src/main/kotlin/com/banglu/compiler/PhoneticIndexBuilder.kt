@@ -387,6 +387,17 @@ object PhoneticIndexBuilder {
         HabitRule("verb_o_drop_b") {
             it.replace("obo", "bo").replace("obe", "be")
         },
+        // S84 (tester: kortam returned করিতাম/কর্তাম — করতাম only reachable via
+        // "korotam"): the same inherent-o precedes the habitual-past -t
+        // morphology (করতাম "korotam", করত "koroto", বলতা "bolota"); typists
+        // write "kortam"/"korto". "ota" also covers -otam via one replace.
+        // Same targeted suffix-onset scope as the -te/-l/-b siblings above.
+        HabitRule("verb_o_drop_t") { key ->
+            // করত emits "korot" (final inherent vowel unwritten); typists say
+            // "korto". Restore the trailing o first so the medial drop lands.
+            val restored = if (key.endsWith("ot")) key + "o" else key
+            restored.replace("ota", "ta").replace("oto", "to")
+        },
         // S81 (tester: dolfin composed দল্ফিন — ডলফিন only reachable via
         // "dolophin"): the inherent o before ফ is never typed (দলফিন,
         // আলফাজ-class loanwords). MUST run before ph_to_f so the chain
@@ -428,6 +439,17 @@ object PhoneticIndexBuilder {
         // evaluated and rejected: it adds ~6% rows of pure collision noise
         // (verb-stem keys) and pushed the artifact over the 125 MB size gate.
         HabitRule("final_o") { withTrailingInherentO(it) },
+        // S86 (tester: thokiyecho had ZERO store rows — composing showed raw
+        // থকিয়েচ): final_o just created new chh-final aliases the collapse
+        // family (which already ran) never sees — thokiyechh -> thokiyechho
+        // existed but thokiyecho/thokiyeco/thokiyeso didn't, for EVERY
+        // ছ-final word whose -ো twin isn't independently in the corpus.
+        // Re-run the collapses on the final_o output; dedup absorbs overlap.
+        // Placed before vowel_glide_y_drop so the chat spellings compose too
+        // (thokiyecho -> thokiecho, thokiyeco -> thokieco).
+        HabitRule("chh_collapse_after_final_o") { it.replace("chh", "c") },
+        HabitRule("h_lazy_chh_after_final_o") { it.replace("chh", "ch") },
+        HabitRule("s_for_chh_after_final_o") { it.replace("chh", "s") },
         // ্য as gemination (জন্য "jonyo" → "jonno") — after final_o so the
         // jony → jonyo → jonno chain composes.
         HabitRule("ya_fola_gemination") { it.replace(YA_PHALA_GEMINATION, "$1$1$2") },

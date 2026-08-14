@@ -311,6 +311,13 @@ object ArpabetToBengali {
                         // S24: -st coda joins even after reph/ER (first ফার্স্ট)
                         prev == "S" && p == "T" && prev2 == "ER" &&
                             restAreConsonants(i - 1) -> true
+                        // S85: the WORD-FINAL consonant after ER takes a reph
+                        // regardless of stress — the Bangla loanword convention
+                        // (প্যাটার্ন, মডার্ন, স্ট্যান্ডার্ড, ফরওয়ার্ড). Only when
+                        // the ER itself follows a consonant: vowel+ER stays open
+                        // (iron আয়ারন). Plural -s is exempted above.
+                        prev == "ER" && i == tokens.size - 1 &&
+                            (prev2 in CONSONANTS || prev2 == "W") -> true
                         coda && !lastJoined &&
                             (prev == "N" || prev == "K" || prev == "P") -> true // ন্ট, ক্স, প্ট codas
                         coda && prev == "L" && p == "T" -> true    // ল্ট: রেজাল্ট, ডিফিকাল্ট
