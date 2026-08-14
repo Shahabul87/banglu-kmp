@@ -504,4 +504,36 @@ class PhoneticIndexBuilderTest {
         )
         assertEquals(1, rows.first { it.bengali == "বেঁচে" && it.key == "beche" }.priority)
     }
+
+    // ── S103: bo-fola pronunciation seeds ────────────────────────────────
+
+    @Test
+    fun bofolaMedialDoublesThePrecedingConsonant() {
+        // অস্তিত্ব romanizes "ostitb"; speech says "ostitto".
+        val keys = PhoneticIndexBuilder.aliasesFor("ostitb", bengali = "অস্তিত্ব")
+        assertTrue("ostitto" in keys, "$keys")
+        // তত্ত্ব "tottb" already carries the doubling — only the b drops.
+        val totto = PhoneticIndexBuilder.aliasesFor("tottb", bengali = "তত্ত্ব")
+        assertTrue("totto" in totto, "$totto")
+        // বিদ্বান "bidban" -> "biddan"; অন্বেষণ "onbeshon" -> "onneshon".
+        assertTrue("biddan" in PhoneticIndexBuilder.aliasesFor("bidban", bengali = "বিদ্বান"))
+        assertTrue("onneshon" in PhoneticIndexBuilder.aliasesFor("onbeshon", bengali = "অন্বেষণ"))
+    }
+
+    @Test
+    fun bofolaInitialDropsTheSilentB() {
+        assertTrue("jor" in PhoneticIndexBuilder.aliasesFor("jbor", bengali = "জ্বর"))
+        assertTrue("dhoni" in PhoneticIndexBuilder.aliasesFor("dhboni", bengali = "ধ্বনি"))
+        assertTrue("tok" in PhoneticIndexBuilder.aliasesFor("tbok", bengali = "ত্বক"))
+    }
+
+    @Test
+    fun bofolaGateNeverFiresWithoutTheConjunct() {
+        // হাটবাজার-class: a real pronounced ব adjacent to t/d must survive.
+        val keys = PhoneticIndexBuilder.aliasesFor("hatbajar", bengali = "হাটবাজার")
+        assertTrue(keys.none { "hattajar" in it || "hatt" in it }, "$keys")
+        // ম্ব keeps its b-sound: no rule exists for it at all.
+        val lomba = PhoneticIndexBuilder.aliasesFor("lombaa", bengali = "লম্বা")
+        assertTrue(lomba.none { it.contains("lomma") }, "$lomba")
+    }
 }

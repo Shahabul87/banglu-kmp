@@ -152,7 +152,10 @@ object PhoneticIndexBuilder {
             val nasalSeed = if ('ঁ' in word) {
                 ReverseTransliterator.reverseWord(word.replace("ঁ", "")).lowercase()
             } else null
-            val aliases = aliasesFor(canonical, nasalSeed) + manualKeys
+            val aliases = aliasesFor(canonical, nasalSeed, bengali = word) + manualKeys
+            val bofolaCanonical = if ("্ব" in word) {
+                bofolaCanonicalKeys(word, listOfNotNull(canonical, nasalSeed))
+            } else emptySet()
             var rowsForWord = 0
             for (key in aliases) {
                 if (key.length !in 2..24 || !ROMAN_ONLY.matches(key)) {
@@ -163,7 +166,9 @@ object PhoneticIndexBuilder {
                 // Curated manual aliases are deliberate ownership decisions —
                 // canonical priority, or an extended-dict junk twin on the
                 // same key outranks them (মুস্কিল@65 vs মুশকিল@70 class).
-                val priority = if (key == canonical || key in manualKeys) PRIORITY_CANONICAL else PRIORITY_HABIT
+                val priority = if (key == canonical || key in manualKeys || key in bofolaCanonical) {
+                    PRIORITY_CANONICAL
+                } else PRIORITY_HABIT
                 rows.add(PhoneticIndexRow(key, word, freq, tier, priority))
                 if (priority == PRIORITY_CANONICAL) canonicalRows++ else habitAliasRows++
                 rowsForWord++
@@ -328,6 +333,12 @@ object PhoneticIndexBuilder {
 
     /** A doubled consonant letter, for the lazy single-press habit (উত্তর "uttor" → "utor"). */
     private val DOUBLED_CONSONANT = Regex("([bcdfghjklmnpqrstvwxyz])\\1")
+
+    // S103 bo-fola: medial-only (never at index 0 — the initial class drops
+    // the b instead of doubling).
+    private val MEDIAL_TB = Regex("(?<=.)tb")
+    private val MEDIAL_DB = Regex("(?<=.)db")
+    private val INITIAL_BOFOLA_PREFIXES = listOf("dhb", "tb", "db", "jb", "zb", "sb")
 
     /** য় glide between two vowels, dropped by lazy typists (phebruyari → phebruari). */
     private val VOWEL_Y_VOWEL = Regex("([aeiou])y([aeiou])")
@@ -504,12 +515,98 @@ object PhoneticIndexBuilder {
      * composes on it (কাঁদছে -> "kadchhe" -> kadche/kadce/kadse). It shares
      * the same key budget; the seed itself is always in.
      */
-    internal fun aliasesFor(canonical: String, nasalSeed: String? = null): List<String> {
+    internal fun aliasesFor(
+        canonical: String,
+        nasalSeed: String? = null,
+        bengali: String? = null,
+    ): List<String> {
         val aliases = LinkedHashSet<String>()
         aliases.add(canonical)
         if (nasalSeed != null && nasalSeed != canonical) aliases.add(nasalSeed)
+        // S103: bo-fola pronunciation seeds join BEFORE the rule table so
+        // final_o and the collapse chains compose on them (ostitt -> ostitto).
+        if (bengali != null && "্ব" in bengali) {
+            for (seed in bofolaPronunciationSeeds(bengali, aliases.toList())) aliases.add(seed)
+        }
         for (rule in HABIT_RULES) expand(aliases, rule.transform)
         return aliases.toList()
+    }
+
+    /**
+     * S103: the pronunciation keys are how users actually type bo-fola words
+     * (nobody spells "ostitb") — they take CANONICAL priority like curated
+     * manual aliases, so the whole-word ownership guards (S25 particle
+     * split, S79 negation) defer to them. Seeds ending in a doubled
+     * consonant also claim their inherent-o twin ("ostitt" -> "ostitto").
+     * Canonical-priority collisions with true owners of the same key fall
+     * to the tier/frequency law as usual (jor -> জোর stays primary, জ্বর
+     * rides the strip).
+     */
+    internal fun bofolaCanonicalKeys(bengali: String, base: List<String>): Set<String> {
+        if ("্ব" !in bengali) return emptySet()
+        val seeds = bofolaPronunciationSeeds(bengali, base)
+        val out = LinkedHashSet(seeds)
+        for (seed in seeds) {
+            if (seed.length >= 2 && seed.last() == seed[seed.length - 2]) out.add(seed + "o")
+        }
+        // The typed spelling often composes one more chain step — the য়
+        // glide dropped between vowels (দায়িত্ব "dayitto" -> "daitto").
+        // Those spellings are equally canonical for the class.
+        for (key in out.toList()) {
+            val glideDropped = key.replace(VOWEL_Y_VOWEL, "$1$2")
+            if (glideDropped != key) out.add(glideDropped)
+        }
+        return out
+    }
+
+    /**
+     * S103 (tester: ostitto -> অস্তিত তো, the অস্তিত্ব key gap): ব-ফলা (্ব)
+     * is SILENT in speech — word-initially the consonant stands alone
+     * (দ্বিতীয় "ditio", জ্বর "jor", ত্বক "tok", ধ্বনি "dhoni"), medially it
+     * doubles the preceding consonant (অস্তিত্ব "ostitto", বিদ্বান "biddan",
+     * অন্বেষণ "onneshon") — but the romanizer spells it letter-by-letter
+     * ("ostitb", "jbor"), so no user-typed key ever reached these words.
+     * The স্ব/শ্ব flavors romanize as "w" and were already covered by the
+     * w-drop/shw chains; this pass covers the "b" flavors.
+     *
+     * Every transform is GATED on the Bengali actually containing the
+     * cluster at the right position — a bare string rule would corrupt
+     * compound words whose "tb"/"db" is a real pronounced ব (হাটবাজার
+     * class). ম্ব / র্ব / ব্ব keep their real b-sound and are never touched.
+     */
+    private fun bofolaPronunciationSeeds(bengali: String, base: List<String>): List<String> {
+        val out = LinkedHashSet<String>()
+        val initial = bengali.length >= 3 && bengali[1] == '্' && bengali[2] == 'ব'
+        for (alias in base) {
+            var k = alias
+            // Medial doubling — the geminated conjuncts (ত্ত্ব "ttb",
+            // জ্জ্ব "jjb") already carry the doubling in the romanization,
+            // so only the b drops; the plain conjuncts double.
+            if ("ত্ত্ব" in bengali) k = k.replace("ttb", "tt")
+            if (bengali.indexOf("ত্ব") > 0) k = k.replace(MEDIAL_TB, "tt")
+            if ("জ্জ্ব" in bengali) k = k.replace("jjb", "jj")
+            if (bengali.indexOf("দ্ব") > 0) k = k.replace(MEDIAL_DB, "dd")
+            if (bengali.indexOf("ন্ব") > 0) k = k.replace("nb", "nn")
+            if ("র্ধ্ব" in bengali) k = k.replace("rdhb", "rdh")
+            // Word-initial silent bo-fola: drop the b.
+            if (initial) {
+                for (prefix in INITIAL_BOFOLA_PREFIXES) {
+                    if (k.startsWith(prefix)) {
+                        k = prefix.dropLast(1) + k.substring(prefix.length)
+                        break
+                    }
+                }
+            }
+            if (k != alias) {
+                out.add(k)
+                // ৃ romanizes "rri" (নেতৃত্ব "netrritt"); typed spelling is
+                // "ri" ("netritto"). double_reduce can't produce this — it
+                // collapses ALL doubles at once ("netrritt" -> "netrit"),
+                // never the rr alone. Seed the collapsed twin explicitly.
+                if ("rri" in k) out.add(k.replace("rri", "ri"))
+            }
+        }
+        return out.toList()
     }
 
     /**
