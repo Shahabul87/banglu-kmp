@@ -258,6 +258,8 @@ fun BangluKeyboardLayout(
     keyboardHeightMode: String = "normal",
     keyboardFontSizeMode: String = "large",
     onKeyPress: (Char) -> Unit,
+    /** S99: probabilistic touch targeting — letter presses report position. */
+    onLetterTouch: ((Char, Char?, Char?, Float) -> Unit)? = null,
     onTextInput: (String) -> Unit = { text -> text.forEach { onKeyPress(it) } },
     onBackspace: () -> Unit,
     onBackspaceRepeat: (Int) -> Unit = { count -> repeat(count) { onBackspace() } },
@@ -393,7 +395,8 @@ fun BangluKeyboardLayout(
                         onBackspace = onBackspace,
                         onBackspaceRepeat = onBackspaceRepeat,
                         onBackspaceWord = onBackspaceWord,
-                        onShiftTap = onShiftTap
+                        onShiftTap = onShiftTap,
+                        onLetterTouch = onLetterTouch
                     )
                     Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
                     BottomRow(
@@ -445,7 +448,8 @@ fun BangluKeyboardLayout(
                         onBackspace = onBackspace,
                         onBackspaceRepeat = onBackspaceRepeat,
                         onBackspaceWord = onBackspaceWord,
-                        onShiftTap = onShiftTap
+                        onShiftTap = onShiftTap,
+                        onLetterTouch = onLetterTouch
                     )
                     Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
                     BottomRow(
@@ -1549,7 +1553,10 @@ private fun LetterRows(
     onBackspace: () -> Unit,
     onBackspaceRepeat: (Int) -> Unit = { count -> repeat(count) { onBackspace() } },
     onBackspaceWord: () -> Unit = {},
-    onShiftTap: () -> Unit
+    onShiftTap: () -> Unit,
+    /** S99: (tapped, leftNeighbor, rightNeighbor, xFraction) — when set,
+     *  letter keys report press position for probabilistic targeting. */
+    onLetterTouch: ((Char, Char?, Char?, Float) -> Unit)? = null
 ) {
     val colors = LocalKeyboardColors.current
     val keyHeight = scaledKeyHeight(LetterKeyRowHeight)
@@ -1558,9 +1565,13 @@ private fun LetterRows(
     // gap lives inside each cell so every pixel of the row hits a key.
     val letterHitPad = currentKeyGapH() / 2
     Row(modifier = Modifier.fillMaxWidth()) {
-        for (key in LETTER_ROW_1) {
+        for ((index, key) in LETTER_ROW_1.withIndex()) {
             val display = letterKeyLabel(key, shiftState, useShiftedLetterInput)
             val input = letterKeyInput(key, shiftState, useShiftedLetterInput)
+            val left = LETTER_ROW_1.getOrNull(index - 1)
+                ?.let { letterKeyInput(it, shiftState, useShiftedLetterInput) }
+            val right = LETTER_ROW_1.getOrNull(index + 1)
+                ?.let { letterKeyInput(it, shiftState, useShiftedLetterInput) }
             KeyButton(
                 label = display,
                 modifier = Modifier.weight(1f),
@@ -1570,6 +1581,7 @@ private fun LetterRows(
                 onTextInput = onTextInput,
                 hitPaddingH = letterHitPad,
                 onReplaceLast = { alt -> onBackspace(); onTextInput(alt) },
+                onClickAt = onLetterTouch?.let { cb -> { frac -> cb(input, left, right, frac) } },
                 onClick = { onKeyPress(input) }
             )
         }
@@ -1594,6 +1606,10 @@ private fun LetterRows(
                 val isLast = index == LETTER_ROW_2.size - 1
                 val display = letterKeyLabel(key, shiftState, useShiftedLetterInput)
                 val input = letterKeyInput(key, shiftState, useShiftedLetterInput)
+                val left = LETTER_ROW_2.getOrNull(index - 1)
+                    ?.let { letterKeyInput(it, shiftState, useShiftedLetterInput) }
+                val right = LETTER_ROW_2.getOrNull(index + 1)
+                    ?.let { letterKeyInput(it, shiftState, useShiftedLetterInput) }
                 KeyButton(
                     label = display,
                     modifier = Modifier.weight(if (isFirst || isLast) edgeWeight else 1f),
@@ -1605,6 +1621,7 @@ private fun LetterRows(
                     hitPaddingStart = if (isFirst) letterHitPad + indent else null,
                     hitPaddingEnd = if (isLast) letterHitPad + indent else null,
                     onReplaceLast = { alt -> onBackspace(); onTextInput(alt) },
+                    onClickAt = onLetterTouch?.let { cb -> { frac -> cb(input, left, right, frac) } },
                     onClick = { onKeyPress(input) }
                 )
             }
@@ -1636,9 +1653,13 @@ private fun LetterRows(
             onClick = onShiftTap
         )
 
-        for (key in LETTER_ROW_3) {
+        for ((index, key) in LETTER_ROW_3.withIndex()) {
             val display = letterKeyLabel(key, shiftState, useShiftedLetterInput)
             val input = letterKeyInput(key, shiftState, useShiftedLetterInput)
+            val left = LETTER_ROW_3.getOrNull(index - 1)
+                ?.let { letterKeyInput(it, shiftState, useShiftedLetterInput) }
+            val right = LETTER_ROW_3.getOrNull(index + 1)
+                ?.let { letterKeyInput(it, shiftState, useShiftedLetterInput) }
             KeyButton(
                 label = display,
                 modifier = Modifier.weight(1f),
@@ -1648,6 +1669,7 @@ private fun LetterRows(
                 onTextInput = onTextInput,
                 hitPaddingH = letterHitPad,
                 onReplaceLast = { alt -> onBackspace(); onTextInput(alt) },
+                onClickAt = onLetterTouch?.let { cb -> { frac -> cb(input, left, right, frac) } },
                 onClick = { onKeyPress(input) }
             )
         }
@@ -1983,6 +2005,10 @@ private fun KeyButton(
     /** S11: with commit-on-press the base character is already committed when
      *  the long-press popup opens; selecting an alternative must REPLACE it. */
     onReplaceLast: ((String) -> Unit)? = null,
+    /** S99: position-aware press — receives the horizontal press fraction
+     *  (0..1) inside the key so the service can run probabilistic touch
+     *  targeting. Null = plain [onClick]. */
+    onClickAt: ((Float) -> Unit)? = null,
     onClick: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
@@ -1992,6 +2018,7 @@ private fun KeyButton(
     val soundOn = LocalSoundEnabled.current
     val previewOn = LocalKeyPreviewEnabled.current
     val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnClickAt by rememberUpdatedState(onClickAt)
     var isPressed by remember { mutableStateOf(false) }
     var showAlternatives by remember { mutableStateOf(false) }
 
@@ -2050,7 +2077,14 @@ private fun KeyButton(
                     // cursor-drag ticks keep TextHandleMove deliberately.
                     if (hapticOn) view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                     if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
-                    currentOnClick()
+                    // S99: hand the press position to the targeting layer when
+                    // the key opted in; geometry-only keys stay as-is.
+                    val clickAt = currentOnClickAt
+                    if (clickAt != null && size.width > 0) {
+                        clickAt((down.position.x / size.width).coerceIn(0f, 1f))
+                    } else {
+                        currentOnClick()
+                    }
                     var longPressed = false
                     var released = false
                     if (longPressOptions.isNotEmpty()) {

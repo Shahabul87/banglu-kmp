@@ -221,6 +221,33 @@ class BangluIMEService : InputMethodService(),
     private var emailInputMode = false
     private var sensitiveInputMode = false
 
+    // S99: the EN-mode word prefix, shadow-tracked in memory so the touch
+    // resolver has SYNC context on the keystroke path (an InputConnection
+    // read there would be IPC on the hot path — S28 law). Cleared on every
+    // separator/field/cursor event; staleness only ever costs a skipped
+    // flip, never a wrong one, because the thresholds demand strong evidence.
+    private var englishWordPrefix = ""
+
+    /**
+     * S99: probabilistic touch targeting. A letter press near a key boundary
+     * is resolved by the language model (BN roman buffer / EN word prefix as
+     * context); center presses and raw/sensitive fields stay geometric.
+     */
+    private fun onLetterTouch(char: Char, left: Char?, right: Char?, xFraction: Float) {
+        val resolved = if (rawCommitInputMode || privateInputMode) {
+            char
+        } else when (keyboardMode.value) {
+            KeyboardMode.ENGLISH -> com.banglu.engine.touch.TouchTargetModel.resolve(
+                englishWordPrefix, char, left, right, xFraction, english = true
+            )
+            KeyboardMode.BANGLU -> com.banglu.engine.touch.TouchTargetModel.resolve(
+                buffer, char, left, right, xFraction, english = false
+            )
+            else -> char
+        }
+        onKeyPress(resolved)
+    }
+
     // ── S94: referentially STABLE compose callbacks ──────────────────────
     // The old inline lambdas in setContent were recreated on every root
     // recomposition (they capture the service), which made every child
@@ -231,6 +258,8 @@ class BangluIMEService : InputMethodService(),
     private val kbClipboardItemsProvider: () -> List<String> = { clipboardHistory.toList() }
     private val kbRecentEmojisProvider: () -> List<String> = { recentEmojis.toList() }
     private val kbOnKeyPress: (Char) -> Unit = { onKeyPress(it) }
+    private val kbOnLetterTouch: (Char, Char?, Char?, Float) -> Unit =
+        { c, l, r, f -> onLetterTouch(c, l, r, f) }
     private val kbOnTextInput: (String) -> Unit = { onTextInput(it) }
     private val kbOnBackspace: () -> Unit = { onBackspace() }
     private val kbOnBackspaceRepeat: (Int) -> Unit = { onBackspaceRepeat(it) }
@@ -1175,6 +1204,7 @@ class BangluIMEService : InputMethodService(),
                         keyboardHeightMode = keyboardHeightMode.value,
                         keyboardFontSizeMode = keyboardFontSizeMode.value,
                         onKeyPress = kbOnKeyPress,
+                        onLetterTouch = kbOnLetterTouch,
                         onTextInput = kbOnTextInput,
                         onBackspace = kbOnBackspace,
                         onBackspaceRepeat = kbOnBackspaceRepeat,
@@ -1248,6 +1278,7 @@ class BangluIMEService : InputMethodService(),
         reloadSettings()
         configureInputSafety(info)
         buffer = ""
+        englishWordPrefix = ""   // S99
         suggestions.clear()
         // S67/S76/S95: same app -> the user's mode choice is sacred; new app
         // -> reset to the settings default (see LanguageModePolicy).
@@ -1518,6 +1549,9 @@ class BangluIMEService : InputMethodService(),
         // S97: typing again closes the undo window for the last correction.
         if (lastAutoCorrectWasEnglish) clearAutoCorrectUndoState()
         ic.commitText(char.toString(), 1)
+        // S99: shadow the word prefix for the sync touch resolver.
+        englishWordPrefix =
+            if (char.isLetter()) englishWordPrefix + char.lowercaseChar() else ""
 
         // Do NOT auto-capitalize here — only after space/enter
         // Auto-capitalizing after every keypress causes uppercase in middle of words
@@ -1586,6 +1620,7 @@ class BangluIMEService : InputMethodService(),
         ic.endBatchEdit()
         lastCommittedTextLength = suggestion.bengali.length + 1
         sessionSuggestionTapCount++
+        englishWordPrefix = ""   // S99: chip finished the word
         recordEnglishCommitAsync(suggestion.bengali, prev)
         refreshEnglishSuggestionsAsync()
     }
@@ -1724,6 +1759,7 @@ class BangluIMEService : InputMethodService(),
         }
         ic.commitText(output.toString(), 1)
         lastCommittedTextLength = 1
+        englishWordPrefix = ""   // S99: separator ends the word
         // S98: '@' (long-press or symbols) starts an email token; a '.'
         // mid-@-token continues one (sham@gmail<.>com).
         if (output == '@' || (identityAssistAllowed() &&
@@ -1770,6 +1806,7 @@ class BangluIMEService : InputMethodService(),
                 deletePreviousGraphemes(ic)
                 // S96: keep the completion strip in sync while editing English.
                 if (keyboardMode.value == KeyboardMode.ENGLISH) {
+                    englishWordPrefix = englishWordPrefix.dropLast(1)   // S99
                     refreshEnglishSuggestionsAsync()
                 } else if (rawCommitInputMode || emailInputMode) {
                     // S98: identity chips track deletions in raw/email fields.
@@ -1940,6 +1977,7 @@ class BangluIMEService : InputMethodService(),
                 // S96: between words the strip switches to next-word
                 // predictions (personal bigrams first, common starters after).
                 if (keyboardMode.value == KeyboardMode.ENGLISH) {
+                    englishWordPrefix = ""   // S99: word finished
                     refreshEnglishSuggestionsAsync()
                 }
             }
@@ -1964,6 +2002,8 @@ class BangluIMEService : InputMethodService(),
             val token = identityTokenBeforeCursor(ic)
             if (token.contains('@')) recordIdentityAsync(token)
         }
+
+        englishWordPrefix = ""   // S99: enter ends the word
 
         // Commit any pending buffer
         if (keyboardMode.value == KeyboardMode.BANGLU && buffer.isNotEmpty() && !rawCommitInputMode) {
@@ -2114,6 +2154,7 @@ class BangluIMEService : InputMethodService(),
         letterModeBeforeSymbols = modeResult.letterMode
         keyboardMode.value = modeResult.mode
         resetShiftState()
+        englishWordPrefix = ""   // S99: mode change resets the word context
         suggestions.clear()
         // S96: entering EN mode surfaces predictions right away.
         if (modeResult.mode == KeyboardMode.ENGLISH) refreshEnglishSuggestionsAsync()
