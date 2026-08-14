@@ -2134,6 +2134,12 @@ class BangluIMEService : InputMethodService(),
     private fun onBackToLetters() {
         keyboardMode.value = letterModeBeforeSymbols
         resetShiftState()
+        // S98/S96: keep the strip coherent after the mode change — an
+        // in-progress @-token keeps its identity chips, EN mode refreshes
+        // its completions.
+        if (!maybeShowIdentityAssist() && keyboardMode.value == KeyboardMode.ENGLISH) {
+            refreshEnglishSuggestionsAsync()
+        }
         log("onBackToLetters: returning to $letterModeBeforeSymbols")
     }
 

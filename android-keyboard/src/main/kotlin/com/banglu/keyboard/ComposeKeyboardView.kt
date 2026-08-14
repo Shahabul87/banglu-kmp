@@ -463,7 +463,14 @@ fun BangluKeyboardLayout(
                     )
                 }
                 KeyboardMode.SYMBOLS_1 -> {
-                    KeyboardActionBar(
+                    // S98: identity chips (sham@ -> @gmail.com) must show
+                    // right where the '@' was typed — the symbols layer gets
+                    // the same adaptive strip (falls back to the action bar
+                    // whenever no suggestions exist).
+                    AdaptiveTopStrip(
+                        suggestionsProvider = suggestionsProvider,
+                        suggestionsEnabled = suggestionsEnabled,
+                        onSuggestionClick = onSuggestionClick,
                         onSettingsClick = onSettingsClick,
                         onEmojiOpen = onEmojiOpen,
                         onStickerOpen = onStickerOpen,
@@ -471,7 +478,8 @@ fun BangluKeyboardLayout(
                         onVoiceInput = onVoiceInput,
                         onPunctuationPress = onPunctuationPress,
                         voiceInputState = voiceInputState,
-                        onToggleToolbar = onToggleToolbar
+                        onToggleToolbar = onToggleToolbar,
+                        isToolbarExpanded = isToolbarExpanded
                     )
                     Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
                     if (showNumberRow) {
@@ -506,7 +514,11 @@ fun BangluKeyboardLayout(
                     )
                 }
                 KeyboardMode.SYMBOLS_2 -> {
-                    KeyboardActionBar(
+                    // S98: same adaptive strip as SYMBOLS_1.
+                    AdaptiveTopStrip(
+                        suggestionsProvider = suggestionsProvider,
+                        suggestionsEnabled = suggestionsEnabled,
+                        onSuggestionClick = onSuggestionClick,
                         onSettingsClick = onSettingsClick,
                         onEmojiOpen = onEmojiOpen,
                         onStickerOpen = onStickerOpen,
@@ -514,7 +526,8 @@ fun BangluKeyboardLayout(
                         onVoiceInput = onVoiceInput,
                         onPunctuationPress = onPunctuationPress,
                         voiceInputState = voiceInputState,
-                        onToggleToolbar = onToggleToolbar
+                        onToggleToolbar = onToggleToolbar,
+                        isToolbarExpanded = isToolbarExpanded
                     )
                     Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
                     if (showNumberRow) {
