@@ -408,7 +408,12 @@ fun BangluKeyboardLayout(
                     )
                 }
                 KeyboardMode.ENGLISH -> {
-                    KeyboardActionBar(
+                    // S96: EN mode gets the SAME adaptive strip as Bangla —
+                    // the old hardcoded action bar could never show the
+                    // English completion/prediction chips.
+                    AdaptiveTopStrip(
+                        suggestions = if (suggestionsEnabled) suggestionsProvider() else emptyList(),
+                        onSuggestionClick = onSuggestionClick,
                         onSettingsClick = onSettingsClick,
                         onEmojiOpen = onEmojiOpen,
                         onStickerOpen = onStickerOpen,
@@ -416,7 +421,8 @@ fun BangluKeyboardLayout(
                         onVoiceInput = onVoiceInput,
                         onPunctuationPress = onPunctuationPress,
                         voiceInputState = voiceInputState,
-                        onToggleToolbar = onToggleToolbar
+                        onToggleToolbar = onToggleToolbar,
+                        isToolbarExpanded = isToolbarExpanded
                     )
                     Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
                     if (showNumberRow) {
