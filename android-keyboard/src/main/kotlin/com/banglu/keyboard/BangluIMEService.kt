@@ -166,6 +166,10 @@ class BangluIMEService : InputMethodService(),
     private var voiceLastLivePartialUpdateAt = 0L
     private var voiceLastSpeechEndedAt = 0L
     private var voiceInsertionCursor: Int? = null
+    /** S107: absolute caret positions our own voice writes are about to
+     *  produce; onUpdateSelection consumes these against VoiceAnchorPolicy so
+     *  only genuine USER cursor moves re-anchor dictation. */
+    private val voiceExpectedSelections = ArrayDeque<Int>()
     private var voicePartialCommitJob: Job? = null
     private var voiceRestartJob: Job? = null
     private var voiceLastAutoCommittedPartial: String? = null
@@ -1378,6 +1382,24 @@ class BangluIMEService : InputMethodService(),
             candidatesEnd,
         )
 
+        // S107 (tester: "place cursor in the middle and start voice typing —
+        // not working"): during dictation a selection change we did not
+        // produce ourselves is an intentional user move — follow it instead
+        // of yanking the caret back to the stale session-start anchor.
+        when (val decision = VoiceAnchorPolicy.onSelectionChanged(
+            dictationActive = voiceDictationActive,
+            expectedSelections = voiceExpectedSelections.toList(),
+            anchor = voiceInsertionCursor,
+            newSelStart = newSelStart,
+            newSelEnd = newSelEnd,
+            liveSegmentActive = voiceLiveCommittedPartial.isNotEmpty(),
+        )) {
+            is VoiceAnchorPolicy.Decision.ConsumeExpected ->
+                repeat(decision.dropCount) { voiceExpectedSelections.removeFirstOrNull() }
+            is VoiceAnchorPolicy.Decision.Reanchor -> reanchorVoiceInsertion(decision.position)
+            VoiceAnchorPolicy.Decision.Ignore -> Unit
+        }
+
         if (buffer.isEmpty()) return
 
         val composingSpanIsKnown = candidatesStart >= 0 && candidatesEnd >= candidatesStart
@@ -1492,6 +1514,7 @@ class BangluIMEService : InputMethodService(),
         if (cancelVoice) {
             stopVoiceInput(cancel = true)
             releaseSpeechRecognizer()
+            voiceExpectedSelections.clear()
         } else {
             voiceRestartJob?.cancel()
             voiceRestartJob = null
@@ -2292,6 +2315,7 @@ class BangluIMEService : InputMethodService(),
 
         commitPendingBuffer()
         voiceInsertionCursor = currentCursorPosition()
+        voiceExpectedSelections.clear()
         suggestions.clear()
         voiceInputState.value = VoiceInputState.PROCESSING
         voiceInputLevel.value = 0f
@@ -2933,12 +2957,14 @@ class BangluIMEService : InputMethodService(),
         ic.finishComposingText()
         ic.deleteSurroundingText(patch.deleteCount, 0)
         voiceInsertionCursor = voiceInsertionCursor?.minus(patch.deleteCount)?.coerceAtLeast(0)
+        expectVoiceSelection(voiceInsertionCursor)
         currentVoiceSessionCommitLength =
             (currentVoiceSessionCommitLength - patch.deleteCount).coerceAtLeast(0)
         if (patch.insert.isNotEmpty()) {
             ic.commitText(patch.insert, 1)
             ic.finishComposingText()
             voiceInsertionCursor = voiceInsertionCursor?.plus(patch.insert.length)
+            expectVoiceSelection(voiceInsertionCursor)
             currentVoiceSessionCommitLength += patch.insert.length
         }
         lastVoiceCommitLength = currentVoiceSessionCommitLength
@@ -2962,6 +2988,7 @@ class BangluIMEService : InputMethodService(),
         ic.commitText(out, 1)
         ic.finishComposingText()
         voiceInsertionCursor = voiceInsertionCursor?.plus(out.length)
+        expectVoiceSelection(voiceInsertionCursor)
         currentVoiceSessionCommitLength += out.length
         lastVoiceCommitLength = currentVoiceSessionCommitLength
     }
@@ -2978,10 +3005,12 @@ class BangluIMEService : InputMethodService(),
         ic.finishComposingText()
         ic.deleteSurroundingText(previous.length, 0)
         voiceInsertionCursor = voiceInsertionCursor?.minus(previous.length)?.coerceAtLeast(0)
+        expectVoiceSelection(voiceInsertionCursor)
         currentVoiceSessionCommitLength = (currentVoiceSessionCommitLength - previous.length).coerceAtLeast(0)
         ic.commitText(replacement, 1)
         ic.finishComposingText()
         voiceInsertionCursor = voiceInsertionCursor?.plus(replacement.length)
+        expectVoiceSelection(voiceInsertionCursor)
         currentVoiceSessionCommitLength += replacement.length
         lastVoiceCommitLength = currentVoiceSessionCommitLength
         return true
@@ -3018,8 +3047,16 @@ class BangluIMEService : InputMethodService(),
         val cleanSegment = normalizeVoiceSegment(segment, useInstantPreview = true)
         if (cleanSegment.isEmpty()) return
 
-        val committed = punctuateVoiceSegment(cleanSegment, punctuation)
         val ic = currentInputConnection ?: return
+        // S107: sentence punctuation (দাঁড়ি/comma) is an end-of-message
+        // affordance — with the insertion point mid-text (cursor-placed edit)
+        // a pause mark would be stamped into the middle of an existing
+        // sentence. Every commit path funnels through here, so gate once.
+        moveVoiceCursorToInsertionPoint(ic)
+        val textAfterInsertion = ic.getTextAfterCursor(4, 0)?.toString().orEmpty()
+        val effectivePunctuation =
+            VoiceAnchorPolicy.punctuationForInsertion(punctuation, textAfterInsertion.isNotBlank())
+        val committed = punctuateVoiceSegment(cleanSegment, effectivePunctuation)
 
         val livePartial = voiceLiveCommittedPartial
         if (livePartial.isNotEmpty()) {
@@ -3095,7 +3132,7 @@ class BangluIMEService : InputMethodService(),
                     return@launch
                 }
                 if (refinedSegment.isEmpty() || refinedSegment == cleanSegment) return@launch
-                val refinedCommitted = punctuateVoiceSegment(refinedSegment, punctuation)
+                val refinedCommitted = punctuateVoiceSegment(refinedSegment, effectivePunctuation)
                 if (refinedCommitted == expectedCommitted) return@launch
                 // S55 (review follow-up): same guard set renderVoicePartialIncrementally's
                 // refine uses (imeSessionVisible + voiceDictationActive + session
@@ -3112,7 +3149,15 @@ class BangluIMEService : InputMethodService(),
                     return@launch
                 }
                 patchIc.deleteSurroundingText(expectedCommitted.length, 0)
+                // S107: the anchor tracked the instant commit's length — a
+                // refined replacement of different length drifted it, so the
+                // NEXT segment's setSelection landed inside the text.
+                voiceInsertionCursor = voiceInsertionCursor
+                    ?.minus(expectedCommitted.length)?.coerceAtLeast(0)
+                expectVoiceSelection(voiceInsertionCursor)
                 patchIc.commitText(refinedCommitted, 1)
+                voiceInsertionCursor = voiceInsertionCursor?.plus(refinedCommitted.length)
+                expectVoiceSelection(voiceInsertionCursor)
                 if (voiceLastSegmentText == expectedCommitted) {
                     voiceLastSegmentText = refinedCommitted
                     lastVoiceCommitLength = refinedCommitted.length
@@ -3132,7 +3177,43 @@ class BangluIMEService : InputMethodService(),
         val extracted = ic.getExtractedText(ExtractedTextRequest(), 0) ?: return
         val textLength = extracted.text?.length ?: return
         val safeCursor = cursor.coerceIn(0, textLength)
+        // S107: a no-op move produces no onUpdateSelection callback — pushing
+        // an expected position for it would leave a guaranteed-stale entry.
+        if (extracted.selectionStart == safeCursor && extracted.selectionEnd == safeCursor) return
         ic.setSelection(safeCursor, safeCursor)
+        expectVoiceSelection(safeCursor)
+    }
+
+    /** S107: record the caret position a voice write of ours is about to
+     *  produce, so VoiceAnchorPolicy can tell it apart from a user move. */
+    private fun expectVoiceSelection(position: Int?) {
+        position ?: return
+        if (!voiceDictationActive) return
+        voiceExpectedSelections.addLast(position)
+        while (voiceExpectedSelections.size > 16) voiceExpectedSelections.removeFirst()
+    }
+
+    /** S107: the user intentionally moved the caret during dictation — the
+     *  words already on screen stay where they are, the current segment is
+     *  closed as auto-committed (so later hypotheses strip it instead of
+     *  re-inserting it), and new speech flows to the new position. */
+    private fun reanchorVoiceInsertion(position: Int) {
+        log("voice: re-anchoring dictation to $position (user cursor move)")
+        voicePartialGeneration++
+        voicePartialCommitJob?.cancel()
+        voicePartialCommitJob = null
+        voiceTokenRefineJob?.cancel()
+        voiceTokenRefineJob = null
+        voiceLastAutoCommittedPartial = VoiceAnchorPolicy.cumulativeCommittedPrefix(
+            voiceLastAutoCommittedPartial,
+            voiceCurrentPartial,
+        )
+        voiceCurrentPartial = ""
+        voiceLiveCommittedPartial = ""
+        voiceLiveCommitLength = 0
+        voiceHasLiveComposing = false
+        voiceExpectedSelections.clear()
+        voiceInsertionCursor = position
     }
 
     private fun punctuateVoiceSegment(text: String, punctuation: String): String {
