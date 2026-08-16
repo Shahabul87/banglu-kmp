@@ -168,7 +168,6 @@ class BangluIMEService : InputMethodService(),
     private var voiceInsertionCursor: Int? = null
     private var voicePartialCommitJob: Job? = null
     private var voiceRestartJob: Job? = null
-    private var voiceResetJob: Job? = null
     private var voiceLastAutoCommittedPartial: String? = null
     private var voicePreferOfflineForSession = false
     /** S55: guards the ONE network-class (ERROR_NETWORK/_TIMEOUT/SERVER/
@@ -1498,8 +1497,6 @@ class BangluIMEService : InputMethodService(),
             voiceRestartJob = null
             voicePartialCommitJob?.cancel()
             voicePartialCommitJob = null
-            voiceResetJob?.cancel()
-            voiceResetJob = null
             voiceTokenRefineJob?.cancel()
             voiceTokenRefineJob = null
         }
@@ -1508,6 +1505,7 @@ class BangluIMEService : InputMethodService(),
     // ── Key Handlers ───────────────────────────────────────────────────────
 
     private fun onKeyPress(char: Char) {
+        dismissVoiceTroubleOnUserAction()
         when (keyboardMode.value) {
             KeyboardMode.BANGLU -> onBangluKeyPress(char)
             KeyboardMode.ENGLISH -> onEnglishKeyPress(char)
@@ -1516,6 +1514,7 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun onTextInput(text: String) {
+        dismissVoiceTroubleOnUserAction()
         if (text.isEmpty()) return
         when (keyboardMode.value) {
             KeyboardMode.BANGLU -> {
@@ -1805,6 +1804,7 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun onBackspace() {
+        dismissVoiceTroubleOnUserAction()
         log("onBackspace: mode=${keyboardMode.value}, buffer='$buffer'")
         val ic = currentInputConnection ?: return
 
@@ -2242,13 +2242,11 @@ class BangluIMEService : InputMethodService(),
         if (privateInputMode || rawCommitInputMode) {
             log("onVoiceInput: blocked for private/raw input field")
             voiceInputState.value = VoiceInputState.UNAVAILABLE
-            resetVoiceStateSoon()
             return
         }
         if (!prefs.getBoolean(PREF_VOICE_TYPING_ENABLED, true)) {
             log("onVoiceInput: disabled in settings")
             voiceInputState.value = VoiceInputState.UNAVAILABLE
-            resetVoiceStateSoon()
             return
         }
         if (voiceInputState.value == VoiceInputState.LISTENING || voiceInputState.value == VoiceInputState.PROCESSING) {
@@ -2262,7 +2260,6 @@ class BangluIMEService : InputMethodService(),
             val intent = Intent(this, VoicePermissionActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(intent)
-            resetVoiceStateSoon()
             return
         }
 
@@ -2272,7 +2269,6 @@ class BangluIMEService : InputMethodService(),
             val intent = Intent(this, VoicePermissionActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(intent)
-            resetVoiceStateSoon()
             return
         }
 
@@ -2291,7 +2287,6 @@ class BangluIMEService : InputMethodService(),
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             log("onVoiceInput: SpeechRecognizer unavailable")
             voiceInputState.value = VoiceInputState.UNAVAILABLE
-            resetVoiceStateSoon()
             return
         }
 
@@ -2378,7 +2373,6 @@ class BangluIMEService : InputMethodService(),
             disarmVoiceWatchdog()
             voiceDictationActive = false
             voiceInputState.value = VoiceInputState.ERROR
-            resetVoiceStateSoon()
         }
     }
 
@@ -2463,7 +2457,6 @@ class BangluIMEService : InputMethodService(),
             is VoiceSessionPolicy.VoiceAction.ShowMessage -> voiceInputState.value = action.state
             else -> voiceInputState.value = VoiceInputState.WATCHDOG_TIMEOUT
         }
-        resetVoiceStateSoon()
     }
 
     private fun createVoiceRecognitionListener(generation: Int): RecognitionListener {
@@ -2619,12 +2612,9 @@ class BangluIMEService : InputMethodService(),
                                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             )
                         }
-                        // S69: terminal error chips hold long enough to READ
-                        // — the old 1.8s wipe is why every tester report says
-                        // "nothing happened" instead of quoting the message.
-                        if (action.state != VoiceInputState.IDLE) {
-                            resetVoiceStateSoon(VOICE_ERROR_CHIP_MS)
-                        }
+                        // S106: terminal give-up messages are sticky — they
+                        // stay until the user acts (S69's 6s chip window was
+                        // still short enough to miss).
                     }
                 }
             }
@@ -2668,8 +2658,7 @@ class BangluIMEService : InputMethodService(),
                     voiceDictationActive = false
                     finishVoiceComposingText()
                     voiceInputState.value = VoiceInputState.ERROR
-                    resetVoiceStateSoon()
-                    releaseSpeechRecognizer()
+                            releaseSpeechRecognizer()
                     return
                 }
 
@@ -2764,8 +2753,6 @@ class BangluIMEService : InputMethodService(),
         voiceTokenRefineJob = null
         voiceRestartJob?.cancel()
         voiceRestartJob = null
-        voiceResetJob?.cancel()
-        voiceResetJob = null
         val recognizer = speechRecognizer
         if (recognizer == null) {
             voiceInputLevel.value = 0f
@@ -3464,22 +3451,22 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
-    private fun resetVoiceStateSoon(delayMs: Long = 1800) {
-        voiceResetJob?.cancel()
-        voiceResetJob = serviceScope.launch {
-            delay(delayMs)
-            if (
-                imeSessionVisible && (
-                    voiceInputState.value == VoiceInputState.ERROR ||
-                        voiceInputState.value == VoiceInputState.PERMISSION_REQUIRED ||
-                        voiceInputState.value == VoiceInputState.UNAVAILABLE ||
-                        voiceInputState.value == VoiceInputState.WATCHDOG_TIMEOUT ||
-                        voiceInputState.value == VoiceInputState.OFFLINE_PACK_MISSING ||
-                        voiceInputState.value == VoiceInputState.BUSY_GIVEUP
-                    )
-            ) {
-                voiceInputState.value = VoiceInputState.IDLE
-            }
+    /** S106 (tester: "voice not working, no error message"): trouble panels
+     *  are STICKY. The old 1.8s auto-wipe meant the explanation vanished
+     *  before anyone read it — every silent-failure report traces to it.
+     *  A trouble panel now stays until the user acts: retry, dismiss, any
+     *  keypress, or the IME session ending (cleanupImeSession). */
+    private fun isVoiceTroubleState(s: VoiceInputState): Boolean =
+        s == VoiceInputState.ERROR ||
+            s == VoiceInputState.PERMISSION_REQUIRED ||
+            s == VoiceInputState.UNAVAILABLE ||
+            s == VoiceInputState.WATCHDOG_TIMEOUT ||
+            s == VoiceInputState.OFFLINE_PACK_MISSING ||
+            s == VoiceInputState.BUSY_GIVEUP
+
+    private fun dismissVoiceTroubleOnUserAction() {
+        if (!voiceDictationActive && isVoiceTroubleState(voiceInputState.value)) {
+            voiceInputState.value = VoiceInputState.IDLE
         }
     }
 

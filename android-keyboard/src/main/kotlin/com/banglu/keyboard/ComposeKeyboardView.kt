@@ -790,10 +790,14 @@ private fun VoiceStatusPanel(
     }
     val detail = when (state) {
         VoiceInputState.STOPPED -> "\u0986\u09ac\u09be\u09b0 \u09ac\u09b2\u09a4\u09c7 \u09b0\u09bf\u099f\u09cd\u09b0\u09be\u0987 \u099a\u09be\u09aa\u09c1\u09a8"
-        VoiceInputState.PERMISSION_REQUIRED -> "Banglu \u0985\u09cd\u09af\u09be\u09aa\u09c7 \u0985\u09a8\u09c1\u09ae\u09a4\u09bf \u099a\u09be\u09b2\u09c1 \u0995\u09b0\u09c1\u09a8"
-        VoiceInputState.UNAVAILABLE -> "\u09a1\u09bf\u09ad\u09be\u0987\u09b8\u09c7 speech service \u09a8\u09c7\u0987"
+        // S106: the permission screen launch can be silently BLOCKED on
+        // MIUI/ColorOS — the panel itself must carry the path.
+        VoiceInputState.PERMISSION_REQUIRED ->
+            "আবার চাপুন — না খুললে: সেটিংস \u2192 অ্যাপস \u2192 Banglu \u2192 Permissions \u2192 Microphone"
+        VoiceInputState.UNAVAILABLE -> "ডিভাইসে Google Speech Services নেই বা বন্ধ আছে"
         VoiceInputState.ERROR -> "\u09ae\u09be\u0987\u0995 \u099a\u09c7\u0995 \u0995\u09b0\u09c7 \u0986\u09ac\u09be\u09b0 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8"
-        VoiceInputState.WATCHDOG_TIMEOUT -> "\u0986\u09ac\u09be\u09b0 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8"
+        // S106: watchdog exhausted — point at the device-level check.
+        VoiceInputState.WATCHDOG_TIMEOUT -> "সাড়া নেই — Gboard-এ ভয়েস কাজ করে কি না দেখুন"
         VoiceInputState.OFFLINE_PACK_MISSING -> "\u0987\u09a8\u09cd\u099f\u09be\u09b0\u09a8\u09c7\u099f \u099a\u09be\u09b2\u09c1 \u0995\u09b0\u09c1\u09a8 \u09ac\u09be Google \u0985\u09cd\u09af\u09be\u09aa \u09a5\u09c7\u0995\u09c7 \u09ac\u09be\u0982\u09b2\u09be \u09aa\u09cd\u09af\u09be\u0995 \u09a8\u09be\u09ae\u09be\u09a8"
         VoiceInputState.BUSY_GIVEUP -> "\u098f\u0995\u099f\u09c1 \u09aa\u09b0\u09c7 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8"
         else -> ""
@@ -850,7 +854,9 @@ private fun VoiceStatusPanel(
                     text = detail,
                     color = colors.subText,
                     fontSize = scaledSp(12),
-                    maxLines = 1,
+                    // S106: trouble instructions need the room — one wrapped
+                    // line was why nobody could read the fix path.
+                    maxLines = if (isTrouble) 2 else 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -875,6 +881,13 @@ private fun VoiceStatusPanel(
         } else {
             VoiceRoundButton("\u0986\u09ac\u09be\u09b0", buttonSize, filled = true, onClick = onRetry) {
                 IconRetry(Modifier.size(buttonSize * 0.52f), it)
+            }
+            if (isTrouble) {
+                // S106: sticky panels need an explicit dismiss.
+                Spacer(modifier = Modifier.width(if (compact) 6.dp else 8.dp))
+                VoiceRoundButton("\u09ac\u09be\u09a4\u09bf\u09b2", buttonSize, filled = false, onClick = onCancel) {
+                    IconClose(Modifier.size(buttonSize * 0.52f), it)
+                }
             }
         }
     }
