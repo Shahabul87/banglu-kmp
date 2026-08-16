@@ -273,7 +273,17 @@ fun FrameWindowScope.EditorScreen(startInTutorial: Boolean = false) {
 
     MaterialTheme(colorScheme = darkColorScheme(background = Bg, surface = PageCard)) {
         Column(Modifier.fillMaxSize().background(Bg).onPreviewKeyEvent { e ->
-            if (e.type != KeyEventType.KeyDown || !(e.isMetaPressed || e.isCtrlPressed)) return@onPreviewKeyEvent false
+            if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+            // S77: Shift+Space keeps the forming word as typed English —
+            // no conversion (parity with the web editor and extension).
+            if (e.key == Key.Spacebar && e.isShiftPressed && !e.isMetaPressed && !e.isCtrlPressed) {
+                if (state.commitFormingAsEnglish()) {
+                    syncFromState(); refreshTitle()
+                    return@onPreviewKeyEvent true
+                }
+                return@onPreviewKeyEvent false
+            }
+            if (!(e.isMetaPressed || e.isCtrlPressed)) return@onPreviewKeyEvent false
             when {
                 e.key == Key.S && e.isShiftPressed -> { doSaveAs(); true }
                 e.key == Key.S -> { doSave(); true }

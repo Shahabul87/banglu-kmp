@@ -163,6 +163,23 @@ class EditorState(
         commitFormingInternal()
     }
 
+    /** S77: Shift+Space — commit the forming word as the raw ENGLISH that
+     *  was typed, plus a trailing space (no conversion, no learning). The
+     *  Avro-standard escape hatch for names, emails and technical terms.
+     *  Returns false when nothing is forming so the caller can let the
+     *  plain space through. */
+    fun commitFormingAsEnglish(): Boolean {
+        if (!forming) return false
+        pushUndo()
+        insertCommitted(formingRaw + " ")
+        formingRaw = ""
+        formingBangla = ""
+        candidates = emptyList()
+        popupDismissed = false
+        generation++
+        return true
+    }
+
     internal fun commitFormingInternal() {
         if (!forming) return
         pushUndo()

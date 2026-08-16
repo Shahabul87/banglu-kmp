@@ -166,6 +166,10 @@
     const el = e.target;
     if (!isEditable(el)) return;
     if (e.key !== " ") return;
+    // S77: Shift+Space keeps the word as typed English — skip conversion
+    // and let the browser insert the space itself (parity with the web
+    // editor and desktop app).
+    if (e.shiftKey) { strip.hide(); return; }
     const w = wordBefore(el);
     if (!w) return;
     e.preventDefault();
