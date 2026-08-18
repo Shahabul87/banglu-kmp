@@ -22,8 +22,8 @@ android {
         applicationId = "com.banglu.keyboard"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2103
-        versionName = "1.5.66"
+        versionCode = 2104
+        versionName = "1.5.67"
     }
 
     signingConfigs {
@@ -108,21 +108,27 @@ val verifyImePrivacyBoundary by tasks.registering {
     val manifestFile = layout.projectDirectory.file("src/main/AndroidManifest.xml")
     val accountSourceDir = rootProject.layout.projectDirectory.dir("android_account/src/main/kotlin/com/banglu/keyboard")
     val accountManifestFile = rootProject.layout.projectDirectory.file("android_account/src/main/AndroidManifest.xml")
+    // S108: the shared engine runs inside the IME process too — a network
+    // dependency added there would be invisible to a keyboard-only scan.
+    val sharedCommonDir = rootProject.layout.projectDirectory.dir("shared/src/commonMain/kotlin")
+    val sharedAndroidDir = rootProject.layout.projectDirectory.dir("shared/src/androidMain/kotlin")
 
     inputs.dir(keyboardSourceDir)
     inputs.dir(accountSourceDir)
+    inputs.dir(sharedCommonDir)
     inputs.file(manifestFile)
     inputs.file(accountManifestFile)
 
     doLast {
-        val hotPathFiles = listOf(
+        // S108: renamed from a 9-file whitelist to "every file in the IME
+        // process package" — the whitelist silently skipped renamed files and
+        // never saw new ones. These named files must still EXIST so a rename
+        // is caught instead of un-scanned.
+        val mustExistHotPathFiles = listOf(
             "BangluIMEService.kt",
             "ComposeKeyboardView.kt",
             "KeyboardState.kt",
             "AndroidDictionaryLoader.kt",
-            "EmojiData.kt",
-            "EmojiKeywords.kt",
-            "BanglaPhrases.kt",
             "BangluComposeHost.kt",
             "BangluProcessGuards.kt"
         )
@@ -135,17 +141,35 @@ val verifyImePrivacyBoundary by tasks.registering {
             "BillingClient",
             "HttpURLConnection",
             "java.net.URL",
-            "URL("
+            "URL(",
+            // S108: whole client families, not just the two classes the
+            // account module happens to use today.
+            "okhttp",
+            "io.ktor",
+            "HttpClient(",
+            "java.net.Socket",
+            "InetAddress",
+            "URLConnection"
         )
 
         val violations = mutableListOf<String>()
-        hotPathFiles.forEach { relativePath ->
-            val file = keyboardSourceDir.file(relativePath).asFile
-            if (!file.exists()) return@forEach
-            val text = file.readText()
-            forbiddenTokens.forEach { token ->
-                if (text.contains(token)) {
-                    violations += "$relativePath must not reference `$token`"
+        mustExistHotPathFiles.forEach { relativePath ->
+            if (!keyboardSourceDir.file(relativePath).asFile.exists()) {
+                violations += "$relativePath is gone — update verifyImePrivacyBoundary if it was renamed"
+            }
+        }
+        val scanRoots = listOf(
+            keyboardSourceDir.asFile to "android-keyboard",
+            sharedCommonDir.asFile to "shared/commonMain",
+            sharedAndroidDir.asFile to "shared/androidMain"
+        )
+        scanRoots.forEach { (root, label) ->
+            root.walkTopDown().filter { it.isFile && it.extension == "kt" }.forEach { file ->
+                val text = file.readText()
+                forbiddenTokens.forEach { token ->
+                    if (text.contains(token)) {
+                        violations += "$label/${file.name} must not reference `$token`"
+                    }
                 }
             }
         }

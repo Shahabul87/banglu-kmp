@@ -24,6 +24,29 @@ object FileStorage : PlatformStorage {
             .getOrElse { mutableListOf() }
     }
 
+    // S108 (invariant #10): tmp + atomic replace, same pattern as DraftStore
+    // and the macOS IME's LearnedStore. A plain writeText interrupted
+    // mid-write corrupted learned.json; readAll then swallowed the parse
+    // error into an empty list and the NEXT save persisted that empty list —
+    // silent loss of the whole shared learning brain.
+    private fun writeRows(rows: List<Row>) {
+        val tmp = File(dir, "learned.json.tmp")
+        tmp.writeText(json.encodeToString(rows))
+        try {
+            java.nio.file.Files.move(
+                tmp.toPath(), file.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+            )
+        } catch (_: Exception) {
+            // Filesystem without atomic move: still replace — non-atomic beats stale.
+            java.nio.file.Files.move(
+                tmp.toPath(), file.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+            )
+        }
+    }
+
     override suspend fun getLearnedWords(): List<LearnedWord> =
         readAll().mapIndexed { i, r -> LearnedWord("d$i", r.p, r.b, r.f, r.t) }
 
@@ -37,7 +60,7 @@ object FileStorage : PlatformStorage {
             } else {
                 rows.add(Row(phonetic, bengali, frequency, System.currentTimeMillis()))
             }
-            file.writeText(json.encodeToString(rows))
+            writeRows(rows)
         }
     }
 
@@ -47,7 +70,7 @@ object FileStorage : PlatformStorage {
         synchronized(lock) {
             val rows = readAll()
             val kept = rows.filterNot { it.p == phonetic && it.f < 120 }
-            if (kept.size != rows.size) file.writeText(json.encodeToString(kept))
+            if (kept.size != rows.size) writeRows(kept)
         }
     }
 

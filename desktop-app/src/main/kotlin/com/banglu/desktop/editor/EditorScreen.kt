@@ -212,13 +212,32 @@ fun FrameWindowScope.EditorScreen(startInTutorial: Boolean = false) {
         SmartEngineAdapter.configurePersistenceScope(scope)
         val learning = drafts.loadPrefs().learningEnabled
         SmartEngineAdapter.configureLearning(enabled = learning, personalDictionary = learning)
-        withContext(Dispatchers.Default) {
-            SmartEngineAdapter.initializeSync()
-            val db = findDictionaryFile()
-            SmartEngineAdapter.setPhoneticIndex(JvmSqlitePhoneticIndexStore(db))
-            SmartEngineAdapter.initialize(FileStorage, JvmSqliteDictionaryLoader(db))
+        // S108: a missing/corrupt/stale-version sqlite used to throw out of
+        // this LaunchedEffect (uncaught) or attach silently under a false
+        // "পূর্ণ অভিধান ✓". Boot failures now degrade to the seed engine with
+        // learned words still loaded, and the status says so.
+        val boot = withContext(Dispatchers.Default) {
+            runCatching {
+                SmartEngineAdapter.initializeSync()
+                val db = findDictionaryFile()
+                val store = JvmSqlitePhoneticIndexStore(db)
+                check(store.isAvailable) {
+                    "dictionary.sqlite rejected (missing table or wrong version): ${db.absolutePath}"
+                }
+                SmartEngineAdapter.setPhoneticIndex(store)
+                SmartEngineAdapter.initialize(FileStorage, JvmSqliteDictionaryLoader(db))
+            }
         }
-        status = "পূর্ণ অভিধান ✓"
+        boot.fold(
+            onSuccess = { status = "পূর্ণ অভিধান ✓" },
+            onFailure = { e ->
+                System.err.println("Banglu dictionary boot failed: $e")
+                runCatching {
+                    withContext(Dispatchers.Default) { SmartEngineAdapter.initialize(FileStorage) }
+                }
+                status = "অভিধান লোড হয়নি — সীমিত মোডে চলছে"
+            },
+        )
     }
 
     // Draft restore on launch (spec §5) — the text is just THERE, no dialog.

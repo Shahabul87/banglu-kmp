@@ -1,35 +1,43 @@
 # Play Console — Data Safety Form Answers (Banglu Keyboard)
 
 Ready-to-enter answers for **Play Console → App content → Data safety**.
-Derived from the 2026-07-10 code audit (verifyImePrivacyBoundary enforced;
-IME process offline; network only in the :ui process account/sync/billing
-code and the system speech recognizer).
+Derived from the 2026-07-10 code audit, reconciled 2026-08-17 (S108) against
+the ACTUAL launch build: the account feature is disabled and the merged
+release manifest carries **no INTERNET permission at all** (verifiable via
+`aapt dump permissions` on the .aab — the manifest merger REJECTS the
+account library's INTERNET/BILLING requests). Sign-in, sync, and purchase
+collection are therefore IMPOSSIBLE in this build; declaring them would
+contradict the permission dump and invite reviewer questions.
 
-## Section 1 — Data collection and security
+**Declare for the launch build: Audio only.** When the account feature ships
+(INTERNET restored), switch to the "future account build" answers kept in
+the appendix below.
+
+## Section 1 — Data collection and security (LAUNCH BUILD)
 
 | Question | Answer |
 |---|---|
-| Does your app collect or share any of the required user data types? | **Yes** (only when the user signs in / uses voice) |
-| Is all of the user data collected by your app encrypted in transit? | **Yes** (HTTPS backend; auth tokens AES/GCM at rest) |
-| Do you provide a way for users to request that their data is deleted? | **Not applicable** — this version has NO accounts and collects NO data off-device. Learned words live only on the device and are clearable in Settings (and removed by uninstall). |
+| Does your app collect or share any of the required user data types? | **Yes** — Audio only (voice typing sends speech to the device's speech provider). Nothing else leaves the device. |
+| Is all of the user data collected by your app encrypted in transit? | **Yes** (speech goes through the OS SpeechRecognizer's own encrypted channel; the app itself has no network permission). |
+| Do you provide a way for users to request that their data is deleted? | **Yes** — no data is stored off-device by Banglu; audio is processed ephemerally by the OS speech provider and never stored by Banglu. On-device learned words are clearable in Settings and removed by uninstall. |
 
-## Section 2 — Data types
-
-### Collected: Personal info
-- **Email address / Name** — Collected, NOT shared. Optional (only with account sign-in). Purpose: Account management. Encrypted in transit: yes.
+## Section 2 — Data types (LAUNCH BUILD)
 
 ### Collected: Audio
 - **Voice or sound recordings** — Collected (processed ephemerally), **shared with the device's speech provider (e.g., Google)** for transcription. Optional (only when the user taps the mic, after the prominent-disclosure screen). Purpose: App functionality. Not stored by Banglu.
 
-### Collected: App activity (only if signed in + sync)
-- **Other user-generated content** (custom typing formulas / dictionary preferences synced to the Banglu backend) — Collected, NOT shared. Optional. Purpose: App functionality (cross-device sync).
-
-### Collected: Purchase history (only if subscribing)
-- **Purchase history** — Google Play Billing subscription state validated with the backend. Collected, NOT shared. Purpose: App functionality.
-
 ### NOT collected (answer No)
 - Keystrokes / typed text: **never leaves the device**. Learned words, clipboard history, and the dictionary are local-only.
-- Location, contacts, photos, files, health, financial info, device IDs, analytics/diagnostics telemetry: none. (S44 launch build: no accounts, no billing, and no INTERNET permission — verifiable via `aapt dump permissions`.)
+- Personal info (email/name), app activity, purchase history: the launch build has no accounts, no billing, and no INTERNET permission — these CANNOT be collected.
+- Location, contacts, photos, files, health, financial info, device IDs, analytics/diagnostics telemetry: none.
+
+## Appendix — future account build (do NOT enter until INTERNET returns)
+
+When the account/sync/billing feature ships in the :ui process, add:
+- **Email address / Name** — Collected, NOT shared. Optional (only with account sign-in). Purpose: Account management. Encrypted in transit: yes (HTTPS backend; auth tokens AES/GCM at rest).
+- **App activity** (custom typing formulas / dictionary preferences synced to the Banglu backend) — Collected, NOT shared. Optional. Purpose: App functionality (cross-device sync).
+- **Purchase history** — Google Play Billing subscription state validated with the backend. Collected, NOT shared. Purpose: App functionality.
+- Section 1 deletion answer becomes: **Yes** — account deletion in-app + backend erasure.
 
 ## Section 3 — Declarations that reviewers check for keyboards
 

@@ -31,8 +31,11 @@ Future revenue = optional premium (AI rewrite via the :ui process, power-user
 packs). NO cloud API on the keystroke path — decided 2026-07-03 (latency,
 cost, and privacy-promise reasons; see memory + git history).
 
-**Current status (2026-07-20):** ONE ENGINE, FIVE SURFACES.
-- **Android** v1.5.39 (2076), db 3.8.7 (S59: মূর্ধন্য-ষ manual aliases) (S56: tester round — URI-field conversion,
+**Current status (2026-08-17):** ONE ENGINE, FIVE SURFACES.
+- **Android** v1.5.67 (2104), db 3.9.2 — S108 production-hardening round
+  (cross-surface dictionary version gate via `DictionaryVersion.REQUIRED`,
+  desktop engine-lane + store error handling, atomic learned.json, macOS
+  boot-failure states). Earlier: (S59: মূর্ধন্য-ষ manual aliases) (S56: tester round — URI-field conversion,
   voice liveness watchdog + word-level partial diff, likh preview parity,
   emphatic-o layer, shw→ssh chat aliases, screenshot loanword; S57: emoji
   overhaul — fake procedural GIFs removed, WhatsApp-style two-row panel,
@@ -85,8 +88,8 @@ banglu-kmp/
 │       │                    Consumed by browser-extension AND macos-ime.
 │       └── jsTest/          S45 web-parity wall + S51 learning tests
 │                            (gate: ./gradlew :shared:jsNodeTest)
-├── shared/banglu-slim.json      ← S45 slim in-memory dictionary (17MB;
-│                                  1.8MB gz) for JS surfaces — regenerate via
+├── shared/banglu-slim.json      ← S45 slim in-memory dictionary (22MB;
+│                                  2.1MB gz) for JS surfaces — regenerate via
 │                                  dictionary-compiler --slim; untracked
 ├── android-keyboard/          ← the ANDROID APP (IME + UI activities)
 │   └── src/main/kotlin/com/banglu/keyboard/
@@ -253,9 +256,11 @@ tier 0 = suggestible corpus words; priority 0 = canonical romanization owner,
         │     --args="<abs>/banglu-web/public <abs>/dictionary.sqlite"
         ▼
 dictionary.sqlite (words, phonetic_index ~1.35M rows, english_lexicon,
-                   trigram_triples, disambiguation)  — version gate:
-                   DictionaryCompiler "3.8.6" == AndroidDictionaryLoader
-                   REQUIRED_DB_VERSION
+                   trigram_triples, disambiguation)  — version gate (S108):
+                   shared/.../DictionaryVersion.REQUIRED is the ONE bump
+                   point — the compiler stamps it, Android/JVM stores and
+                   the JS attachSlimDictionary all refuse a mismatch, and
+                   build.sh/build-engine.sh assert it before bundling
         ▼  cp to android-keyboard/src/main/assets/dictionary.sqlite
         ▼  cp to ./dictionary.sqlite   ← REPO ROOT — JVM tests read THIS
 ```
@@ -280,9 +285,9 @@ the engine and which dictionary tier they carry:
 |--------------------|---------------------------------|-----------------------|
 | Android IME        | JVM/ART, adapter singleton      | full sqlite (143MB), lite fallback |
 | Desktop editor     | JVM (Compose Desktop, jpackage) | full sqlite via JDBC  |
-| Browser extension  | Kotlin/JS in the page/worker    | slim JSON (17MB mem)  |
-| macOS input method | Kotlin/JS in JavaScriptCore     | slim JSON (17MB mem)  |
-| Web (banglu-web)   | Kotlin/JS in page + Node routes | slim JSON (17MB mem)  |
+| Browser extension  | Kotlin/JS in the page/worker    | slim JSON (22MB mem)  |
+| macOS input method | Kotlin/JS in JavaScriptCore     | slim JSON (22MB mem)  |
+| Web (banglu-web)   | Kotlin/JS in page + Node routes | slim JSON (22MB mem)  |
 
 - JS artifact: `./gradlew :shared:jsBrowserProductionLibraryDistribution` →
   `shared/build/dist/js/productionLibrary/banglu-engine.js` → esbuild bundle

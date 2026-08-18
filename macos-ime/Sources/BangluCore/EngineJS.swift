@@ -18,6 +18,12 @@ public final class EngineJS: BangluEngine {
     private let context: JSContext
     private let engine: JSValue
 
+    /// S108: non-nil when a slim dictionary was requested but rejected —
+    /// unreadable, malformed, or version-mismatched (the Kotlin engine throws
+    /// on drift since S108). The engine stays alive on seeds; hosts surface
+    /// this instead of silently shipping a degraded vocabulary.
+    public private(set) var slimAttachError: String?
+
     public init(bundleJS: URL, slimJSON: URL?) throws {
         guard let ctx = JSContext() else { throw EngineJSError.loadFailed("JSContext") }
         var jsError: String?
@@ -42,11 +48,27 @@ public final class EngineJS: BangluEngine {
         engine = eng
 
         engine.invokeMethod("initSeed", withArguments: [])
-        if let slim = slimJSON, FileManager.default.fileExists(atPath: slim.path) {
-            let json = try String(contentsOf: slim, encoding: .utf8)
-            engine.invokeMethod("attachSlimDictionary", withArguments: [json])
-        }
         if let e = jsError { throw EngineJSError.loadFailed("engine init: \(e)") }
+
+        // S108: slim attach is SOFT-fail — a stale or corrupt slim degrades
+        // to the seed engine (still types Bangla) instead of killing the
+        // whole engine and echoing raw English forever.
+        if let slim = slimJSON {
+            if FileManager.default.fileExists(atPath: slim.path) {
+                do {
+                    let json = try String(contentsOf: slim, encoding: .utf8)
+                    engine.invokeMethod("attachSlimDictionary", withArguments: [json])
+                    if let e = jsError {
+                        slimAttachError = e
+                        jsError = nil
+                    }
+                } catch {
+                    slimAttachError = String(describing: error)
+                }
+            } else {
+                slimAttachError = "slim dictionary missing: \(slim.path)"
+            }
+        }
     }
 
     public func convert(_ raw: String) -> String {

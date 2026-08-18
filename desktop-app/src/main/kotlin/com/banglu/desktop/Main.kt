@@ -122,8 +122,10 @@ private fun MiniConverter(onDone: (String) -> Unit, onDismiss: () -> Unit) {
     fun recompute(text: String) {
         input = text
         scope.launch(Dispatchers.Default) {
+            // S108: through the facade so this shares the editor's engine
+            // lock — a direct adapter call here raced the refine coroutines.
             val bn = text.split(Regex("(?<=\\s)|(?=\\s)")).joinToString("") { p ->
-                if (p.isBlank()) p else SmartEngineAdapter.convertWord(p.trim()).bengali
+                if (p.isBlank()) p else com.banglu.desktop.editor.RealEngineFacade.convert(p.trim())
             }
             withContext(Dispatchers.Main) { output = bn }
         }

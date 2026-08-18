@@ -415,6 +415,46 @@ do {
     // (2) post-ready suggestions include the primary.
     let postSuggs = bg.suggestions("kemon", limit: 6)
     check("BackgroundEngine.postReadySuggestionsContainPrimary", postSuggs.contains("কেমন"), "got \(postSuggs)")
+    // S108: a healthy full boot reports .ready and no notice.
+    var isReady = false; if case .ready = bg.state { isReady = true }
+    check("BackgroundEngine.fullBootStateReady", isReady, "state \(bg.state)")
+    check("BackgroundEngine.fullBootNoNotice", bg.bootFailureNotice == nil, "unexpected notice \(String(describing: bg.bootFailureNotice))")
+}
+
+// S108: boot-failure hardening. A broken bundle must land in .failed —
+// logged, notice available, ready NEVER flips — instead of the old silent
+// permanent raw echo (`try?` swallowed the error but still set ready=true).
+do {
+    let bad = BackgroundEngine(
+        bundleJS: URL(fileURLWithPath: "/nonexistent-banglu-bundle.js"),
+        slimJSON: nil, learnedJSON: nil)
+    let timeout = Date().addingTimeInterval(10)
+    while case .loading = bad.state, Date() < timeout { usleep(10_000) }
+    var isFailed = false; if case .failed = bad.state { isFailed = true }
+    check("BackgroundEngine.badBundleStateFailed", isFailed, "state \(bad.state)")
+    check("BackgroundEngine.badBundleNeverReady", !bad.ready, "ready was true")
+    check("BackgroundEngine.badBundleHasNotice", bad.bootFailureNotice != nil, "no notice")
+    let echoed = bad.convert("kemon")
+    check("BackgroundEngine.badBundleEchoesRaw", echoed == "kemon", "got \(echoed)")
+}
+
+// S108: a version-stale slim (the Kotlin engine rejects it at attach since
+// S108) must degrade to .seedOnly WITH a notice — the engine keeps typing
+// Bangla from seeds, never full failure, never silence.
+do {
+    let staleSlim = FileManager.default.temporaryDirectory
+        .appendingPathComponent("banglu-stale-slim-\(ProcessInfo.processInfo.processIdentifier).json")
+    try! #"{"version":"0.0.0","index":[],"english":[],"words":[]}"#
+        .data(using: .utf8)!.write(to: staleSlim)
+    defer { try? FileManager.default.removeItem(at: staleSlim) }
+    let bg = BackgroundEngine(bundleJS: artifacts.bundle, slimJSON: staleSlim, learnedJSON: nil)
+    let timeout = Date().addingTimeInterval(30)
+    while case .loading = bg.state, Date() < timeout { usleep(10_000) }
+    var seedOnly = false; if case .seedOnly = bg.state { seedOnly = true }
+    check("BackgroundEngine.staleSlimStateSeedOnly", seedOnly, "state \(bg.state)")
+    let converted = bg.convert("ami")
+    check("BackgroundEngine.staleSlimStillTypesBangla", converted == "আমি", "got \(converted)")
+    check("BackgroundEngine.staleSlimHasNotice", bg.bootFailureNotice != nil, "no notice")
 }
 
 print("\(checkCount) checks: \(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILURE(S)")")

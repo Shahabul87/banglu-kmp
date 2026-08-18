@@ -9,9 +9,19 @@ class BangluInputController: IMKInputController {
     private var composer: Composer?
     private var candidateUI: CandidateUI = PanelCandidateUI()
 
+    /// S108: once per process — a permanently degraded engine announces
+    /// itself in the candidate panel instead of masquerading as a broken
+    /// keyboard (raw echo with zero signal).
+    private static var bootNoticeShown = false
+
     override func activateServer(_ sender: Any!) {
         super.activateServer(sender)
         AppState.reloadLearned()
+        if !Self.bootNoticeShown, let notice = AppState.engine.bootFailureNotice,
+           let client = sender as? IMKTextInput {
+            Self.bootNoticeShown = true
+            candidateUI.show(candidates: [notice], highlight: 0, client: client)
+        }
         let bundleID = (sender as? IMKTextInput)?.bundleIdentifier()
         let plain = AppState.compat.mode(forBundleID: bundleID) == .plain
         let engine = AppState.engine

@@ -73,11 +73,19 @@ copyBtn.addEventListener("click", async () => {
   ready = true;
   status.textContent = "সিড ইঞ্জিন";
   render();
-  const url = (globalThis.chrome?.runtime?.getURL)
-    ? chrome.runtime.getURL("vendor/banglu-slim.json")
-    : "./vendor/banglu-slim.json"; // dev mode: served over http
-  const res = await fetch(url);
-  engine.attachSlimDictionary(await res.text());
-  status.textContent = "পূর্ণ অভিধান ✓";
+  // S108: attach failure (fetch error, malformed slim, or the engine's
+  // version gate) used to be an unhandled promise rejection that left the
+  // popup silently on "সিড ইঞ্জিন" — now it says so and logs why.
+  try {
+    const url = (globalThis.chrome?.runtime?.getURL)
+      ? chrome.runtime.getURL("vendor/banglu-slim.json")
+      : "./vendor/banglu-slim.json"; // dev mode: served over http
+    const res = await fetch(url);
+    engine.attachSlimDictionary(await res.text());
+    status.textContent = "পূর্ণ অভিধান ✓";
+  } catch (e) {
+    console.error("Banglu: slim dictionary attach failed, staying on seeds", e);
+    status.textContent = "সীমিত অভিধান — পূর্ণ অভিধান লোড হয়নি";
+  }
   render();
 })();

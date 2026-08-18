@@ -5971,17 +5971,22 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * Bulk-load persisted user bigram pairs (called once at initialization).
      */
     fun setUserBigrams(pairs: Map<String, Map<String, Int>>) {
-        userBigrams.clear()
-        for ((previous, followers) in pairs) {
-            val prev = previous.trim()
-            if (prev.isEmpty() || followers.isEmpty()) continue
-            userBigrams[prev] = followers
-                .entries
-                .sortedByDescending { it.value }
-                .take(USER_BIGRAM_MAX_FOLLOWERS)
-                .associate { it.key.trim() to it.value }
-                .filterKeys { it.isNotEmpty() }
-                .toMutableMap()
+        // S108: same lock every other userBigrams accessor takes — the
+        // production full-init path runs on a pre-publication engine, but the
+        // loader-less light path hits a live one.
+        com.banglu.engine.util.runSynchronized(userBigrams) {
+            userBigrams.clear()
+            for ((previous, followers) in pairs) {
+                val prev = previous.trim()
+                if (prev.isEmpty() || followers.isEmpty()) continue
+                userBigrams[prev] = followers
+                    .entries
+                    .sortedByDescending { it.value }
+                    .take(USER_BIGRAM_MAX_FOLLOWERS)
+                    .associate { it.key.trim() to it.value }
+                    .filterKeys { it.isNotEmpty() }
+                    .toMutableMap()
+            }
         }
     }
 

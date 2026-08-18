@@ -458,7 +458,9 @@ fun main(args: Array<String>) {
         // 7. Insert metadata
         val insertMeta = connection.prepareStatement("INSERT INTO metadata (key, value) VALUES (?, ?)")
         val metadataEntries = mapOf(
-            "version" to "3.9.2",
+            // S108: stamped from the shared constant so compiler, engine, and
+            // every surface gate bump together in exactly one place.
+            "version" to com.banglu.engine.DictionaryVersion.REQUIRED,
             "word_count" to count.toString(),
             "disambiguation_count" to mappings.size.toString(),
             "extended_entry_count" to extendedEntryCount.toString(),

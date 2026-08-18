@@ -314,6 +314,11 @@ class BangluIMEService : InputMethodService(),
     // ── Settings (read from SharedPreferences) ──────────────────────────
     private lateinit var prefs: SharedPreferences
     private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        // S108: diagnostics counters live in the same prefs file; a
+        // session-end flush writes ~20 diag_* keys and each one used to
+        // trigger a full reloadSettings() on main. Telemetry never changes a
+        // setting.
+        if (key != null && key.startsWith("diag_")) return@OnSharedPreferenceChangeListener
         reloadSettings()
         if (key == "auth_user_id" || key == "auth_email" || key == "subscription_plan" || key == "lite_mode") {
             reloadUserLearningAsync()
@@ -695,9 +700,12 @@ class BangluIMEService : InputMethodService(),
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - lastEngineFailureLogAt >= 60_000) {
             lastEngineFailureLogAt = now
+            // S108: exception CLASS only — a library exception message could
+            // in principle embed input-derived text, and this log survives
+            // release builds.
             Log.w(
                 TAG,
-                "engine failure #$engineFailureCount at $where: ${e::class.java.simpleName}: ${e.message?.take(120)}"
+                "engine failure #$engineFailureCount at $where: ${e::class.java.simpleName}"
             )
             recordImeEvent("engine_failure_${where}_${e::class.java.simpleName}")
         }
@@ -776,11 +784,20 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
-    private fun safeConvertWithContext(input: String): ConversionResult {
+    /** S108: [prev2]/[prev1] default to the live fields, but the fast-commit
+     *  reconcile passes a snapshot captured BEFORE updatePredictions runs —
+     *  otherwise the authoritative conversion reranked against its own
+     *  just-committed preview instead of the two true previous words, and a
+     *  fast commit could resolve differently from a cached commit. */
+    private fun safeConvertWithContext(
+        input: String,
+        prev2: String = secondLastCommittedBengali,
+        prev1: String = lastCommittedBengali,
+    ): ConversionResult {
         val start = System.nanoTime()
         return try {
             SmartEngineAdapter.convertWordWithContext(
-                input, listOf(secondLastCommittedBengali, lastCommittedBengali)
+                input, listOf(prev2, prev1)
             )
         } catch (e: Throwable) {
             recordEngineFailure("context_convert", e)
@@ -3822,12 +3839,17 @@ class BangluIMEService : InputMethodService(),
         // Pair learning needs the word BEFORE this one; updatePredictions
         // overwrites it, so capture first and record in the reconcile step.
         val previousWord = lastCommittedBengali
+        // S108: the conversion context too — updatePredictions mutates both
+        // fields before the reconcile coroutine runs its conversion.
+        val contextPrev2 = secondLastCommittedBengali
         val sessionToken = imeTextSessionToken
         // Context/predictions use the visible word immediately; the reconcile
         // below re-runs them with the authoritative word if it differs.
         updatePredictions(committedNow)
         serviceScope.launch {
-            val result = withContext(engineLane) { safeConvertWithContext(phonetic) }
+            val result = withContext(engineLane) {
+                safeConvertWithContext(phonetic, prev2 = contextPrev2, prev1 = previousWord)
+            }
             reconcileFastCommit(phonetic, committedNow, previousWord, sessionToken, result, appendText)
         }
     }

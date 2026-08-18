@@ -27,13 +27,24 @@ import kotlinx.coroutines.withContext
 object SmartEngineAdapter {
     @Volatile
     private var engine: SmartEngine? = null
+    // S108: these fields are written on the init/settings thread (Android:
+    // Main) and read on the engine lane — @Volatile makes the publication
+    // safe; the preference maps additionally share [preferenceLock] because
+    // clear+putAll and get can otherwise tear mid-rebuild.
+    @Volatile
     private var storage: PlatformStorage? = null
+    private val preferenceLock = Any()
     private val customPreferenceMap = mutableMapOf<String, String>()
     private val selectedPreferenceMap = mutableMapOf<String, String>()
+    @Volatile
     private var learningEnabled = true
+    @Volatile
     private var personalDictionaryEnabled = true
+    @Volatile
     private var persistenceScope: CoroutineScope? = null
+    @Volatile
     private var phoneticStore: com.banglu.engine.platform.PhoneticIndexStore? = null
+    @Volatile
     private var engineFullyLoaded = false
 
     internal fun getEngine(): SmartEngine = com.banglu.engine.util.runSynchronized(this) {
@@ -171,10 +182,12 @@ object SmartEngineAdapter {
     }
 
     private fun applyPreferenceMaps(maps: Pair<Map<String, String>, Map<String, String>>) {
-        customPreferenceMap.clear()
-        customPreferenceMap.putAll(maps.first)
-        selectedPreferenceMap.clear()
-        selectedPreferenceMap.putAll(maps.second)
+        com.banglu.engine.util.runSynchronized(preferenceLock) {
+            customPreferenceMap.clear()
+            customPreferenceMap.putAll(maps.first)
+            selectedPreferenceMap.clear()
+            selectedPreferenceMap.putAll(maps.second)
+        }
     }
 
     /**
@@ -427,7 +440,9 @@ object SmartEngineAdapter {
         if (key.isEmpty() || cleanBengali.isBlank()) return
         if (!personalDictionaryEnabled) return
 
-        customPreferenceMap[key] = cleanBengali
+        com.banglu.engine.util.runSynchronized(preferenceLock) {
+            customPreferenceMap[key] = cleanBengali
+        }
         getEngine().addWord(key, cleanBengali, CUSTOM_CONVERSION_FREQUENCY)
         getEngine().clearCache()
         persistLearnedWord(key, cleanBengali, CUSTOM_CONVERSION_FREQUENCY)
@@ -496,13 +511,18 @@ object SmartEngineAdapter {
             // যেটা সিলেক্ট করেছিলাম সেটাই বার বার আসছে"). Recording the
             // primary as a preference stays forbidden (S26 — it would freeze
             // this build's ranking against future engine fixes).
-            if (selectedPreferenceMap.remove(key) != null) {
+            val removed = com.banglu.engine.util.runSynchronized(preferenceLock) {
+                selectedPreferenceMap.remove(key) != null
+            }
+            if (removed) {
                 getEngine().evictCachedWord(key)
                 removeLearnedPreference(key)
             }
             return
         }
-        selectedPreferenceMap[key] = cleanBengali
+        com.banglu.engine.util.runSynchronized(preferenceLock) {
+            selectedPreferenceMap[key] = cleanBengali
+        }
         // Suggestion taps are preferences, not dictionary mutations. Explicit
         // user dictionary formulas still go through addCustomConversion().
         // S66: a preference affects only this key — evict it alone instead of
@@ -517,8 +537,10 @@ object SmartEngineAdapter {
     suspend fun resetLearning() {
         storage?.clearLearnedWords()
         storage?.clearUserBigrams()
-        customPreferenceMap.clear()
-        selectedPreferenceMap.clear()
+        com.banglu.engine.util.runSynchronized(preferenceLock) {
+            customPreferenceMap.clear()
+            selectedPreferenceMap.clear()
+        }
         engine = null
         engineFullyLoaded = false
     }
@@ -538,13 +560,19 @@ object SmartEngineAdapter {
     // lane (S75 law) — same contract as SmartEngine itself.
 
     private val englishTyping = com.banglu.engine.english.EnglishTypingEngine()
+    @Volatile
     private var englishLearningLoaded = false
 
     /** Load the persisted English learning blob once (idempotent). */
     suspend fun ensureEnglishLearningLoaded() {
         if (englishLearningLoaded) return
-        englishLearningLoaded = true
+        // S108: flag flips only AFTER the load lands — setting it first let a
+        // concurrent englishAutocorrect run against an empty word list (the
+        // exact hazard the doc comment warns about), and a failed load was
+        // never retried. Callers all arrive on the single engine lane, so the
+        // check-then-load pair cannot double-run.
         storage?.loadEnglishUserData()?.let { englishTyping.load(it) }
+        englishLearningLoaded = true
     }
 
     fun englishCompletions(prefix: String, limit: Int = 3): List<String> =
@@ -570,12 +598,14 @@ object SmartEngineAdapter {
     // personal-dictionary setting.
 
     private val identityAssist = com.banglu.engine.assist.IdentityAssist()
+    @Volatile
     private var identityLoaded = false
 
     suspend fun ensureIdentityLoaded() {
         if (identityLoaded) return
-        identityLoaded = true
+        // S108: same flip-after-load ordering as ensureEnglishLearningLoaded.
         storage?.loadIdentityUserData()?.let { identityAssist.load(it) }
+        identityLoaded = true
     }
 
     fun identityDomainSuggestions(token: String, limit: Int = 3): List<String> =
@@ -633,8 +663,10 @@ object SmartEngineAdapter {
     fun reset() {
         engine = null
         storage = null
-        customPreferenceMap.clear()
-        selectedPreferenceMap.clear()
+        com.banglu.engine.util.runSynchronized(preferenceLock) {
+            customPreferenceMap.clear()
+            selectedPreferenceMap.clear()
+        }
         learningEnabled = true
         personalDictionaryEnabled = true
         persistenceScope = null
@@ -668,10 +700,10 @@ object SmartEngineAdapter {
             return result
         }
 
-        val learnedPreferred = if (learningEnabled) selectedPreferenceMap[key] else null
-        val preferred: String = customPreferenceMap[key]
-            ?: learnedPreferred
-            ?: return result
+        val preferred: String = com.banglu.engine.util.runSynchronized(preferenceLock) {
+            customPreferenceMap[key]
+                ?: if (learningEnabled) selectedPreferenceMap[key] else null
+        } ?: return result
         if (preferred == result.bengali) return result
 
         val alternatives = buildList {
@@ -694,10 +726,10 @@ object SmartEngineAdapter {
         if (!personalDictionaryEnabled) return suggestions
 
         val key = phonetic.normalizedPhonetic()
-        val learnedPreferred = if (learningEnabled) selectedPreferenceMap[key] else null
-        val preferred: String = customPreferenceMap[key]
-            ?: learnedPreferred
-            ?: return suggestions
+        val preferred: String = com.banglu.engine.util.runSynchronized(preferenceLock) {
+            customPreferenceMap[key]
+                ?: if (learningEnabled) selectedPreferenceMap[key] else null
+        } ?: return suggestions
         val index = suggestions.indexOfFirst { it.bengali == preferred }
         if (index < 0) {
             return listOf(

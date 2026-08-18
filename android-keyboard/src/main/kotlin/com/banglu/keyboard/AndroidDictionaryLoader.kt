@@ -31,7 +31,12 @@ class AndroidDictionaryLoader(
     companion object {
         private const val TAG = "BangluDictLoader"
         internal const val DB_FILENAME = "dictionary.sqlite"
-        internal const val REQUIRED_DB_VERSION = "3.9.2"
+        // S108: single bump point lives in shared (compiler stamps the same constant).
+        internal const val REQUIRED_DB_VERSION = com.banglu.engine.DictionaryVersion.REQUIRED
+
+        // S108: headroom on top of the asset size before starting a copy —
+        // filling the disk to the last byte breaks the rest of the phone.
+        private const val COPY_SPACE_MARGIN_BYTES = 64L * 1024 * 1024
     }
 
     /**
@@ -54,9 +59,17 @@ class AndroidDictionaryLoader(
     private val dbFile: File by lazy {
         val file = File(context.filesDir, DB_FILENAME)
         if (!file.exists() || databaseVersion(file) != REQUIRED_DB_VERSION) {
+            val tmpFile = File(context.filesDir, "$DB_FILENAME.tmp")
             try {
                 if (BuildConfig.DEBUG) Log.d(TAG, "Copying $DB_FILENAME from assets to ${file.absolutePath}")
-                val tmpFile = File(context.filesDir, "$DB_FILENAME.tmp")
+                if (!hasSpaceForCopy()) {
+                    // S108: don't start a ~151MB copy that cannot fit — the
+                    // partial tmp used to be left behind, permanently eating
+                    // the very space the failing device is short of, and got
+                    // re-truncated on every cold start. No user data logged.
+                    Log.e(TAG, "Not enough free storage for dictionary copy — staying seed-only")
+                    return@lazy file
+                }
                 context.assets.open(DB_FILENAME).use { input ->
                     tmpFile.outputStream().use { output ->
                         input.copyTo(output)
@@ -77,9 +90,32 @@ class AndroidDictionaryLoader(
                 // storage) leaves the keyboard seed-only FOREVER with zero
                 // trace in release builds. No user data in this log.
                 Log.e(TAG, "Failed to copy database from assets", e)
+                // S108: never leave a partial multi-MB tmp on a full disk.
+                runCatching { tmpFile.delete() }
             }
         }
         file
+    }
+
+    /**
+     * S108: true when filesDir has room for the asset copy plus a safety
+     * margin. Asset size comes from the AssetFileDescriptor when the asset is
+     * stored uncompressed; otherwise a conservative constant covers it.
+     * Fails open (returns true) if StatFs itself errors — the copy's own
+     * catch block then cleans up.
+     */
+    private fun hasSpaceForCopy(): Boolean {
+        val assetBytes = try {
+            context.assets.openFd(DB_FILENAME).use { it.length }
+        } catch (_: Exception) {
+            180L * 1024 * 1024
+        }
+        val availableBytes = try {
+            android.os.StatFs(context.filesDir.path).availableBytes
+        } catch (_: Exception) {
+            return true
+        }
+        return availableBytes >= assetBytes + COPY_SPACE_MARGIN_BYTES
     }
 
     /**

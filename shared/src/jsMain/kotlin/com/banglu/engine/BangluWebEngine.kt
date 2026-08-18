@@ -26,10 +26,21 @@ object BangluWebEngine {
         }
     }
 
-    /** Attach the slim dictionary (JSON string from banglu-slim.json). */
+    /**
+     * Attach the slim dictionary (JSON string from banglu-slim.json).
+     *
+     * S108: throws on a version mismatch — a stale slim silently shipping an
+     * old vocabulary is exactly the drift that put 3.8.10 in store zips while
+     * Android shipped 3.9.2. Hosts catch and stay on the seed engine.
+     */
     fun attachSlimDictionary(json: String) {
         initSeed()
         val slim = Json.decodeFromString<SlimDictionary>(json)
+        require(slim.version == DictionaryVersion.REQUIRED) {
+            "slim dictionary version ${slim.version} != engine required " +
+                "${DictionaryVersion.REQUIRED} — regenerate banglu-slim.json " +
+                "(dictionary-compiler: slim <db> <out.json>)"
+        }
         val entries = ArrayList<Pair<PhoneticIndexHit, String>>(slim.index.size)
         for (row in slim.index) {
             entries.add(
