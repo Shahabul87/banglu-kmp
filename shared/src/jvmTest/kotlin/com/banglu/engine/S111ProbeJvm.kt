@@ -22,7 +22,7 @@ class S111ProbeJvm {
             // glued samasa compounds (expected word glued)
             "dehogothoner", "dehogothon", "sposhtochihnit", "ekoiruup",
             "kromobinyasogot",
-            "chihnit", "deh", "deho", "dhap", "dhapo", "sposhto", "sposht", "gon", "gono", "gothoner", "ochihnit",
+            "chihnit", "deh", "deho", "dhap", "dhapo", "sposhto", "ato", "oswabhabikobhabei", "zounosongzog", "lyaminati",
         )
         for (k in keys) {
             val r = engine.convertWord(k)

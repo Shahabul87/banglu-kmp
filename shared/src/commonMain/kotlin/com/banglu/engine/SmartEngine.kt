@@ -761,6 +761,25 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * dictionary-layer result stands).
      */
     private fun storeBeatsDictionary(key: String, result: ConversionResult): ConversionResult? {
+        // S113 (ato class — the S27/S109 residual): a dictionary-layer exact
+        // hit at junk frequency (আটো@25 from the extended dict) must not
+        // silence a DECISIVELY stronger tier-A store word (অটো@77). The S7
+        // continuation bail inside tryCorpusPhoneticLookup is a composing-
+        // panic guard and rightly stays for close calls; this branch fires
+        // only on the decisive shape: dict word under 40, store top at 2x+.
+        if (validator.isLoaded()) {
+            val dictFreqEarly = validator.getFrequency(result.bengali)
+            val top = storeLookup(key).firstOrNull()
+            if (top != null && top.tier == PhoneticIndexHit.TIER_A &&
+                top.bengali != result.bengali && dictFreqEarly in 1..39 &&
+                maxOf(validator.getFrequency(top.bengali), top.frequency) >= dictFreqEarly * 2
+            ) {
+                val alternatives = (listOf(Alternative(result.bengali, 0.8)) +
+                    storeLookup(key).drop(1).take(3).map { Alternative(it.bengali, 0.78) })
+                    .distinctBy { it.bengali }
+                return ConversionResult(top.bengali, 0.96, ResolutionSource.DICTIONARY, alternatives)
+            }
+        }
         val corpusResult = tryCorpusPhoneticLookup(key, minKeyLength = 2) ?: return null
         val dictFreq = validator.getFrequency(result.bengali)
         // Store words live outside the 480K validator: without the store
@@ -1039,6 +1058,27 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // commits — a NEW divergence S55's own rescue mirror would have
         // introduced.
         if (isProtectedFromJunkRescue(key, raw)) return raw
+        // S113 onset-integrity floor (book study: 51% of OOV misses were
+        // real-word SUBSTITUTIONS, worst shape = the negation morpheme
+        // silently dropped: oswabhabikobhabei -> স্বাভাবিকভাবেই, meaning
+        // inverted). A fuzzy-band (<0.9) single-word result whose roman
+        // onset class disagrees with what the user typed may ride the strip
+        // but never the commit — the deterministic transliteration becomes
+        // primary. Same-onset rescues (obisasso -> অবিশ্বাস্য) are untouched.
+        if (raw.confidence < 0.9 && ' ' !in raw.bengali &&
+            !halfReadsTypedKey(key, raw.bengali)
+        ) {
+            val literal = convertByPatterns(key)
+            if (literal.bengali.isNotEmpty() && literal.bengali != raw.bengali) {
+                return ConversionResult(
+                    bengali = literal.bengali,
+                    confidence = 0.62,
+                    source = ResolutionSource.CLEAN_TRANSLITERATION,
+                    alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.8))) +
+                        raw.alternatives.filter { it.bengali != literal.bengali }.take(2)
+                )
+            }
+        }
         if (!isJunkPipelineResult(raw)) return raw
         // S24: an English word whose Bengali pipeline result is junk should
         // render as its loanword, not as whatever corpus-tail word squats on
