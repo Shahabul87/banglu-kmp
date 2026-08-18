@@ -931,6 +931,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 if (normalized != key) storeLookup(normalized) else emptyList()
             }
             if (hits.isEmpty()) return null
+            // S115 NOTE (attempted fix REVERTED, 2026-08-18): filtering
+            // tier-B habit-alias floor-frequency primaries (kutsi -> কুটছি@1)
+            // broke four pins including the SACRED kassi -> কাচছি invariant —
+            // the deliberate chat-orthography class has exactly the same row
+            // shape as the "junk" it targeted. kutsi -> কুটছি is the
+            // korsi -> করছি s-for-chh law working as designed (কুটছি = "am
+            // chopping"). Do not reintroduce a shape-based filter here; any
+            // future cleanup must be per-word corpus evidence, not row shape.
             // S7 continuation preference (study W3): when the best exact hit only
             // owns this key through a habit alias (priority > 0) and a canonical
             // (priority-0) word at least as common continues the typed key, the

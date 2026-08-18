@@ -22,12 +22,12 @@ class S111ProbeJvm {
             // glued samasa compounds (expected word glued)
             "dehogothoner", "dehogothon", "sposhtochihnit", "ekoiruup",
             "kromobinyasogot",
-            "chihnit", "deh", "deho", "dhap", "dhapo", "sposhto", "ato", "oswabhabikobhabei", "zounosongzog", "lyaminati",
+            "chihnit", "deh", "deho", "dhap", "dhapo", "sposhto", "chas", "s", "kutsi", "voice", "dukkh",
         )
         for (k in keys) {
             val r = engine.convertWord(k)
             val strip = engine.getSuggestions(k, 6).joinToString("|") { it.bengali }
-            println("S111PROBE $k -> ${r.bengali} (conf=${r.confidence}, src=${r.source}) strip=[$strip]")
+            println("S111PROBE $k -> ${r.bengali} (conf=${r.confidence}, src=${r.source}) preview=${engine.convertForInstantPreview(k)} strip=[$strip]")
         }
     }
 }
