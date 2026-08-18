@@ -38,3 +38,4 @@ desktop-app/resources/
 # macOS IME — engine bundle build artifacts (17MB+)
 macos-ime/Resources/built/
 macos-ime/.build/
+test-bangla.md
