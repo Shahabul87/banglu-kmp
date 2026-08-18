@@ -3308,6 +3308,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      *   Case 6: 2-char suffix NOT ending in 'o' -> direct attachment
      *   Case 7: Arbitrary suffix with 480K validation
      */
+    /** S111: the plural/classifier suffix roman keys (see the when table). */
+    private val PLURAL_SUFFIX_KEYS = setOf(
+        "der", "derke", "guli", "gulir", "gulike", "gulite",
+        "gulo", "gulor", "guloke", "gulote"
+    )
+
     /** Reentrancy guard for [tryNegationCompound] (it re-enters [convertWord]). */
     private var inNegationCompound = false
 
@@ -3341,13 +3347,24 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         var best: Triple<String, String, Double>? = null
         inCompoundSplit = true
         try {
-            for (i in 4..(key.length - 4)) {
+            // S111: split point from 3 — the 4-char floor made 3-key stems
+            // unreachable (dehogothoner could only try দেহো@junk, never
+            // দেহ@real; the minFreq scoring then picks the real stem).
+            for (i in 3..(key.length - 3)) {
                 val leftKey = key.substring(0, i)
                 val rightKey = key.substring(i)
                 val left = convertWord(leftKey)
                 if (left.confidence < 0.9 || !validator.isValid(left.bengali)) continue
+                // S111 honesty guard: a half whose reverse romanization
+                // starts with a DIFFERENT letter than what was typed is a
+                // fuzzy jump, not a reading of the key — sposhtochihnit's
+                // right half came back as অচিহ্নিত ("ocihnit" for typed
+                // "chihnit"), silently INVERTING the meaning. Better no
+                // split than a semantic inversion.
+                if (!halfReadsTypedKey(leftKey, left.bengali)) continue
                 val right = convertWord(rightKey)
                 if (right.confidence < 0.9) continue
+                if (!halfReadsTypedKey(rightKey, right.bengali)) continue
                 // The right half may itself be an attached-negation form
                 // (parcina -> পারছিনা) — accept validator words or negation
                 // compounds whose stem the validator attests.
@@ -3356,15 +3373,42 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                         validator.isValid(right.bengali.removeSuffix("না")))
                 if (!rightValid) continue
 
-                val pairEvidence = bigramModel.bigramCount(left.bengali, right.bengali)
+                // S111: junk o-final left stems (দেহো@65 on "deho" while
+                // দেহ@81 is the real word — the twin lives in the extended
+                // dict, invisible to a store tie-break): when the o-less key
+                // resolves confidently to a strictly more frequent word,
+                // that word is the left half (দেহ গঠনের / দেহগঠনের chip,
+                // never দেহো গঠনের).
+                var leftWord = left.bengali
+                if (leftKey.last() == 'o' && leftKey.length >= 4) {
+                    val alt = convertWord(leftKey.dropLast(1))
+                    if (alt.confidence >= 0.9 && validator.isValid(alt.bengali) &&
+                        validator.getFrequency(alt.bengali) > validator.getFrequency(leftWord)
+                    ) {
+                        leftWord = alt.bengali
+                    }
+                }
+                val pairEvidence = bigramModel.bigramCount(leftWord, right.bengali)
                 val minFreq = minOf(
-                    validator.getFrequency(left.bengali),
+                    validator.getFrequency(leftWord),
                     if (validator.isValid(right.bengali)) validator.getFrequency(right.bengali)
                     else validator.getFrequency(right.bengali.removeSuffix("না"))
                 )
-                val score = pairEvidence * 1000.0 + minFreq
+                var score = pairEvidence * 1000.0 + minFreq
+                // S111 (semantic-inversion guard): a right half that begins
+                // with the NEGATIVE prefix অ read from a boundary 'o' is
+                // usually the left stem's stolen inherent vowel
+                // (sposht|ochihnit -> স্পষ্ট অচিহ্নিত, meaning INVERTED,
+                // instead of sposhto|chihnit -> স্পষ্ট চিহ্নিত). Halve its
+                // score so the non-negated split wins unless evidence
+                // genuinely dominates.
+                if (rightKey.first() == 'o' && right.bengali.startsWith("অ") &&
+                    validator.isValid(right.bengali.removePrefix("অ"))
+                ) {
+                    score *= 0.5
+                }
                 if (best == null || score > best!!.third) {
-                    best = Triple(left.bengali, right.bengali, score)
+                    best = Triple(leftWord, right.bengali, score)
                 }
             }
         } finally {
@@ -3379,6 +3423,35 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             source = ResolutionSource.DICTIONARY,
             alternatives = listOf(Alternative(found.first + found.second, 0.7))
         )
+    }
+
+    /**
+     * S111: true when [bengali] plausibly READS the typed [halfKey] — its
+     * reverse romanization must share the first letter (vowel-class folded:
+     * o/a both map word-initial অ/আ/ও readings, see S109). Cheap and
+     * deliberately loose everywhere else; it only exists to reject fuzzy
+     * morpheme jumps (অচিহ্নিত for "chihnit") inside compound halves.
+     */
+    private fun halfReadsTypedKey(halfKey: String, bengali: String): Boolean {
+        val reversed = com.banglu.engine.util.ReverseTransliterator
+            .reverseWord(bengali).lowercase()
+        if (reversed.isEmpty() || halfKey.isEmpty()) return true
+        return romanOnsetClass(halfKey.first()) == romanOnsetClass(reversed.first())
+    }
+
+    /**
+     * S111: first-letter equivalence classes for the guard above — letters
+     * that romanize the SAME Bengali onset must compare equal (য is typed j
+     * or z, ভ is v/bh, ফ is f/ph, word-initial vowels fold per S109), else
+     * legitimate splits get rejected (jeteparbona's যেতে reverses as
+     * "zete" — caught by the S22 compound pin).
+     */
+    private fun romanOnsetClass(c: Char): Char = when (c) {
+        'a', 'e', 'i', 'o', 'u' -> 'V'
+        'j', 'z' -> 'J'
+        'b', 'v', 'w' -> 'B'
+        'f', 'p' -> 'P'
+        else -> c
     }
 
     /**
@@ -3555,6 +3628,22 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // বন্ধুরে) — the most common chat particle after তো. করে/ধরে/ঘুরে
             // class canonical owners defer via the store guard.
             key.endsWith("re") && phoneticIndex != null -> "re" to "রে"
+            // S111 (book-register study: 600 OOV words were dictionary stems
+            // + plural/classifier suffixes — ভ্যারাইটিদের, বৈশিষ্ট্যগুলি,
+            // ধাপগুলি): the -দের/-গুলি/-গুলো families and their case forms.
+            // Same guards as রা/রে (store-gated, stem evidence ≥25, attested
+            // whole words defer). Longer case forms are matched FIRST so
+            // "gulir" never half-matches as "guli"+r junk.
+            key.endsWith("derke") && phoneticIndex != null -> "derke" to "দেরকে"
+            key.endsWith("der") && phoneticIndex != null -> "der" to "দের"
+            key.endsWith("gulir") && phoneticIndex != null -> "gulir" to "গুলির"
+            key.endsWith("gulike") && phoneticIndex != null -> "gulike" to "গুলিকে"
+            key.endsWith("gulite") && phoneticIndex != null -> "gulite" to "গুলিতে"
+            key.endsWith("guli") && phoneticIndex != null -> "guli" to "গুলি"
+            key.endsWith("gulor") && phoneticIndex != null -> "gulor" to "গুলোর"
+            key.endsWith("guloke") && phoneticIndex != null -> "guloke" to "গুলোকে"
+            key.endsWith("gulote") && phoneticIndex != null -> "gulote" to "গুলোতে"
+            key.endsWith("gulo") && phoneticIndex != null -> "gulo" to "গুলো"
             else -> return null
         }
         // Minimum lengths: "na" keeps the proven S16 floor (>= 7 — sona/kena
@@ -3568,6 +3657,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "nane" -> 8 // asbonane -> আসবোনানে
             "ra" -> 5   // jaora -> যাওরা; store guard keeps tara/dhora/tomra safe
             "re" -> 5   // jaore -> যাওরে; store guard keeps kore/dhore/ghure safe
+            // S111: plural/classifier families — stem must be ≥3 roman chars
+            // (boiguli); sunder/moder-class real words defer via the store
+            // guard like everything else.
+            "der" -> 6
+            "derke" -> 8
+            "guli", "gulo" -> 7
+            "gulir", "gulor" -> 8
+            "gulike", "gulite", "guloke", "gulote" -> 9
             else -> 7
         }
         if (key.length < minLen) return null
@@ -3593,6 +3690,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (storeTopReal != null && suffix.first != "ne" && suffix.first != "nane") {
             return null
         }
+        // S111: HABIT-priority owners defer too, but evidence-competitively
+        // (the S79 নে rule, generalized): স্পষ্ট@82 rides "sposhto" as a
+        // final-o alias — composing স্পস+তো over it produced "স্পস তো"
+        // garbage for a plain adjective. A glued-formal alias (করবনা) never
+        // clears the stem+margin bar, so the S79 chat compounds keep winning.
+        val storeTopHabit = storeLookup(key)
+            .firstOrNull()
+            ?.takeIf { top ->
+                top.priority == PhoneticIndexHit.PRIORITY_HABIT &&
+                    (top.tier == PhoneticIndexHit.TIER_A || validator.isValid(top.bengali))
+            }
 
         val prefixKey = key.dropLast(suffix.first.length)
         inNegationCompound = true
@@ -3621,10 +3729,35 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // Length guard (S43): the tie-break exists for same-shape squatters
             // (পার্তেছি vs পারতেছি) — a SHORTER store word (asbo: আস over
             // আসবো) is a different word, not a better spelling of the stem.
-            if (top.bengali.length >= stem.length &&
+            // S111: EXCEPT the inherent-vowel-final key class — an o-final
+            // prefix key owned by a junk twin one char longer (dhapo: ধাপা
+            // over ধাপ) may take the one-shorter real word (ধাপগুলি, not
+            // ধাপাগুলি).
+            val minLength = if (prefixKey.last() == 'o') stem.length - 1 else stem.length
+            if (top.bengali.length >= minLength &&
                 validator.getFrequency(top.bengali) > validator.getFrequency(stem)
             ) {
                 stem = top.bengali
+            }
+        }
+
+        // S111: inherent-vowel-final prefix keys owned by junk twins outside
+        // the store (dhapo -> ধাপা@60 from the extended dict while ধাপ@79 is
+        // the real stem; deho -> দেহো@65 vs দেহ@81): when the o-less twin
+        // resolves confidently and is strictly more frequent, it IS the stem
+        // (ধাপগুলি, never ধাপাগুলি). Verb stems keep their -ো: the o-less
+        // key (korb, asb) never resolves at 0.9.
+        if (prefixKey.length >= 4 && prefixKey.last() == 'o') {
+            inNegationCompound = true
+            val alt = try {
+                convertWord(prefixKey.dropLast(1))
+            } finally {
+                inNegationCompound = false
+            }
+            if (alt.confidence >= 0.9 && validator.isValid(alt.bengali) &&
+                validator.getFrequency(alt.bengali) > validator.getFrequency(stem)
+            ) {
+                stem = alt.bengali
             }
         }
 
@@ -3633,23 +3766,31 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // key (পার্বণে@65 on parbone) defers the softener only when it CLEARLY
         // dominates the stem's own evidence; ties and weaker owners lose the
         // primary but stay one slot away via the store suggestion path.
+        val stemEvidence = maxOf(
+            validator.getFrequency(stem),
+            storeFrequencyOf(prefixKey, stem)
+        )
         if (storeTopReal != null) {
-            val stemFreq = maxOf(
-                validator.getFrequency(stem),
-                storeFrequencyOf(prefixKey, stem)
-            )
-            if (storeTopReal.frequency > stemFreq + ALIAS_EVIDENCE_MARGIN) return null
+            if (storeTopReal.frequency > stemEvidence + ALIAS_EVIDENCE_MARGIN) return null
+        }
+        // S111: the generalized habit-owner deferral (see above).
+        if (storeTopHabit != null &&
+            storeTopHabit.frequency > stemEvidence + ALIAS_EVIDENCE_MARGIN
+        ) {
+            return null
         }
 
         // "to" only: the -ত past-habitual reading owns the key when attested
         // (dekhto -> দেখত, not দেখ তো; hobeto composes — হবেত is not a word).
         if (suffix.first == "to" && validator.getFrequency(stem + "ত") >= 25) return null
 
-        // S105 (ra/re only): the stem must carry real usage evidence — the
-        // validator list is junk-tolerant (S16 lesson), and a floor-frequency
-        // squatter stem composes garbage (tomra: তম@junk + রা beat the fuzzy
-        // layer's তোমরা). Same ≥25 evidence bar as the S22 composition gate.
-        if (suffix.first == "ra" || suffix.first == "re") {
+        // S105 (ra/re; S111 extends to the plural/classifier families): the
+        // stem must carry real usage evidence — the validator list is
+        // junk-tolerant (S16 lesson), and a floor-frequency squatter stem
+        // composes garbage (tomra: তম@junk + রা beat the fuzzy layer's
+        // তোমরা; dhapoguli: ধাপা@junk + গুলি). Same ≥25 evidence bar as the
+        // S22 composition gate.
+        if (suffix.first == "ra" || suffix.first == "re" || suffix.first in PLURAL_SUFFIX_KEYS) {
             if (validator.getFrequency(stem) < 25) return null
             // A dictionary exact hit with real evidence (≥40 — above the
             // জায়রা@25 junk class this layer exists to displace) owns the
