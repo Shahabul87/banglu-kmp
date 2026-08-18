@@ -60,6 +60,36 @@ internal object BackspaceResume {
         return BackspaceResumePlan(word.length, roman, fragment)
     }
 
+    /**
+     * S109: resume plan for a LETTER typed with an empty buffer while the
+     * cursor sits directly after Bengali word text \u2014 the user is editing
+     * that word (tap-in mid-word to add a kar, or typing right after a
+     * committed word with no space). A fresh composition there turned the
+     * vowel into a full letter (\u09A6|\u09AC\u09BE + 'a' showed \u09A6\u0986\u09AC\u09BE instead of \u09A6\u09BE\u09AC\u09BE \u2014
+     * tester report 2026-08-17). Same round-trip gate as [plan]: the whole
+     * prefix before the cursor must reproduce exactly through
+     * reverse -> instant preview, else return null and the caller keeps the
+     * old fresh-composition behavior \u2014 never worse.
+     */
+    fun planForTyping(
+        textBeforeCursor: String,
+        reverse: (String) -> String,
+        instantPreview: (String) -> String,
+    ): BackspaceResumePlan? {
+        if (textBeforeCursor.isEmpty()) return null
+        if (!isBengaliWordChar(textBeforeCursor.last())) return null
+        var start = textBeforeCursor.length
+        while (start > 0 && isBengaliWordChar(textBeforeCursor[start - 1])) start--
+        val word = textBeforeCursor.substring(start)
+        if (word.isEmpty() || word.length > MAX_WORD_LENGTH) return null
+        val roman = runCatching { reverse(word).lowercase() }.getOrNull() ?: return null
+        if (roman.isEmpty() || roman.length > MAX_WORD_LENGTH) return null
+        if (!roman.all { it in 'a'..'z' }) return null
+        val echo = runCatching { instantPreview(roman) }.getOrNull() ?: return null
+        if (echo != word) return null
+        return BackspaceResumePlan(word.length, roman, word)
+    }
+
     private fun isBengaliWordChar(ch: Char): Boolean =
         ch in '\u0980'..'\u09FF' || ch == '\u200C' || ch == '\u200D'
 

@@ -1595,6 +1595,14 @@ class BangluIMEService : InputMethodService(),
             return
         }
 
+        // S109: first letter of a word typed with the cursor directly after
+        // Bengali word text = the user is EDITING that word (tap-in mid-word
+        // to add a kar, or continuing a committed word with no space). Seed
+        // the buffer with the prefix's roman key so the whole word
+        // re-converts (dobaa class: দ|বা + 'a' -> দাবা, not দআবা). One
+        // IC read per word START only — the per-keystroke path stays on the
+        // shadow buffer (S28 law).
+        if (buffer.isEmpty() && char.isLetter()) tryResumeComposingBeforeTyping(ic)
         buffer += char
         sessionBangluKeyCount++
 
@@ -1607,6 +1615,30 @@ class BangluIMEService : InputMethodService(),
 
         refreshSuggestionsAsync(buffer)
         prepareCommitConversionAsync(buffer)
+    }
+
+    /**
+     * S109: see [BackspaceResume.planForTyping]. No-op when resume doesn't
+     * apply — the caller then composes fresh from the typed letter
+     * (previous behavior).
+     */
+    private fun tryResumeComposingBeforeTyping(ic: InputConnection) {
+        if (rawCommitInputMode || uriInputMode || sensitiveInputMode) return
+        if (keyboardMode.value != KeyboardMode.BANGLU) return
+        val before = ic.getTextBeforeCursor(32, 0)?.toString().orEmpty()
+        val plan = BackspaceResume.planForTyping(
+            textBeforeCursor = before,
+            reverse = { com.banglu.engine.util.ReverseTransliterator.reverseWord(it) },
+            instantPreview = { SmartEngineAdapter.convertForInstantPreview(it) },
+        ) ?: return
+        ic.beginBatchEdit()
+        ic.deleteSurroundingText(plan.deleteLength, 0)
+        buffer = plan.romanBuffer
+        ic.setComposingText(plan.visibleFragment, 1)
+        ic.endBatchEdit()
+        composingInput = plan.romanBuffer
+        composingResult = null
+        composingVisibleText = plan.visibleFragment
     }
 
     private fun onEnglishKeyPress(char: Char) {

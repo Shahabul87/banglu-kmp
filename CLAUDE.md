@@ -32,7 +32,9 @@ packs). NO cloud API on the keystroke path — decided 2026-07-03 (latency,
 cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-17):** ONE ENGINE, FIVE SURFACES.
-- **Android** v1.5.67 (2104), db 3.9.2 — S108 production-hardening round
+- **Android** v1.5.68 (2105), db 3.9.3 — S109 vowel-onset round (aw/a chat
+  onsets for অ words, initial-o twin promote, mid-word typing-resume kar
+  edits). Before that: S108 production-hardening round
   (cross-surface dictionary version gate via `DictionaryVersion.REQUIRED`,
   desktop engine-lane + store error handling, atomic learned.json, macOS
   boot-failure states). Earlier: (S59: মূর্ধন্য-ষ manual aliases) (S56: tester round — URI-field conversion,

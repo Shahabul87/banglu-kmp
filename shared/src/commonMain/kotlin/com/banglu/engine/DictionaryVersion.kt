@@ -17,5 +17,8 @@ package com.banglu.engine
  * Bump this together with the compiler round; nothing else needs editing.
  */
 object DictionaryVersion {
-    const val REQUIRED = "3.9.2"
+    // 3.9.3 (S109): word-initial অ chat onsets — "a"/"aw" alias seeds for
+    // অ-initial words + the initial-o twin promote pass (anek -> অনেক,
+    // awto -> অটো class).
+    const val REQUIRED = "3.9.3"
 }

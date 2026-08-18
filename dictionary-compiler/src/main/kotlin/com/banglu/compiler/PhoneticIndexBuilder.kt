@@ -152,7 +152,20 @@ object PhoneticIndexBuilder {
             val nasalSeed = if ('ঁ' in word) {
                 ReverseTransliterator.reverseWord(word.replace("ঁ", "")).lowercase()
             } else null
-            val aliases = aliasesFor(canonical, nasalSeed, bengali = word) + manualKeys
+            var aliases = aliasesFor(canonical, nasalSeed, bengali = word) + manualKeys
+            // S109: word-initial অ chat onsets — the canonical romanization
+            // is "o" (অনেক -> "onek") but casual typists write the অ sound
+            // as "a" (anek) or "aw" (awnek/awto; recon 2026-08-17 found ZERO
+            // aw keys in the whole index). Derived from the FINISHED chain,
+            // never seeded into it: injecting them before the rule table
+            // starved the per-word key cap and silently dropped real aliases
+            // (অবিশ্বাস্য lost "obisasso" — caught by two pins).
+            if (word.startsWith("অ")) {
+                val onsetVariants = aliases
+                    .filter { it.startsWith("o") && it.length >= 2 }
+                    .flatMap { listOf("a" + it.substring(1), "aw" + it.substring(1)) }
+                aliases = (aliases + onsetVariants).distinct()
+            }
             val bofolaCanonical = if ("্ব" in word) {
                 bofolaCanonicalKeys(word, listOfNotNull(canonical, nasalSeed))
             } else emptySet()
@@ -178,6 +191,7 @@ object PhoneticIndexBuilder {
         promoteModernChhOverArchaicCc(rows)
         promoteNasalTwinOverPlain(rows)
         promoteHasantaFreeTwinOverConjunct(rows)
+        promoteInitialOTwinOverJunkA(rows)
         lastReport = IndexBuildReport(
             totalWords = total,
             roundTripOk = roundTripOk,
@@ -300,6 +314,43 @@ object PhoneticIndexBuilder {
             promoted++
         }
         if (promoted > 0) println("  hasanta-promote: $promoted key(s) now surface the everyday form first")
+    }
+
+    /**
+     * S109: the "a"-onset seeds above put অ-words on the keys casual typists
+     * press (anek), but junk আ-spellings from the wiki corpus own several of
+     * those keys at canonical priority and shadow the real word (আনেক@64
+     * beats অনেক@93 on "anek" because priority outranks frequency). Mirror
+     * of the S33/S78/S100 passes: when a habit row differs from the same-key
+     * canonical owner ONLY by the initial আ -> অ and is strictly more
+     * frequent, promote it to canonical priority — the junk twin stays
+     * reachable one slot down. Legit আ owners (আটা on "ata", আবার on
+     * "abar") are untouched: their অ twins are rarer or nonexistent, so the
+     * frequency gate never fires.
+     */
+    private fun promoteInitialOTwinOverJunkA(rows: ArrayList<PhoneticIndexRow>) {
+        val aOwners = HashMap<String, PhoneticIndexRow>()
+        for (row in rows) {
+            if (row.priority == PRIORITY_CANONICAL && row.bengali.startsWith("আ")) {
+                val existing = aOwners[row.key]
+                if (existing == null || row.frequency > existing.frequency) {
+                    aOwners[row.key] = row
+                }
+            }
+        }
+        if (aOwners.isEmpty()) return
+        var promoted = 0
+        for (i in rows.indices) {
+            val row = rows[i]
+            if (row.priority != PRIORITY_HABIT || !row.bengali.startsWith("অ")) continue
+            val owner = aOwners[row.key] ?: continue
+            if (row.tier != owner.tier) continue
+            if (row.frequency <= owner.frequency) continue
+            if (owner.bengali.substring(1) != row.bengali.substring(1)) continue
+            rows[i] = row.copy(priority = PRIORITY_CANONICAL)
+            promoted++
+        }
+        if (promoted > 0) println("  initial-o-promote: $promoted key(s) now surface the অ form first")
     }
 
     // =========================================================================

@@ -252,6 +252,13 @@ object SeedData {
             e("বা", listOf("ba"), 82, WordCategory.TADBHAVA),
             e("আর", listOf("ar", "aar"), 90, WordCategory.TADBHAVA),
             e("ও", listOf("o"), 90, WordCategory.TADBHAVA),
+            // S109: bare "a" used to fall to the rule fallback (strip [আ]
+            // only, conf 0.6). আ leads on frequency (WYSIWYG: instant
+            // preview 'a' -> আ), অ rides the strip — the "a could be অ or
+            // আ" first-letter class; the following letters then resolve it
+            // via the store keys once the word grows.
+            e("আ", listOf("a"), 89, WordCategory.TADBHAVA),
+            e("অ", listOf("o", "a"), 88, WordCategory.TADBHAVA),
             e("তাই", listOf("tai", "taai"), 90, WordCategory.TADBHAVA),
             e("কারণ", listOf("karon", "kaaron"), 78, WordCategory.TATSAMA),
             e("যেন", listOf("jeno", "zeno", "jenou", "zenou"), 77, WordCategory.TADBHAVA),
