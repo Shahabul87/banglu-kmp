@@ -32,13 +32,19 @@ class S111CompositionRoundJvmTest {
     fun oLessStemTwinBeatsJunk() {
         assertEquals("ধাপগুলি", engine.convertWord("dhapoguli").bengali)
         assertEquals("গণগুলির", engine.convertWord("gonogulir").bengali)
-        assertEquals("দেহ গঠনের", engine.convertWord("dehogothoner").bengali)
+        // db 3.9.4 (S112): দেহগঠনের entered via book_lexicon.tsv, so the
+        // store-exact glued form now beats the S111 split ("দেহ গঠনের") —
+        // strictly better, pinned as such.
+        assertEquals("দেহগঠনের", engine.convertWord("dehogothoner").bengali)
     }
 
     @Test
     fun semanticInversionClassIsDead() {
         val got = engine.convertWord("sposhtochihnit").bengali
-        assertEquals("স্পষ্ট চিহ্নিত", got)
+        // db 3.9.4 (S112): the glued book form is now a dictionary word;
+        // before that the S111 split gave "স্পষ্ট চিহ্নিত". Either is right —
+        // what may NEVER return is the inverted স্পষ্ট অচিহ্নিত.
+        assertEquals("স্পষ্টচিহ্নিত", got)
         // The guard exists for exactly this: the negative-prefix capture must
         // never invert meaning, in the primary OR anywhere on the strip.
         val strip = engine.getSuggestions("sposhtochihnit", 6).map { it.bengali }

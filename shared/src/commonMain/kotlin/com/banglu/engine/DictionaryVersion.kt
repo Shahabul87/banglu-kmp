@@ -17,8 +17,10 @@ package com.banglu.engine
  * Bump this together with the compiler round; nothing else needs editing.
  */
 object DictionaryVersion {
+    // 3.9.4 (S112): khanda-ta ৎ/ত্ twin fold (936 legacy-encoding pairs
+    // merge into the standard ৎ forms) + book_lexicon.tsv reading-register
+    // vocabulary (416 words from the S110 book corpus at count >= 3).
     // 3.9.3 (S109): word-initial অ chat onsets — "a"/"aw" alias seeds for
-    // অ-initial words + the initial-o twin promote pass (anek -> অনেক,
-    // awto -> অটো class).
-    const val REQUIRED = "3.9.3"
+    // অ-initial words + the initial-o twin promote pass.
+    const val REQUIRED = "3.9.4"
 }

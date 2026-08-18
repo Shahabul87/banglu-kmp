@@ -84,21 +84,29 @@ fun main(args: Array<String>) {
         // enough to surface when typed, below evidenced formal words. Absent
         // from the usage corpus they assign as tier-B exact-only keys — they
         // never pollute suggestions for other typings.
-        val chatLexicon = sequenceOf(
-            File("data/chat_lexicon.tsv"),
-            File("dictionary-compiler/data/chat_lexicon.tsv")
-        ).firstOrNull { it.exists() }
+        // S112 generalizes the mechanism to a lexicon list: book_lexicon.tsv
+        // carries the reading-register vocabulary the wiki/news corpora lack
+        // (S110 book study: 675 genuinely-new words — সঙ্করণ, গৃহপালনাধীন,
+        // taxonomy, proper nouns — plus frequent inflections/compounds),
+        // harvested from user-collected books at count >= 3 so OCR hapax
+        // noise never enters. Same curated-band + usage-injection rules.
         val chatWords = mutableListOf<String>()
-        if (chatLexicon != null) {
-            chatLexicon.readLines().forEach { line ->
+        for (lexiconName in listOf("chat_lexicon.tsv", "book_lexicon.tsv")) {
+            val lexicon = sequenceOf(
+                File("data/$lexiconName"),
+                File("dictionary-compiler/data/$lexiconName")
+            ).firstOrNull { it.exists() } ?: continue
+            var count = 0
+            lexicon.readLines().forEach { line ->
                 val parts = line.trim().split("\t")
                 if (parts.size == 2 && parts[1].toIntOrNull() != null) {
                     rawWordList.add(parts[0])
                     freqMap.putIfAbsent(parts[0], parts[1].toInt())
                     chatWords.add(parts[0])
+                    count++
                 }
             }
-            println("  Chat lexicon: merged ${chatWords.size} supplemental words")
+            println("  Supplemental lexicon $lexiconName: merged $count words")
         }
         val foldResult = PhoneticIndexBuilder.foldAndDedupe(rawWordList, freqMap)
         println("  Nukta fold/dedupe removed ${foldResult.mergedCount} duplicate rows " +

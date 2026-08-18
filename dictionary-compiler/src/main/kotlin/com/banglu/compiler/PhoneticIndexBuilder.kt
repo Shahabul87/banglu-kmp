@@ -93,6 +93,45 @@ object PhoneticIndexBuilder {
             val folded = ReverseTransliterator.foldNukta(raw.trim())
             if (seen.add(folded)) out.add(folded) else merged++
         }
+
+        // S112: khanda-ta twin fold (S110 book study found 936 ৎ/ত্ twin
+        // pairs — legacy web-text encoding, same disease as the nukta twins;
+        // in 14 pairs the junk virama form was MORE frequent and could win
+        // keys: উত্পাদন@70 vs উৎপাদন@84). When BOTH spellings exist, the
+        // virama form folds into the standard ৎ form (max frequency wins,
+        // same rule as the nukta merge). Pair-gated, so real ত্ conjuncts
+        // (উত্তর — no উৎতর twin) are never touched.
+        // The twin is derived FROM the ৎ form (ৎ -> ত্), never the other way:
+        // a mixed word like উৎপত্তি (ৎপ AND a real ত্ত) round-trips only in
+        // this direction (উত্পত্তি), so real ত্ত conjuncts stay untouched.
+        val viramaTwinToKhanda = HashMap<String, String>()
+        for (w in out) {
+            if ('ৎ' in w) {
+                val twin = w.replace("ৎ", "ত্")
+                if (twin != w) viramaTwinToKhanda[twin] = w
+            }
+        }
+        if (viramaTwinToKhanda.isNotEmpty()) {
+            val result = ArrayList<String>(out.size)
+            var khandaMerged = 0
+            for (w in out) {
+                val khanda = viramaTwinToKhanda[w]
+                if (khanda != null) {
+                    foldedFrequencies[khanda] = maxOf(
+                        foldedFrequencies[khanda] ?: 0,
+                        foldedFrequencies[w] ?: 0
+                    )
+                    foldedFrequencies.remove(w)
+                    khandaMerged++
+                    continue
+                }
+                result.add(w)
+            }
+            if (khandaMerged > 0) {
+                println("  Khanda-ta fold merged $khandaMerged virama twin(s) into their ৎ forms")
+                return NuktaFoldResult(result, foldedFrequencies, merged + khandaMerged)
+            }
+        }
         return NuktaFoldResult(out, foldedFrequencies, merged)
     }
 
