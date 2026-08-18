@@ -62,6 +62,16 @@ object BangluWebEngine {
     fun instantPreview(input: String): String = engine.convertForInstantPreview(input)
 
     /**
+     * S114: Bengali -> roman key (the corpus romanization). Web hosts use it
+     * for resume-editing: backspace into / typing after a committed word
+     * re-enters roman composing on the word's own key, gated on an exact
+     * reverse -> instantPreview round-trip (the Android S88/S109 mechanic;
+     * the gate lives host-side, the linguistics live here).
+     */
+    fun reverseWord(bengali: String): String =
+        com.banglu.engine.util.ReverseTransliterator.reverseWord(bengali)
+
+    /**
      * S54: multi-word conversion — converts each whitespace-separated token
      * and preserves the original whitespace, same contract as the Android
      * adapter's `parse()`. Use this (not per-word `convert`) when the caller
