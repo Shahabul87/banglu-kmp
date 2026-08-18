@@ -32,9 +32,11 @@ packs). NO cloud API on the keystroke path — decided 2026-07-03 (latency,
 cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-17):** ONE ENGINE, FIVE SURFACES.
-- **Android** v1.5.68 (2105), db 3.9.3 — S109 vowel-onset round (aw/a chat
-  onsets for অ words, initial-o twin promote, mid-word typing-resume kar
-  edits). Before that: S108 production-hardening round
+- **Android** v1.5.69 (2106), db 3.9.4 — S110-S113 book-register block
+  (book-corpus study harness + literary pin wall; plural-suffix and samasa
+  composition; khanda-ta ৎ/ত্ twin fold; book_lexicon.tsv ingestion; OOV
+  onset-integrity honesty floor; ato-class arbitration). Before that: S109
+  vowel-onset round, S108 production-hardening round
   (cross-surface dictionary version gate via `DictionaryVersion.REQUIRED`,
   desktop engine-lane + store error handling, atomic learned.json, macOS
   boot-failure states). Earlier: (S59: মূর্ধন্য-ষ manual aliases) (S56: tester round — URI-field conversion,
