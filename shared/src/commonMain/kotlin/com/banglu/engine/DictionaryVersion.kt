@@ -22,5 +22,5 @@ object DictionaryVersion {
     // vocabulary (416 words from the S110 book corpus at count >= 3).
     // 3.9.3 (S109): word-initial অ chat onsets — "a"/"aw" alias seeds for
     // অ-initial words + the initial-o twin promote pass.
-    const val REQUIRED = "3.9.5"
+    const val REQUIRED = "3.9.6"
 }

@@ -1018,8 +1018,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // notation swap (v never spells ব), so normalize the query instead
         // of doubling the ভ vocabulary's alias rows (+34MB measured). vh
         // first, else the v-swap would turn "vh" into "bhh".
+        // S119: sh→s last — the reverse of the compiler's h_lazy_sh habit
+        // for keys the alias budget never reached (oshojjo owns nothing;
+        // its s-twin osojjo owns অসহ্য). Safe by construction: this
+        // normalizer only runs when the RAW key owns zero rows, so owned
+        // sh-words (shob → শব) are never touched.
         key.replace("ee", "i").replace("oo", "u")
-            .replace("vh", "bh").replace("v", "bh")
+            .replace("vh", "bh").replace("v", "bh").replace("sh", "s")
 
     // ======================== SINGLE WORD CONVERSION (7-LAYER PIPELINE) ========================
 

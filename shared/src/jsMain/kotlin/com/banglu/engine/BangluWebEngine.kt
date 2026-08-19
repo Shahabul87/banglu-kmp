@@ -52,6 +52,18 @@ object BangluWebEngine {
         engine.setPhoneticIndex(
             InMemoryPhoneticIndexStore(entries, english, slim.words.toHashSet())
         )
+        // S119 slim-tier parity: the validator was never loaded on JS
+        // surfaces, so every validator-gated layer (tryNegationCompound —
+        // hobeto never glued হবে তো on web; the S118 stem-evidence law;
+        // recovery guards) was silently dead. The slim word set + the S119
+        // freqs array are the tier-A validator; sub-floor words simply stay
+        // unattested — the documented slim scope.
+        engine.loadValidatorWords(slim.words)
+        if (slim.freqs.size == slim.words.size && slim.freqs.isNotEmpty()) {
+            val freqMap = HashMap<String, Int>(slim.words.size * 2)
+            for (i in slim.words.indices) freqMap[slim.words[i]] = slim.freqs[i]
+            engine.loadValidatorFrequencies(freqMap)
+        }
     }
 
     fun convert(input: String): String = engine.convertWord(input.trim()).bengali
@@ -210,5 +222,8 @@ internal data class SlimDictionary(
     val version: String,
     val index: List<SlimRow>,
     val english: List<SlimEnglish>,
-    val words: List<String>
+    val words: List<String>,
+    /** S119: corpus frequency per words[i] — powers the validator on slim
+     *  surfaces (glue layers and evidence guards are frequency-gated). */
+    val freqs: List<Int> = emptyList()
 )

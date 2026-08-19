@@ -18,10 +18,14 @@ object SlimExporter {
                 "SELECT value FROM metadata WHERE key='version'"
             ).use { rs -> sb.append(if (rs.next()) rs.getString(1) else "unknown") }
             sb.append("\",\"index\":[")
-            val words = LinkedHashSet<String>(200_000)
+            // S119: word -> corpus frequency, exported as a parallel freqs
+            // array so the JS surfaces can load the validator WITH frequency
+            // data — the glue layers (তো/না compounds) and the S118 stem-
+            // evidence law are frequency-gated and were silently dead on slim.
+            val words = LinkedHashMap<String, Int>(200_000)
             var rows = 0
             conn.createStatement().executeQuery(
-                """SELECT p.key, w.bengali, p.frequency, p.tier, p.priority
+                """SELECT p.key, w.bengali, p.frequency, p.tier, p.priority, w.frequency
                    FROM phonetic_index p JOIN words w ON w.id = p.word_id
                    WHERE p.tier = 0 AND p.frequency >= $floor"""
             ).use { rs ->
@@ -32,7 +36,7 @@ object SlimExporter {
                         .append(",\"f\":").append(rs.getInt(3))
                         .append(",\"t\":").append(rs.getInt(4))
                         .append(",\"p\":").append(rs.getInt(5)).append('}')
-                    words.add(rs.getString(2)); rows++
+                    words[rs.getString(2)] = rs.getInt(6); rows++
                 }
             }
             sb.append("],\"english\":[")
@@ -48,7 +52,11 @@ object SlimExporter {
                 }
             }
             sb.append("],\"words\":[")
-            words.forEachIndexed { i, w -> if (i > 0) sb.append(','); sb.append(q(w)) }
+            var wi = 0
+            for (w in words.keys) { if (wi > 0) sb.append(','); sb.append(q(w)); wi++ }
+            sb.append("],\"freqs\":[")
+            wi = 0
+            for (f in words.values) { if (wi > 0) sb.append(','); sb.append(f); wi++ }
             sb.append("]}")
             File(outPath).writeText(sb.toString())
             println("slim: $rows index rows, $en english, ${words.size} words, floor=$floor -> $outPath (${File(outPath).length() / 1024 / 1024} MB)")
