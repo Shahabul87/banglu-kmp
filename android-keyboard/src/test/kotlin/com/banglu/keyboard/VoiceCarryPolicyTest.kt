@@ -69,14 +69,39 @@ class VoiceCarryPolicyTest {
         assertEquals("ভালোবাসো সবাইকে", c.strip("ভালোবাসো সবাইকে"))
     }
 
+    // ── mechanism 3 (S121): recognizer REVISIONS during long dictation ──
+
     @Test
-    fun withoutProbationMismatchKeepsCarry() {
+    fun revisionOfCommittedWordsNeverReappends() {
+        // The exact on-device trace (2026-08-19, 11:29 PM): the recognizer
+        // revised "অনেক" to "অ১নেক" between hypotheses — S120's textual
+        // prefix match broke and the whole transcript re-appended:
+        // "অনেক অ১নেক অনেক রাত অনেক রাত হয়ে অনেক রাত হয়ে গেছে…".
+        // Word-count stripping is revision-proof.
+        val c = VoiceCarryPolicy()
+        assertEquals("অনেক", c.strip("অনেক"))
+        c.append("অনেক")
+        // committed word revised — only the NEW word is owed
+        assertEquals("রাত", c.strip("অ১নেক রাত"))
+        c.append("রাত")
+        assertEquals("হয়ে", c.strip("অনেক রাত হয়ে"))
+        c.append("হয়ে")
+        assertEquals("গেছে", c.strip("অনেক রাত হয়ে গেছে"))
+        c.append("গেছে")
+        // final result — fully covered, nothing owed
+        assertEquals("", c.strip("অনেক রাত হয়ে গেছে"))
+    }
+
+    @Test
+    fun sameLengthRevisionOwesNothing() {
+        // S121 semantics change (was: mismatch passed through in full): a
+        // hypothesis no longer than the committed word count is a pure
+        // revision of already-committed words — committed text stays as
+        // committed ("data preservation beats transcript fidelity"), so
+        // nothing is owed. Decision note: re-appending here was mechanism 3.
         val c = VoiceCarryPolicy()
         c.append("আমি ভালো")
-        // mid-session revision that does not extend the carry passes through
-        // but the carry survives (recognizer may re-emit the full transcript
-        // next tick)
-        assertEquals("অন্য কথা", c.strip("অন্য কথা"))
+        assertEquals("", c.strip("অন্য কথা"))
         assertEquals("আছি", c.strip("আমি ভালো আছি"))
     }
 

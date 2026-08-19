@@ -1,86 +1,132 @@
 package com.banglu.keyboard
 
 /**
- * S120 — the auto-committed transcript carry (tester report: "voice typing
- * is very unstable, words are repeated", with a WhatsApp composer showing
- * "ভালোবাসো | ভালোবাসো তুমি | ভালোবাসো তুমি | ভালোবাসো তুমি মোরে…").
+ * S120/S121 — the auto-committed transcript carry (tester reports: "voice
+ * typing is very unstable, words are repeated", then after S120 "still
+ * repeated for long time", with an on-device trace showing the smoking gun:
+ * "অনেক অ১নেক অনেক রাত অনেক রাত হয়ে অনেক রাত হয়ে গেছে…" — the recognizer
+ * REVISED an already-committed word ("অনেক" → "অ১নেক") between hypotheses).
  *
- * The recognizer's partial hypotheses grow over the WHOLE utterance, while
- * the IME commits pieces of it early (pause commits, error-restart commits).
- * This class owns the ONE piece of state that reconciles the two — the
- * cumulative committed prefix of the current utterance — and the rules for
- * stripping it back out of later hypotheses. Two historical bugs live here:
+ * The recognizer's partial hypotheses grow over the WHOLE utterance while
+ * the IME commits pieces of it early (pause commits, error-restart
+ * commits). This class owns the reconciliation. Three historical bugs:
  *
- * 1. Replace-semantics carry (pre-S120): each commit REPLACED the carry, so
- *    after a second mid-utterance commit the prefix test failed and every
- *    later partial (and the final) re-appended in full.
- * 2. Unconditional reset on restart (S56): every error restart forgot the
- *    carry, so a flaky network committed the live partial once per error
- *    cycle while the re-heard speech stamped the same words again. The S56
- *    fear (a fresh session's genuinely-new speech beginning with the same
- *    words must not be swallowed) is honored via PROBATION: after an error
- *    restart the carry survives exactly until the first non-overlapping
- *    hypothesis, which kills it.
+ * 1. Replace-semantics carry (pre-S120): each commit REPLACED the carry —
+ *    the second mid-utterance commit broke the prefix test and every later
+ *    hypothesis re-appended in full.
+ * 2. Unconditional reset on restart (S56): flaky-network error restarts
+ *    committed the live partial, forgot it, and the re-heard speech
+ *    duplicated once per error cycle.
+ * 3. TEXTUAL prefix matching (S120's own gap): long dictation gets
+ *    constantly revised — one changed character in an already-committed
+ *    word broke the exact-prefix match and the whole transcript
+ *    re-appended. S121: WITHIN a session the strip is WORD-COUNT based —
+ *    the transcript is cumulative by construction, so the first N
+ *    hypothesis words correspond to the N committed words regardless of
+ *    how their spelling was revised. Committed text stays as committed
+ *    (the same "data preservation beats transcript fidelity" law the live
+ *    renderer applies); only genuinely NEW words are owed. Text matching
+ *    survives solely at the cross-error-restart boundary, where the new
+ *    session's audio is different and no count alignment exists —
+ *    probationary, as in S120.
  *
- * Pure state machine — no Android imports — so the dedup law is unit-pinned
- * (VoiceCarryPolicyTest), same architecture as VoiceSessionPolicy.
+ * Pure state machine — no Android imports — unit-pinned in
+ * VoiceCarryPolicyTest, same architecture as VoiceSessionPolicy.
  */
 class VoiceCarryPolicy {
 
-    private var carry: String = ""
+    /** Committed text originating from the CURRENT recognizer session's
+     *  transcript. Its WORD COUNT is the strip law within the session. */
+    private var sessionCommitted: String = ""
+
+    /** Committed text of interrupted utterance(s) carried across an error
+     *  restart — textual overlap heuristics only, under probation. */
+    private var restartCarry: String = ""
     private var probation: Boolean = false
 
-    val current: String get() = carry
+    private val whitespace = Regex("\\s+")
+
+    private fun wordCount(s: String): Int =
+        if (s.isEmpty()) 0 else s.trim().split(whitespace).size
 
     /** A fresh user-initiated session or a cleanly-closed transcript (final
      *  result delivered): nothing left to strip. */
     fun closeTranscript() {
-        carry = ""
+        sessionCommitted = ""
+        restartCarry = ""
         probation = false
     }
 
-    /** A commit of [segment] from the CURRENT utterance (pause commit or
-     *  error-restart commit). Extends the cumulative prefix — never
-     *  replaces it. */
+    /** A commit of [segment] from the CURRENT session's transcript (pause
+     *  commit, error-restart commit, or S107 re-anchor closure). Extends the
+     *  cumulative session prefix — never replaces it. */
     fun append(segment: String) {
         val clean = segment.trim()
         if (clean.isEmpty()) return
-        carry = if (carry.isEmpty()) clean else "$carry $clean"
+        sessionCommitted =
+            if (sessionCommitted.isEmpty()) clean else "$sessionCommitted $clean"
     }
 
-    /** An error restart is about to re-hear the interrupted utterance: the
-     *  carry survives, probationary. No-op when there is nothing to carry. */
+    /** An error restart is about to re-hear the interrupted utterance: fold
+     *  the session's committed text into the textual carry (chains across
+     *  repeated errors) and start the next session's count at zero. */
     fun armProbation() {
-        probation = carry.isNotEmpty()
+        restartCarry = listOf(restartCarry, sessionCommitted)
+            .filter { it.isNotEmpty() }
+            .joinToString(" ")
+        sessionCommitted = ""
+        probation = restartCarry.isNotEmpty()
     }
 
     /**
-     * Strip the already-committed prefix out of a recognizer hypothesis.
+     * Strip everything already committed out of a recognizer hypothesis.
      * Returns the text still owed to the editor ("" when the hypothesis is
-     * entirely stale). A probationary carry that the hypothesis does not
-     * overlap is genuinely new speech — the carry dies immediately so it
-     * can never mis-strip a later sentence that happens to begin with the
-     * same words.
+     * entirely covered by prior commits).
      */
     fun strip(text: String): String {
-        val clean = text.trim()
-        if (carry.isEmpty()) return clean
-        if (clean == carry) {
-            probation = false
-            return ""
+        var clean = text.trim()
+        if (clean.isEmpty()) return clean
+
+        // 1. Cross-restart textual overlap (probationary). A probationary
+        //    carry the hypothesis does not overlap is genuinely new speech
+        //    (the S56 contract) — the carry dies immediately so it can never
+        //    mis-strip a later sentence starting with the same words.
+        if (restartCarry.isNotEmpty()) {
+            clean = when {
+                clean == restartCarry -> {
+                    probation = false
+                    ""
+                }
+                // A late, SHORTER hypothesis of already-committed speech is
+                // stale — re-appending it would duplicate committed text.
+                restartCarry.startsWith(clean) -> ""
+                clean.startsWith("$restartCarry ") -> {
+                    probation = false
+                    clean.removePrefix(restartCarry).trimStart()
+                }
+                else -> {
+                    if (probation) {
+                        probation = false
+                        restartCarry = ""
+                    }
+                    clean
+                }
+            }
+            if (clean.isEmpty()) return ""
         }
-        // A late, SHORTER hypothesis of already-committed speech
-        // (recognizers re-emit trimmed interims around a pause) is stale —
-        // re-appending it would duplicate text the commit already wrote.
-        if (carry.startsWith(clean)) return ""
-        if (clean.startsWith("$carry ")) {
-            probation = false
-            return clean.removePrefix(carry).trimStart()
+
+        // 2. Within-session strip — WORD COUNT, not text (S121): the session
+        //    transcript is cumulative, so the first N words are the already-
+        //    committed audio in whatever spelling the recognizer currently
+        //    prefers. A hypothesis no longer than the committed count owes
+        //    nothing (stale or pure revision of committed words).
+        val committedWords = wordCount(sessionCommitted)
+        if (committedWords == 0) return clean
+        val words = clean.split(whitespace)
+        return if (words.size > committedWords) {
+            words.drop(committedWords).joinToString(" ")
+        } else {
+            ""
         }
-        if (probation) {
-            probation = false
-            carry = ""
-        }
-        return clean
     }
 }
