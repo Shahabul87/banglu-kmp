@@ -53,5 +53,10 @@ class S119SlimParityJsTest {
         // unowned keys — this is the guard's contract)
         assertEquals("শব", BangluWebEngine.convert("shob"), "shob")
         assertTrue(BangluWebEngine.convert("shokal").isNotEmpty(), "shokal")
+
+        // fold-attestation law: an entirely-unattested spelling never
+        // composes stem+particle (shushto glued "সুস তো" the moment the
+        // validator went live on slim)
+        assertTrue(' ' !in BangluWebEngine.convert("shushto"), "shushto must not split")
     }
 }

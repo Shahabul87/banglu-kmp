@@ -3788,6 +3788,22 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
 
         val prefixKey = key.dropLast(suffix.first.length)
+        // S119: a stem whose ONLY store reading comes through the lossy
+        // query fold (sh→s / v→bh — raw prefix key owns nothing, folded twin
+        // does) cannot host a particle while the raw whole key is also
+        // unowned: the fold says the user was spelling a DIFFERENT word.
+        // Slim surfaced this the moment the validator went live there:
+        // shushto glued "সুস তো" (shush folds to sus -> সুস) while the
+        // honest fuzzy gives সুস্থ. Raw-owned stems (hobe, dhap) and
+        // fuzzy-rescued chat stems whose key the fold doesn't change
+        // (jactesi -> যাইতেছি) are untouched.
+        val foldedPrefixKey = normalizeIndexQuery(prefixKey)
+        if (phoneticIndex != null && storeLookup(key).isEmpty() &&
+            storeLookup(prefixKey).isEmpty() &&
+            foldedPrefixKey != prefixKey && storeLookup(foldedPrefixKey).isNotEmpty()
+        ) {
+            return null
+        }
         inNegationCompound = true
         val prefix = try {
             convertWord(prefixKey)
@@ -3954,6 +3970,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (dictionary.lookup(key).isNotEmpty()) return null
 
         val stemKey = key.dropLast(1)
+        // S119: same fold-attestation law as tryNegationCompound — a stem
+        // readable only through the lossy query fold never composes stem+ও.
+        val foldedStemKey = normalizeIndexQuery(stemKey)
+        if (phoneticIndex != null && storeLookup(key).isEmpty() &&
+            storeLookup(stemKey).isEmpty() &&
+            foldedStemKey != stemKey && storeLookup(foldedStemKey).isNotEmpty()
+        ) {
+            return null
+        }
         inEmphaticOCompound = true
         val prefix = try {
             convertWord(stemKey)
