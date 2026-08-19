@@ -691,11 +691,15 @@ private fun AdaptiveTopStrip(
                 isExpanded = true
             )
         } else if (suggestions.isNotEmpty()) {
-            // Punctuation predictions fill the strip on an idle buffer, which
-            // used to make the mic and toolbar unreachable — keep both pinned
-            // at the strip's end whenever the user is not mid-word.
-            val idlePunctuationBar = suggestions.all { it.tier == "punctuation" }
-            if (idlePunctuationBar) {
+            // Idle-strip chips (punctuation bar, Bangla next-word predictions,
+            // S96 English predictions) fill the strip whenever the buffer is
+            // empty — which made the mic and toolbar unreachable for most of
+            // an EN-mode session (S122 report). The rule: no chip carries a
+            // word-in-progress (phonetic prefix) -> the user is BETWEEN words
+            // -> pin mic + tools at the strip's end, Gboard-style. Mid-word
+            // conversion/completion chips keep the full width.
+            val idleStrip = suggestions.none { it.phonetic.isNotEmpty() }
+            if (idleStrip) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
