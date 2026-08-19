@@ -438,6 +438,17 @@ object PhoneticIndexBuilder {
     /** য় glide between two vowels, dropped by lazy typists (phebruyari → phebruari). */
     private val VOWEL_Y_VOWEL = Regex("([aeiou])y([aeiou])")
 
+    /**
+     * S118: হ্য after a vowel. Canonical romanization is letter-wise "hy"
+     * (অসহ্য → "osohy"), but the conjunct is PRONOUNCED as a geminated jjh —
+     * সহ্য "shojjo", অসহ্য "oshojjo", ঐতিহ্য "oitijjho" (previously a one-off
+     * MANUAL_ALIASES entry — the class was known but never generalized).
+     * The vowel guard keeps aspirate digraphs (khy/ghy/thy/dhy/bhy/shy…)
+     * untouched: an h after a consonant letter is part of the digraph, an h
+     * after a vowel is the real letter হ.
+     */
+    private val HY_AFTER_VOWEL = Regex("([aeiou])hy")
+
     /** স্য before a vowel, for the S33 cc chat spelling (somosya → somocca). */
     private val SYA_BEFORE_VOWEL = Regex("sy([aeiou])")
 
@@ -565,6 +576,23 @@ object PhoneticIndexBuilder {
         // ডলফিন "dolfin"). The fon/fol keys were EMPTY before this rule —
         // the whole ফ vocabulary depended on seed coverage for f-spellings.
         HabitRule("ph_to_f") { it.replace("ph", "f") },
+        // S118 NOTE — ভ typed as v/vh (ovhab, vhalo, valo): deliberately NOT
+        // habit rules here. bh→v/vh alias branches added ~34MB to the
+        // artifact (ভ vocabulary is huge). v/vh→bh is a deterministic
+        // notation swap with no Bengali collision (v never means ব), so the
+        // ENGINE normalizes the QUERY instead (SmartEngine.normalizeIndexQuery)
+        // — full coverage at zero rows.
+        // S118 হ্য pronunciation class (tester: osojjo/osojya -> garbage;
+        // অসহ্য only reachable via the letter-wise "osohy"). Two spellings
+        // real typists use: the geminated sound ("osojjh" -> jj via
+        // h_lazy_jh right below) and the j+ya-phala reading ("osojy" ->
+        // "osojyo" via final_o -> "osojjo" via ya_fola_gemination). MUST run
+        // before h_lazy_jh so the lazy-jj twin composes, and before final_o
+        // so the trailing inherent vowel lands on both branches.
+        HabitRule("hy_gemination_jjh") { it.replace(HY_AFTER_VOWEL, "$1jjh") },
+        HabitRule("hy_ya_spelling") { it.replace(HY_AFTER_VOWEL, "$1jy") },
+        // the same reading typed with the full "ya" (tester's osojya)
+        HabitRule("hy_ya_full") { it.replace(HY_AFTER_VOWEL, "$1jya") },
         // ঝ emits "jh"; users drop the h (বুঝি → "buji", ঝাল → "jal").
         // Must run BEFORE j_to_z: that rule doubles the alias set with
         // z-variants and would starve the 32-key budget for jh chains

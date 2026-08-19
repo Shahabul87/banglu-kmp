@@ -930,7 +930,28 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 val normalized = normalizeIndexQuery(key)
                 if (normalized != key) storeLookup(normalized) else emptyList()
             }
-            if (hits.isEmpty()) return null
+            if (hits.isEmpty()) {
+                // S118 echo-vowel retry (tester: "otibo joruri" — অতীব owns
+                // otib/atib but nobody owns otibo): tatsama words with a
+                // single final consonant never get a compiler trailing-o twin
+                // (withTrailingInherentO is cluster-only, a deliberate size
+                // gate), yet the pronounced final ô makes "-o" a natural
+                // typing. When the typed key owns NOTHING, dropping one
+                // trailing o after a consonant and retrying costs no
+                // ambiguity — any word that really owns the -o key never
+                // reaches here. Tier-A owners only: junk twins must not ride
+                // the retry.
+                if (key.length >= 4 && key.last() == 'o' && key[key.length - 2] !in "aeiou") {
+                    val echoHits = storeLookup(key.dropLast(1))
+                        .filter { it.tier == PhoneticIndexHit.TIER_A }
+                    if (echoHits.isNotEmpty()) {
+                        val alternatives = echoHits.drop(1).take(config.maxSuggestions - 1)
+                            .mapIndexed { index, hit -> Alternative(hit.bengali, maxOf(0.70, 0.90 - index * 0.04)) }
+                        return ConversionResult(echoHits.first().bengali, 0.93, ResolutionSource.DICTIONARY, alternatives)
+                    }
+                }
+                return null
+            }
             // S115 NOTE (attempted fix REVERTED, 2026-08-18): filtering
             // tier-B habit-alias floor-frequency primaries (kutsi -> কুটছি@1)
             // broke four pins including the SACRED kassi -> কাচছি invariant —
@@ -987,7 +1008,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * users may also type ee/oo for long vowels — collapse those here.
      */
     private fun normalizeIndexQuery(key: String): String =
+        // S118: ভ typed as v/vh (valo, vai, ovhab — Avro convention). The
+        // index stores only the canonical "bh"; v→bh is a deterministic
+        // notation swap (v never spells ব), so normalize the query instead
+        // of doubling the ভ vocabulary's alias rows (+34MB measured). vh
+        // first, else the v-swap would turn "vh" into "bhh".
         key.replace("ee", "i").replace("oo", "u")
+            .replace("vh", "bh").replace("v", "bh")
 
     // ======================== SINGLE WORD CONVERSION (7-LAYER PIPELINE) ========================
 
@@ -3762,10 +3789,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // store attests (আসবো is store-owned at key asbo but absent from the
         // 476K list, while বলবো is present). A Tier-A store row for the exact
         // prefix key is equally strong stem evidence.
-        val stemAttested = validator.isValid(prefix.bengali) ||
-            phoneticIndex?.containsWord(
-                com.banglu.engine.util.ReverseTransliterator.foldNukta(prefix.bengali)
-            ) == true
+        // S118: presence alone is NOT evidence — "shushto" glued "শুষ তো"
+        // from the floor-band stem শুষ (words-table freq 1 → validator freq
+        // 0, store row tier-B@1). Real glue stems measure 66-95 on the
+        // validator scale; the junk band is exactly the ≤1 frequencies the
+        // loader already excludes. A stem hosts a particle only on a Tier-A
+        // store row for the exact prefix key, or a validator frequency above
+        // that junk band (frequency data may lag the word list during load —
+        // don't reject while it hasn't landed).
+        val stemTierA = storeLookup(prefixKey).any {
+            it.tier == PhoneticIndexHit.TIER_A && it.bengali == prefix.bengali
+        }
+        val stemAttested = stemTierA || (validator.isValid(prefix.bengali) &&
+            (!validator.hasFrequencyData() || validator.getFrequency(prefix.bengali) > 0))
         if (!stemAttested) return null
 
         // Stem tie-break: the in-memory layers can hand back a floor-frequency
@@ -3905,10 +3941,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (prefix.confidence < 0.9) return null
         val stem = prefix.bengali
         if (stem.isEmpty()) return null
-        val stemAttested = validator.isValid(stem) ||
-            phoneticIndex?.containsWord(
-                com.banglu.engine.util.ReverseTransliterator.foldNukta(stem)
-            ) == true
+        // S118: same stem-evidence law as tryNegationCompound — a floor-band
+        // word (validator freq 0, no Tier-A row) is not a stem to build on.
+        val stemTierA = storeLookup(stemKey).any {
+            it.tier == PhoneticIndexHit.TIER_A && it.bengali == stem
+        }
+        val stemAttested = stemTierA || (validator.isValid(stem) &&
+            (!validator.hasFrequencyData() || validator.getFrequency(stem) > 0))
         if (!stemAttested) return null
 
         // ও (separate letter) is always grammatical; the -ো kar spelling only
