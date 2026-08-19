@@ -947,7 +947,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     if (echoHits.isNotEmpty()) {
                         val alternatives = echoHits.drop(1).take(config.maxSuggestions - 1)
                             .mapIndexed { index, hit -> Alternative(hit.bengali, maxOf(0.70, 0.90 - index * 0.04)) }
-                        return ConversionResult(echoHits.first().bengali, 0.93, ResolutionSource.DICTIONARY, alternatives)
+                        // 0.95, not 0.93: the composing mirror only repaints
+                        // store results at >= 0.94 (V2 kar-stability bar) —
+                        // at 0.93 the editor kept the literal ওতিব while
+                        // Space committed অতীব (device-verified WYSIWYG
+                        // break). Tier-A-only evidence earns the bar.
+                        return ConversionResult(echoHits.first().bengali, 0.95, ResolutionSource.DICTIONARY, alternatives)
                     }
                 }
                 return null
