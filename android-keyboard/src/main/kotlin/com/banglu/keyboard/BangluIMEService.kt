@@ -172,7 +172,10 @@ class BangluIMEService : InputMethodService(),
     private val voiceExpectedSelections = ArrayDeque<Int>()
     private var voicePartialCommitJob: Job? = null
     private var voiceRestartJob: Job? = null
-    private var voiceLastAutoCommittedPartial: String? = null
+    /** S120: cumulative committed-transcript carry + cross-restart
+     *  probation — the dedup law is pure and unit-pinned in
+     *  VoiceCarryPolicy(Test); the service only delegates. */
+    private val voiceCarry = VoiceCarryPolicy()
     private var voicePreferOfflineForSession = false
     /** S55: guards the ONE network-class (ERROR_NETWORK/_TIMEOUT/SERVER/
      *  _DISCONNECTED) offline retry per dictation session — see
@@ -2382,7 +2385,7 @@ class BangluIMEService : InputMethodService(),
         voiceLastSpeechEndedAt = 0L
         voicePartialCommitJob?.cancel()
         voicePartialCommitJob = null
-        voiceLastAutoCommittedPartial = null
+        voiceCarry.closeTranscript()
         voiceFruitlessRestarts = 0
         voiceBusyRestarts = 0
         voiceWedgeRestarts = 0
@@ -2394,10 +2397,17 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun startVoiceRecognition() {
-        // S56: a recognizer session's transcript starts from silence — the
-        // auto-committed prefix of the PREVIOUS session must not strip (i.e.
-        // swallow) new speech that happens to begin with the same words.
-        voiceLastAutoCommittedPartial = null
+        // S120 (tester: "voice typing is very unstable, words repeated"): the
+        // old unconditional carry reset here was S56's answer to the swallow
+        // risk, but it created the OPPOSITE bug on flaky networks — every
+        // error restart committed the live partial, the reset forgot it, and
+        // the new session re-heard the same speech and stamped it AGAIN
+        // ("ভালোবাসো | ভালোবাসো তুমি | ভালোবাসো তুমি | …" once per error
+        // cycle). The carry now survives error restarts under PROBATION
+        // (see stripAutoCommittedVoicePrefix): overlap strips, divergence
+        // kills the carry — S56's genuinely-new-speech case still wins.
+        // Clean restarts (after a final result) and fresh onVoiceInput()
+        // sessions still reset the carry at their own sites.
         // S92 (tester: "voice typing is slow after some uses"): NEVER reuse a
         // recognizer instance across sessions. One long-lived client binding
         // accumulates per-session state inside the platform RecognitionService
@@ -2738,7 +2748,7 @@ class BangluIMEService : InputMethodService(),
                 log("voice: result='$best'")
                 if (best.isEmpty()) {
                     log("voice: result already committed by pause timer")
-                    voiceLastAutoCommittedPartial = null
+                    voiceCarry.closeTranscript()
                     voiceCurrentPartial = ""
                     deleteVoiceLivePartial()
                     finishVoiceComposingText()
@@ -2792,21 +2802,8 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
-    private fun stripAutoCommittedVoicePrefix(text: String): String {
-        val committedPartial = voiceLastAutoCommittedPartial?.trim().orEmpty()
-        val cleanText = text.trim()
-        if (committedPartial.isEmpty()) return cleanText
-        if (cleanText == committedPartial) return ""
-        // A late, SHORTER hypothesis of already-committed speech (recognizers
-        // re-emit trimmed interims around a pause) is stale — re-appending it
-        // would duplicate text the pause commit already wrote.
-        if (committedPartial.startsWith(cleanText)) return ""
-        return if (cleanText.startsWith("$committedPartial ")) {
-            cleanText.removePrefix(committedPartial).trimStart()
-        } else {
-            cleanText
-        }
-    }
+    private fun stripAutoCommittedVoicePrefix(text: String): String =
+        voiceCarry.strip(text)
 
     /** S55: shared by every VoiceSessionPolicy retry/restart action — a
      *  partial already visible on screen must not vanish just because the
@@ -2815,7 +2812,7 @@ class BangluIMEService : InputMethodService(),
         val partial = voiceCurrentPartial.trim()
         if (partial.isNotEmpty()) {
             log("voice: committing live partial before restart error=$error text='$partial'")
-            voiceLastAutoCommittedPartial = partial
+            voiceCarry.append(partial)
             commitVoiceFinalText(partial, " ")
         }
     }
@@ -2900,7 +2897,7 @@ class BangluIMEService : InputMethodService(),
                 voiceCurrentPartial.trim() == snapshot
             ) {
                 log("voice: pause commit terminal='$snapshot'")
-                voiceLastAutoCommittedPartial = snapshot
+                voiceCarry.append(snapshot)
                 commitVoiceFinalText(snapshot, "\u0964")
                 suggestions.clear()
             }
@@ -2914,7 +2911,7 @@ class BangluIMEService : InputMethodService(),
         if (pauseMs < VOICE_COMMA_PAUSE_MS) return
         val mark = if (pauseMs >= VOICE_DARI_PAUSE_MS) "\u0964" else ","
         log("voice: measured pause commit mark='$mark' pauseMs=$pauseMs text='$partial'")
-        voiceLastAutoCommittedPartial = partial
+        voiceCarry.append(partial)
         commitVoiceFinalText(partial, mark)
         suggestions.clear()
     }
@@ -3253,10 +3250,7 @@ class BangluIMEService : InputMethodService(),
         voicePartialCommitJob = null
         voiceTokenRefineJob?.cancel()
         voiceTokenRefineJob = null
-        voiceLastAutoCommittedPartial = VoiceAnchorPolicy.cumulativeCommittedPrefix(
-            voiceLastAutoCommittedPartial,
-            voiceCurrentPartial,
-        )
+        voiceCarry.append(voiceCurrentPartial)
         voiceCurrentPartial = ""
         voiceLiveCommittedPartial = ""
         voiceLiveCommitLength = 0
@@ -3435,6 +3429,13 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun restartVoiceRecognitionSoon(afterError: Boolean = false) {
+        // S120: a CLEAN restart follows a final result — that transcript is
+        // closed and committed, so the next session starts with no carry
+        // (the original S56 contract). An ERROR restart interrupted a live
+        // utterance mid-flight: the carry (everything this utterance already
+        // committed) survives, probationary, so the re-heard overlap strips
+        // instead of duplicating.
+        if (afterError) voiceCarry.armProbation() else voiceCarry.closeTranscript()
         voiceInputState.value = VoiceInputState.LISTENING
         voiceInputLevel.value = 0f
         voiceRestartJob?.cancel()
@@ -3558,7 +3559,7 @@ class BangluIMEService : InputMethodService(),
         voiceLiveCommitLength = 0
         voiceLastLivePartialUpdateAt = 0L
         voiceCommittedText = ""
-        voiceLastAutoCommittedPartial = null
+        voiceCarry.closeTranscript()
         lastVoiceCommitLength = 0
         voiceLastSegmentText = ""
         currentVoiceSessionCommitLength = 0
@@ -3575,7 +3576,7 @@ class BangluIMEService : InputMethodService(),
         voiceLiveCommittedPartial = ""
         voiceLiveCommitLength = 0
         voiceLastLivePartialUpdateAt = 0L
-        voiceLastAutoCommittedPartial = null
+        voiceCarry.closeTranscript()
         if (suggestions.any { it.source == VOICE_DELETE_SOURCE || it.tier == "voice_action" }) {
             suggestions.clear()
         }
