@@ -134,7 +134,20 @@ private fun scaledSp(base: Float) = (base * LocalKeyboardFontScale.current).sp
 private fun scaledDp(base: Dp) = base * LocalKeyboardHeightScale.current
 
 @Composable
-private fun scaledKeyHeight(base: Dp): Dp = maxOf(base * LocalKeyboardHeightScale.current, MinKeyTouchHeight)
+private fun scaledKeyHeight(base: Dp): Dp {
+    // S117: the touch floor must be orientation-aware. Landscape only has
+    // 360dp of height on a 20:9 phone — the portrait 48dp floor swallowed the
+    // 0.78 landscape scale (49dp * 0.78 = 38.2dp -> clamped back to 48dp) and
+    // the keyboard ate 62% of the screen. 38dp rows are the Gboard-class
+    // landscape norm; keys there are ~2x wider than portrait, so the touch
+    // target area stays comfortably above portrait keys.
+    val floor = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+        MinKeyTouchHeightLandscape
+    } else {
+        MinKeyTouchHeight
+    }
+    return maxOf(base * LocalKeyboardHeightScale.current, floor)
+}
 
 @Composable
 private fun currentKeyGapH(): Dp {
@@ -160,6 +173,7 @@ private val NumberRowHeight = 43.dp
 private val LetterKeyRowHeight = 49.dp
 private val BottomKeyRowHeight = 51.dp
 private val MinKeyTouchHeight = 48.dp
+private val MinKeyTouchHeightLandscape = 38.dp
 private val TopStripHeight = 38.dp
 private val ToolbarExpandedHeight = 40.dp
 private val ToolbarCollapsedHeight = 36.dp
@@ -1436,7 +1450,13 @@ private fun BangluSuggestionRow(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        if (suggestion.phonetic.isNotEmpty() && isFirst) {
+                        // S117: the two-line chip (word + roman hint) needs the
+                        // full 38dp portrait strip; in the 0.78x landscape strip
+                        // the hint line clipped mid-glyph. Landscape is single-
+                        // line, Gboard-style.
+                        val hintFits =
+                            LocalConfiguration.current.orientation != Configuration.ORIENTATION_LANDSCAPE
+                        if (suggestion.phonetic.isNotEmpty() && isFirst && hintFits) {
                             Text(
                                 text = displayPhoneticHint(suggestion.phonetic),
                                 color = colors.subText,
@@ -1967,6 +1987,12 @@ private fun EnterActionKey(
                 .background(if (isPressed) colors.keyPressed else bgColor),
             contentAlignment = Alignment.Center
         ) {
+            // S117: the arrow glyphs and their optical-centering offsets were
+            // tuned for the 51dp portrait row. Landscape rows are ~0.78x that,
+            // and the fixed -12dp lift pushed the clipped \u21B5 out of the key.
+            // Scale both by the ACTUAL key height so the glyph stays centered
+            // at every row height (portrait normal keeps ratio = 1, unchanged).
+            val heightRatio = height / BottomKeyRowHeight
             Text(
                 text = label,
                 color = colors.keyText,
@@ -1975,7 +2001,7 @@ private fun EnterActionKey(
                         isHorizontalArrow -> 32
                         isReturnArrow -> 32
                         else -> 30
-                    }
+                    } * heightRatio
                 ),
                 fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center,
@@ -1983,12 +2009,12 @@ private fun EnterActionKey(
                 modifier = Modifier.offset(
                     x = when (label) {
                         "\u21E5" -> (-1).dp
-                        "\u21B5" -> (-5).dp
+                        "\u21B5" -> (-5).dp * heightRatio
                         else -> 0.dp
                     },
                     y = when (label) {
                         "\u2192", "\u21E5" -> (-1).dp
-                        "\u21B5" -> (-12).dp
+                        "\u21B5" -> (-12).dp * heightRatio
                         else -> 0.dp
                     }
                 )
