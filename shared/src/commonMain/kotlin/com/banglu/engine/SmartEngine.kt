@@ -3850,6 +3850,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
+        // S118c (astitto class, found by the full অ-onset study): when the
+        // typed key's own tier-A owner IS the stem word, the "suffix" is the
+        // word's own trailing syllable, never a particle — অস্তিত্ব owns
+        // "astitto"@81, yet stem astit resolved to the same অস্তিত্ব and the
+        // glue emitted "অস্তিত্ব তো". The S79 evidence-competitive deferral
+        // below can't catch this shape: the owner and the stem are the SAME
+        // word, so the margin comparison is a tie by construction. All 14
+        // তো-glue misses in the 4,530-key a-variant study were this class.
+        if (storeLookup(key).any { it.tier == PhoneticIndexHit.TIER_A && it.bengali == stem }) {
+            return null
+        }
+
         // S79 (নে classes): the deferred whole-word decision. The chat
         // register is the product's first promise — a rare real word on the
         // key (পার্বণে@65 on parbone) defers the softener only when it CLEARLY

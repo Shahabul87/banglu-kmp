@@ -93,6 +93,17 @@ class S118GeneralClassesJvmTest {
     }
 
     @Test
+    fun ownWordNeverGluesItsOwnTail() {
+        // S118c (full অ-onset study, 14/15 a-variant misses): -ত্ব words typed
+        // with the a-onset glued a phantom তো because the whole-key owner IS
+        // the stem (অস্তিত্ব owns "astitto"@81; stem astit -> অস্তিত্ব too).
+        assertEquals("অস্তিত্ব", engine.convertWord("astitto").bengali, "astitto")
+        assertEquals("অস্তিত্ব", engine.convertWord("ostitto").bengali, "ostitto")
+        assertEquals("অস্তিত্ব", engine.convertWord("awstitto").bengali, "awstitto")
+        assertEquals("অমরত্ব", engine.convertWord("amorotto").bengali, "amorotto")
+    }
+
+    @Test
     fun realGlueStemsKeepWorking() {
         assertEquals("বলবোনে", engine.convertWord("bolbone").bengali, "bolbone")
         assertEquals("হবে তো", engine.convertWord("hobeto").bengali, "hobeto")
