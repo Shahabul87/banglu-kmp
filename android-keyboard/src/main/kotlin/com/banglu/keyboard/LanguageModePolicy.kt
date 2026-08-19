@@ -41,6 +41,8 @@ internal object LanguageModePolicy {
             Result(opposite, opposite)
         }
         KeyboardMode.CLIPBOARD -> Result(letterMode, letterMode)
+        // S122: no globe key on the numpad; if it ever fires, exit to letters.
+        KeyboardMode.NUMBER -> Result(letterMode, letterMode)
     }
 
     /** Keyboard re-shown while a transient layer was up: fall back to letters. */

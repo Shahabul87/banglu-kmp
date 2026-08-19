@@ -6,7 +6,8 @@ enum class KeyboardMode {
     SYMBOLS_1,  // Symbols page 1
     SYMBOLS_2,  // Symbols page 2
     EMOJI,      // Emoji picker panel
-    CLIPBOARD   // Local clipboard history panel
+    CLIPBOARD,  // Local clipboard history panel
+    NUMBER      // S122: numeric keypad for number/phone/PIN fields
 }
 
 enum class ShiftState {

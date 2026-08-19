@@ -177,6 +177,12 @@ class BangluIMEService : InputMethodService(),
      *  VoiceCarryPolicy(Test); the service only delegates. */
     private val voiceCarry = VoiceCarryPolicy()
     private var voicePreferOfflineForSession = false
+    /** S122: dictation language is captured per session — EN mode dictates
+     *  English; restarts of the same dictation keep the language. */
+    private var voiceSessionLanguage = VOICE_LANGUAGE
+    private val voiceSessionEnglish: Boolean get() = voiceSessionLanguage.startsWith("en")
+    /** S122: current field is a phone-class number field (numpad shows +*#). */
+    private val numberPadPhone = mutableStateOf(false)
     /** S55: guards the ONE network-class (ERROR_NETWORK/_TIMEOUT/SERVER/
      *  _DISCONNECTED) offline retry per dictation session — see
      *  VoiceSessionPolicy. Reset at the top of every fresh onVoiceInput(). */
@@ -401,6 +407,7 @@ class BangluIMEService : InputMethodService(),
 
         /** S96: strip chips produced by the English typing suite. */
         private const val ENGLISH_WORD_SOURCE = "english_word"
+        private const val EMOJI_WORD_SOURCE = "emoji_word"
 
         /** S98: identity-assist chips (email fills / domain completions). */
         private const val IDENTITY_FILL_SOURCE = "identity_fill"
@@ -1293,7 +1300,10 @@ class BangluIMEService : InputMethodService(),
                         onBackFromEmoji = kbOnBackFromEmoji,
                         onEmojiSearch = kbOnEmojiSearch,
                         emojiInitialCategory = emojiInitialCategory.value,
-                        recentEmojisProvider = kbRecentEmojisProvider
+                        recentEmojisProvider = kbRecentEmojisProvider,
+                        numberPadPhone = numberPadPhone.value,
+                        voiceEnglishSession = voiceInputState.value != VoiceInputState.IDLE &&
+                            voiceSessionEnglish
                     )
                 }
             }
@@ -1351,6 +1361,16 @@ class BangluIMEService : InputMethodService(),
         keyboardMode.value = modeResult.mode
         letterModeBeforeSymbols = modeResult.letterMode
         collapseTransientKeyboardUi()
+        // S122: number/phone/PIN/datetime fields get the numeric keypad —
+        // stock-keyboard behavior; ABC exits to the letter mode above. Set
+        // AFTER collapseTransientKeyboardUi, which folds non-letter modes
+        // back to letters and would undo this.
+        val startTypeClass = (info?.inputType ?: 0) and InputType.TYPE_MASK_CLASS
+        val numberField = startTypeClass == InputType.TYPE_CLASS_NUMBER ||
+            startTypeClass == InputType.TYPE_CLASS_PHONE ||
+            startTypeClass == InputType.TYPE_CLASS_DATETIME
+        numberPadPhone.value = startTypeClass == InputType.TYPE_CLASS_PHONE
+        if (numberField) keyboardMode.value = KeyboardMode.NUMBER
         clearCommitCaches()
         // S96: an EN-mode field starts with the completion/prediction strip.
         if (keyboardMode.value == KeyboardMode.ENGLISH) refreshEnglishSuggestionsAsync()
@@ -1713,6 +1733,15 @@ class BangluIMEService : InputMethodService(),
                 autoCorrectUndoSuggestion()?.let { suggestions.add(it) }
                 items.forEach { w ->
                     suggestions.add(SmartSuggestion(w, 0.9, ENGLISH_WORD_SOURCE, prefix, "en"))
+                }
+                // S122: inline emoji suggestions — typed word matches an
+                // emoji keyword (love -> ❤️), Gboard/Samsung behavior. The
+                // 3-script keyword data has existed since S57; this wires it
+                // into the strip.
+                if (prefix.length >= 2) {
+                    EmojiKeywords.suggestFor(prefix).forEach { e ->
+                        suggestions.add(SmartSuggestion(e, 0.9, EMOJI_WORD_SOURCE, prefix, "emoji"))
+                    }
                 }
             }
         }
@@ -2198,6 +2227,24 @@ class BangluIMEService : InputMethodService(),
             return
         }
 
+        // S122: emoji chip replaces the typed keyword with the emoji itself
+        // (Gboard semantics — "love" + ❤️-tap leaves just ❤️).
+        if (suggestion.source == EMOJI_WORD_SOURCE) {
+            val emojiIc = currentInputConnection ?: return
+            val beforeEmoji = emojiIc.getTextBeforeCursor(48, 0)?.toString().orEmpty()
+            val (emojiPrefix, _) = englishContextFrom(beforeEmoji)
+            emojiIc.beginBatchEdit()
+            if (emojiPrefix.isNotEmpty()) emojiIc.deleteSurroundingText(emojiPrefix.length, 0)
+            emojiIc.commitText(suggestion.bengali, 1)
+            emojiIc.endBatchEdit()
+            lastCommittedTextLength = suggestion.bengali.length
+            sessionSuggestionTapCount++
+            englishWordPrefix = ""
+            rememberRecentEmoji(suggestion.bengali)
+            refreshEnglishSuggestionsAsync()
+            return
+        }
+
         val ic = currentInputConnection ?: return
 
         if (buffer.isEmpty()) {
@@ -2373,6 +2420,10 @@ class BangluIMEService : InputMethodService(),
         voiceInputLevel.value = 0f
         voiceCancelRequested = false
         voiceStopRequested = false
+        // S122: EN mode dictates English; the language is per-session so
+        // mid-dictation mode flips can't switch recognizers underneath.
+        voiceSessionLanguage =
+            if (keyboardMode.value == KeyboardMode.ENGLISH) "en-US" else VOICE_LANGUAGE
         voiceDictationActive = true
         currentVoiceSessionCommitLength = 0
         voiceHasLiveComposing = false
@@ -2430,15 +2481,18 @@ class BangluIMEService : InputMethodService(),
 
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, VOICE_LANGUAGE)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, VOICE_LANGUAGE)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, voiceSessionLanguage)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, voiceSessionLanguage)
             putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, voicePreferOfflineForSession)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, VOICE_COMPLETE_SILENCE_MS)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, VOICE_POSSIBLY_COMPLETE_SILENCE_MS)
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "বাংলায় বলুন")
+            putExtra(
+                RecognizerIntent.EXTRA_PROMPT,
+                if (voiceSessionEnglish) "Speak in English" else "বাংলায় বলুন"
+            )
             // S69: several Google-app/OEM recognizer builds return
             // ERROR_CLIENT or silently drop results without the calling
             // package for attribution — AOSP LatinIME sets it too.
@@ -2446,7 +2500,7 @@ class BangluIMEService : InputMethodService(),
         }
 
         try {
-            log("onVoiceInput: startListening $VOICE_LANGUAGE offline=$voicePreferOfflineForSession")
+            log("onVoiceInput: startListening $voiceSessionLanguage offline=$voicePreferOfflineForSession")
             voiceInputState.value = VoiceInputState.PROCESSING
             voiceInputLevel.value = 0f
             armVoiceWatchdog()
@@ -2909,7 +2963,10 @@ class BangluIMEService : InputMethodService(),
         if (partial.isEmpty() || voiceLastSpeechEndedAt <= 0L) return
         val pauseMs = (System.currentTimeMillis() - voiceLastSpeechEndedAt).coerceAtLeast(0L)
         if (pauseMs < VOICE_COMMA_PAUSE_MS) return
-        val mark = if (pauseMs >= VOICE_DARI_PAUSE_MS) "\u0964" else ","
+        val mark = when {
+            pauseMs >= VOICE_DARI_PAUSE_MS -> if (voiceSessionEnglish) "." else "\u0964"
+            else -> ","
+        }
         log("voice: measured pause commit mark='$mark' pauseMs=$pauseMs text='$partial'")
         voiceCarry.append(partial)
         commitVoiceFinalText(partial, mark)
@@ -2938,7 +2995,7 @@ class BangluIMEService : InputMethodService(),
         voiceCurrentPartial = instantPartial
         commitVoiceLivePartialIncrementally(instantPartial)
 
-        if (!containsLatinToken(rawPartial)) return
+        if (voiceSessionEnglish || !containsLatinToken(rawPartial)) return
         val sessionToken = imeTextSessionToken
         voiceTokenRefineJob?.cancel()
         voiceTokenRefineJob = serviceScope.launch {
@@ -3167,7 +3224,7 @@ class BangluIMEService : InputMethodService(),
         // with exactly what we committed (same data-loss guard as
         // deleteLastVoiceCommit): further speech, an app switch, or the user
         // editing the text must never be silently overwritten.
-        if (containsLatinToken(segment)) {
+        if (!voiceSessionEnglish && containsLatinToken(segment)) {
             val expectedCommitted = committed
             val sessionToken = imeTextSessionToken
             serviceScope.launch {
@@ -3312,7 +3369,7 @@ class BangluIMEService : InputMethodService(),
         // testers got । after every dictation. Only a genuinely long
         // pause earns sentence-final punctuation now.
         return when {
-            pauseMs >= VOICE_DARI_PAUSE_MS -> "\u0964"
+            pauseMs >= VOICE_DARI_PAUSE_MS -> if (voiceSessionEnglish) "." else "\u0964"
             pauseMs >= VOICE_COMMA_PAUSE_MS -> ","
             else -> " "
         }
@@ -3336,7 +3393,7 @@ class BangluIMEService : InputMethodService(),
             .replace(" ,", ",")
             .replace(" ?", "?")
             .replace(" !", "!")
-            .let { normalizeVoiceLatinTokens(it, useInstantPreview) }
+            .let { if (voiceSessionEnglish) it else normalizeVoiceLatinTokens(it, useInstantPreview) }
     }
 
     // S71: token normalization extracted to VoiceTextNormalizer (unit-pinned).

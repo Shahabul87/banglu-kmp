@@ -271,6 +271,11 @@ fun BangluKeyboardLayout(
     themePref: String = "dark",
     keyboardHeightMode: String = "normal",
     keyboardFontSizeMode: String = "large",
+    /** S122: phone-class number field — the numpad shows plus/star/hash. */
+    numberPadPhone: Boolean = false,
+    /** S122: the running dictation is an English session — the voice panel
+     *  prompt must say so instead of "বাংলায় বলুন". */
+    voiceEnglishSession: Boolean = false,
     onKeyPress: (Char) -> Unit,
     /** S99: probabilistic touch targeting — letter presses report position. */
     onLetterTouch: ((Char, Char?, Char?, Float) -> Unit)? = null,
@@ -367,6 +372,7 @@ fun BangluKeyboardLayout(
                 VoiceStatusPanel(
                     state = voiceInputState,
                     levelProvider = voiceInputLevelProvider,
+                    englishSession = voiceEnglishSession,
                     onRetry = onVoiceInput,
                     onStop = onVoiceStop,
                     onCancel = onVoiceCancel
@@ -601,6 +607,21 @@ fun BangluKeyboardLayout(
                         onBackToKeyboard = onBackToLetters
                     )
                 }
+                KeyboardMode.NUMBER -> {
+                    // S122: dedicated numeric keypad for number/phone/PIN
+                    // fields — every stock keyboard shows one; Banglu used to
+                    // present full QWERTY here.
+                    NumberPadLayout(
+                        phone = numberPadPhone,
+                        enterLabel = enterLabel,
+                        onKeyPress = onKeyPress,
+                        onBackspace = onBackspace,
+                        onBackspaceRepeat = onBackspaceRepeat,
+                        onBackspaceWord = onBackspaceWord,
+                        onEnter = onEnter,
+                        onBackToLetters = onBackToLetters
+                    )
+                }
             }
         }
     }
@@ -778,6 +799,7 @@ private fun ToolbarRow(
 private fun VoiceStatusPanel(
     state: VoiceInputState,
     levelProvider: () -> Float,
+    englishSession: Boolean = false,
     onRetry: () -> Unit,
     onStop: () -> Unit,
     onCancel: () -> Unit
@@ -788,7 +810,8 @@ private fun VoiceStatusPanel(
     val configuration = LocalConfiguration.current
     val compact = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val message = when (state) {
-        VoiceInputState.LISTENING -> "\u09ac\u09be\u0982\u09b2\u09be\u09df \u09ac\u09b2\u09c1\u09a8"
+        VoiceInputState.LISTENING ->
+            if (englishSession) "Speak in English" else "\u09ac\u09be\u0982\u09b2\u09be\u09df \u09ac\u09b2\u09c1\u09a8"
         VoiceInputState.PROCESSING -> "\u09b2\u09c7\u0996\u09be \u09b9\u099a\u09cd\u099b\u09c7\u2026"
         VoiceInputState.STOPPED -> "\u09ad\u09df\u09c7\u09b8 \u09a5\u09be\u09ae\u09be\u09a8\u09cb \u09b9\u09df\u09c7\u099b\u09c7"
         VoiceInputState.PERMISSION_REQUIRED -> "\u09ae\u09be\u0987\u0995\u09cd\u09b0\u09cb\u09ab\u09cb\u09a8 \u09aa\u09be\u09b0\u09ae\u09bf\u09b6\u09a8 \u09a6\u09bf\u09a8"
@@ -1911,6 +1934,91 @@ private fun BottomRow(
         EnterActionKey(
             label = enterLabel,
             modifier = Modifier.weight(1.5f),
+            height = keyHeight,
+            bgColor = colors.specialKeyBg,
+            hitPaddingH = hitPad,
+            onClick = onEnter
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// S122: Numeric keypad (number / phone / PIN fields)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Stock-keyboard numpad: 3-wide digit grid + an action column. Number
+ *  fields get . , - ; phone fields get + * # . Digits commit ASCII (apps
+ *  parsing number fields expect 0-9, never ০-৯). */
+@Composable
+private fun NumberPadLayout(
+    phone: Boolean,
+    enterLabel: String,
+    onKeyPress: (Char) -> Unit,
+    onBackspace: () -> Unit,
+    onBackspaceRepeat: (Int) -> Unit,
+    onBackspaceWord: () -> Unit,
+    onEnter: () -> Unit,
+    onBackToLetters: () -> Unit
+) {
+    val colors = LocalKeyboardColors.current
+    val keyHeight = scaledKeyHeight(LetterKeyRowHeight)
+    val hitPad = currentKeyGapH() / 2
+
+    @Composable
+    fun digit(label: String, modifier: Modifier) {
+        KeyButton(
+            label = label,
+            modifier = modifier,
+            height = keyHeight,
+            bgColor = colors.keyBg,
+            fontSize = 26,
+            hitPaddingH = hitPad,
+            onClick = { onKeyPress(label.first()) }
+        )
+    }
+
+    @Composable
+    fun special(label: String, modifier: Modifier, onClick: () -> Unit) {
+        KeyButton(
+            label = label,
+            modifier = modifier,
+            height = keyHeight,
+            bgColor = colors.specialKeyBg,
+            fontSize = 18,
+            hitPaddingH = hitPad,
+            onClick = onClick
+        )
+    }
+
+    Row(modifier = Modifier.fillMaxWidth()) {
+        digit("1", Modifier.weight(1f)); digit("2", Modifier.weight(1f)); digit("3", Modifier.weight(1f))
+        BackspaceKey(
+            modifier = Modifier.weight(1f),
+            height = keyHeight,
+            hitPaddingH = hitPad,
+            onBackspace = onBackspace,
+            onBackspaceRepeat = onBackspaceRepeat,
+            onBackspaceWord = onBackspaceWord
+        )
+    }
+    Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
+    Row(modifier = Modifier.fillMaxWidth()) {
+        digit("4", Modifier.weight(1f)); digit("5", Modifier.weight(1f)); digit("6", Modifier.weight(1f))
+        special(if (phone) "+" else "-", Modifier.weight(1f)) { onKeyPress(if (phone) '+' else '-') }
+    }
+    Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
+    Row(modifier = Modifier.fillMaxWidth()) {
+        digit("7", Modifier.weight(1f)); digit("8", Modifier.weight(1f)); digit("9", Modifier.weight(1f))
+        special(if (phone) "*" else ",", Modifier.weight(1f)) { onKeyPress(if (phone) '*' else ',') }
+    }
+    Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
+    Row(modifier = Modifier.fillMaxWidth()) {
+        special("ABC", Modifier.weight(1f)) { onBackToLetters() }
+        special(if (phone) "#" else ".", Modifier.weight(1f)) { onKeyPress(if (phone) '#' else '.') }
+        digit("0", Modifier.weight(1f))
+        EnterActionKey(
+            label = enterLabel,
+            modifier = Modifier.weight(1f),
             height = keyHeight,
             bgColor = colors.specialKeyBg,
             hitPaddingH = hitPad,

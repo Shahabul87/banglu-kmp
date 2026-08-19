@@ -7,6 +7,24 @@ package com.banglu.keyboard
  */
 object EmojiKeywords {
 
+    /** S122: keyword -> emoji reverse index for inline suggestion chips
+     *  (type "love" -> ❤️ in the strip). Single-token keywords only; at most
+     *  two emojis per word keep the strip tidy. Built lazily once. */
+    val byKeyword: Map<String, List<String>> by lazy {
+        val m = LinkedHashMap<String, MutableList<String>>()
+        for ((emoji, words) in keywords) {
+            for (w in words) {
+                if (' ' in w) continue
+                val k = w.lowercase()
+                val list = m.getOrPut(k) { mutableListOf() }
+                if (list.size < 2 && emoji !in list) list.add(emoji)
+            }
+        }
+        m
+    }
+
+    fun suggestFor(word: String): List<String> = byKeyword[word.lowercase()].orEmpty()
+
     val keywords: Map<String, List<String>> = mapOf(
         // ── Smileys ────────────────────────────────────────────────────────
         "😀" to listOf("grin", "smile", "happy", "hasi", "হাসি", "খুশি", "khushi"),
