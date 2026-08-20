@@ -44,6 +44,20 @@ interface PlatformStorage {
     suspend fun clearUserBigrams() {}
 
     /**
+     * S128 (production audit): the ONE authoritative erasure — every piece
+     * of learned personal data: learned words, custom conversions, user
+     * bigrams, English-typing learning, and saved identities (emails).
+     * The default composes the existing operations so every platform gets
+     * complete semantics; platforms may override to remove keys outright.
+     */
+    suspend fun clearAllLearningData() {
+        clearLearnedWords()
+        clearUserBigrams()
+        saveEnglishUserData("")
+        saveIdentityUserData("")
+    }
+
+    /**
      * S96: the English typing suite's learning blob (user word counts +
      * next-word bigrams, EnglishTypingEngine.serialize format). One bounded
      * string; platforms without an EN keyboard surface keep the no-op.

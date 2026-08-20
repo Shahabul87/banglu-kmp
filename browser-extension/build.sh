@@ -17,5 +17,5 @@ if [ -z "$REQ_V" ] || [ "$SLIM_V" != "$REQ_V" ]; then
   exit 1
 fi
 cp "$ROOT"/shared/banglu-slim.json vendor/banglu-slim.json
-npx --yes esbuild vendor/banglu-engine.js --bundle --format=esm --minify --outfile=vendor/banglu-engine.bundle.js
+npx --yes esbuild@0.28.2 vendor/banglu-engine.js --bundle --format=esm --minify --outfile=vendor/banglu-engine.bundle.js
 echo "vendor refreshed: $(ls vendor | wc -l | tr -d ' ') files"

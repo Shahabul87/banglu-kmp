@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- S128 (production audit): allowBackup=false covers classic backup, but
+     Android 12+ device-to-device transfer follows THESE rules. Everything
+     the keyboard stores is learned personal typing data (learned words,
+     bigrams, English learning, saved identities, clipboard history) — none
+     of it may leave the device by any transfer path. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+    </device-transfer>
+</data-extraction-rules>

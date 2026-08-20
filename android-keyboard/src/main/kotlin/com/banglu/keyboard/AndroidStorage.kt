@@ -123,6 +123,20 @@ class AndroidStorage(context: Context) : PlatformStorage {
             .apply()
     }
 
+    // S128 (production audit): "Clear learned data" must erase EVERYTHING the
+    // keyboard has learned about the user — the old path left user bigrams,
+    // English-typing learning, and saved email identities behind while the
+    // UI claimed the data was gone. Keys are removed outright.
+    override suspend fun clearAllLearningData() {
+        prefs.edit()
+            .remove(scopedKey(KEY_LEARNED_WORDS))
+            .remove(scopedKey(KEY_CUSTOM_CONVERSIONS))
+            .remove(scopedKey(KEY_USER_BIGRAMS))
+            .remove(scopedKey(KEY_ENGLISH_USER_DATA))
+            .remove(scopedKey(KEY_IDENTITY_USER_DATA))
+            .apply()
+    }
+
     override suspend fun getUserBigrams(): Map<String, Map<String, Int>> {
         val raw = getScopedString(KEY_USER_BIGRAMS) ?: return emptyMap()
         val pairs = mutableMapOf<String, MutableMap<String, Int>>()

@@ -546,6 +546,28 @@ object SmartEngineAdapter {
     }
 
     /**
+     * S128 (production audit): the ONE authoritative erasure. Clears every
+     * category of learned personal data — persisted (learned words, custom
+     * conversions, bigrams, English learning, saved identities) AND live
+     * in-memory state (preference maps, the English-typing engine, the
+     * identity store, and the loaded engine itself, which is dropped and
+     * rebuilt clean on next use). Conversion behavior is untouched.
+     */
+    suspend fun eraseAllLearning() {
+        storage?.clearAllLearningData()
+        com.banglu.engine.util.runSynchronized(preferenceLock) {
+            customPreferenceMap.clear()
+            selectedPreferenceMap.clear()
+        }
+        englishTyping.clearLearning()
+        englishLearningLoaded = false
+        identityAssist.clear()
+        identityLoaded = false
+        engine = null
+        engineFullyLoaded = false
+    }
+
+    /**
      * Runtime settings from Android preferences. The IME calls this whenever
      * settings are reloaded so learning can be disabled without rebuilding.
      */

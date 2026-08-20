@@ -14,6 +14,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -206,6 +208,9 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
     var keyboardHeight by remember { mutableStateOf(prefs.getString("keyboard_height", "normal") ?: "normal") }
     var keyboardFontSize by remember { mutableStateOf(prefs.getString("keyboard_font_size", "large") ?: "large") }
     var showClearLearnedDialog by remember { mutableStateOf(false) }
+    // S128 (production audit): the dictionary data licenses (CMUdict,
+    // wordfreq/SUBTLEX) require an in-app notices surface.
+    var showLicensesDialog by remember { mutableStateOf(false) }
     var diagnosticsSummary by remember { mutableStateOf(buildDiagnosticsSummary(prefs)) }
 
     fun saveBoolean(key: String, value: Boolean) { prefs.edit().putBoolean(key, value).apply() }
@@ -439,6 +444,11 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
             // sizes) stays out of the public settings — the About section sells
             // the outcome, not the implementation.
             item { BrandInfoRow("ইঞ্জিন", "স্মার্ট বাংলা ইঞ্জিন — সম্পূর্ণ অফলাইন") }
+            item {
+                BrandActionRow("ওপেন সোর্স লাইসেন্স", "অভিধান ডেটার থার্ড-পার্টি লাইসেন্স নোটিশ") {
+                    showLicensesDialog = true
+                }
+            }
 
             // ── Diagnostics ──
             item { BrandSectionHeader("ডায়াগনস্টিকস", "Diagnostics") }
@@ -492,6 +502,33 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
             }
         }
 
+        if (showLicensesDialog) {
+            val licensesText = remember {
+                runCatching {
+                    context.assets.open("LICENSES.md").bufferedReader().use { it.readText() }
+                }.getOrElse { "License notices could not be loaded." }
+            }
+            AlertDialog(
+                onDismissRequest = { showLicensesDialog = false },
+                containerColor = WarmCard,
+                title = { Text("ওপেন সোর্স লাইসেন্স", fontWeight = FontWeight.Bold) },
+                text = {
+                    Text(
+                        licensesText,
+                        color = TextMuted,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        modifier = Modifier
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState())
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { showLicensesDialog = false }) { Text("বন্ধ করুন") }
+                }
+            )
+        }
+
         if (showClearLearnedDialog) {
             AlertDialog(
                 onDismissRequest = { showClearLearnedDialog = false },
@@ -502,7 +539,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                 },
                 text = {
                     Text(
-                        "এতে আপনার বাছাই করা সাজেশন, শেখা শব্দ এবং নিজের যোগ করা কনভার্সন মুছে যাবে। থিম, উচ্চতা ও অন্য সেটিংস থাকবে।",
+                        "এতে কীবোর্ডের শেখা সবকিছু মুছে যাবে — শেখা শব্দ, বাছাই করা সাজেশন, নিজের যোগ করা কনভার্সন, পরের-শব্দ শেখা, ইংরেজি টাইপিং শেখা এবং সংরক্ষিত ইমেইল ঠিকানা। থিম, উচ্চতা ও অন্য সেটিংস থাকবে।",
                         color = TextMuted,
                         fontSize = 16.sp,
                         lineHeight = 22.sp
@@ -513,8 +550,13 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                         onClick = {
                             showClearLearnedDialog = false
                             coroutineScope.launch {
-                                storage.clearLearnedWords()
-                                Toast.makeText(context, "শেখা শব্দ মুছে ফেলা হয়েছে", Toast.LENGTH_SHORT).show()
+                                // S128 (production audit): ONE authoritative
+                                // erase — persisted keys AND live engine
+                                // memory; the old storage.clearLearnedWords()
+                                // left bigrams, English learning and saved
+                                // emails behind.
+                                com.banglu.engine.SmartEngineAdapter.eraseAllLearning()
+                                Toast.makeText(context, "শেখা সব ডেটা মুছে ফেলা হয়েছে", Toast.LENGTH_SHORT).show()
                             }
                         }
                     ) {

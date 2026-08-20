@@ -34,7 +34,6 @@ class S108SlimVersionGateJsTest {
         val candidates = arrayOf(
             "banglu-slim.json", "shared/banglu-slim.json",
             "../banglu-slim.json", "../../banglu-slim.json",
-            "/Users/mdshahabulalam/myprojects/banlgu/banglu-kmp/shared/banglu-slim.json"
         )
         val real = candidates.firstOrNull { fsGate.existsSync(it) as Boolean }
         val json = if (real != null) fsGate.readFileSync(real, "utf8") as String

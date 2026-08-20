@@ -7,7 +7,7 @@
   const HOST_KEY = location.hostname || "local";
   let enabled = true;
 
-  chrome.storage?.sync.get(["disabledSites"], (r) => {
+  chrome.storage?.local.get(["disabledSites"], (r) => {
     enabled = !(r.disabledSites || []).includes(HOST_KEY);
     if (!enabled) strip.hide();
   });
@@ -155,10 +155,10 @@
       e.preventDefault();
       enabled = !enabled;
       strip.hide();
-      chrome.storage?.sync.get(["disabledSites"], (r) => {
+      chrome.storage?.local.get(["disabledSites"], (r) => {
         const set = new Set(r.disabledSites || []);
         enabled ? set.delete(HOST_KEY) : set.add(HOST_KEY);
-        chrome.storage.sync.set({ disabledSites: [...set] });
+        chrome.storage.local.set({ disabledSites: [...set] });
       });
       return;
     }

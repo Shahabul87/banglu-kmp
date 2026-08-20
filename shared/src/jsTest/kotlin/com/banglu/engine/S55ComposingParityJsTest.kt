@@ -23,7 +23,6 @@ class S55ComposingParityJsTest {
         val candidates = arrayOf(
             "banglu-slim.json", "shared/banglu-slim.json",
             "../banglu-slim.json", "../../banglu-slim.json",
-            "/Users/mdshahabulalam/myprojects/banlgu/banglu-kmp/shared/banglu-slim.json"
         )
         for (c in candidates) if (fs55.existsSync(c) as Boolean) return c
         return null

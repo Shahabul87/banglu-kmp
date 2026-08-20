@@ -2795,7 +2795,7 @@ class BangluIMEService : InputMethodService(),
                     voiceDictationActive = false
                     finishVoiceComposingText()
                     voiceInputState.value = VoiceInputState.ERROR
-                            releaseSpeechRecognizer()
+                    releaseSpeechRecognizer()
                     return
                 }
 

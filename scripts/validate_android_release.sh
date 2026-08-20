@@ -23,9 +23,15 @@ echo "root=$ROOT_DIR"
 echo
 
 echo "== Build and test =="
+# S128 (production audit): the validator passed while lintRelease failed —
+# a false-green release gate. Android lint and the Android unit suites
+# (debug AND release variants) are now mandatory gate members.
 "$ROOT_DIR/gradlew" -p "$ROOT_DIR" \
   :android-keyboard:verifyImePrivacyBoundary \
   :shared:allTests \
+  :android-keyboard:lintRelease \
+  :android-keyboard:testDebugUnitTest \
+  :android-keyboard:testReleaseUnitTest \
   :android-keyboard:assembleRelease \
   :android-keyboard:bundleRelease
 echo

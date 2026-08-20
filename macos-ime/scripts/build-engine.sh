@@ -5,7 +5,7 @@ set -e
 cd "$(dirname "$0")/../.."
 ./gradlew :shared:jsBrowserProductionLibraryDistribution
 mkdir -p macos-ime/Resources/built
-npx --yes esbuild shared/build/dist/js/productionLibrary/banglu-engine.js \
+npx --yes esbuild@0.28.2 shared/build/dist/js/productionLibrary/banglu-engine.js \
   --bundle --format=iife --global-name=BangluNS --minify \
   --outfile=macos-ime/Resources/built/banglu-engine.bundle.js
 # S108: same stale-slim gate as browser-extension/build.sh — the engine

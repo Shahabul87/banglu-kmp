@@ -2263,6 +2263,16 @@ private fun AccountField(
         singleLine = true,
         label = { Text(label) },
         visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        // S128 (production audit): masking alone is not password semantics —
+        // without the Password keyboard type, IMEs may learn/suggest the
+        // password and autofill can't classify the field.
+        keyboardOptions = if (password) {
+            androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Password
+            )
+        } else {
+            androidx.compose.foundation.text.KeyboardOptions.Default
+        },
         modifier = Modifier.fillMaxWidth(),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = AccountPrimary,

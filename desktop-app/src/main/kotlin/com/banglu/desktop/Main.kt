@@ -66,6 +66,17 @@ fun main(args: Array<String>) {
             )
             Item(if (isMac) "যেকোনো অ্যাপে লিখুন: ⌘⇧B চাপুন"
                  else "যেকোনো অ্যাপে লিখুন: Ctrl+Shift+B চাপুন", enabled = false) {}
+            // S128 (production audit): the dictionary data licenses require
+            // an in-app notices surface — opens the bundled LICENSES.md.
+            Item("ওপেন সোর্স লাইসেন্স") {
+                runCatching {
+                    val res = System.getProperty("compose.application.resources.dir")
+                        ?.let { java.io.File(it, "LICENSES.md") }
+                        ?.takeIf { it.exists() }
+                        ?: java.io.File("desktop-app/resources/common/LICENSES.md")
+                    if (res.exists()) java.awt.Desktop.getDesktop().open(res)
+                }
+            }
             Separator()
             Item("বন্ধ করুন") {
                 com.banglu.desktop.editor.DraftFlush.flush?.invoke()

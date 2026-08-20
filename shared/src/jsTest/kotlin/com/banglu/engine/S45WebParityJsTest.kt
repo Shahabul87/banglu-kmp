@@ -10,9 +10,13 @@ class S45WebParityJsTest {
         val candidates = arrayOf(
             "banglu-slim.json", "shared/banglu-slim.json",
             "../banglu-slim.json", "../../banglu-slim.json",
-            "/Users/mdshahabulalam/myprojects/banlgu/banglu-kmp/shared/banglu-slim.json"
         )
         for (c in candidates) if (fs.existsSync(c) as Boolean) return c
+        // S128 (production audit): parity walls must never SILENTLY pass in
+        // CI — a missing slim there means the pipeline forgot to generate it.
+        check(js("typeof process !== 'undefined' && process.env.CI === 'true'") != true) {
+            "banglu-slim.json missing in CI — generate it (dictionary-compiler: slim <db> <out.json>) before :shared:jsNodeTest"
+        }
         return null
     }
 
