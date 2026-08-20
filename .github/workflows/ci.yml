@@ -60,6 +60,8 @@ jobs:
         run: ./gradlew :dictionary-compiler:run --args="slim $PWD/dictionary.sqlite $PWD/shared/banglu-slim.json"
 
       - name: Privacy boundary + full test walls + lint
+        env:
+          BANGLU_SLIM_PATH: ${{ github.workspace }}/shared/banglu-slim.json
         run: |
           ./gradlew \
             :android-keyboard:verifyImePrivacyBoundary \

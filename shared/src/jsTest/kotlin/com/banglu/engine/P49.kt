@@ -15,7 +15,7 @@ class P49 {
     println("P49 seedonly kmon -> ${seed.bengali}/${seed.source}/${seed.confidence}")
     assertTrue(seed.bengali.isNotEmpty(), "seed conversion produced nothing for kmon")
 
-    val path = arrayOf("banglu-slim.json", "shared/banglu-slim.json", "../banglu-slim.json", "../../banglu-slim.json")
+    val path = arrayOf("banglu-slim.json", "shared/banglu-slim.json", "../banglu-slim.json", "../../banglu-slim.json", "../../../../shared/banglu-slim.json", "../../../../../shared/banglu-slim.json")
       .firstOrNull { fs2.existsSync(it) as Boolean }
     if (path == null) {
       println("P49: slim json absent — skipping slim half")

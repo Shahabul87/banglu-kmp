@@ -34,6 +34,9 @@ class S108SlimVersionGateJsTest {
         val candidates = arrayOf(
             "banglu-slim.json", "shared/banglu-slim.json",
             "../banglu-slim.json", "../../banglu-slim.json",
+            // kotlin-js node tests run in <root>/build/js/packages/<module>-test
+            "../../../../shared/banglu-slim.json",
+            "../../../../../shared/banglu-slim.json",
         )
         val real = candidates.firstOrNull { fsGate.existsSync(it) as Boolean }
         val json = if (real != null) fsGate.readFileSync(real, "utf8") as String

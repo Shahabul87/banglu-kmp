@@ -7,9 +7,14 @@ private val fs: dynamic = js("require('fs')")
 
 class S45WebParityJsTest {
     private fun slimPath(): String? {
+        val envPath = js("typeof process !== 'undefined' ? (process.env.BANGLU_SLIM_PATH || null) : null")
+        if (envPath != null) return envPath as String
         val candidates = arrayOf(
             "banglu-slim.json", "shared/banglu-slim.json",
             "../banglu-slim.json", "../../banglu-slim.json",
+            // kotlin-js node tests run in <root>/build/js/packages/<module>-test
+            "../../../../shared/banglu-slim.json",
+            "../../../../../shared/banglu-slim.json",
         )
         for (c in candidates) if (fs.existsSync(c) as Boolean) return c
         // S128 (production audit): parity walls must never SILENTLY pass in

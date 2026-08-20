@@ -20,9 +20,14 @@ private val fs55: dynamic = js("require('fs')")
  */
 class S55ComposingParityJsTest {
     private fun slimPath(): String? {
+        val envPath = js("typeof process !== 'undefined' ? (process.env.BANGLU_SLIM_PATH || null) : null")
+        if (envPath != null) return envPath as String
         val candidates = arrayOf(
             "banglu-slim.json", "shared/banglu-slim.json",
             "../banglu-slim.json", "../../banglu-slim.json",
+            // kotlin-js node tests run in <root>/build/js/packages/<module>-test
+            "../../../../shared/banglu-slim.json",
+            "../../../../../shared/banglu-slim.json",
         )
         for (c in candidates) if (fs55.existsSync(c) as Boolean) return c
         return null
