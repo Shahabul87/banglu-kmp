@@ -33,7 +33,17 @@ kotlin {
             // extension/macOS-IME/web consume. The JS wall is jsNodeTest.
             testTask { enabled = false }
         }
-        nodejs()
+        nodejs {
+            testTask {
+                useMocha {
+                    // S128c (CI hardening): mocha's 2s default killed every
+                    // slim-loading test on shared CI runners — parsing the
+                    // 25MB slim JSON alone can exceed it there. Locally the
+                    // attach is sub-second; this only bounds runaway hangs.
+                    timeout = "120s"
+                }
+            }
+        }
         binaries.library()
         generateTypeScriptDefinitions()
     }
