@@ -43,7 +43,10 @@ jobs:
         run: |
           cat > check_dict_version.py <<'PYEOF'
           import re, sqlite3, sys
-          src = open("shared/src/commonMain/kotlin/com/banglu/engine/DictionaryVersion.kt").read()
+          # encoding is explicit: Python on Windows defaults to the locale
+          # codepage (cp1252), and this file's changelog comments are Bengali,
+          # so a bare open() dies with UnicodeDecodeError on the runner.
+          src = open("shared/src/commonMain/kotlin/com/banglu/engine/DictionaryVersion.kt", encoding="utf-8").read()
           required = re.search(r'REQUIRED\s*=\s*"([^"]+)"', src).group(1)
           conn = sqlite3.connect("dictionary.sqlite")
           actual = conn.execute("SELECT value FROM metadata WHERE key='version'").fetchone()[0]
