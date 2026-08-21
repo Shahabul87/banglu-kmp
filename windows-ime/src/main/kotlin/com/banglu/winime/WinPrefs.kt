@@ -75,13 +75,27 @@ class WinPrefsStore(private val baseDir: File) {
  * Never logs or echoes `exePath` — see CLAUDE.md's secrets policy; a local
  * file path is not a credential, but the brief is explicit that this must
  * not leak it, so failures are reported by exit code alone.
+ *
+ * `set` is synchronous and genuinely blocks for `reg.exe`'s real duration —
+ * callers MUST run it off the UI thread (review finding, Task 8 round 2):
+ * `reg` can stall on registry virtualization, AV interception, or Group
+ * Policy, and Compose-for-Desktop's tray/preview window share one AWT event
+ * thread with the whole menu.
  */
 object StartupRegistry {
     private const val RUN_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
     private const val VALUE_NAME = "BangluTyper"
+    private const val WAIT_TIMEOUT_SECONDS = 5L
 
-    fun set(enabled: Boolean, exePath: String) {
-        if (!isWindowsOs()) return
+    /**
+     * Returns true only on a confirmed, zero-exit-code `reg` run within the
+     * timeout. A `reg.exe` that never returns is killed and reported as a
+     * failure rather than left to block the calling coroutine forever — the
+     * caller must not persist state or flip the checkbox as if this
+     * succeeded when it returns false.
+     */
+    fun set(enabled: Boolean, exePath: String): Boolean {
+        if (!isWindowsOs(System.getProperty("os.name"))) return false
         val command = if (enabled) {
             listOf(
                 "reg", "add", RUN_KEY,
@@ -90,12 +104,29 @@ object StartupRegistry {
         } else {
             listOf("reg", "delete", RUN_KEY, "/v", VALUE_NAME, "/f")
         }
-        val exitCode = runCatching { ProcessBuilder(command).start().waitFor() }.getOrDefault(-1)
-        if (exitCode != 0) {
-            System.err.println("Banglu: startup registry update failed (exit $exitCode)")
-        }
+        return runCatching {
+            val process = ProcessBuilder(command).start()
+            if (!process.waitFor(WAIT_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)) {
+                // Stuck reg.exe: kill it rather than leak a process and hang
+                // the caller — never logs the command (it carries exePath).
+                process.destroyForcibly()
+                System.err.println("Banglu: startup registry update timed out")
+                return@runCatching false
+            }
+            val exitCode = process.exitValue()
+            if (exitCode != 0) {
+                System.err.println("Banglu: startup registry update failed (exit $exitCode)")
+            }
+            exitCode == 0
+        }.getOrDefault(false)
     }
 
-    private fun isWindowsOs(): Boolean =
-        System.getProperty("os.name", "").contains("windows", ignoreCase = true)
+    /**
+     * Pure and parameterized so it is unit-testable on its own, with no
+     * `ProcessBuilder` and no dependency on the real `System.getProperty` —
+     * it is the single guard standing between this repo's Mac test suite
+     * and a real `reg` invocation.
+     */
+    internal fun isWindowsOs(osName: String?): Boolean =
+        osName?.contains("windows", ignoreCase = true) == true
 }

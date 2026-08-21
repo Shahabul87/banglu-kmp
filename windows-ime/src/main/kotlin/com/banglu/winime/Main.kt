@@ -21,6 +21,7 @@ import com.banglu.winime.hook.ForegroundApp
 import com.banglu.winime.hook.LowLevelHook
 import com.banglu.winime.hook.SendInputInjector
 import com.banglu.winime.ui.PreviewWindow
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -67,6 +68,10 @@ private const val HINT_FAULT =
     "টাইপ করার সময় একটি সমস্যা হয়েছে, শব্দটি বাদ পড়তে পারে। " +
         "বারবার হলে বাংলু টাইপার বন্ধ করে আবার চালু করুন।"
 
+private const val TITLE_STARTUP_TOGGLE_FAILED = "বাংলু টাইপার — সেটিং সংরক্ষণ হয়নি"
+private const val HINT_STARTUP_TOGGLE_FAILED =
+    "\"লগইনে চালু হবে\" সেটিং পরিবর্তন করা যায়নি। আবার চেষ্টা করুন।"
+
 fun main() = application {
     val bangluDir = remember { File(System.getProperty("user.home"), ".banglu") }
     val prefsStore = remember { WinPrefsStore(bangluDir) }
@@ -83,6 +88,16 @@ fun main() = application {
     // OFF must be honoured on restart (spec): an unknown/corrupt mode string
     // degrades to BANGLA rather than crashing the tray at startup.
     val restoredMode = remember { runCatching { Mode.valueOf(initialPrefs.mode) }.getOrDefault(Mode.BANGLA) }
+    // Armed ONLY when the restore below will actually fire onModeChanged:
+    // Controller's own boot-time default is BANGLA, and setModeExternal is a
+    // no-op when `from == to`, so restoring to BANGLA never calls the
+    // listener at all. Arming unconditionally would leave this flag "stuck
+    // true" in that (default, most common) case and wrongly suppress the
+    // user's actual FIRST real mode switch later in the session. Cleared on
+    // the one callback the restore call produces (self-clearing, not
+    // time-based) — never suppresses a later real switch, even one that
+    // happens to land back on the same mode string.
+    val restoringMode = remember { java.util.concurrent.atomic.AtomicBoolean(restoredMode != Mode.BANGLA) }
 
     val ui = remember { UiState(restoredMode) }
     val scope = rememberCoroutineScope()
@@ -95,7 +110,11 @@ fun main() = application {
             engine = WinEngine,
             injector = TaggingInjector(SendInputInjector()),
             compat = AppCompat(bangluDir),
-            listener = UiListener(ui) { mode -> updatePrefs { it.copy(mode = mode.name) } },
+            listener = UiListener(ui) { mode ->
+                if (!restoringMode.getAndSet(false)) {
+                    updatePrefs { it.copy(mode = mode.name) }
+                }
+            },
         ).apply {
             onError = { error -> elevation.report(error) }
             banglaDigits = initialPrefs.banglaDigits
@@ -221,14 +240,16 @@ fun main() = application {
                         // deliver in a dev run.
                         return@CheckboxItem
                     }
-                    startOnLoginChecked = true
-                    updatePrefs { it.copy(startOnLogin = true) }
-                    StartupRegistry.set(true, exePath)
+                    applyStartupRegistryChange(scope, trayState, enabled = true, exePath = exePath) {
+                        startOnLoginChecked = true
+                        updatePrefs { it.copy(startOnLogin = true) }
+                    }
                 } else {
-                    startOnLoginChecked = false
-                    updatePrefs { it.copy(startOnLogin = false) }
                     // The delete branch never reads exePath.
-                    StartupRegistry.set(false, "")
+                    applyStartupRegistryChange(scope, trayState, enabled = false, exePath = "") {
+                        startOnLoginChecked = false
+                        updatePrefs { it.copy(startOnLogin = false) }
+                    }
                 }
             }
             Separator()
@@ -435,6 +456,44 @@ private fun openUrl(url: String) {
  */
 private fun resolveExePath(): String? =
     runCatching { ProcessHandle.current().info().command().orElse(null) }.getOrNull()
+
+/**
+ * Runs [StartupRegistry.set] off the Compose-for-Desktop/AWT event thread
+ * (review finding, Task 8 round 2): `reg.exe` is a real synchronous process
+ * launch, bounded by [StartupRegistry]'s own timeout but still potentially
+ * seconds long on registry virtualization/AV interception/Group Policy, and
+ * that thread also services the whole tray menu and the preview window — a
+ * stuck `reg.exe` inline in the checkbox callback would freeze both.
+ *
+ * `onSuccess` (the checkbox flip + the pref write) runs ONLY when `reg`
+ * confirmed a zero exit within the timeout; a failure or timeout leaves the
+ * checkbox and the pref exactly as they were and surfaces a tray warning
+ * instead of silently claiming the Run key was written.
+ */
+private fun applyStartupRegistryChange(
+    scope: CoroutineScope,
+    trayState: TrayState,
+    enabled: Boolean,
+    exePath: String,
+    onSuccess: () -> Unit,
+) {
+    scope.launch(Dispatchers.IO) {
+        val ok = StartupRegistry.set(enabled, exePath)
+        EventQueue.invokeLater {
+            if (ok) {
+                onSuccess()
+            } else {
+                trayState.sendNotification(
+                    Notification(
+                        title = TITLE_STARTUP_TOGGLE_FAILED,
+                        message = HINT_STARTUP_TOGGLE_FAILED,
+                        type = Notification.Type.Warning,
+                    )
+                )
+            }
+        }
+    }
+}
 
 /**
  * The notices surface. It must open something real in every run, not only a
