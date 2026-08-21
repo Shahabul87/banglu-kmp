@@ -72,7 +72,9 @@ jobs:
             :android-keyboard:testDebugUnitTest \
             :android-keyboard:testReleaseUnitTest \
             :desktop-app:test \
-            :desktop-app:verifyPackagedDictionary
+            :desktop-app:verifyPackagedDictionary \
+            :windows-ime:test \
+            :windows-ime:verifyHookIsolation
 
       - name: Upload lint report on failure
         if: failure()

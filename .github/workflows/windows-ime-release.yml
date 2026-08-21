@@ -1,0 +1,83 @@
+# বাংলু টাইপার (Windows IME) — jpackage MSI, built + released from a tag.
+# Modeled on desktop-release.yml's shape (dictionary fetch → build → upload)
+# plus ci.yml's dictionary-version preflight, but for one Windows-only
+# module: MSI packaging cannot cross-compile, so this always runs on
+# windows-latest. Trigger: push a tag like windows-v1.0.0.
+name: windows-ime-release
+on:
+  workflow_dispatch:
+  push:
+    tags: ["windows-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # windows-latest defaults new shell steps to PowerShell; every step
+      # below uses POSIX syntax (heredocs, $(...), &&), so shell: bash is
+      # explicit throughout (Git for Windows ships bash on this runner).
+      - name: Fetch dictionary (release asset)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download dictionary --pattern dictionary.sqlite --output dictionary.sqlite --repo "$GITHUB_REPOSITORY"
+          ls -la dictionary.sqlite
+
+      # Fails fast, before any Gradle work, with a clear message — the
+      # ci.yml grep+sqlite3 pattern would also work but relies on the
+      # sqlite3 CLI and grep -P, neither guaranteed on windows-latest;
+      # Python (preinstalled on this runner image) does both portably.
+      - name: Verify dictionary matches DictionaryVersion.REQUIRED
+        shell: bash
+        run: |
+          cat > check_dict_version.py <<'PYEOF'
+          import re, sqlite3, sys
+          src = open("shared/src/commonMain/kotlin/com/banglu/engine/DictionaryVersion.kt").read()
+          required = re.search(r'REQUIRED\s*=\s*"([^"]+)"', src).group(1)
+          conn = sqlite3.connect("dictionary.sqlite")
+          actual = conn.execute("SELECT value FROM metadata WHERE key='version'").fetchone()[0]
+          print(f"required={required} actual={actual}")
+          if required != actual:
+              print(f"::error::dictionary release asset is {actual} but engine requires {required} — upload the current dictionary.sqlite to the dictionary release")
+              sys.exit(1)
+          PYEOF
+          python check_dict_version.py
+          rm check_dict_version.py
+
+      - name: Stage dictionary for windows-ime resources
+        shell: bash
+        run: |
+          mkdir -p windows-ime/resources/common
+          cp dictionary.sqlite windows-ime/resources/common/dictionary.sqlite
+
+      - name: Test + build MSI
+        shell: bash
+        env:
+          BANGLU_JDK: ${{ env.JAVA_HOME }}
+        run: ./gradlew :windows-ime:test :windows-ime:packageMsi --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: banglu-typer-windows-msi
+          path: windows-ime/build/compose/binaries/main/msi/*.msi
+
+      - name: Attach MSI to GitHub release
+        if: startsWith(github.ref, 'refs/tags/windows-v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          MSI=$(ls windows-ime/build/compose/binaries/main/msi/*.msi)
+          gh release create "$TAG" --title "বাংলু টাইপার $TAG" --repo "$GITHUB_REPOSITORY" --notes "বাংলু টাইপার (Windows IME) — unsigned MSI installer." "$MSI"
