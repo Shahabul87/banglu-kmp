@@ -79,6 +79,17 @@ private class GateEngine(private val gateOn: String) : RecordingEngine() {
     }
 }
 
+/** Blows up inside `convert()` on demand, to prove the worker recovers. */
+private class FlakyEngine : RecordingEngine() {
+    @Volatile
+    var failing = false
+
+    override fun convert(raw: String): String {
+        if (failing) error("engine blew up converting '$raw'")
+        return super.convert(raw)
+    }
+}
+
 private class Rig(val engine: RecordingEngine) {
     val injector = FakeInjector()
     val listener = FakeListener()
@@ -359,6 +370,70 @@ class ControllerTest {
         assertEquals(PreviewCall("", "", emptyList()), r.listener.previews.last())
         // Buffer empty again: the host owns backspace.
         assertFalse(r.key(RawKey.Backspace))
+    }
+
+    @Test
+    fun escapeIsForwardedToTheAppWhileAPendingSpaceIsHeld() {
+        val r = rig()
+        r.type("ami")
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
+        assertEquals(listOf("আমি"), r.injector.texts)
+
+        // The pending space keeps the composer active, so Escape is ours to
+        // handle — but the app MUST still get it: Escape closes dialogs, and a
+        // word-then-space is the state a user spends most of their time in.
+        assertTrue(r.key(RawKey.Escape))
+        r.idle()
+        assertEquals(listOf(Emitted.Key(RawKey.Escape)), r.injector.emitted.drop(1))
+
+        // And it keeps working — the pending space survives, so the next Escape
+        // takes the same path rather than silently dying.
+        assertTrue(r.key(RawKey.Escape))
+        r.idle()
+        assertEquals(listOf(RawKey.Escape, RawKey.Escape), r.injector.keys)
+
+        // While a word IS forming, Escape cancels to the raw roman instead —
+        // nothing is forwarded to the app.
+        r.type("kmn")
+        assertTrue(r.key(RawKey.Escape))
+        r.idle()
+        assertEquals(listOf("আমি", " ", "kmn"), r.injector.texts)
+        assertEquals(listOf(RawKey.Escape, RawKey.Escape), r.injector.keys)
+    }
+
+    @Test
+    fun aThrowingEngineDoesNotPoisonTheComposer() {
+        val engine = FlakyEngine()
+        val r = rig(engine)
+        val errors = mutableListOf<Throwable>()
+        r.controller.onError = { t -> synchronized(errors) { errors += t } }
+
+        r.type("am")
+        r.idle()
+        assertTrue(r.injector.emitted.isEmpty())
+
+        engine.failing = true
+        assertTrue(r.key(RawKey.Letter('k')))
+        r.idle()
+        // The state machine is reset instead of holding a buffer it can never
+        // render: the last good Bangla is committed, not lost.
+        assertEquals(listOf("আম"), r.injector.texts)
+        assertEquals(PreviewCall("", "", emptyList()), r.listener.previews.last())
+        // The failure is surfaced, not swallowed in silence.
+        assertEquals(1, synchronized(errors) { errors.size })
+        assertTrue(r.controller.lastWorkerError is IllegalStateException)
+        // Mirror is clean again: Enter belongs to the app once more.
+        assertFalse(r.key(RawKey.Enter))
+
+        engine.failing = false
+        // The poisoning bug: without the reset, "ami" would append to the
+        // stranded "amk" buffer and every letter would vanish.
+        r.type("ami")
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
+        assertEquals(listOf("আম", "আমি"), r.injector.texts)
+        assertEquals(1, synchronized(errors) { errors.size })
     }
 
     @Test

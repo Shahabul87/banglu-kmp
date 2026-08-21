@@ -85,6 +85,15 @@ class Controller(
     internal var lastWorkerError: Throwable? = null
         private set
 
+    /**
+     * Push sink for a job that threw — the app logs it (and can show a tray
+     * warning). Invoked on the worker thread, after the composer has been
+     * reset, and never allowed to throw back into the loop. Without it a
+     * failing engine is completely silent to the user.
+     */
+    @Volatile
+    var onError: ((Throwable) -> Unit)? = null
+
     init {
         // Assigned before the worker exists so no job can ever observe a null hook.
         composer.onPick = { raw, bangla, wasPrimary ->
@@ -212,7 +221,28 @@ class Controller(
             } catch (t: Throwable) {
                 // A dead worker is a dead keyboard: one bad key must not end it.
                 lastWorkerError = t
+                // …but surviving is not enough. `Composer.handle` appends the
+                // character to its buffer BEFORE it calls the engine, so a key
+                // that threw leaves a buffer that was never rendered or
+                // committed: every following letter would be swallowed into a
+                // growing invisible word and throw again. Reset the state
+                // machine — focusLost() flushes the last good Bangla and never
+                // touches the engine.
+                if (job is Job.Key) recoverFromFailedKey()
+                runCatching { onError?.invoke(t) }
             }
+        }
+    }
+
+    private fun recoverFromFailedKey() {
+        try {
+            dispatch(composer.focusLost())
+        } catch (t: Throwable) {
+            // The injector itself is failing. The composer's state was already
+            // cleared by focusLost(), so the mirror below is still the truth.
+            lastWorkerError = t
+        } finally {
+            syncMirror()
         }
     }
 
