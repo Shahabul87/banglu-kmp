@@ -52,6 +52,12 @@ compose.desktop {
             windows {
                 iconFile.set(project.layout.projectDirectory.file("icons/banglu.ico"))
                 menu = true; shortcut = true
+                // -PbangluConsole=true builds a console launcher. A GUI-subsystem
+                // jpackage app reports every startup failure as the same opaque
+                // "Failed to launch JVM" box with the real cause discarded; the
+                // console build prints it. Ships false — users must never see a
+                // terminal window behind the tray app.
+                console = project.findProperty("bangluConsole") == "true"
             }
         }
     }

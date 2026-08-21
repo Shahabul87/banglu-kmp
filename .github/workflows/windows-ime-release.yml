@@ -6,6 +6,11 @@
 name: windows-ime-release
 on:
   workflow_dispatch:
+    inputs:
+      console:
+        description: "Diagnostic build: console launcher that prints JVM startup errors"
+        type: boolean
+        default: false
   push:
     tags: ["windows-v*"]
 
@@ -68,7 +73,7 @@ jobs:
         shell: bash
         env:
           BANGLU_JDK: ${{ env.JAVA_HOME }}
-        run: ./gradlew :windows-ime:test :windows-ime:packageMsi --no-daemon
+        run: ./gradlew :windows-ime:test :windows-ime:packageMsi --no-daemon -PbangluConsole=${{ inputs.console || false }}
 
       - uses: actions/upload-artifact@v4
         with:
