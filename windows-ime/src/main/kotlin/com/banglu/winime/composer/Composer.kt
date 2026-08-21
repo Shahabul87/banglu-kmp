@@ -33,6 +33,15 @@ sealed interface ComposerAction {
 interface ComposerEngine {
     fun convert(raw: String): String
     fun suggest(raw: String, limit: Int = 6): List<String>
+
+    /**
+     * Teach the engine one explicit, user-chosen alternative — the call shape
+     * of `SmartEngineAdapter.onWordSelected(raw, bangla, learnAsWord = false,
+     * explicitChoice = true)`. Called ONLY for a non-primary pick: committing
+     * the engine's own primary is never learned (S26 law). No-op by default so
+     * a read-only host need not implement it.
+     */
+    fun selected(raw: String, bangla: String) {}
 }
 
 /**
