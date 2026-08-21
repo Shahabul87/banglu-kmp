@@ -46,7 +46,14 @@ class Controller(
 
     /** Work items for the worker. FIFO order across all of them IS the ordering law. */
     private sealed interface Job {
-        class Key(val key: RawKey) : Job
+        /**
+         * [claimed] says whether [claim] incremented [inFlight] for this key,
+         * and therefore whether the worker owes a decrement. FocusChanged and
+         * the mode hotkey are enqueued unclaimed — the hook does not swallow
+         * anything on their behalf — and releasing a claim that was never
+         * taken is what drove the counter permanently negative.
+         */
+        class Key(val key: RawKey, val claimed: Boolean) : Job
         class Pick(val index: Int) : Job
         class ModeSwitch(val from: Mode, val to: Mode) : Job
         class Idle(val latch: CountDownLatch) : Job
@@ -69,6 +76,14 @@ class Controller(
 
     /** Stale-true is harmless (we swallow a key we would have passed); stale-false is a bug. */
     private val composerActive: Boolean get() = composerBusy || inFlight.get() > 0
+
+    /**
+     * Test-only view of the claim counter. Every claim must be matched by
+     * exactly one release: a counter that drifts below zero can never satisfy
+     * `> 0` again, which silently disables the whole mirror and lets Enter
+     * overtake a pending commit. Pinned in ControllerTest.
+     */
+    internal val inFlightCount: Int get() = inFlight.get()
 
     @Volatile
     var mode: Mode = Mode.BANGLA
@@ -122,7 +137,7 @@ class Controller(
         // A focus notification is never swallowed, but must always reach the
         // worker: it is what flushes a word stranded in the old window.
         if (key === RawKey.FocusChanged) {
-            queue.offer(Job.Key(key))
+            queue.offer(Job.Key(key, claimed = false))
             return false
         }
         if (!engineReady) return false
@@ -132,7 +147,7 @@ class Controller(
         // including our own hotkey. Nothing of it reaches the composer.
         if (compat.isPassthrough(foregroundExe)) return false
         if (key === RawKey.ToggleHotkey) {
-            queue.offer(Job.Key(key))
+            queue.offer(Job.Key(key, claimed = false))
             return true
         }
         // English mode is full passthrough; only the hotkey above stays claimed.
@@ -163,7 +178,7 @@ class Controller(
     /** Hook thread only: claim the key BEFORE it becomes visible to the worker. */
     private fun claim(key: RawKey) {
         inFlight.incrementAndGet()
-        queue.offer(Job.Key(key))
+        queue.offer(Job.Key(key, claimed = true))
     }
 
     // MARK: - other threads (tray, preview window)
@@ -216,7 +231,13 @@ class Controller(
                     is Job.Key -> try {
                         handle(job.key)
                     } finally {
-                        inFlight.decrementAndGet()
+                        // Exactly one release per claim. An unclaimed signal
+                        // (FocusChanged, the hotkey) never incremented, and
+                        // decrementing for it would sink the counter below
+                        // zero for the rest of the session — after which
+                        // `inFlight.get() > 0` is unreachable and the mirror
+                        // is dead.
+                        if (job.claimed) inFlight.decrementAndGet()
                     }
 
                     is Job.Pick -> {

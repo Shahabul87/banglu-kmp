@@ -232,6 +232,71 @@ class ControllerTest {
     }
 
     @Test
+    fun enterIsStillSwallowedAfterEarlierForegroundChanges() {
+        val gate = GateEngine(gateOn = "k")
+        val r = rig(gate)
+        // EVENT_SYSTEM_FOREGROUND fires on EVERY system-wide foreground
+        // change — alt-tab, clicking another window, a notification stealing
+        // focus — so within a minute of ordinary use a real session has seen
+        // dozens. They are enqueued WITHOUT a claim; releasing one anyway
+        // drove the counter permanently negative, `inFlight.get() > 0` could
+        // never be true again, and the mirror collapsed to composerBusy alone.
+        repeat(5) { assertFalse(r.key(RawKey.FocusChanged)) }
+        r.idle()
+
+        // From here this is exactly the race pinned above, on a rig that has
+        // simply been used first.
+        r.type("ami")
+        assertTrue(r.key(RawKey.Space)) // commits আমি, holds the space
+        assertTrue(r.key(RawKey.Space)) // commits "। " — the composer is now IDLE
+        assertTrue(r.key(RawKey.Letter('k')))
+        assertTrue(gate.entered.await(30, TimeUnit.SECONDS), "worker never reached the gate")
+        try {
+            assertTrue(r.key(RawKey.Enter), "Enter must never overtake a queued letter")
+        } finally {
+            gate.release.countDown()
+        }
+        r.idle()
+        assertEquals(
+            listOf(
+                Emitted.Text("আমি"),
+                Emitted.Text("। "),
+                Emitted.Text("ক"),
+                Emitted.Key(RawKey.Enter),
+            ),
+            r.injector.emitted,
+        )
+    }
+
+    @Test
+    fun everyClaimIsReleasedExactlyOnce() {
+        val r = rig()
+        // One line that catches the whole class of bug: after ANY mixture of
+        // claimed keys and unclaimed signals, the counter must be back at zero.
+        // Anything else means the mirror is either stuck on (harmless but
+        // wrong) or sinking below zero (the bug that disables it forever).
+        r.type("kmn")
+        assertFalse(r.key(RawKey.FocusChanged))
+        r.type("ami")
+        assertTrue(r.key(RawKey.Space))
+        assertFalse(r.key(RawKey.FocusChanged))
+        r.type("kmn")
+        r.idle()
+        r.controller.pickCandidate(1)
+        assertTrue(r.key(RawKey.ToggleHotkey)) // → English
+        assertTrue(r.key(RawKey.ToggleHotkey)) // → back to বাংলা
+        r.idle()
+        r.type("ami")
+        // Deliberately unasserted: whether this Enter is swallowed is pinned
+        // by the tests above. Here it is only one more claimed key in the mix,
+        // and the counter — not the swallow decision — is what is on trial.
+        r.key(RawKey.Enter)
+        assertFalse(r.key(RawKey.FocusChanged))
+        r.idle()
+        assertEquals(0, r.controller.inFlightCount, "every claim must be released exactly once")
+    }
+
+    @Test
     fun toggleHotkeyCyclesBanglaEnglish() {
         val r = rig()
         r.type("ami")

@@ -24,26 +24,43 @@ object FileStorage : PlatformStorage {
             .getOrElse { mutableListOf() }
     }
 
-    // S108 (invariant #10): tmp + atomic replace, same pattern as DraftStore
-    // and the macOS IME's LearnedStore. A plain writeText interrupted
-    // mid-write corrupted learned.json; readAll then swallowed the parse
-    // error into an empty list and the NEXT save persisted that empty list —
-    // silent loss of the whole shared learning brain.
+    // S108 (invariant #10): unique temp file + atomic replace, same pattern as
+    // DraftStore and the macOS IME's LearnedStore. A plain writeText
+    // interrupted mid-write corrupted learned.json; readAll then swallowed the
+    // parse error into an empty list and the NEXT save persisted that empty
+    // list — silent loss of the whole shared learning brain.
+    //
+    // The temp NAME must be unique per write, because ~/.banglu is shared by
+    // several Banglu PROCESSES: the Windows typer (windows-ime's WinStorage)
+    // writes this same learned.json, and typing Bangla INTO this editor with
+    // that app is the expected configuration on Windows. `synchronized(lock)`
+    // below is an in-process lock and buys nothing across processes — with a
+    // fixed temp name two processes could truncate and write the same temp
+    // file concurrently, and the move would then promote a truncated or
+    // interleaved file over learned.json, which is exactly the corruption
+    // this pattern exists to prevent.
     private fun writeRows(rows: List<Row>) {
-        val tmp = File(dir, "learned.json.tmp")
-        tmp.writeText(json.encodeToString(rows))
+        val tmp = java.nio.file.Files.createTempFile(dir.toPath(), "learned", ".tmp")
         try {
-            java.nio.file.Files.move(
-                tmp.toPath(), file.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-            )
-        } catch (_: Exception) {
-            // Filesystem without atomic move: still replace — non-atomic beats stale.
-            java.nio.file.Files.move(
-                tmp.toPath(), file.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-            )
+            tmp.toFile().writeText(json.encodeToString(rows))
+            try {
+                java.nio.file.Files.move(
+                    tmp, file.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                )
+            } catch (_: Exception) {
+                // Filesystem without atomic move: still replace — non-atomic beats stale.
+                java.nio.file.Files.move(
+                    tmp, file.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                )
+            }
+        } finally {
+            // A successful move consumed the path; this only cleans up after a
+            // failed write or a failed move, so a unique name can never leave
+            // litter behind in the user's ~/.banglu.
+            runCatching { java.nio.file.Files.deleteIfExists(tmp) }
         }
     }
 
