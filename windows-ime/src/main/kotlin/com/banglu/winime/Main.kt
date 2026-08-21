@@ -48,13 +48,6 @@ import java.util.concurrent.ConcurrentHashMap
  * and no JNA type is imported outside `hook/` (the isolation law).
  */
 
-/**
- * Task 8 replaces this with a persisted `WinPrefsStore`; it exists now only so
- * the fields it will carry have one agreed shape. Nothing reads it yet — the
- * tray toggles that will are part of that task.
- */
-data class WinPrefs(val banglaDigits: Boolean = true, val startOnLogin: Boolean = true)
-
 private const val BOOT_LOADING = "লোড হচ্ছে…"
 private const val BOOT_READY = "পূর্ণ অভিধান ✓"
 private const val BOOT_FAILED = "অভিধান লোড হয়নি — বাংলা টাইপিং বন্ধ"
@@ -75,18 +68,42 @@ private const val HINT_FAULT =
         "বারবার হলে বাংলু টাইপার বন্ধ করে আবার চালু করুন।"
 
 fun main() = application {
-    val ui = remember { UiState() }
+    val bangluDir = remember { File(System.getProperty("user.home"), ".banglu") }
+    val prefsStore = remember { WinPrefsStore(bangluDir) }
+    // Read once at composition start: this is the ONE state restore point.
+    // Everything after this reads/writes through updatePrefs, never prefsStore
+    // directly, so a click on one toggle can never clobber another toggle's
+    // concurrent write (mode persistence runs on the worker thread; the
+    // checkbox clicks run on the UI thread).
+    val initialPrefs = remember { prefsStore.load() }
+    val prefsLock = remember { Any() }
+    fun updatePrefs(mutate: (WinPrefs) -> WinPrefs) {
+        synchronized(prefsLock) { prefsStore.save(mutate(prefsStore.load())) }
+    }
+    // OFF must be honoured on restart (spec): an unknown/corrupt mode string
+    // degrades to BANGLA rather than crashing the tray at startup.
+    val restoredMode = remember { runCatching { Mode.valueOf(initialPrefs.mode) }.getOrDefault(Mode.BANGLA) }
+
+    val ui = remember { UiState(restoredMode) }
     val scope = rememberCoroutineScope()
     val trayState = rememberTrayState()
-    val bangluDir = remember { File(System.getProperty("user.home"), ".banglu") }
+    var digitsChecked by remember { mutableStateOf(initialPrefs.banglaDigits) }
+    var startOnLoginChecked by remember { mutableStateOf(initialPrefs.startOnLogin) }
     val elevation = remember { InjectionWarning(trayState) }
     val controller = remember {
         Controller(
             engine = WinEngine,
             injector = TaggingInjector(SendInputInjector()),
             compat = AppCompat(bangluDir),
-            listener = UiListener(ui),
-        ).apply { onError = { error -> elevation.report(error) } }
+            listener = UiListener(ui) { mode -> updatePrefs { it.copy(mode = mode.name) } },
+        ).apply {
+            onError = { error -> elevation.report(error) }
+            banglaDigits = initialPrefs.banglaDigits
+            // Restores mode incl. OFF; the hook honours it as soon as it
+            // installs, and OFF makes onKey a pure passthrough regardless of
+            // whether the hook is up yet.
+            setModeExternal(restoredMode)
+        }
     }
     val hook = remember { LowLevelHook() }
 
@@ -188,6 +205,33 @@ fun main() = application {
             ) { controller.setModeExternal(Mode.OFF) }
             Item("বাংলা/English: Ctrl+Space", enabled = false) {}
             Separator()
+            CheckboxItem(text = "বাংলা সংখ্যা (০-৯)", checked = digitsChecked) { checked ->
+                digitsChecked = checked
+                controller.banglaDigits = checked
+                updatePrefs { it.copy(banglaDigits = checked) }
+            }
+            CheckboxItem(text = "লগইনে চালু হবে", checked = startOnLoginChecked) { checked ->
+                if (checked) {
+                    val exePath = resolveExePath()
+                    if (exePath == null) {
+                        // Can't honour it: a Run key pointing at bare `java`
+                        // with no classpath would fail silently at every
+                        // login. Leave the checkbox and the pref exactly as
+                        // they were rather than promising something we can't
+                        // deliver in a dev run.
+                        return@CheckboxItem
+                    }
+                    startOnLoginChecked = true
+                    updatePrefs { it.copy(startOnLogin = true) }
+                    StartupRegistry.set(true, exePath)
+                } else {
+                    startOnLoginChecked = false
+                    updatePrefs { it.copy(startOnLogin = false) }
+                    // The delete branch never reads exePath.
+                    StartupRegistry.set(false, "")
+                }
+            }
+            Separator()
             Item("কীবোর্ড আবার চালু করুন", enabled = ui.engineReady) { restartHook() }
             Item("টিউটোরিয়াল (ওয়েব গাইড)") { openUrl(GUIDE_URL) }
             // The dictionary data licenses require an in-app notices surface.
@@ -215,11 +259,11 @@ fun main() = application {
  * ONLY from the UI thread; the controller's worker and the hook's pump thread
  * both reach it through [EventQueue.invokeLater].
  */
-private class UiState {
+private class UiState(initialMode: Mode = Mode.BANGLA) {
     var bootStatus by mutableStateOf(BOOT_LOADING)
     var engineReady by mutableStateOf(false)
     var hookInstalled by mutableStateOf(false)
-    var mode by mutableStateOf(Mode.BANGLA)
+    var mode by mutableStateOf(initialMode)
     var bangla by mutableStateOf("")
     var raw by mutableStateOf("")
     var candidates by mutableStateOf(emptyList<String>())
@@ -234,7 +278,13 @@ private class UiState {
  * to the UI thread first — touching Compose state off it is a data race that
  * shows up as a preview frozen on a word the user finished typing.
  */
-private class UiListener(private val ui: UiState) : ControllerListener {
+private class UiListener(
+    private val ui: UiState,
+    /** Task 8: fired on every mode change regardless of origin (tray click
+     * or the Ctrl+Space hotkey) — `switchMode` always routes through here,
+     * so this is the one place mode persistence needs to hook in. */
+    private val onModeChangedExtra: (Mode) -> Unit = {},
+) : ControllerListener {
     override fun onPreview(bangla: String, raw: String, candidates: List<String>) {
         EventQueue.invokeLater {
             ui.bangla = bangla
@@ -245,6 +295,7 @@ private class UiListener(private val ui: UiState) : ControllerListener {
 
     override fun onModeChanged(mode: Mode) {
         EventQueue.invokeLater { ui.mode = mode }
+        onModeChangedExtra(mode)
     }
 }
 
@@ -375,6 +426,15 @@ private fun modeLabel(mode: Mode): String = when (mode) {
 private fun openUrl(url: String) {
     runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
 }
+
+/**
+ * Best-effort executable path for the "start on login" Run-key entry —
+ * `null` in a dev run, where there is no single meaningful exe (the JVM
+ * launcher, not a packaged app). Never logged (CLAUDE.md secrets policy);
+ * the caller must not persist or act on a `null` result as if it succeeded.
+ */
+private fun resolveExePath(): String? =
+    runCatching { ProcessHandle.current().info().command().orElse(null) }.getOrNull()
 
 /**
  * The notices surface. It must open something real in every run, not only a

@@ -54,7 +54,13 @@ interface ComposerEngine {
  * HOLDS the space; what arrives next decides whether it becomes " ", "। ",
  * or is swallowed (tight punctuation).
  */
-class Composer(private val engine: ComposerEngine, private val banglaDigits: Boolean = true) {
+class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true) {
+    // Read on the worker thread (Controller.handle), written from the UI
+    // thread by the tray's বাংলা সংখ্যা toggle (Task 8) — @Volatile is the
+    // whole cross-thread contract, same as Controller.engineReady.
+    @Volatile
+    var banglaDigits: Boolean = banglaDigits
+
     private var formingRaw = ""
     private var formingBangla = ""
     private var candidates: List<String> = emptyList()

@@ -39,6 +39,11 @@ class Controller(
 
     private val composer = Composer(engine)
 
+    /** Task 8 tray toggle, passed straight through to the composer's own @Volatile field. */
+    var banglaDigits: Boolean
+        get() = composer.banglaDigits
+        set(value) { composer.banglaDigits = value }
+
     /** Work items for the worker. FIFO order across all of them IS the ordering law. */
     private sealed interface Job {
         class Key(val key: RawKey) : Job

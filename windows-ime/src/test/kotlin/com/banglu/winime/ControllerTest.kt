@@ -503,6 +503,20 @@ class ControllerTest {
     }
 
     @Test
+    fun banglaDigitsFlagControlsCommittedDigitScript() {
+        val r = rig()
+        r.controller.banglaDigits = true
+        assertTrue(r.key(RawKey.Digit('5')))
+        r.idle()
+        assertEquals(listOf("৫"), r.injector.texts)
+
+        r.controller.banglaDigits = false
+        assertTrue(r.key(RawKey.Digit('5')))
+        r.idle()
+        assertEquals(listOf("৫", "5"), r.injector.texts)
+    }
+
+    @Test
     fun shutdownDrainsQueuedWork() {
         val r = rig()
         r.type("ami")
