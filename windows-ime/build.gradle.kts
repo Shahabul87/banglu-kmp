@@ -44,6 +44,7 @@ compose.desktop {
             packageVersion = "1.0.0"
             description = "Type Bangla anywhere on Windows"
             vendor = "Banglu"
+            licenseFile.set(rootProject.layout.projectDirectory.file("LICENSE"))
             // resources/common/dictionary.sqlite is bundled into the MSI
             // (CI copies it; gitignored — 143MB). LICENSES.md in the same
             // dir IS committed — see verifyPackagedDictionary below.

@@ -55,6 +55,8 @@ jobs:
           cp dictionary.sqlite android-keyboard/src/main/assets/dictionary.sqlite
           mkdir -p desktop-app/resources/common
           cp dictionary.sqlite desktop-app/resources/common/dictionary.sqlite
+          mkdir -p windows-ime/resources/common
+          cp dictionary.sqlite windows-ime/resources/common/dictionary.sqlite
 
       - name: Generate slim web dictionary
         run: ./gradlew :dictionary-compiler:run --args="slim $PWD/dictionary.sqlite $PWD/shared/banglu-slim.json"
@@ -74,7 +76,8 @@ jobs:
             :desktop-app:test \
             :desktop-app:verifyPackagedDictionary \
             :windows-ime:test \
-            :windows-ime:verifyHookIsolation
+            :windows-ime:verifyHookIsolation \
+            :windows-ime:verifyPackagedDictionary
 
       - name: Upload lint report on failure
         if: failure()
