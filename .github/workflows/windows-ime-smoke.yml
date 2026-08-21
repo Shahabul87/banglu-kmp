@@ -1,0 +1,63 @@
+# Runs the packaged বাংলু টাইপার app image on a real Windows machine and
+# captures whatever it prints. A jpackage GUI app reports every startup
+# failure as the same opaque "Failed to launch JVM" dialog, so the only way
+# to see the real cause is to launch a console build and read stdout/stderr.
+# This exists so diagnosing a launch failure costs a workflow run instead of
+# a round trip through a human with a laptop.
+name: windows-ime-smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download compiled dictionary (release asset)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download dictionary --pattern dictionary.sqlite --output dictionary.sqlite --repo "$GITHUB_REPOSITORY"
+
+      - name: Stage dictionary for windows-ime resources
+        shell: bash
+        run: |
+          mkdir -p windows-ime/resources/common
+          cp dictionary.sqlite windows-ime/resources/common/dictionary.sqlite
+
+      - name: Build console app image
+        shell: bash
+        env:
+          BANGLU_JDK: ${{ env.JAVA_HOME }}
+        run: ./gradlew :windows-ime:createDistributable --no-daemon -PbangluConsole=true
+
+      - name: Launch it and capture output
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Recurse -Filter BangluTyper.exe `
+            windows-ime/build/compose/binaries/main/app | Select-Object -First 1
+          if (-not $exe) { throw "no launcher was produced" }
+          Write-Host "launching $($exe.FullName)"
+          $p = Start-Process -FilePath $exe.FullName -PassThru `
+            -RedirectStandardOutput out.txt -RedirectStandardError err.txt
+          # The app is a tray app: a healthy run never exits. 90s covers the
+          # ~15s dictionary attach with headroom; a crash exits far sooner.
+          $exited = $p.WaitForExit(90000)
+          Write-Host "=== exited-within-90s: $exited ==="
+          if ($exited) { Write-Host "=== exit code: $($p.ExitCode) ===" }
+          else { Stop-Process -Id $p.Id -Force }
+          Write-Host "=== STDOUT ==="
+          if (Test-Path out.txt) { Get-Content out.txt } else { Write-Host "(none)" }
+          Write-Host "=== STDERR ==="
+          if (Test-Path err.txt) { Get-Content err.txt } else { Write-Host "(none)" }
+          if ($exited -and $p.ExitCode -ne 0) {
+            throw "app exited with code $($p.ExitCode) — see output above"
+          }
