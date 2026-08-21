@@ -138,7 +138,12 @@ class Controller(
                 true
             }
 
-            RawKey.Backspace, RawKey.Enter, RawKey.Tab, RawKey.Escape ->
+            // Unmanaged belongs here for the same reason Enter does. Left to
+            // pass through, `(` would land in the app NOW while the Bangla for
+            // the word still forming lands after it — the user types "আমি(" and
+            // reads "(আমি". Claimed, it goes down the one FIFO lane and the
+            // worker re-injects it behind the commit.
+            RawKey.Backspace, RawKey.Enter, RawKey.Tab, RawKey.Escape, is RawKey.Unmanaged ->
                 if (composerActive) {
                     claim(key)
                     true
@@ -256,6 +261,20 @@ class Controller(
             RawKey.ToggleHotkey -> {
                 val from = mode
                 switchMode(from, if (from == Mode.BANGLA) Mode.ENGLISH else Mode.BANGLA)
+            }
+
+            is RawKey.Unmanaged -> {
+                // A held space is one the user already typed and can see the
+                // effect of; focusLost() discards it, which is right when focus
+                // really left and wrong here, where the next thing they typed
+                // belongs after that space.
+                val heldSpace = composer.pendingSpace && !composer.forming
+                // Commit first, key second — the same ordering as ForwardKey,
+                // on the same single lane. focusLost() never calls the engine.
+                dispatch(composer.focusLost())
+                if (heldSpace) injector.injectText(" ")
+                syncMirror()
+                injector.injectVirtualKey(key.vk, key.shift)
             }
 
             else -> {

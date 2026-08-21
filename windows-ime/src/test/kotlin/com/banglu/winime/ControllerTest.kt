@@ -15,6 +15,7 @@ import kotlin.test.assertTrue
 private sealed interface Emitted {
     data class Text(val text: String) : Emitted
     data class Key(val key: RawKey) : Emitted
+    data class VirtualKey(val vk: Int, val shift: Boolean) : Emitted
 }
 
 private class FakeInjector : TextInjector {
@@ -25,6 +26,10 @@ private class FakeInjector : TextInjector {
 
     override fun injectKey(key: RawKey) {
         synchronized(calls) { calls += Emitted.Key(key) }
+    }
+
+    override fun injectVirtualKey(vk: Int, shift: Boolean) {
+        synchronized(calls) { calls += Emitted.VirtualKey(vk, shift) }
     }
 
     val emitted: List<Emitted> get() = synchronized(calls) { calls.toList() }
@@ -147,7 +152,10 @@ class ControllerTest {
         assertTrue(r.key(RawKey.Space))
         assertTrue(r.key(RawKey.Digit('5')))
         assertTrue(r.key(RawKey.Punct(",")))
-        // Modifiers and everything the hook could not classify stay the app's.
+        r.idle()
+        // With the composer idle, everything the hook could not classify stays
+        // the app's. (While a word is forming it is claimed instead, so it
+        // cannot overtake the Bangla — pinned separately below.)
         assertFalse(r.key(RawKey.Unmanaged(0x11)))
         assertFalse(r.key(RawKey.Unmanaged(0x25)))
 
@@ -400,6 +408,64 @@ class ControllerTest {
         r.idle()
         assertEquals(listOf("আমি", " ", "kmn"), r.injector.texts)
         assertEquals(listOf(RawKey.Escape, RawKey.Escape), r.injector.keys)
+    }
+
+    @Test
+    fun unmanagedKeyWhileFormingReachesTheAppBehindTheBanglaWord() {
+        val r = rig()
+        r.type("ami")
+        // '(' is VK 0x39 with Shift held. Passed through, it would land in the
+        // app NOW and আমি after it: the user types "আমি(" and reads "(আমি".
+        assertTrue(
+            r.key(RawKey.Unmanaged(0x39, shift = true)),
+            "an unmanaged key must not overtake a forming word",
+        )
+        r.idle()
+        assertEquals(
+            listOf(Emitted.Text("আমি"), Emitted.VirtualKey(0x39, true)),
+            r.injector.emitted,
+        )
+        // The flush really ended composition: the next one is the app's again.
+        assertFalse(r.key(RawKey.Unmanaged(0x39, shift = true)))
+    }
+
+    @Test
+    fun unmanagedKeyPassesThroughWhenNothingIsForming() {
+        val r = rig()
+        assertFalse(r.key(RawKey.Unmanaged(0x25)), "an arrow key with an idle composer is the app's")
+        assertFalse(r.key(RawKey.Unmanaged(0x39, shift = true)))
+        r.idle()
+        assertTrue(r.injector.emitted.isEmpty(), "a key we let through must never also be injected")
+    }
+
+    @Test
+    fun unmanagedKeyAfterAHeldSpaceKeepsTheSpace() {
+        val r = rig()
+        r.type("ami")
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
+        assertEquals(listOf("আমি"), r.injector.texts)
+
+        // The pending space keeps the composer active, so the key is ours to
+        // order — but the space the user already typed must not vanish with it.
+        assertTrue(r.key(RawKey.Unmanaged(0x39, shift = true)))
+        r.idle()
+        assertEquals(
+            listOf(Emitted.Text("আমি"), Emitted.Text(" "), Emitted.VirtualKey(0x39, true)),
+            r.injector.emitted,
+        )
+    }
+
+    @Test
+    fun unmanagedKeyNeverOvertakesAQueuedLetter() {
+        val r = rig()
+        // Same optimistic-mirror race as Enter: the letter may still be queued
+        // when the unmanaged key is classified on the hook thread.
+        assertTrue(r.key(RawKey.Letter('a')))
+        assertTrue(r.key(RawKey.Unmanaged(0x39, shift = true)))
+        r.idle()
+        assertTrue(r.injector.emitted.first() is Emitted.Text, "'a' must have been committed first")
+        assertEquals(Emitted.VirtualKey(0x39, true), r.injector.emitted.last())
     }
 
     @Test

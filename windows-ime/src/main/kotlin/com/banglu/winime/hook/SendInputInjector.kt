@@ -51,19 +51,41 @@ class SendInputInjector : TextInjector {
             is RawKey.Digit -> injectText(key.c.toString())
             is RawKey.Punct -> injectText(key.p)
             RawKey.Space -> injectText(" ")
-            is RawKey.Unmanaged -> injectVk(key.vk)
+            is RawKey.Unmanaged -> injectVirtualKey(key.vk, key.shift)
             // Not keystrokes: an internal signal and a window event.
             RawKey.ToggleHotkey, RawKey.FocusChanged -> Unit
         }
     }
 
-    private fun injectVk(vk: Int) {
+    override fun injectVirtualKey(vk: Int, shift: Boolean) {
         if (vk < 0 || vk > 0xFFFF) return
-        val inputs = allocate(2)
-        vkEvent(inputs[0], vk.toLong(), up = false)
-        vkEvent(inputs[1], vk.toLong(), up = true)
+        // Wrapping the key in a synthetic Shift press is only correct while
+        // Shift is actually up. If the user is still holding it — which is the
+        // common case, since they only just pressed the shifted key — our
+        // shift-UP would tell Windows a key they are still pressing was
+        // released, and the hook would then classify their very next keystroke
+        // as unshifted. Holding Shift and typing "((" would produce "(৯".
+        // With Shift already down the application reads the live modifier
+        // state and the bare key is enough.
+        if (!shift || isShiftDown()) {
+            val inputs = allocate(2)
+            vkEvent(inputs[0], vk.toLong(), up = false)
+            vkEvent(inputs[1], vk.toLong(), up = true)
+            send(inputs)
+            return
+        }
+        val inputs = allocate(4)
+        vkEvent(inputs[0], VK_SHIFT.toLong(), up = false)
+        vkEvent(inputs[1], vk.toLong(), up = false)
+        vkEvent(inputs[2], vk.toLong(), up = true)
+        vkEvent(inputs[3], VK_SHIFT.toLong(), up = true)
         send(inputs)
     }
+
+    private fun isShiftDown(): Boolean =
+        (User32.INSTANCE.GetAsyncKeyState(VK_SHIFT).toInt() and 0x8000) != 0
+
+    private fun injectVk(vk: Int) = injectVirtualKey(vk, shift = false)
 
     @Suppress("UNCHECKED_CAST")
     private fun allocate(count: Int): Array<WinUser.INPUT> =

@@ -26,16 +26,20 @@ internal const val VK_RETURN = 0x0D
 internal const val VK_SHIFT = 0x10
 internal const val VK_CONTROL = 0x11
 internal const val VK_MENU = 0x12 // Alt
+internal const val VK_CAPITAL = 0x14
 internal const val VK_ESCAPE = 0x1B
 internal const val VK_SPACE = 0x20
 internal const val VK_LWIN = 0x5B
 internal const val VK_RWIN = 0x5C
+internal const val VK_LSHIFT = 0xA0
+internal const val VK_RSHIFT = 0xA1
+internal const val VK_LCONTROL = 0xA2
+internal const val VK_RCONTROL = 0xA3
+internal const val VK_LMENU = 0xA4
+internal const val VK_RMENU = 0xA5
 internal const val VK_OEM_COMMA = 0xBC
 internal const val VK_OEM_PERIOD = 0xBE
 internal const val VK_OEM_2 = 0xBF // '/' unshifted, '?' shifted (US layout)
-
-/** `KBDLLHOOKSTRUCT.flags` bit: the event came from `SendInput`, not a key. */
-private const val LLKHF_INJECTED = 0x10
 
 private const val EVENT_SYSTEM_FOREGROUND = 0x0003
 private const val WINEVENT_OUTOFCONTEXT = 0x0000
@@ -78,12 +82,34 @@ private const val STOP_JOIN_MS = 2_000L
 class LowLevelHook : KeySource {
 
     /**
-     * Invoked on the pump thread after the watchdog managed to install a hook
-     * that was not live. The tray uses it to tell the user their keyboard just
-     * came back.
+     * Invoked on the pump thread when the KEYBOARD hook comes back after being
+     * absent. The tray uses it to tell the user their keyboard is working
+     * again. It deliberately ignores the foreground hook: re-arming that one
+     * alone would announce a recovery for a keyboard that never stopped.
      */
     @Volatile
     var onRearm: (() -> Unit)? = null
+
+    /**
+     * Invoked on the pump thread when installing the keyboard hook fails — at
+     * boot, or on a later attempt after it had been working. The argument is
+     * the exception if one was thrown, and null when `SetWindowsHookEx` simply
+     * returned NULL (which is the usual shape: group policy, a locked session,
+     * an elevated foreground window at start-up).
+     *
+     * Without this a permanently failing install is a keyboard that does
+     * nothing, forever, with nothing on screen to explain it.
+     *
+     * Edge-triggered, not level-triggered: it fires on entering the failed
+     * state, not on every 5-second retry, because a tray warning repeating
+     * forever is its own defect. [isInstalled] is the pollable truth for as
+     * long as the condition lasts.
+     */
+    @Volatile
+    var onHookLost: ((Throwable?) -> Unit)? = null
+
+    /** Whether the keyboard hook is live right now. False = no keys reach us. */
+    val isInstalled: Boolean get() = hook != null
 
     @Volatile
     private var sink: HookSink? = null
@@ -119,6 +145,24 @@ class LowLevelHook : KeySource {
     /** VK → key, pre-built so classification allocates nothing per keystroke. */
     private val plainKeys: Array<RawKey> = buildKeyTable(shift = false)
     private val shiftedKeys: Array<RawKey> = buildKeyTable(shift = true)
+
+    /**
+     * Modifier keys pressed on their own. They must never be claimed: the
+     * controller now swallows an unmanaged key while a word is forming and
+     * re-injects it, and re-injecting a modifier would be actively harmful —
+     * the synthetic key-UP tells Windows a key the user is still holding was
+     * released, and a lone Alt or Win press-and-release opens a menu.
+     * The `GetAsyncKeyState` guard below cannot cover this, because a
+     * modifier's own key-down may arrive before its state is published.
+     */
+    private val modifierKeys = BooleanArray(256).also {
+        for (vk in intArrayOf(
+            VK_SHIFT, VK_CONTROL, VK_MENU, VK_CAPITAL, VK_LWIN, VK_RWIN,
+            VK_LSHIFT, VK_RSHIFT, VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU,
+        )) {
+            it[vk] = true
+        }
+    }
 
     /**
      * Reused across callbacks: the hook procedure runs only on the pump
@@ -167,8 +211,8 @@ class LowLevelHook : KeySource {
         }
     }
 
-    /** True once both hooks are installed; false while the watchdog retries. */
-    private val installed: Boolean get() = hook != null && focusHook != null
+    /** Set while the keyboard hook is known to be down, so [onHookLost] fires once per outage. */
+    private var hookLossReported = false
 
     // MARK: - pump thread
 
@@ -205,12 +249,26 @@ class LowLevelHook : KeySource {
 
     private fun installKeyboardHook(): Boolean {
         if (hook != null) return true
-        // WH_KEYBOARD_LL ignores hMod, but passing the running module is the
-        // documented call shape; the trailing 0 makes the hook global.
-        val module = Kernel32.INSTANCE.GetModuleHandle(null)
-        val h = User32.INSTANCE.SetWindowsHookEx(WinUser.WH_KEYBOARD_LL, keyboardProc, module, 0)
+        var failure: Throwable? = null
+        val h = try {
+            // WH_KEYBOARD_LL ignores hMod, but passing the running module is
+            // the documented call shape; the trailing 0 makes the hook global.
+            val module = Kernel32.INSTANCE.GetModuleHandle(null)
+            User32.INSTANCE.SetWindowsHookEx(WinUser.WH_KEYBOARD_LL, keyboardProc, module, 0)
+        } catch (t: Throwable) {
+            failure = t
+            null
+        }
         hook = h
-        return h != null
+        if (h == null) {
+            if (!hookLossReported) {
+                hookLossReported = true
+                runCatching { onHookLost?.invoke(failure) }
+            }
+            return false
+        }
+        hookLossReported = false
+        return true
     }
 
     private fun installFocusHook(): Boolean {
@@ -233,10 +291,12 @@ class LowLevelHook : KeySource {
     }
 
     private fun rearm() {
-        val wasMissing = !installed
-        installKeyboardHook()
+        // The two hooks are tracked apart on purpose: only the keyboard one
+        // going from absent to present is a recovery worth announcing.
+        val keyboardWasMissing = hook == null
+        val keyboardBack = installKeyboardHook() && keyboardWasMissing
         installFocusHook()
-        if (wasMissing && installed) {
+        if (keyboardBack) {
             runCatching { onRearm?.invoke() }
         }
     }
@@ -269,7 +329,7 @@ class LowLevelHook : KeySource {
                 return
             }
             if (stopping) return
-            if (installed) continue
+            if (hook != null && focusHook != null) continue
             val tid = pumpThreadId
             if (tid != 0) {
                 User32.INSTANCE.PostThreadMessage(tid, WM_BANGLU_REARM, WinDef.WPARAM(0), WinDef.LPARAM(0))
@@ -289,11 +349,12 @@ class LowLevelHook : KeySource {
             // untouched without inspecting anything.
             if (nCode < 0) return next(nCode, wParam, info)
 
-            // Our own SendInput, and anything else synthesised, is never ours
-            // to convert. Both tests are needed: LLKHF_INJECTED covers every
-            // synthetic event, the magic covers ours specifically even if a
-            // future Windows stops setting the flag.
-            if ((info.flags and LLKHF_INJECTED) != 0) return next(nCode, wParam, info)
+            // Our own SendInput must never be re-converted. The magic tag is
+            // the whole test: every event this process emits goes through the
+            // one builder that sets it. Testing LLKHF_INJECTED as well would
+            // also exclude the on-screen/touch keyboard, AutoHotkey and
+            // PowerToys remaps, OEM keyboard utilities and remote-desktop
+            // input — for those users the app would be silently inert.
             val extra = info.dwExtraInfo
             if (extra != null && extra.toLong() == BANGLU_MAGIC) return next(nCode, wParam, info)
 
@@ -309,6 +370,11 @@ class LowLevelHook : KeySource {
                 return next(nCode, wParam, info)
             }
             if (message != WinUser.WM_KEYDOWN && message != WinUser.WM_SYSKEYDOWN) {
+                return next(nCode, wParam, info)
+            }
+
+            if (modifierKeys[vk]) {
+                swallowedDown[vk] = false
                 return next(nCode, wParam, info)
             }
 
@@ -333,8 +399,9 @@ class LowLevelHook : KeySource {
                 // Shift only ever selects a different pre-built table; a
                 // shifted letter is still the lowercase Letter the engine
                 // contract requires. Keys whose shifted meaning we cannot
-                // represent (Shift+2 = '@') fall through as Unmanaged, so the
-                // application produces the character itself.
+                // represent (Shift+2 = '@') fall through as Unmanaged carrying
+                // that shift state, which is what lets the controller put '@'
+                // — not '2' — back into the application after a flush.
                 key = if (isDown(VK_SHIFT)) shiftedKeys[vk] else plainKeys[vk]
             }
 
@@ -399,8 +466,10 @@ class LowLevelHook : KeySource {
 
     private fun buildKeyTable(shift: Boolean): Array<RawKey> {
         // Every VK gets an instance up front, Unmanaged included, so the hook
-        // procedure only ever indexes an array.
-        val t = Array<RawKey>(256) { RawKey.Unmanaged(it) }
+        // procedure only ever indexes an array. The shift flag is baked into
+        // the table rather than read per keystroke, which is what keeps the
+        // controller able to re-inject `(` rather than `9`.
+        val t = Array<RawKey>(256) { RawKey.Unmanaged(it, shift) }
         for (vk in 0x41..0x5A) t[vk] = RawKey.Letter('a' + (vk - 0x41))
         for (vk in 0x60..0x69) t[vk] = RawKey.Digit('0' + (vk - 0x60)) // numpad
         t[VK_SPACE] = RawKey.Space

@@ -20,7 +20,14 @@ sealed interface RawKey {
     data object Escape : RawKey
     data object ToggleHotkey : RawKey // Ctrl+Space, pre-detected by the hook
     data object FocusChanged : RawKey // foreground window changed
-    data class Unmanaged(val vk: Int) : RawKey // everything else
+
+    /**
+     * Everything the hook has no [RawKey] for — arrows, `(`, `'`, Shift+2 and
+     * the rest. The shift state travels with it because re-injecting the key
+     * is the only way the application can ever produce the character, and
+     * `(` is `9` with Shift held.
+     */
+    data class Unmanaged(val vk: Int, val shift: Boolean = false) : RawKey
 }
 
 enum class Mode { OFF, BANGLA, ENGLISH }
@@ -44,6 +51,14 @@ interface TextInjector {
 
     /** Synthetic key event for a `ForwardKey` action. */
     fun injectKey(key: RawKey)
+
+    /**
+     * Re-injects a key the hook swallowed but the engine has no meaning for,
+     * with its shift state, so the application produces exactly the character
+     * the user pressed. Used to keep an unmanaged key behind the Bangla word
+     * it would otherwise have overtaken.
+     */
+    fun injectVirtualKey(vk: Int, shift: Boolean)
 }
 
 /** The tray + preview window (Task 7). Called from the worker thread. */
