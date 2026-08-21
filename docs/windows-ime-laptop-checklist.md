@@ -28,6 +28,12 @@ machine you didn't develop it on.
 Legend: **P** = Pass, **F** = Fail, **N/A** = not applicable to this machine
 (e.g. no password manager installed).
 
+**Recording results from two laptops.** Section 0 has separate Laptop A /
+Laptop B columns because it's per-machine facts, not pass/fail. Sections 1–5
+use a single **P/F** column per row instead — if you run the checklist on
+both laptops, record both results in that one cell as `A:P B:F` (or `A:P
+B:P` if both pass). If you only run one laptop, a bare `P` or `F` is enough.
+
 ---
 
 ## 0. Setup
@@ -67,14 +73,14 @@ differ per host.
 
 | # | Item | Steps | Expected result | P/F |
 |---|---|---|---|---|
-| 2.1\* | Basic word + single space | Type `ami` then press Space | Text shows **আমি** followed by a held space (visually just a space — no extra character yet) | |
+| 2.1\* | Basic word + single space | Type `ami` then press Space | Text shows exactly **আমি** with the cursor right after it — **no visible space glyph yet**. (The space you pressed is held internally, not injected; press Space again per 2.2 to see it resolve into either a plain space or দাঁড়ি.) | |
 | 2.2\* | Double space → দাঁড়ি | Immediately press Space again | Text now reads **আমি। ** (দাঁড়ি + one space) — i.e. typing `ami` + Space + Space produces `আমি। ` | |
 | 2.3 | Triple space alternates | Press Space a third time | Text becomes **আমি।  ** (a plain space is appended, not a second দাঁড়ি) | |
 | 2.4\* | Tight comma | Type `ami` then Space then `,` | Text reads **আমি,** — no space between আমি and the comma | |
 | 2.5 | Period maps to দাঁড়ি | Type `ami` then Space then `.` | Text reads **আমি।** (no space before it, `.` is tight-punctuation-mapped to দাঁড়ি) | |
 | 2.6\* | Bracket ordering (the historic bug) | Type `ami` then Space then `(` | Text reads **আমি (** — the space you typed is preserved AND the Bangla appears BEFORE the bracket. (This used to fail: unmapped keys reached the app ahead of the pending word, producing `(আমি`.) | |
-| 2.7 | Mid-word unmanaged keys | Type `am`, then `-` (hyphen), then finish `i` | The hyphen must not appear ahead of or scrambled into আমি — confirm the final text order looks correct (record exactly what you see if it looks wrong) | |
-| 2.8 | Mid-word apostrophe | Type `do`, then `'`, then `nt` | Same check as above with `'` — record exact output | |
+| 2.7 | Mid-word unmanaged key — hyphen | Type `am` (do NOT finish the word), then press `-` (hyphen), then type `i`, then press Space | Text reads exactly **আম-ই** with the cursor right after ই — no visible space glyph yet (same held-space note as 2.1). Interrupting `am` mid-word with the hyphen must commit **আম** (the engine's real conversion of the buffer `am` at that point) immediately followed by the literal `-` character, THEN start a fresh word with `i` (which converts to **ই**) — never `-আম`, never `আমি-` with the hyphen swallowed or reordered. | |
+| 2.8 | Mid-word unmanaged key — apostrophe | Type `do` (do NOT finish the word), then press `'` (apostrophe), then type `n`, then press Space | Text reads exactly **ডঃ'ন** with the cursor right after ন — no visible space glyph yet. Same ordering rule as 2.7: interrupting `do` mid-word with the apostrophe must commit **ডঃ** (the engine's real conversion of the buffer `do`) immediately followed by the literal `'` character, THEN start a fresh word with `n` (which converts to **ন**). | |
 | 2.9\* | Escape reaches the app | Type `ami`, press Space (word commits, space pending), then open a dialog in the app (e.g. Notepad's Find dialog, Ctrl+F), then focus back in the document and press **Escape twice** | Each Escape must actually reach the application — e.g. if you press Escape while the Find dialog is open, it closes the dialog. (This was completely dead in exactly this state — word committed, space pending — until a review caught it; test it in exactly that state, not from a fresh idle keyboard.) | |
 | 2.10\* | Held-Shift double bracket | Hold physical Shift down and type `((` (i.e. press the `9` key twice while holding Shift) | Both characters must be **(** **(**. (A conditional shift wrapper exists specifically so the second one does not come out as **৯**.) | |
 | 2.11\* | Shift+2 for email addresses | Press Shift+2 | Types **@**, not **২** | |
