@@ -6,7 +6,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.toPainter
 import androidx.compose.ui.window.Notification
 import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.TrayState
@@ -23,8 +24,18 @@ import com.banglu.winime.ui.PreviewWindow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.awt.AlphaComposite
+import java.awt.BasicStroke
+import java.awt.Color
 import java.awt.EventQueue
+import java.awt.Font
+import java.awt.Graphics2D
+import java.awt.RenderingHints
+import java.awt.geom.Ellipse2D
+import java.awt.geom.RoundRectangle2D
+import java.awt.image.BufferedImage
 import java.io.File
+import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -53,6 +64,16 @@ private const val GUIDE_URL = "https://www.craftsai.org/products/banglu"
 /** One hint per offending application, at most this many in a session. */
 private const val MAX_WARNED_APPS = 16
 
+private const val TITLE_BLOCKED = "বাংলু টাইপার — লেখা পাঠানো যায়নি"
+private const val HINT_BLOCKED =
+    "প্রশাসক (administrator) হিসেবে চলা অ্যাপে উইন্ডোজ বাইরের কীবোর্ড ঢুকতে দেয় না। " +
+        "ওখানে বাংলা লিখতে বাংলু টাইপারকেও \"Run as administrator\" দিয়ে চালান।"
+
+private const val TITLE_FAULT = "বাংলু টাইপার — সমস্যা হয়েছে"
+private const val HINT_FAULT =
+    "টাইপ করার সময় একটি সমস্যা হয়েছে, শব্দটি বাদ পড়তে পারে। " +
+        "বারবার হলে বাংলু টাইপার বন্ধ করে আবার চালু করুন।"
+
 fun main() = application {
     val ui = remember { UiState() }
     val scope = rememberCoroutineScope()
@@ -62,7 +83,7 @@ fun main() = application {
     val controller = remember {
         Controller(
             engine = WinEngine,
-            injector = SendInputInjector(),
+            injector = TaggingInjector(SendInputInjector()),
             compat = AppCompat(bangluDir),
             listener = UiListener(ui),
         ).apply { onError = { error -> elevation.report(error) } }
@@ -138,8 +159,12 @@ fun main() = application {
         )
     }
 
+    // Rendered once per state, not per recomposition: the tray icon is the only
+    // always-visible surface this app has, and the question it exists to answer
+    // is "am I typing Bangla right now?" (spec §5).
+    val trayIcon = remember(ui.mode, ui.engineReady) { TrayGlyph.painter(ui.mode, ui.engineReady) }
     Tray(
-        icon = painterResource("tray.png"),
+        icon = trayIcon,
         state = trayState,
         tooltip = "বাংলু টাইপার — ${modeLabel(ui.mode)}",
         menu = {
@@ -246,6 +271,45 @@ private object WinEngine : ComposerEngine {
     }
 }
 
+/** Marks a throwable that came out of the injector rather than the engine. */
+private class InjectionFailure(cause: Throwable) : RuntimeException(cause)
+
+/**
+ * Tags injector failures on their way out. `Controller.onError` reports ANY
+ * throwable a job raises — an engine fault included — and the two need opposite
+ * advice: "Windows blocks outside keyboards in administrator windows" is wrong
+ * and actively misleading for a corrupt-dictionary throw. Only the injector can
+ * produce the first kind, so tagging here is the honest discriminator.
+ *
+ * Behaviourally transparent: the controller still sees a throwable from the
+ * same call and runs its existing recovery.
+ */
+private class TaggingInjector(private val delegate: TextInjector) : TextInjector {
+    override fun injectText(text: String) {
+        try {
+            delegate.injectText(text)
+        } catch (t: Throwable) {
+            throw InjectionFailure(t)
+        }
+    }
+
+    override fun injectKey(key: RawKey) {
+        try {
+            delegate.injectKey(key)
+        } catch (t: Throwable) {
+            throw InjectionFailure(t)
+        }
+    }
+
+    override fun injectVirtualKey(vk: Int, shift: Boolean) {
+        try {
+            delegate.injectVirtualKey(vk, shift)
+        } catch (t: Throwable) {
+            throw InjectionFailure(t)
+        }
+    }
+}
+
 /**
  * `SendInput` inserts zero events into a window running elevated, so the
  * injector throws on EVERY keystroke typed there. Reporting each one would put
@@ -260,16 +324,16 @@ private class InjectionWarning(private val tray: TrayState) {
         val exe = ForegroundApp.exeName()
         if (warnedApps.size >= MAX_WARNED_APPS) return
         if (!warnedApps.add(exe)) return
-        System.err.println("Banglu could not type into '$exe': $error")
+        System.err.println("Banglu worker error in '$exe': $error")
+        // Only an injector failure means "run Banglu as administrator". Saying
+        // that about an engine fault sends the user to relaunch elevated and
+        // stay just as broken.
+        val blocked = error is InjectionFailure
+        val title = if (blocked) TITLE_BLOCKED else TITLE_FAULT
+        val message = if (blocked) HINT_BLOCKED else HINT_FAULT
         EventQueue.invokeLater {
             tray.sendNotification(
-                Notification(
-                    title = "বাংলু টাইপার — লেখা পাঠানো যায়নি",
-                    message = "প্রশাসক (administrator) হিসেবে চলা অ্যাপে উইন্ডোজ বাইরের " +
-                        "কীবোর্ড ঢুকতে দেয় না। ওখানে বাংলা লিখতে বাংলু টাইপারকেও " +
-                        "\"Run as administrator\" দিয়ে চালান।",
-                    type = Notification.Type.Warning,
-                )
+                Notification(title = title, message = message, type = Notification.Type.Warning)
             )
         }
     }
@@ -312,12 +376,152 @@ private fun openUrl(url: String) {
     runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
 }
 
+/**
+ * The notices surface. It must open something real in every run, not only a
+ * packaged one: the dictionary data licences require an in-app notices surface,
+ * and the bundled Noto Sans Bengali ships under the OFL, whose §2 requires the
+ * licence to travel with the font.
+ */
 private fun openLicenses() {
     runCatching {
-        val notices = System.getProperty("compose.application.resources.dir")
-            ?.let { File(it, "LICENSES.md") }
-            ?.takeIf { it.exists() }
-            ?: File("windows-ime/resources/common/LICENSES.md")
-        if (notices.exists()) java.awt.Desktop.getDesktop().open(notices)
+        val notices = packagedNotices() ?: repoNotices() ?: extractedFontLicense() ?: return@runCatching
+        val desktop = java.awt.Desktop.getDesktop()
+        try {
+            desktop.open(notices)
+        } catch (_: Exception) {
+            // Windows refuses to open a file type nothing is registered for,
+            // and a clean install frequently has no handler for `.md`. Plain
+            // text always has one, so the notices still reach the user.
+            asPlainText(notices)?.let { desktop.open(it) }
+        }
+    }
+}
+
+private fun asPlainText(source: File): File? = runCatching {
+    val target = File(System.getProperty("java.io.tmpdir"), "banglu-typer-licenses.txt")
+    target.writeText(source.readText())
+    target
+}.getOrNull()
+
+/** Beside the installed app image (jpackage `appResourcesRootDir`). */
+private fun packagedNotices(): File? =
+    System.getProperty("compose.application.resources.dir")
+        ?.let { File(it, "LICENSES.md") }
+        ?.takeIf { it.exists() }
+
+/** A dev run started from the repository root. */
+private fun repoNotices(): File? =
+    File("windows-ime/resources/common/LICENSES.md").takeIf { it.exists() }
+
+/**
+ * Last resort: the font licence always travels on the classpath beside the
+ * fonts themselves, so extracting it gives the user something real even when
+ * neither the packaged nor the repo copy of the full notices is reachable.
+ */
+private fun extractedFontLicense(): File? {
+    val target = File(System.getProperty("java.io.tmpdir"), "banglu-typer-font-license.txt")
+    if (!target.exists()) {
+        val stream = Bundled.stream("/fonts/OFL.txt") ?: return null
+        stream.use { input -> target.outputStream().use { output -> input.copyTo(output) } }
+    }
+    return target.takeIf { it.exists() }
+}
+
+/** Classpath handle for the resources this module bundles. */
+private object Bundled {
+    fun stream(path: String): InputStream? = Bundled::class.java.getResourceAsStream(path)
+
+    /**
+     * The same face the preview window renders with, for Java2D. Null when the
+     * resource is unreadable — the tray glyph then falls back to the platform
+     * sans-serif, which on Windows still has Bangla coverage (Nirmala UI).
+     */
+    val bengaliFont: Font? by lazy {
+        runCatching {
+            stream("/fonts/NotoSansBengali-Regular.ttf")?.use {
+                Font.createFont(Font.TRUETYPE_FONT, it)
+            }
+        }.getOrNull()
+    }
+}
+
+/**
+ * The live tray indicator, drawn per state instead of shipped as art: বাংলা,
+ * English, বন্ধ, each dimmed while the dictionary is still loading or failed.
+ * `tray.png` remains the packaging icon.
+ */
+private object TrayGlyph {
+    private const val SIZE = 32
+    private const val NOT_READY_ALPHA = 0.45f
+    private const val RING_INSET = 9f
+    private const val RING_STROKE = 3f
+
+    private val BanglaFill = Color(0x64, 0xD2, 0xFF)
+    private val EnglishFill = Color(0x94, 0xA3, 0xB8)
+    private val OffFill = Color(0x33, 0x41, 0x55)
+    private val DarkInk = Color(0x08, 0x0D, 0x16)
+    private val LightInk = Color(0x94, 0xA3, 0xB8)
+
+    fun painter(mode: Mode, ready: Boolean): Painter {
+        val image = BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_ARGB)
+        val g = image.createGraphics()
+        try {
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g.setRenderingHint(
+                RenderingHints.KEY_TEXT_ANTIALIASING,
+                RenderingHints.VALUE_TEXT_ANTIALIAS_ON,
+            )
+            // Same shape, visibly not ready: "still loading" must never look
+            // like "typing Bangla".
+            if (!ready) {
+                g.composite = AlphaComposite.getInstance(AlphaComposite.SRC_OVER, NOT_READY_ALPHA)
+            }
+            val fill = when (mode) {
+                Mode.BANGLA -> BanglaFill
+                Mode.ENGLISH -> EnglishFill
+                Mode.OFF -> OffFill
+            }
+            // A filled badge rather than a bare glyph: the Windows taskbar is
+            // dark by default and light in the light theme, and a single-colour
+            // letter disappears against one of the two.
+            g.color = fill
+            g.fill(RoundRectangle2D.Float(1f, 1f, SIZE - 2f, SIZE - 2f, 9f, 9f))
+            g.color = if (mode == Mode.OFF) LightInk else DarkInk
+            if (mode == Mode.OFF) {
+                // Drawn, not typed: a "○" character rendered at tray size is a
+                // hairline that vanishes against the badge (verified by
+                // rendering both at a true 16px).
+                g.stroke = BasicStroke(RING_STROKE)
+                g.draw(Ellipse2D.Float(RING_INSET, RING_INSET, SIZE - 2 * RING_INSET, SIZE - 2 * RING_INSET))
+            } else {
+                val glyph = if (mode == Mode.BANGLA) "অ" else "A"
+                g.font = glyphFont(mode)
+                drawCentered(g, glyph)
+            }
+        } finally {
+            g.dispose()
+        }
+        return image.toPainter()
+    }
+
+    private fun glyphFont(mode: Mode): Font {
+        val bengali = Bundled.bengaliFont
+        return if (mode == Mode.BANGLA && bengali != null) {
+            bengali.deriveFont(Font.PLAIN, 18f)
+        } else {
+            Font(Font.SANS_SERIF, Font.BOLD, 16)
+        }
+    }
+
+    /**
+     * Centred on the glyph's own ink, not on the font box: Bangla's matra bar
+     * makes ascent/descent wildly asymmetric, and a baseline placed from font
+     * metrics hangs অ off the bottom of the badge.
+     */
+    private fun drawCentered(g: Graphics2D, text: String) {
+        val bounds = g.font.createGlyphVector(g.fontRenderContext, text).visualBounds
+        val x = ((SIZE - bounds.width) / 2 - bounds.x).toFloat()
+        val y = ((SIZE - bounds.height) / 2 - bounds.y).toFloat()
+        g.drawString(text, x, y)
     }
 }
