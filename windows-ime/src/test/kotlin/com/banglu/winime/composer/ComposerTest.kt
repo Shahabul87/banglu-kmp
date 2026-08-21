@@ -31,6 +31,9 @@ class ComposerTest {
     private fun previews(actions: List<ComposerAction>) =
         actions.filterIsInstance<ComposerAction.Preview>()
 
+    private fun candidates(actions: List<ComposerAction>) =
+        actions.filterIsInstance<ComposerAction.Candidates>().last().list
+
     private fun type(c: Composer, s: String): List<ComposerAction> =
         s.flatMap { c.handle(ComposerKey.Letter(it)) }
 
@@ -114,6 +117,22 @@ class ComposerTest {
         assertEquals("কেম", commits(actions))
         assertEquals(Triple("kmn", "কেম", false), picked)
         assertTrue(c.pendingSpace)
+        assertFalse(c.forming)
+    }
+
+    @Test
+    fun theRawRomanEscapeHatchStaysWithinDigitAndChipReach() {
+        val c = composer()
+        val list = candidates(type(c, "kmn"))
+        // The engine is asked for MAX_CANDIDATES - 1 precisely so the raw
+        // roman appended after it is the LAST entry of at most MAX_CANDIDATES.
+        // Asking for a full six put the escape hatch at index 6, where neither
+        // a digit (Composer bounds them to 1..6) nor a chip (the preview strip
+        // renders MAX_CANDIDATES of them) could ever reach it.
+        assertEquals(6, list.size, "a word with plenty of candidates must fill the window exactly")
+        assertEquals("kmn", list.last(), "the raw roman is always the last candidate")
+        // …and the digit for that last position really commits it.
+        assertEquals("kmn", commits(c.handle(ComposerKey.Digit('6'))))
         assertFalse(c.forming)
     }
 

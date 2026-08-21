@@ -47,8 +47,12 @@ windows-ime/src/main/kotlin/com/banglu/winime/
 ├── WinPrefs.kt           WinPrefsStore (mode/digits/start-on-login prefs)
 │                         and StartupRegistry (the HKCU Run-key toggle).
 ├── ui/PreviewWindow.kt   The caret-anchored, non-activating preview strip
-│                         (forming word + up to 5 candidate chips) — the
-│                         Windows stand-in for macOS marked text.
+│                         (forming word + up to 6 candidate chips, the last
+│                         of which is always the raw roman escape hatch) —
+│                         the Windows stand-in for macOS marked text. The
+│                         chip count is `Composer.MAX_CANDIDATES`, the same
+│                         number the digit keys 1-6 pick from: a strip that
+│                         showed fewer would hide a pickable candidate.
 └── hook/                 THE ONLY PACKAGE THAT MAY IMPORT com.sun.jna.
     ├── LowLevelHook.kt       WH_KEYBOARD_LL on a dedicated message-pump
     │                         thread, plus a foreground-window watcher and
@@ -86,7 +90,7 @@ part of `check`, so it also runs in CI.
 ## Build and test
 
 ```bash
-./gradlew :windows-ime:test    # 60 tests: Composer pins, Controller ordering/
+./gradlew :windows-ime:test    # 63 tests: Composer pins, Controller ordering/
                                 # swallow rules, AppCompat, WinStorage, WinPrefs,
                                 # StartupRegistry OS-guard, an engine smoke test —
                                 # all driven against the real repo-root
@@ -158,6 +162,54 @@ one tray notification per offending application (deduplicated, so a blocked
 elevated window does not spam one warning per keystroke), pointing the user
 at running বাংলু টাইপার as administrator too.
 
+## When Bangla conversion silently stops
+
+Windows can unregister a low-level keyboard hook it judged slow, without an
+error, an event, or any way to ask about it afterwards. When that happens we
+still hold the hook handle, so `LowLevelHook.isInstalled` still answers true,
+the tray does **not** show **"⚠ কীবোর্ড হুক বসেনি"**, and the watchdog does
+not re-arm (re-arming a hook that might still be healthy would eat
+keystrokes). The tray warning only covers the case where Windows told us the
+install failed.
+
+So: **if typing stops converting and there is no tray warning, the first
+thing to do is tray menu → "কীবোর্ড কাজ করছে না? আবার চালু করুন"** — that
+re-installs the hook from scratch. If that fixes it, the hook had been
+dropped; please record what you were doing just before it happened (which
+app, whether the machine had just resumed/locked, whether anything was
+loading heavily), because that context is the only lead we will ever get
+about which callbacks Windows considered slow.
+
+## Passthrough apps (`winime-appcompat.json`)
+
+`AppCompat` keeps a per-exe list of applications that must never have their
+keystrokes intercepted. Password managers (`keepass.exe`, `keepassxc.exe`,
+`1password.exe`, `bitwarden.exe`) are on it by default. v1 has no UI for this
+list, so adding an application to it is a manual edit of
+`%USERPROFILE%\.banglu\winime-appcompat.json`, which is a JSON array of
+`{exe, passthrough}` rows:
+
+```json
+[
+  { "exe": "electron-app.exe", "passthrough": true },
+  { "exe": "keepass.exe", "passthrough": false }
+]
+```
+
+- `"passthrough": true` adds an application to the list (this is what you
+  want for a misbehaving Electron/game/remote-desktop host).
+- `"passthrough": false` removes one of the built-in password managers — a
+  row is only needed to *deviate* from the built-in defaults, so the file is
+  normally short or absent.
+- `exe` is matched case-insensitively against the focused window's executable
+  name only — not a path, not a window title.
+
+**A change requires restarting বাংলু টাইপার.** The effective set is read once
+into an immutable snapshot when the app starts (the keyboard-hook thread
+consults it on every keystroke and must never touch the disk or a lock), and
+there is no reload path in v1. Edit the file, quit via tray → **"বন্ধ করুন"**,
+and relaunch.
+
 ## Learning data and privacy
 
 Learned word picks — an explicit non-primary candidate choice, never the
@@ -193,8 +245,10 @@ process.
 
 The design spec sketches a dedicated `ui/SettingsWindow.kt`. v1 does not have
 one — the two settings that exist (Bengali digits, start-on-login) are tray
-`CheckboxItem`s, and the passthrough app list has no UI at all yet (it is
-edited by hand as `%USERPROFILE%\.banglu\winime-appcompat.json`, or via the
-`AppCompat.add`/`remove` API directly). A dedicated settings window is
-tracked as future work once the passthrough list needs a real UI to manage
-it — building one now would be speculative.
+`CheckboxItem`s, and the passthrough app list has no UI at all: it is edited
+by hand, and it takes a restart, as documented under **Passthrough apps**
+above. `AppCompat.add`/`remove` exist and are tested, but nothing in the
+running app calls them yet — a settings window is what would. That window is
+tracked as future work: the first user who actually needs the escape hatch
+is the signal to build it, and until then the documented file edit is the
+supported route.

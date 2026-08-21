@@ -80,4 +80,12 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           MSI=$(ls windows-ime/build/compose/binaries/main/msi/*.msi)
-          gh release create "$TAG" --title "বাংলু টাইপার $TAG" --repo "$GITHUB_REPOSITORY" --notes "বাংলু টাইপার (Windows IME) — unsigned MSI installer." "$MSI"
+          # Re-running this workflow for a tag that already has a release is
+          # normal (a failed upload, a re-dispatch), and `gh release create`
+          # fails outright on an existing tag. Upload into the existing
+          # release instead, replacing the asset, so a re-run is idempotent.
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$MSI" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" --title "বাংলু টাইপার $TAG" --repo "$GITHUB_REPOSITORY" --notes "বাংলু টাইপার (Windows IME) — unsigned MSI installer." "$MSI"
+          fi

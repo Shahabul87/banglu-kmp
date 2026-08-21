@@ -53,6 +53,14 @@ private const val BOOT_LOADING = "লোড হচ্ছে…"
 private const val BOOT_READY = "পূর্ণ অভিধান ✓"
 private const val BOOT_FAILED = "অভিধান লোড হয়নি — বাংলা টাইপিং বন্ধ"
 private const val HOOK_DOWN = "⚠ কীবোর্ড হুক বসেনি"
+
+/**
+ * The manual re-arm. Deliberately phrased as a question about the symptom:
+ * Windows can drop a hook it judged slow without telling anyone, and in that
+ * state [LowLevelHook.isInstalled] still answers true (we hold the handle), so
+ * [HOOK_DOWN] never appears and this item is the user's only route back.
+ */
+private const val REARM_HOOK = "কীবোর্ড কাজ করছে না? আবার চালু করুন"
 private const val GUIDE_URL = "https://www.craftsai.org/products/banglu"
 
 /** One hint per offending application, at most this many in a session. */
@@ -253,7 +261,13 @@ fun main() = application {
                 }
             }
             Separator()
-            Item("কীবোর্ড আবার চালু করুন", enabled = ui.engineReady) { restartHook() }
+            // Names the SYMPTOM, not the mechanism. `HOOK_DOWN` above only
+            // appears when Windows told us the install failed; a hook Windows
+            // silently dropped still leaves us holding a handle, so the tray
+            // reads healthy while the keyboard is dead. In that case — the one
+            // this item exists for — this label is the only thing on screen
+            // that tells the user what to do.
+            Item(REARM_HOOK, enabled = ui.engineReady) { restartHook() }
             Item("টিউটোরিয়াল (ওয়েব গাইড)") { openUrl(GUIDE_URL) }
             // The dictionary data licenses require an in-app notices surface.
             Item("ওপেন সোর্স লাইসেন্স") { openLicenses() }
@@ -567,7 +581,8 @@ private object Bundled {
 /**
  * The live tray indicator, drawn per state instead of shipped as art: বাংলা,
  * English, বন্ধ, each dimmed while the dictionary is still loading or failed.
- * `tray.png` remains the packaging icon.
+ * This module therefore ships no tray bitmap at all; the installer/Start-menu
+ * icon is `windows-ime/icons/banglu.ico`, set in the packaging config.
  */
 private object TrayGlyph {
     private const val SIZE = 32

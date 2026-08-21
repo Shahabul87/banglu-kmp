@@ -108,7 +108,20 @@ class LowLevelHook : KeySource {
     @Volatile
     var onHookLost: ((Throwable?) -> Unit)? = null
 
-    /** Whether the keyboard hook is live right now. False = no keys reach us. */
+    /**
+     * Whether we currently HOLD a keyboard-hook handle — which is not the same
+     * question as "are keystrokes still reaching us".
+     *
+     * False is trustworthy: `SetWindowsHookEx` failed or was undone, and no key
+     * reaches us. True is weaker than it looks: Windows silently unregisters a
+     * hook whose callback it judged slow, tells nobody, and leaves the handle
+     * in our hands — so a keyboard that has gone dead that way still reads
+     * `true` here. No Win32 call reports that state, and guessing at it would
+     * mean re-arming healthy hooks and eating keystrokes (see [runWatchdog]).
+     * The compensating control is a user-driven one: the tray's
+     * "কীবোর্ড কাজ করছে না? আবার চালু করুন" item, which is named after the
+     * symptom precisely because no warning will have been shown.
+     */
     val isInstalled: Boolean get() = hook != null
 
     @Volatile

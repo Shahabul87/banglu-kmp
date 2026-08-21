@@ -2,6 +2,7 @@ package com.banglu.winime.hook
 
 import com.banglu.winime.RawKey
 import com.banglu.winime.TextInjector
+import com.sun.jna.Native
 import com.sun.jna.platform.win32.BaseTSD
 import com.sun.jna.platform.win32.User32
 import com.sun.jna.platform.win32.WinDef
@@ -124,13 +125,26 @@ class SendInputInjector : TextInjector {
         val sent = User32.INSTANCE
             .SendInput(WinDef.DWORD(inputs.size.toLong()), inputs, inputs[0].size())
             .toInt()
+        // Read immediately after the call, before anything else can clobber
+        // the thread's last-error value.
+        val lastError = Native.getLastError()
         if (sent != inputs.size) {
             // UIPI blocks a normal-integrity process from sending input to an
             // elevated window, and BlockInput does the same globally. Failing
             // loudly hands the controller its existing recovery path (reset
             // the composer, surface the error) instead of losing the user's
             // word with no trace.
-            error("SendInput inserted $sent of ${inputs.size} events (blocked by UIPI or BlockInput)")
+            //
+            // The OS code travels with the message because "blocked by UIPI or
+            // BlockInput" is our GUESS: an elevated window, BlockInput, a
+            // secure-desktop transition and some AV products all land here, and
+            // the only runtime gate this code will ever get is a human on a
+            // laptop telling us what they saw. ERROR_ACCESS_DENIED (5) is the
+            // UIPI case; anything else means the guess was wrong.
+            error(
+                "SendInput inserted $sent of ${inputs.size} events " +
+                    "(blocked by UIPI or BlockInput; GetLastError=$lastError)"
+            )
         }
     }
 }

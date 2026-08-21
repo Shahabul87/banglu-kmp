@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.rememberWindowState
+import com.banglu.winime.composer.Composer
 import com.banglu.winime.hook.CaretLocator
 import java.awt.GraphicsEnvironment
 import java.awt.MouseInfo
@@ -48,14 +49,23 @@ private val BengaliFont = FontFamily(
     Font(resource = "fonts/NotoSansBengali-Bold.ttf", weight = FontWeight.Bold),
 )
 
-private const val WIDTH_DP = 460
+// Wide enough for six chips: five is what the strip used to show, and the
+// sixth (the raw-roman escape hatch) needs room rather than the clip that
+// `clipToBounds` would otherwise give it.
+private const val WIDTH_DP = 540
 private const val HEIGHT_DP = 96
 
 /** Below the caret, not on it: the strip must never cover the text being typed. */
 private const val CARET_GAP_PX = 24
 
-/** Spec §5: forming word + up to five candidates. */
-private const val MAX_CANDIDATES = 5
+/**
+ * Forming word + every candidate a digit can pick. This is deliberately
+ * [Composer.MAX_CANDIDATES] and not a local number: a strip that shows fewer
+ * chips than the digits reach hides candidates (the last one is always the raw
+ * roman escape hatch), and one that shows more offers a chip whose digit does
+ * nothing.
+ */
+private const val MAX_CANDIDATES = Composer.MAX_CANDIDATES
 
 /**
  * The live-forming word, floating under the caret of whatever application has
@@ -168,7 +178,8 @@ private fun CandidateChip(index: Int, text: String, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // The same number that picks this candidate from the keyboard: while a
-        // word is forming, Composer maps digits 1-6 onto the candidate list.
+        // word is forming, Composer maps digits 1-6 onto the candidate list —
+        // the same six entries this row renders.
         Text(
             text = bengaliDigit(index + 1),
             color = Sky,

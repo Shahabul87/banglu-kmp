@@ -81,7 +81,11 @@ by a native shell (Approach 3) without touching anything else.
   toggles, hotkey display (default Ctrl+Space), সেটিংস, টিউটোরিয়াল
   (v1 links to the web guide), quit.
 - **Preview strip**: one undecorated always-on-top window, visible only
-  while a word forms; forming word + up to 5 candidates. Anchored at the
+  while a word forms; forming word + up to 6 candidates (revised from 5
+  during the final review: the last entry is always the raw-roman escape
+  hatch, so a 5-chip strip hid it whenever the engine filled the list —
+  `Composer.MAX_CANDIDATES` is now the single source of that number, shared
+  by the digit-pick range and the chip row). Anchored at the
   caret via `GetGUIThreadInfo`; falls back to near-cursor / remembered
   corner when the app hides its caret (Electron). `WS_EX_NOACTIVATE` —
   never steals focus.

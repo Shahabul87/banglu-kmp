@@ -75,8 +75,16 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
     /** Fires on every candidate pick; the caller decides whether to learn. */
     var onPick: ((raw: String, bangla: String, wasPrimary: Boolean) -> Unit)? = null
 
-    private companion object {
-        val tightPunctuation = setOf(",", "।", "?", "!")
+    companion object {
+        private val tightPunctuation = setOf(",", "।", "?", "!")
+
+        /**
+         * How many candidates a digit can pick and the preview strip shows.
+         * The three must agree: [MAX_CANDIDATES] = engine suggestions + the
+         * raw-roman escape hatch, and PreviewWindow renders that many chips.
+         */
+        const val MAX_CANDIDATES = 6
+        private const val MAX_ENGINE_SUGGESTIONS = MAX_CANDIDATES - 1
     }
 
     fun handle(key: ComposerKey): List<ComposerAction> = when (key) {
@@ -125,7 +133,7 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
 
         is ComposerKey.Digit -> {
             val n = key.c.digitToIntOrNull()
-            if (forming && candidates.isNotEmpty() && n != null && n in 1..6 && n - 1 < candidates.size) {
+            if (forming && candidates.isNotEmpty() && n != null && n in 1..MAX_CANDIDATES && n - 1 < candidates.size) {
                 pick(n - 1)
             } else {
                 val out = (if (forming) commitForming() else releasePendingSpace()).toMutableList()
@@ -190,7 +198,12 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
             return
         }
         formingBangla = engine.convert(formingRaw)
-        val list = engine.suggest(formingRaw, 6).toMutableList()
+        // Five, not six: the raw roman appended below is a real candidate and
+        // has to fit inside the SAME window the two pick paths cover — digits
+        // 1..6 here, six chips in PreviewWindow. Asking for six put the
+        // escape hatch at index 6 whenever the engine filled the list, where
+        // no digit and no chip could reach it.
+        val list = engine.suggest(formingRaw, MAX_ENGINE_SUGGESTIONS).toMutableList()
         if (formingRaw !in list) list.add(formingRaw) // raw = inline English
         candidates = list
         out.add(ComposerAction.Preview(formingBangla, formingRaw))
