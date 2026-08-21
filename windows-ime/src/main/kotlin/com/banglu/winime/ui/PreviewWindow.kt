@@ -44,7 +44,7 @@ private val SkySoft = Color(0xFFBAE6FD)
 private val Muted = Color(0xFF64748B)
 
 /** The bundled face (OFL) — the host app's font never applies to our window. */
-private val BengaliFont = FontFamily(
+internal val BengaliFont = FontFamily(
     Font(resource = "fonts/NotoSansBengali-Regular.ttf", weight = FontWeight.Normal),
     Font(resource = "fonts/NotoSansBengali-Bold.ttf", weight = FontWeight.Bold),
 )

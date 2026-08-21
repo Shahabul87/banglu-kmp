@@ -20,6 +20,7 @@ import com.banglu.winime.composer.ComposerEngine
 import com.banglu.winime.hook.ForegroundApp
 import com.banglu.winime.hook.LowLevelHook
 import com.banglu.winime.hook.SendInputInjector
+import com.banglu.winime.ui.ControlWindow
 import com.banglu.winime.ui.PreviewWindow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -218,19 +219,18 @@ fun main() = application {
             // warning for that would train the user to ignore this line.
             if (ui.engineReady && !ui.hookInstalled) Item(HOOK_DOWN, enabled = false) {}
             Separator()
-            RadioButtonItem(
-                text = modeLabel(Mode.BANGLA),
-                selected = ui.mode == Mode.BANGLA,
-            ) { controller.setModeExternal(Mode.BANGLA) }
-            RadioButtonItem(
-                text = modeLabel(Mode.ENGLISH),
-                selected = ui.mode == Mode.ENGLISH,
-            ) { controller.setModeExternal(Mode.ENGLISH) }
-            RadioButtonItem(
-                text = modeLabel(Mode.OFF),
-                selected = ui.mode == Mode.OFF,
-            ) { controller.setModeExternal(Mode.OFF) }
+            // Plain Items with a ✓ prefix, NOT RadioButtonItem: Compose maps a
+            // tray menu onto java.awt.PopupMenu, whose Menu has no radio item —
+            // it throws UnsupportedOperationException at first composition and
+            // the app dies before drawing anything ("Failed to launch JVM").
+            // Found the first time this ever ran on Windows; the mark is drawn
+            // in the label instead.
+            Item(modeMenuLabel(Mode.BANGLA, ui.mode)) { controller.setModeExternal(Mode.BANGLA) }
+            Item(modeMenuLabel(Mode.ENGLISH, ui.mode)) { controller.setModeExternal(Mode.ENGLISH) }
+            Item(modeMenuLabel(Mode.OFF, ui.mode)) { controller.setModeExternal(Mode.OFF) }
             Item("বাংলা/English: Ctrl+Space", enabled = false) {}
+            Separator()
+            Item("বাংলু উইন্ডো দেখান") { ui.controlVisible = true }
             Separator()
             CheckboxItem(text = "বাংলা সংখ্যা (০-৯)", checked = digitsChecked) { checked ->
                 digitsChecked = checked
@@ -280,6 +280,23 @@ fun main() = application {
         },
     )
 
+    // The discoverable surface. Opens on launch: a Windows user cannot be
+    // expected to find a tray icon that Windows itself hides by default.
+    ControlWindow(
+        visible = ui.controlVisible,
+        mode = ui.mode,
+        bootStatus = ui.bootStatus,
+        hookHealthy = ui.hookInstalled,
+        engineReady = ui.engineReady,
+        onMode = { controller.setModeExternal(it) },
+        onHide = { ui.controlVisible = false },
+        onQuit = {
+            controller.shutdown()
+            hook.stop()
+            exitApplication()
+        },
+    )
+
     PreviewWindow(
         visible = ui.previewVisible,
         bangla = ui.bangla,
@@ -302,6 +319,14 @@ private class UiState(initialMode: Mode = Mode.BANGLA) {
     var bangla by mutableStateOf("")
     var raw by mutableStateOf("")
     var candidates by mutableStateOf(emptyList<String>())
+
+    /**
+     * The control window is visible on launch and stays reachable from the
+     * tray. A tray-only app is undiscoverable on Windows: new icons are
+     * hidden behind the taskbar's overflow chevron, so a first-time user
+     * sees nothing at all and cannot tell whether their keyboard is on.
+     */
+    var controlVisible by mutableStateOf(true)
 
     /** `"" , ""` with no candidates is the composer's "hide" (KeyPorts). */
     val previewVisible: Boolean
@@ -457,6 +482,10 @@ private fun modeLabel(mode: Mode): String = when (mode) {
     Mode.ENGLISH -> "English"
     Mode.OFF -> "বন্ধ"
 }
+
+/** Selection drawn into the text: AWT tray menus have no radio item. */
+private fun modeMenuLabel(mode: Mode, current: Mode): String =
+    (if (mode == current) "✓ " else "     ") + modeLabel(mode)
 
 private fun openUrl(url: String) {
     runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
