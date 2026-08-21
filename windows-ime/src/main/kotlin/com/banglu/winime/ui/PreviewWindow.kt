@@ -4,10 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
@@ -41,7 +39,6 @@ private val CardBorder = Color(0xFF1E293B)
 private val ChipBg = Color(0xFF101A2A)
 private val Sky = Color(0xFF64D2FF)
 private val SkySoft = Color(0xFFBAE6FD)
-private val Muted = Color(0xFF64748B)
 
 /** The bundled face (OFL) — the host app's font never applies to our window. */
 internal val BengaliFont = FontFamily(
@@ -53,13 +50,17 @@ internal val BengaliFont = FontFamily(
 // sixth (the raw-roman escape hatch) needs room rather than the clip that
 // `clipToBounds` would otherwise give it.
 private const val WIDTH_DP = 540
-private const val HEIGHT_DP = 96
+
+// One row of chips. The forming word used to live above them; it is now typed
+// straight into the user's document, so the strip is suggestions and nothing
+// else — and the shorter it is, the less of their text it covers.
+private const val HEIGHT_DP = 52
 
 /** Below the caret, not on it: the strip must never cover the text being typed. */
 private const val CARET_GAP_PX = 24
 
 /**
- * Forming word + every candidate a digit can pick. This is deliberately
+ * Every candidate a digit can pick. This is deliberately
  * [Composer.MAX_CANDIDATES] and not a local number: a strip that shows fewer
  * chips than the digits reach hides candidates (the last one is always the raw
  * roman escape hatch), and one that shows more offers a chip whose digit does
@@ -68,9 +69,14 @@ private const val CARET_GAP_PX = 24
 private const val MAX_CANDIDATES = Composer.MAX_CANDIDATES
 
 /**
- * The live-forming word, floating under the caret of whatever application has
- * focus. This is the Windows stand-in for macOS marked text: the hook swallows
- * the roman letters, so without this window the user types blind.
+ * The suggestion strip, floating under the caret of whatever application has
+ * focus.
+ *
+ * It no longer shows the word being typed: that is echoed straight into the
+ * user's document as they type it, the way Avro does, so repeating it here
+ * would only put the same text in two places and cover the real one. What is
+ * left is the thing the document cannot show — the alternatives, pickable by
+ * digit or by click.
  *
  * It is created once and hidden between words rather than composed
  * conditionally — a native window rebuilt per word costs a visible flash, and
@@ -84,8 +90,6 @@ private const val MAX_CANDIDATES = Composer.MAX_CANDIDATES
 @Composable
 fun PreviewWindow(
     visible: Boolean,
-    bangla: String,
-    raw: String,
     candidates: List<String>,
     onPick: (Int) -> Unit,
 ) {
@@ -116,51 +120,26 @@ fun PreviewWindow(
         // Re-anchored on every show: between two words the caret has usually
         // moved, and the user may have switched application entirely.
         LaunchedEffect(visible) { if (visible) placeUnderCaret(window) }
-        PreviewCard(bangla = bangla, raw = raw, candidates = candidates, onPick = onPick)
+        PreviewCard(candidates = candidates, onPick = onPick)
     }
 }
 
 @Composable
-private fun PreviewCard(
-    bangla: String,
-    raw: String,
-    candidates: List<String>,
-    onPick: (Int) -> Unit,
-) {
+private fun PreviewCard(candidates: List<String>, onPick: (Int) -> Unit) {
     Surface(
         modifier = Modifier.fillMaxSize(),
         shape = RoundedCornerShape(12.dp),
         color = CardBg,
         border = BorderStroke(1.dp, CardBorder),
     ) {
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 9.dp)
+                .clipToBounds(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Text(
-                    text = bangla.ifEmpty { "…" },
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    fontFamily = BengaliFont,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                // What the user actually pressed, so a surprising conversion is
-                // explainable without deleting the word.
-                Text(text = raw, color = Muted, fontSize = 12.sp, maxLines = 1)
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth().clipToBounds(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                candidates.take(MAX_CANDIDATES).forEachIndexed { index, candidate ->
-                    CandidateChip(index = index, text = candidate, onClick = { onPick(index) })
-                }
+            candidates.take(MAX_CANDIDATES).forEachIndexed { index, candidate ->
+                CandidateChip(index = index, text = candidate, onClick = { onPick(index) })
             }
         }
     }

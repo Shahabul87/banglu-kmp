@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,11 +47,16 @@ import com.banglu.winime.Mode
  * typing without alt-tabbing to another app.
  *
  * Closing it hides it (the app keeps running in the tray) rather than
- * quitting, which is what a keyboard should do.
+ * quitting, which is what a keyboard should do. Only **বন্ধ করুন** quits.
+ *
+ * [showRequests] counts "bring this window back" requests, including ones made
+ * while it is already open — a click on the tray icon while the window sits
+ * behind Word must raise it, not silently do nothing.
  */
 @Composable
 fun ControlWindow(
     visible: Boolean,
+    showRequests: Int,
     mode: Mode,
     bootStatus: String,
     hookHealthy: Boolean,
@@ -62,11 +68,20 @@ fun ControlWindow(
     if (!visible) return
     val state: WindowState = rememberWindowState(width = 460.dp, height = 470.dp)
     Window(
+        // The close box hides; it never quits. The keyboard is the product and
+        // it must survive the user tidying their desktop.
         onCloseRequest = onHide,
         title = "বাংলু টাইপার",
         state = state,
         resizable = false,
     ) {
+        LaunchedEffect(showRequests) {
+            // Minimised counts as hidden to the user, so un-minimise before
+            // raising: toFront() on an iconified window does nothing visible.
+            state.isMinimized = false
+            window.toFront()
+            window.requestFocus()
+        }
         Column(
             Modifier.fillMaxSize().background(Ink).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -121,7 +136,9 @@ fun ControlWindow(
                 ModeButton("বন্ধ করুন", false, Off, BengaliFont, Modifier.weight(1f)) { onQuit() }
             }
             Text(
-                "লুকালে অ্যাপ চালু থাকে — টাস্কবারের ^ চিহ্নের নিচে আইকনটি পাবেন।",
+                "লুকালে অ্যাপ চালু থাকে — টাস্কবারের বাংলু আইকনে ক্লিক করলে এই উইন্ডো " +
+                    "আবার আসবে (আইকন না দেখলে ^ চিহ্নে ক্লিক করুন)। " +
+                    "\"বন্ধ করুন\" চাপলে টাইপিংও বন্ধ হয়ে যাবে।",
                 color = Dim,
                 fontSize = 11.sp,
                 fontFamily = BengaliFont,

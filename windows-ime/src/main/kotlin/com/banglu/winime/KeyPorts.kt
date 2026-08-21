@@ -49,6 +49,17 @@ interface TextInjector {
     /** KEYEVENTF_UNICODE, tagged so the hook ignores what we type ourselves. */
     fun injectText(text: String)
 
+    /**
+     * [count] backspaces, to un-type text WE injected for the word currently
+     * forming — never anything else. The controller is the only caller and it
+     * counts them from its own echo ledger; see `Controller.reconcileEcho`.
+     *
+     * Sent as ONE `SendInput` batch rather than [count] calls: the host
+     * application processes a single batch atomically, so an intervening real
+     * keystroke cannot interleave halfway through a correction.
+     */
+    fun injectBackspaces(count: Int)
+
     /** Synthetic key event for a `ForwardKey` action. */
     fun injectKey(key: RawKey)
 
@@ -63,7 +74,28 @@ interface TextInjector {
 
 /** The tray + preview window (Task 7). Called from the worker thread. */
 interface ControllerListener {
-    /** `"" , ""` with no candidates = hide the preview window. */
-    fun onPreview(bangla: String, raw: String, candidates: List<String>)
+    /**
+     * The suggestion list for the word being typed, or empty to hide the
+     * popup.
+     *
+     * The forming word itself is NOT reported here any more: it is echoed
+     * live into the focused application as the user types, so the popup shows
+     * suggestions and nothing else. An empty list is the hide signal.
+     */
+    fun onCandidates(candidates: List<String>)
     fun onModeChanged(mode: Mode)
+}
+
+/**
+ * Deferred, cancellable execution of the debounced candidate refresh.
+ *
+ * A port rather than a bare timer so tests can fire the refresh
+ * deterministically instead of sleeping, and so the production timer thread
+ * stays out of the pure-logic layer. [schedule] REPLACES whatever was
+ * pending: only the newest buffer is ever worth asking the engine about.
+ */
+interface RefineScheduler {
+    fun schedule(task: () -> Unit)
+    fun cancel()
+    fun close()
 }

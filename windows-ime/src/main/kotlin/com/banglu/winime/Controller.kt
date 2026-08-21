@@ -35,9 +35,25 @@ class Controller(
     private val injector: TextInjector,
     private val compat: AppCompat,
     private val listener: ControllerListener,
+    private val refineScheduler: RefineScheduler = DebounceScheduler(),
 ) : HookSink {
 
     private val composer = Composer(engine)
+
+    /**
+     * The text this controller has physically typed into the focused
+     * application for the word currently forming — and therefore the ONLY text
+     * it is ever allowed to backspace.
+     *
+     * Worker thread only (the @Volatile exists so tests can read it after a
+     * drain). Every path that ends composition without owning the caret any
+     * more clears it WITHOUT injecting backspaces; see [abandonComposition].
+     */
+    @Volatile
+    private var echoed = ""
+
+    /** Test-only view of the echo ledger. */
+    internal val echoedText: String get() = echoed
 
     /** Task 8 tray toggle, passed straight through to the composer's own @Volatile field. */
     var banglaDigits: Boolean
@@ -57,6 +73,14 @@ class Controller(
         class Pick(val index: Int) : Job
         class ModeSwitch(val from: Mode, val to: Mode) : Job
         class Idle(val latch: CountDownLatch) : Job
+
+        /**
+         * The debounced suggestion query, posted by the scheduler thread and
+         * run HERE so it shares the one engine lane. [generation] is the
+         * composer's buffer version it was scheduled for; a stale one is
+         * dropped by the composer rather than shown.
+         */
+        class Refine(val generation: Long) : Job
         data object Stop : Job
     }
 
@@ -100,6 +124,9 @@ class Controller(
     @Volatile
     private var stopped = false
 
+    /** Test-only: awaitIdle is illegal once the worker has been told to stop. */
+    internal val isStopped: Boolean get() = stopped
+
     /** Last throwable a job threw; kept for diagnostics, never printed. */
     @Volatile
     internal var lastWorkerError: Throwable? = null
@@ -121,6 +148,9 @@ class Controller(
             // primary never does.
             if (!wasPrimary) engine.selected(raw, bangla)
         }
+        // A conversion that fell back to the rule layer still typed the user's
+        // word, so it is not a job failure — but it must not be silent either.
+        composer.onConversionFault = { t -> reportFault(t) }
     }
 
     private val worker = Thread({ runLoop() }, "banglu-winime-worker").apply {
@@ -203,6 +233,10 @@ class Controller(
         stopped = true
         queue.offer(Job.Stop)
         worker.join(SHUTDOWN_JOIN_MS)
+        // Belt and braces: the worker closes it on Job.Stop, but a worker that
+        // never got there would otherwise leave a live timer thread that can
+        // still enqueue into a queue nobody drains.
+        refineScheduler.close()
     }
 
     /**
@@ -230,6 +264,7 @@ class Controller(
                 when (job) {
                     is Job.Key -> try {
                         handle(job.key)
+                        updateRefineSchedule()
                     } finally {
                         // Exactly one release per claim. An unclaimed signal
                         // (FocusChanged, the hotkey) never incremented, and
@@ -243,46 +278,56 @@ class Controller(
                     is Job.Pick -> {
                         dispatch(composer.pick(job.index))
                         syncMirror()
+                        updateRefineSchedule()
                     }
+
+                    // No reschedule: the strip for this buffer has just been
+                    // filled, and asking again for the same generation would
+                    // loop the engine forever on a word nobody is typing.
+                    is Job.Refine -> dispatch(composer.refineCandidates(job.generation))
 
                     is Job.ModeSwitch -> switchMode(job.from, job.to)
                     is Job.Idle -> job.latch.countDown()
-                    Job.Stop -> return
+                    Job.Stop -> {
+                        // The app is going away with the user's word already on
+                        // screen. Clearing the ledger without backspaces is the
+                        // only correct end: whatever we typed is theirs now.
+                        echoed = ""
+                        refineScheduler.close()
+                        return
+                    }
                 }
             } catch (t: Throwable) {
                 // A dead worker is a dead keyboard: one bad key must not end it.
-                lastWorkerError = t
                 // …but surviving is not enough. `Composer.handle` appends the
                 // character to its buffer BEFORE it calls the engine, so a key
                 // that threw leaves a buffer that was never rendered or
                 // committed: every following letter would be swallowed into a
                 // growing invisible word and throw again. Reset the state
-                // machine — focusLost() flushes the last good Bangla and never
-                // touches the engine.
+                // machine.
+                //
+                // A failed Refine needs no reset at all: it never mutates the
+                // buffer and the converted word is already on screen, so the
+                // only casualty is one suggestion strip.
                 if (job is Job.Key) recoverFromFailedKey()
-                runCatching { onError?.invoke(t) }
+                reportFault(t)
             }
         }
     }
 
     private fun recoverFromFailedKey() {
-        try {
-            dispatch(composer.focusLost())
-        } catch (t: Throwable) {
-            // The injector itself is failing. The composer's state was already
-            // cleared by focusLost(), so the mirror below is still the truth.
-            lastWorkerError = t
-        } finally {
-            syncMirror()
-        }
+        // Abandon, not flush: the last good Bangla is ALREADY in the host
+        // application (live echo), so re-injecting it would duplicate the word
+        // and backspacing it would destroy it.
+        runCatching { abandonComposition() }
     }
 
     private fun handle(key: RawKey) {
         when (key) {
-            RawKey.FocusChanged -> {
-                dispatch(composer.focusLost())
-                syncMirror()
-            }
+            // The caret has moved to a different window. The word we echoed
+            // stays where the user typed it; anything we injected or deleted
+            // now would land in the NEW window, on somebody else's text.
+            RawKey.FocusChanged -> abandonComposition()
 
             RawKey.ToggleHotkey -> {
                 val from = mode
@@ -295,11 +340,12 @@ class Controller(
                 // really left and wrong here, where the next thing they typed
                 // belongs after that space.
                 val heldSpace = composer.pendingSpace && !composer.forming
-                // Commit first, key second — the same ordering as ForwardKey,
-                // on the same single lane. focusLost() never calls the engine.
-                dispatch(composer.focusLost())
+                // An unmanaged key is an arrow, Home, End, a bracket — several
+                // of them MOVE THE CARET, and the ones that do not are still
+                // about to. The forming word is already on screen, so ending
+                // composition here means sealing the ledger, never editing it.
+                abandonComposition()
                 if (heldSpace) injector.injectText(" ")
-                syncMirror()
                 injector.injectVirtualKey(key.vk, key.shift)
             }
 
@@ -313,39 +359,108 @@ class Controller(
 
     private fun switchMode(from: Mode, to: Mode) {
         if (from == Mode.BANGLA) {
-            // Never strand a half-typed word in the app we are leaving.
-            dispatch(composer.focusLost())
-            syncMirror()
+            // Never strand a half-typed word — and never edit it either: the
+            // user reached the tray or the control window to get here, so the
+            // caret they left behind is no longer under our control.
+            abandonComposition()
         }
         mode = to // idempotent when setModeExternal already published it
         listener.onModeChanged(to)
     }
 
     /**
-     * Injection first, UI after: the app must have the text before the preview
-     * window redraws. Preview/Candidates coalesce into ONE listener call per
-     * handled key so the window never flickers through an intermediate state.
+     * Ends composition leaving the host application's text EXACTLY as it is.
+     *
+     * This is the primary safety rule of the live echo. Every caller here has
+     * lost the guarantee that our caret is still the one the backspaces would
+     * hit — focus moved, the user clicked our own window, a caret-moving key is
+     * about to fire, or the worker is unwinding from a fault. The word the user
+     * typed is already on their screen and belongs to them; the only correct
+     * action is to stop tracking it.
+     */
+    private fun abandonComposition() {
+        val ending = composer.forming || composer.pendingSpace
+        composer.focusLost() // discards its actions ON PURPOSE — see above
+        echoed = ""
+        refineScheduler.cancel()
+        syncMirror()
+        if (ending) listener.onCandidates(emptyList())
+    }
+
+    /**
+     * Injection first, UI after: the app must have the text before the popup
+     * redraws. The candidate lists in a batch coalesce into ONE listener call
+     * so the window never flickers through an intermediate state.
      */
     private fun dispatch(actions: List<ComposerAction>) {
         if (actions.isEmpty()) return
-        var previewBangla: String? = null
-        var previewRaw = ""
         var candidates: List<String>? = null
         for (action in actions) {
             when (action) {
-                is ComposerAction.Commit -> injector.injectText(action.text)
+                is ComposerAction.Commit -> commitEcho(action.text)
                 is ComposerAction.ForwardKey -> injector.injectKey(toRawKey(action.key))
-                is ComposerAction.Preview -> {
-                    previewBangla = action.bangla
-                    previewRaw = action.raw
-                }
-
+                is ComposerAction.Preview -> reconcileEcho(action.bangla)
                 is ComposerAction.Candidates -> candidates = action.list
             }
         }
-        if (previewBangla != null || candidates != null) {
-            listener.onPreview(previewBangla ?: "", previewRaw, candidates ?: emptyList())
+        candidates?.let(listener::onCandidates)
+    }
+
+    /**
+     * Makes the host application read [target] for the word being typed, by
+     * changing only what actually differs.
+     *
+     * The common-prefix diff is not an optimisation: re-typing the whole word
+     * on every letter would flicker visibly, and every backspace it saves is
+     * one that cannot go wrong. Typing `ami` sends `আ`, then `ম`, then `ি` —
+     * three inserts and no deletions at all, because each conversion extends
+     * the last. Only a conversion that REWRITES an earlier letter costs
+     * deletions: `kmn` goes `ক`, `কিমি`, `কেমন`, so the third keystroke sends
+     * three backspaces and types `েমন`.
+     */
+    private fun reconcileEcho(target: String) {
+        if (target == echoed) return
+        val common = commonPrefixLength(echoed, target)
+        if (echoed.length > common) {
+            injector.injectBackspaces(echoed.length - common)
+            // Recorded BEFORE the insert: if that throws, the ledger must
+            // still describe what is really on screen, or the next diff would
+            // backspace text nobody typed.
+            echoed = echoed.substring(0, common)
         }
+        if (target.length > common) {
+            injector.injectText(target.substring(common))
+            echoed = target
+        }
+    }
+
+    /**
+     * The word is finished. It is already on screen — with the conversion
+     * computed synchronously this is a no-op in the overwhelmingly common case
+     * — so all that is left is to stop treating it as editable. The exception
+     * is a commit that differs from what is displayed (Escape's raw roman, a
+     * candidate pick), which reconciles through the same diff first.
+     */
+    private fun commitEcho(text: String) {
+        reconcileEcho(text)
+        echoed = ""
+    }
+
+    /** Arms (or drops) the debounced suggestion query for the current buffer. */
+    private fun updateRefineSchedule() {
+        if (!composer.forming) {
+            refineScheduler.cancel()
+            return
+        }
+        val generation = composer.generation
+        // The scheduler thread ONLY enqueues: the engine has exactly one lane
+        // and this is not it.
+        refineScheduler.schedule { queue.offer(Job.Refine(generation)) }
+    }
+
+    private fun reportFault(t: Throwable) {
+        lastWorkerError = t
+        runCatching { onError?.invoke(t) }
     }
 
     private fun syncMirror() {
@@ -378,5 +493,25 @@ class Controller(
     private companion object {
         const val SHUTDOWN_JOIN_MS = 2_000L
         const val AWAIT_IDLE_MS = 30_000L
+
+        /**
+         * Length of the shared leading run of [a] and [b], in UTF-16 units —
+         * the unit `SendInput` types and a host application's backspace
+         * deletes.
+         *
+         * A boundary is never allowed to fall between the halves of a
+         * surrogate pair: splitting one would inject a lone surrogate, which
+         * renders as a replacement box and is undeletable by our own count.
+         * Bengali is entirely inside the BMP, so this only ever bites on an
+         * emoji or a rare-plane character reaching the buffer — which the raw
+         * escape hatch can do.
+         */
+        fun commonPrefixLength(a: String, b: String): Int {
+            var i = 0
+            val limit = minOf(a.length, b.length)
+            while (i < limit && a[i] == b[i]) i++
+            if (i > 0 && i < a.length && a[i - 1].isHighSurrogate()) i--
+            return i
+        }
     }
 }

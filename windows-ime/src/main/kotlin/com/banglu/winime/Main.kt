@@ -77,6 +77,20 @@ private const val HINT_FAULT =
     "টাইপ করার সময় একটি সমস্যা হয়েছে, শব্দটি বাদ পড়তে পারে। " +
         "বারবার হলে বাংলু টাইপার বন্ধ করে আবার চালু করুন।"
 
+/**
+ * Shown the FIRST time the user hides the control window in a session.
+ *
+ * Without it, hiding the window looks like quitting: the app is still typing
+ * Bangla, but the only thing left on screen is a tray icon Windows files away
+ * behind the taskbar's overflow chevron by default. A user who hid the window
+ * and could not find it again is the report this exists to answer, so the
+ * message names both facts — still running, and how to get back.
+ */
+private const val TITLE_HIDDEN = "বাংলু টাইপার চলছে"
+private const val HINT_HIDDEN =
+    "উইন্ডোটি লুকানো হলো, কিন্তু বাংলা টাইপিং চালু আছে। " +
+        "ফিরে পেতে টাস্কবারের ডান দিকে (দরকার হলে ^ চিহ্নে ক্লিক করে) বাংলু আইকনে ক্লিক করুন।"
+
 private const val TITLE_STARTUP_TOGGLE_FAILED = "বাংলু টাইপার — সেটিং সংরক্ষণ হয়নি"
 private const val HINT_STARTUP_TOGGLE_FAILED =
     "\"লগইনে চালু হবে\" সেটিং পরিবর্তন করা যায়নি। আবার চেষ্টা করুন।"
@@ -134,6 +148,39 @@ fun main() = application {
         }
     }
     val hook = remember { LowLevelHook() }
+
+    /**
+     * Brings the control window back, whether it is hidden or merely buried.
+     * Safe from any thread — the tray's action listener is not guaranteed to
+     * be the AWT event thread.
+     */
+    fun showControlWindow() {
+        EventQueue.invokeLater {
+            ui.controlVisible = true
+            ui.controlShowRequests++
+        }
+    }
+
+    /**
+     * Hides it, and says so — once. A balloon on every hide would be noise;
+     * never saying it at all is how the user got stranded.
+     */
+    val hideHintShown = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    fun hideControlWindow() {
+        ui.controlVisible = false
+        if (hideHintShown.compareAndSet(false, true)) {
+            trayState.sendNotification(
+                Notification(title = TITLE_HIDDEN, message = HINT_HIDDEN, type = Notification.Type.Info)
+            )
+        }
+    }
+
+    /** The one real exit: drain the worker, unhook, then leave. */
+    fun quitApp() {
+        controller.shutdown()
+        hook.stop()
+        exitApplication()
+    }
 
     /** Publishes the hook's own truth; called from the pump thread as well. */
     fun publishHookState() {
@@ -212,6 +259,10 @@ fun main() = application {
         icon = trayIcon,
         state = trayState,
         tooltip = "বাংলু টাইপার — ${modeLabel(ui.mode)}",
+        // The tray icon IS the way back to the window on Windows, and clicking
+        // it is the first thing anyone tries. The menu item below stays as the
+        // discoverable duplicate, but it is not the primary route.
+        onAction = { showControlWindow() },
         menu = {
             Item(ui.bootStatus, enabled = false) {}
             // Only a fault once the hook was supposed to be there: before the
@@ -230,7 +281,7 @@ fun main() = application {
             Item(modeMenuLabel(Mode.OFF, ui.mode)) { controller.setModeExternal(Mode.OFF) }
             Item("বাংলা/English: Ctrl+Space", enabled = false) {}
             Separator()
-            Item("বাংলু উইন্ডো দেখান") { ui.controlVisible = true }
+            Item("বাংলু উইন্ডো দেখান") { showControlWindow() }
             Separator()
             CheckboxItem(text = "বাংলা সংখ্যা (০-৯)", checked = digitsChecked) { checked ->
                 digitsChecked = checked
@@ -272,11 +323,7 @@ fun main() = application {
             // The dictionary data licenses require an in-app notices surface.
             Item("ওপেন সোর্স লাইসেন্স") { openLicenses() }
             Separator()
-            Item("বন্ধ করুন") {
-                controller.shutdown()
-                hook.stop()
-                exitApplication()
-            }
+            Item("বন্ধ করুন") { quitApp() }
         },
     )
 
@@ -284,23 +331,18 @@ fun main() = application {
     // expected to find a tray icon that Windows itself hides by default.
     ControlWindow(
         visible = ui.controlVisible,
+        showRequests = ui.controlShowRequests,
         mode = ui.mode,
         bootStatus = ui.bootStatus,
         hookHealthy = ui.hookInstalled,
         engineReady = ui.engineReady,
         onMode = { controller.setModeExternal(it) },
-        onHide = { ui.controlVisible = false },
-        onQuit = {
-            controller.shutdown()
-            hook.stop()
-            exitApplication()
-        },
+        onHide = { hideControlWindow() },
+        onQuit = { quitApp() },
     )
 
     PreviewWindow(
         visible = ui.previewVisible,
-        bangla = ui.bangla,
-        raw = ui.raw,
         candidates = ui.candidates,
         onPick = { index -> controller.pickCandidate(index) },
     )
@@ -316,8 +358,6 @@ private class UiState(initialMode: Mode = Mode.BANGLA) {
     var engineReady by mutableStateOf(false)
     var hookInstalled by mutableStateOf(false)
     var mode by mutableStateOf(initialMode)
-    var bangla by mutableStateOf("")
-    var raw by mutableStateOf("")
     var candidates by mutableStateOf(emptyList<String>())
 
     /**
@@ -328,9 +368,17 @@ private class UiState(initialMode: Mode = Mode.BANGLA) {
      */
     var controlVisible by mutableStateOf(true)
 
-    /** `"" , ""` with no candidates is the composer's "hide" (KeyPorts). */
-    val previewVisible: Boolean
-        get() = bangla.isNotEmpty() || raw.isNotEmpty() || candidates.isNotEmpty()
+    /**
+     * Incremented on every "show the window" request, including one made while
+     * it is already open. A show that finds `controlVisible` already true would
+     * otherwise be a silent no-op — the same "I clicked and nothing happened"
+     * the tray click exists to fix — so the window keys its bring-to-front on
+     * this counter instead of on visibility.
+     */
+    var controlShowRequests by mutableStateOf(0)
+
+    /** An empty candidate list is the composer's "hide" (KeyPorts). */
+    val previewVisible: Boolean get() = candidates.isNotEmpty()
 }
 
 /**
@@ -345,12 +393,8 @@ private class UiListener(
      * so this is the one place mode persistence needs to hook in. */
     private val onModeChangedExtra: (Mode) -> Unit = {},
 ) : ControllerListener {
-    override fun onPreview(bangla: String, raw: String, candidates: List<String>) {
-        EventQueue.invokeLater {
-            ui.bangla = bangla
-            ui.raw = raw
-            ui.candidates = candidates
-        }
+    override fun onCandidates(candidates: List<String>) {
+        EventQueue.invokeLater { ui.candidates = candidates }
     }
 
     override fun onModeChanged(mode: Mode) {
@@ -365,6 +409,12 @@ private class UiListener(
  * and that single lane IS the guarantee. Do not add a second caller.
  */
 private object WinEngine : ComposerEngine {
+    // Rule-only, zero I/O — the same call the Android hot path and the desktop
+    // editor's EngineFacade.instant use. Here it is the degraded path: it needs
+    // no store, so it still answers when the full pipeline throws.
+    override fun instant(raw: String): String =
+        SmartEngineAdapter.convertForInstantPreview(raw)
+
     override fun convert(raw: String): String =
         SmartEngineAdapter.convertWord(raw).bengali
 
@@ -399,6 +449,14 @@ private class TaggingInjector(private val delegate: TextInjector) : TextInjector
     override fun injectText(text: String) {
         try {
             delegate.injectText(text)
+        } catch (t: Throwable) {
+            throw InjectionFailure(t)
+        }
+    }
+
+    override fun injectBackspaces(count: Int) {
+        try {
+            delegate.injectBackspaces(count)
         } catch (t: Throwable) {
             throw InjectionFailure(t)
         }

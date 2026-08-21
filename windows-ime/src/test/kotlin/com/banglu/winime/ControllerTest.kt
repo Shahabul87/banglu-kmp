@@ -14,6 +14,7 @@ import kotlin.test.assertTrue
 /** One ordered log of everything that reached the OS injection layer. */
 private sealed interface Emitted {
     data class Text(val text: String) : Emitted
+    data class Back(val count: Int) : Emitted
     data class Key(val key: RawKey) : Emitted
     data class VirtualKey(val vk: Int, val shift: Boolean) : Emitted
 }
@@ -22,6 +23,10 @@ private class FakeInjector : TextInjector {
     private val calls = mutableListOf<Emitted>()
     override fun injectText(text: String) {
         synchronized(calls) { calls += Emitted.Text(text) }
+    }
+
+    override fun injectBackspaces(count: Int) {
+        synchronized(calls) { calls += Emitted.Back(count) }
     }
 
     override fun injectKey(key: RawKey) {
@@ -37,29 +42,94 @@ private class FakeInjector : TextInjector {
     val keys: List<RawKey> get() = emitted.filterIsInstance<Emitted.Key>().map { it.key }
 }
 
-private data class PreviewCall(val bangla: String, val raw: String, val candidates: List<String>)
-
 private class FakeListener : ControllerListener {
-    private val previewCalls = mutableListOf<PreviewCall>()
+    private val candidateCalls = mutableListOf<List<String>>()
     private val modeCalls = mutableListOf<Mode>()
-    override fun onPreview(bangla: String, raw: String, candidates: List<String>) {
-        synchronized(previewCalls) { previewCalls += PreviewCall(bangla, raw, candidates) }
+    override fun onCandidates(candidates: List<String>) {
+        synchronized(candidateCalls) { candidateCalls += candidates }
     }
 
     override fun onModeChanged(mode: Mode) {
         synchronized(modeCalls) { modeCalls += mode }
     }
 
-    val previews: List<PreviewCall> get() = synchronized(previewCalls) { previewCalls.toList() }
+    val candidates: List<List<String>> get() = synchronized(candidateCalls) { candidateCalls.toList() }
     val modes: List<Mode> get() = synchronized(modeCalls) { modeCalls.toList() }
+}
+
+/**
+ * The debounce, under the test's control. Nothing here sleeps: [fire] runs
+ * whatever the controller last armed, which is exactly what the real timer
+ * thread does once the user stops typing.
+ */
+private class ManualScheduler : RefineScheduler {
+    @Volatile
+    private var pending: (() -> Unit)? = null
+
+    @Volatile
+    var scheduled = 0
+        private set
+
+    @Volatile
+    var closed = false
+        private set
+
+    override fun schedule(task: () -> Unit) {
+        scheduled++
+        pending = task
+    }
+
+    override fun cancel() {
+        pending = null
+    }
+
+    override fun close() {
+        closed = true
+        pending = null
+    }
+
+    /**
+     * Takes the currently armed task so a test can fire it LATE — after the
+     * user has typed on. That race is the reason the generation guard exists.
+     */
+    fun armed(): () -> Unit {
+        val task = pending ?: error("nothing was armed")
+        pending = null
+        return task
+    }
+
+    /** true when there was something armed to run. */
+    fun fire(): Boolean {
+        val task = pending ?: return false
+        pending = null
+        task()
+        return true
+    }
 }
 
 /** The real engine on the real dictionary; `selected` is recorded, never taught. */
 private open class RecordingEngine : ComposerEngine {
     private val learned = mutableListOf<Pair<String, String>>()
-    override fun convert(raw: String): String = SmartEngineAdapter.convertWord(raw).bengali
-    override fun suggest(raw: String, limit: Int): List<String> =
-        SmartEngineAdapter.getSuggestions(raw, limit).map { it.bengali }
+
+    /** Counts what the typing path asked for; the performance pin reads these. */
+    val instants = java.util.concurrent.atomic.AtomicInteger(0)
+    val converts = java.util.concurrent.atomic.AtomicInteger(0)
+    val suggests = java.util.concurrent.atomic.AtomicInteger(0)
+
+    override fun instant(raw: String): String {
+        instants.incrementAndGet()
+        return SmartEngineAdapter.convertForInstantPreview(raw)
+    }
+
+    override fun convert(raw: String): String {
+        converts.incrementAndGet()
+        return SmartEngineAdapter.convertWord(raw).bengali
+    }
+
+    override fun suggest(raw: String, limit: Int): List<String> {
+        suggests.incrementAndGet()
+        return SmartEngineAdapter.getSuggestions(raw, limit).map { it.bengali }
+    }
 
     override fun selected(raw: String, bangla: String) {
         synchronized(learned) { learned += raw to bangla }
@@ -84,10 +154,20 @@ private class GateEngine(private val gateOn: String) : RecordingEngine() {
     }
 }
 
-/** Blows up inside `convert()` on demand, to prove the worker recovers. */
+/**
+ * Blows up on demand, to prove the worker recovers. It fails the RULE layer as
+ * well as the pipeline on purpose: a pipeline-only fault is survivable (the
+ * composer falls back to rules and the word still appears), so only a total
+ * engine failure reaches the controller's reset path at all.
+ */
 private class FlakyEngine : RecordingEngine() {
     @Volatile
     var failing = false
+
+    override fun instant(raw: String): String {
+        if (failing) error("engine blew up converting '$raw'")
+        return super.instant(raw)
+    }
 
     override fun convert(raw: String): String {
         if (failing) error("engine blew up converting '$raw'")
@@ -98,8 +178,10 @@ private class FlakyEngine : RecordingEngine() {
 private class Rig(val engine: RecordingEngine) {
     val injector = FakeInjector()
     val listener = FakeListener()
+    val scheduler = ManualScheduler()
     val compat = AppCompat(createTempDirectory("winime-controller").toFile())
-    val controller = Controller(engine, injector, compat, listener).apply { engineReady = true }
+    val controller = Controller(engine, injector, compat, listener, scheduler)
+        .apply { engineReady = true }
 
     fun key(k: RawKey, exe: String = "notepad.exe"): Boolean = controller.onKey(k, exe)
 
@@ -108,6 +190,13 @@ private class Rig(val engine: RecordingEngine) {
     }
 
     fun idle() = controller.awaitIdle()
+
+    /** The user pauses: the debounce fires and the strip fills. */
+    fun settle() {
+        idle()
+        scheduler.fire()
+        idle()
+    }
 }
 
 /**
@@ -134,14 +223,21 @@ class ControllerTest {
     fun banglaTypingEndToEnd() {
         val r = rig()
         r.type("ami")
-        assertTrue(r.key(RawKey.Space))
+        // Live echo: each letter reached the application as it was typed, and
+        // each conversion simply extended the last, so nothing was deleted.
         r.idle()
-        // The space is HELD (pending-space দাঁড়ি model): only the word landed.
-        assertEquals(listOf("আমি"), r.injector.texts)
+        assertEquals(listOf(Emitted.Text("আ"), Emitted.Text("ম"), Emitted.Text("ি")), r.injector.emitted)
 
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        assertEquals(listOf("আমি", "। "), r.injector.texts)
+        // The space is HELD (pending-space দাঁড়ি model) and the word needed no
+        // injection at all — it has been on screen since the user typed it.
+        assertEquals(listOf("আ", "ম", "ি"), r.injector.texts)
+        assertEquals("", r.controller.echoedText, "the word belongs to the document now")
+
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
+        assertEquals(listOf("আ", "ম", "ি", "। "), r.injector.texts)
         assertTrue(r.injector.keys.isEmpty())
     }
 
@@ -179,10 +275,18 @@ class ControllerTest {
         r.type("ami")
         assertTrue(r.key(RawKey.Enter))
         r.idle()
-        assertEquals(listOf("আমি"), r.injector.texts)
+        assertEquals(listOf("আ", "ম", "ি"), r.injector.texts)
         assertEquals(listOf(RawKey.Enter), r.injector.keys)
-        // Ordering law: the commit reaches the app BEFORE the forwarded Enter.
-        assertEquals(listOf(Emitted.Text("আমি"), Emitted.Key(RawKey.Enter)), r.injector.emitted)
+        // Ordering law: the whole word reaches the app BEFORE the forwarded Enter.
+        assertEquals(
+            listOf(
+                Emitted.Text("আ"),
+                Emitted.Text("ম"),
+                Emitted.Text("ি"),
+                Emitted.Key(RawKey.Enter),
+            ),
+            r.injector.emitted,
+        )
 
         // Composer is idle again, so the next Enter is the app's once more.
         assertFalse(r.key(RawKey.Enter))
@@ -222,7 +326,9 @@ class ControllerTest {
         r.idle()
         assertEquals(
             listOf(
-                Emitted.Text("আমি"),
+                Emitted.Text("আ"),
+                Emitted.Text("ম"),
+                Emitted.Text("ি"),
                 Emitted.Text("। "),
                 Emitted.Text("ক"),
                 Emitted.Key(RawKey.Enter),
@@ -259,7 +365,9 @@ class ControllerTest {
         r.idle()
         assertEquals(
             listOf(
-                Emitted.Text("আমি"),
+                Emitted.Text("আ"),
+                Emitted.Text("ম"),
+                Emitted.Text("ি"),
                 Emitted.Text("। "),
                 Emitted.Text("ক"),
                 Emitted.Key(RawKey.Enter),
@@ -281,7 +389,7 @@ class ControllerTest {
         assertTrue(r.key(RawKey.Space))
         assertFalse(r.key(RawKey.FocusChanged))
         r.type("kmn")
-        r.idle()
+        r.settle()
         r.controller.pickCandidate(1)
         assertTrue(r.key(RawKey.ToggleHotkey)) // → English
         assertTrue(r.key(RawKey.ToggleHotkey)) // → back to বাংলা
@@ -304,9 +412,11 @@ class ControllerTest {
         r.idle()
         assertEquals(Mode.ENGLISH, r.controller.mode)
         assertEquals(listOf(Mode.ENGLISH), r.listener.modes)
-        // Leaving BANGLA flushes the half-typed word instead of stranding it.
-        assertEquals(listOf("আমি"), r.injector.texts)
-        assertEquals(PreviewCall("", "", emptyList()), r.listener.previews.last())
+        // Leaving BANGLA ends the word instead of stranding it — and, because
+        // it is already on screen, without injecting or deleting anything.
+        assertEquals(listOf("আ", "ম", "ি"), r.injector.texts)
+        assertEquals("", r.controller.echoedText)
+        assertEquals(emptyList(), r.listener.candidates.last())
 
         assertFalse(r.key(RawKey.Letter('a')), "English mode is pure passthrough")
 
@@ -329,19 +439,27 @@ class ControllerTest {
         assertTrue(r.key(RawKey.Letter('a'), exe = "notepad.exe"))
 
         r.idle()
-        // Nothing from a passthrough app ever reached the composer.
-        assertEquals(1, r.listener.previews.size)
-        assertEquals("a", r.listener.previews.last().raw)
+        // Nothing from a passthrough app ever reached the composer: exactly one
+        // letter — the notepad.exe one — was ever converted and echoed.
+        assertEquals(listOf(Emitted.Text("আ")), r.injector.emitted)
+        assertEquals(1, r.listener.candidates.size)
     }
 
     @Test
-    fun focusChangeFlushesForming() {
+    fun focusChangeSealsTheEchoWithoutTouchingAnyText() {
         val r = rig()
         r.type("ami")
+        r.idle()
+        val beforeFocusChange = r.injector.emitted
         assertFalse(r.key(RawKey.FocusChanged), "a focus notification is never swallowed")
         r.idle()
-        assertEquals(listOf("আমি"), r.injector.texts)
-        assertEquals(PreviewCall("", "", emptyList()), r.listener.previews.last())
+        // THE primary invariant of the live echo. The word is already in the
+        // window the user typed it in; the caret is now somewhere else
+        // entirely, so a backspace here would delete SOMEBODY ELSE'S text and
+        // a re-injection would type the word into the wrong document.
+        assertEquals(beforeFocusChange, r.injector.emitted, "focus change must inject nothing at all")
+        assertEquals("", r.controller.echoedText)
+        assertEquals(emptyList(), r.listener.candidates.last())
         // Composition really ended: the next Enter is the app's again.
         assertFalse(r.key(RawKey.Enter))
     }
@@ -350,23 +468,47 @@ class ControllerTest {
     fun candidatePickInjectsAndLearns() {
         val r = rig()
         r.type("kmn")
-        r.idle()
-        val forming = r.listener.previews.last()
-        assertEquals("কেমন", forming.bangla)
-        assertTrue(forming.candidates.size > 1, "the UI needs candidates to click")
+        r.settle()
+        val strip = r.listener.candidates.last()
+        assertEquals("কেমন", strip.first())
+        assertTrue(strip.size > 1, "the UI needs candidates to click")
+        // The echo trace for a word whose conversion REWRITES earlier letters:
+        // ক, then কিমি (a pure extension), then কেমন — which shares only "ক",
+        // so three characters come off and "েমন" goes on.
+        assertEquals(
+            listOf(
+                Emitted.Text("ক"),
+                Emitted.Text("িমি"),
+                Emitted.Back(3),
+                Emitted.Text("েমন"),
+            ),
+            r.injector.emitted,
+        )
 
         r.controller.pickCandidate(1)
         r.idle()
-        assertEquals(listOf("কেম"), r.injector.texts)
+        // কেমন → কেম in place: one backspace, nothing retyped.
+        assertEquals(Emitted.Back(1), r.injector.emitted.last())
         // Non-primary choice: the engine learns it (S26 law, explicit choice).
         assertEquals(listOf("kmn" to "কেম"), r.engine.taught)
 
+        val afterFirstPick = r.injector.emitted.size
         r.type("kmn")
-        r.idle()
+        r.settle()
         r.controller.pickCandidate(0)
         r.idle()
-        // The pending space from the first pick, then the primary itself.
-        assertEquals(listOf("কেম", " ", "কেমন"), r.injector.texts)
+        // The pending space from the first pick, the echo again, and then a
+        // primary pick that injects NOTHING: it is what is already on screen.
+        assertEquals(
+            listOf(
+                Emitted.Text(" "),
+                Emitted.Text("ক"),
+                Emitted.Text("িমি"),
+                Emitted.Back(3),
+                Emitted.Text("েমন"),
+            ),
+            r.injector.emitted.drop(afterFirstPick),
+        )
         // Committing the engine's own primary must NEVER be learned.
         assertEquals(listOf("kmn" to "কেম"), r.engine.taught)
     }
@@ -395,7 +537,7 @@ class ControllerTest {
         assertFalse(r.key(RawKey.ToggleHotkey))
         r.idle()
         assertTrue(r.injector.emitted.isEmpty())
-        assertTrue(r.listener.previews.isEmpty())
+        assertTrue(r.listener.candidates.isEmpty())
 
         r.controller.engineReady = true
         assertTrue(r.key(RawKey.Letter('a')))
@@ -410,37 +552,52 @@ class ControllerTest {
         assertEquals(Mode.ENGLISH, r.controller.mode)
         assertFalse(r.key(RawKey.Letter('k')))
         r.idle()
-        assertEquals(listOf("আমি"), r.injector.texts)
+        // Only the live echo — the switch itself neither retyped nor deleted.
+        assertEquals(listOf("আ", "ম", "ি"), r.injector.texts)
+        assertEquals("", r.controller.echoedText)
         assertEquals(listOf(Mode.ENGLISH), r.listener.modes)
     }
 
     @Test
-    fun eachHandledKeyProducesAtMostOnePreviewCall() {
+    fun eachHandledKeyProducesAtMostOneCandidatesCall() {
         val r = rig()
         r.type("ami")
         r.idle()
-        assertEquals(3, r.listener.previews.size, "one coalesced preview per keystroke")
-        assertEquals("ami", r.listener.previews.last().raw)
-        assertEquals("আমি", r.listener.previews.last().bangla)
+        assertEquals(3, r.listener.candidates.size, "one coalesced UI call per keystroke")
+        // Typing does not query suggestions, so the strip stays hidden until
+        // the user pauses — and the word itself is in their document, not here.
+        assertTrue(r.listener.candidates.all { it.isEmpty() })
+        assertEquals("আমি", r.controller.echoedText)
 
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        assertEquals(4, r.listener.previews.size)
-        assertEquals(PreviewCall("", "", emptyList()), r.listener.previews.last())
+        assertEquals(4, r.listener.candidates.size)
+        assertEquals(emptyList(), r.listener.candidates.last())
     }
 
     @Test
-    fun backspaceEditsFormingThenReturnsToTheApp() {
+    fun backspaceEditsTheEchoedWordThenReturnsToTheApp() {
         val r = rig()
-        r.type("amii")
+        r.type("amii") // আ, আম, আমি, আমিই — four pure extensions
+        r.idle()
+        assertEquals("আমিই", r.controller.echoedText)
         assertTrue(r.key(RawKey.Backspace))
         r.idle()
-        assertEquals("ami", r.listener.previews.last().raw)
-        assertTrue(r.injector.emitted.isEmpty(), "editing the buffer injects nothing")
+        // Shrinking the buffer goes down the SAME diff as growing it: the new
+        // conversion shares "আমি", so exactly one character comes off.
+        assertEquals(Emitted.Back(1), r.injector.emitted.last())
+        assertEquals("আমি", r.controller.echoedText)
 
         repeat(3) { assertTrue(r.key(RawKey.Backspace)) }
         r.idle()
-        assertEquals(PreviewCall("", "", emptyList()), r.listener.previews.last())
+        // …down to nothing: the word the user un-typed is gone from their
+        // document, one character at a time, and never more than we put there.
+        assertEquals(
+            listOf(Emitted.Back(1), Emitted.Back(1), Emitted.Back(1), Emitted.Back(1)),
+            r.injector.emitted.drop(4),
+        )
+        assertEquals("", r.controller.echoedText)
+        assertEquals(emptyList(), r.listener.candidates.last())
         // Buffer empty again: the host owns backspace.
         assertFalse(r.key(RawKey.Backspace))
     }
@@ -451,14 +608,14 @@ class ControllerTest {
         r.type("ami")
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        assertEquals(listOf("আমি"), r.injector.texts)
+        assertEquals(listOf("আ", "ম", "ি"), r.injector.texts)
 
         // The pending space keeps the composer active, so Escape is ours to
         // handle — but the app MUST still get it: Escape closes dialogs, and a
         // word-then-space is the state a user spends most of their time in.
         assertTrue(r.key(RawKey.Escape))
         r.idle()
-        assertEquals(listOf(Emitted.Key(RawKey.Escape)), r.injector.emitted.drop(1))
+        assertEquals(listOf(Emitted.Key(RawKey.Escape)), r.injector.emitted.drop(3))
 
         // And it keeps working — the pending space survives, so the next Escape
         // takes the same path rather than silently dying.
@@ -467,11 +624,24 @@ class ControllerTest {
         assertEquals(listOf(RawKey.Escape, RawKey.Escape), r.injector.keys)
 
         // While a word IS forming, Escape cancels to the raw roman instead —
-        // nothing is forwarded to the app.
+        // nothing is forwarded to the app. The Bangla is already on screen, so
+        // "cancel" means un-typing it and typing the roman over the top.
+        val beforeKmn = r.injector.emitted.size
         r.type("kmn")
         assertTrue(r.key(RawKey.Escape))
         r.idle()
-        assertEquals(listOf("আমি", " ", "kmn"), r.injector.texts)
+        assertEquals(
+            listOf(
+                Emitted.Text(" "), // the held space, released by the letter
+                Emitted.Text("ক"),
+                Emitted.Text("িমি"),
+                Emitted.Back(3),
+                Emitted.Text("েমন"),
+                Emitted.Back(4), // কেমন shares nothing with "kmn"
+                Emitted.Text("kmn"),
+            ),
+            r.injector.emitted.drop(beforeKmn),
+        )
         assertEquals(listOf(RawKey.Escape, RawKey.Escape), r.injector.keys)
     }
 
@@ -486,10 +656,20 @@ class ControllerTest {
             "an unmanaged key must not overtake a forming word",
         )
         r.idle()
+        // The word was echoed as it was typed and the unmanaged key lands
+        // behind it. Nothing is injected for the word itself and — the safety
+        // rule — nothing is deleted either: an arrow key may already have moved
+        // the caret away from our text.
         assertEquals(
-            listOf(Emitted.Text("আমি"), Emitted.VirtualKey(0x39, true)),
+            listOf(
+                Emitted.Text("আ"),
+                Emitted.Text("ম"),
+                Emitted.Text("ি"),
+                Emitted.VirtualKey(0x39, true),
+            ),
             r.injector.emitted,
         )
+        assertEquals("", r.controller.echoedText)
         // The flush really ended composition: the next one is the app's again.
         assertFalse(r.key(RawKey.Unmanaged(0x39, shift = true)))
     }
@@ -509,14 +689,20 @@ class ControllerTest {
         r.type("ami")
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        assertEquals(listOf("আমি"), r.injector.texts)
+        assertEquals(listOf("আ", "ম", "ি"), r.injector.texts)
 
         // The pending space keeps the composer active, so the key is ours to
         // order — but the space the user already typed must not vanish with it.
         assertTrue(r.key(RawKey.Unmanaged(0x39, shift = true)))
         r.idle()
         assertEquals(
-            listOf(Emitted.Text("আমি"), Emitted.Text(" "), Emitted.VirtualKey(0x39, true)),
+            listOf(
+                Emitted.Text("আ"),
+                Emitted.Text("ম"),
+                Emitted.Text("ি"),
+                Emitted.Text(" "),
+                Emitted.VirtualKey(0x39, true),
+            ),
             r.injector.emitted,
         )
     }
@@ -542,15 +728,17 @@ class ControllerTest {
 
         r.type("am")
         r.idle()
-        assertTrue(r.injector.emitted.isEmpty())
+        assertEquals(listOf("আ", "ম"), r.injector.texts)
 
         engine.failing = true
         assertTrue(r.key(RawKey.Letter('k')))
         r.idle()
         // The state machine is reset instead of holding a buffer it can never
-        // render: the last good Bangla is committed, not lost.
-        assertEquals(listOf("আম"), r.injector.texts)
-        assertEquals(PreviewCall("", "", emptyList()), r.listener.previews.last())
+        // render — and the last good Bangla is not lost, because it is already
+        // in the user's document. Nothing is injected and nothing is deleted.
+        assertEquals(listOf("আ", "ম"), r.injector.texts)
+        assertEquals("", r.controller.echoedText)
+        assertEquals(emptyList(), r.listener.candidates.last())
         // The failure is surfaced, not swallowed in silence.
         assertEquals(1, synchronized(errors) { errors.size })
         assertTrue(r.controller.lastWorkerError is IllegalStateException)
@@ -563,7 +751,7 @@ class ControllerTest {
         r.type("ami")
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        assertEquals(listOf("আম", "আমি"), r.injector.texts)
+        assertEquals(listOf("আ", "ম", "আ", "ম", "ি"), r.injector.texts)
         assertEquals(1, synchronized(errors) { errors.size })
     }
 
@@ -587,12 +775,148 @@ class ControllerTest {
         r.type("ami")
         assertTrue(r.key(RawKey.Space))
         r.controller.shutdown()
-        assertEquals(listOf("আমি"), r.injector.texts)
+        assertEquals(listOf("আ", "ম", "ি"), r.injector.texts)
+        // Quitting must never backspace: the user's word is theirs, and the
+        // process is going away with no way to put anything back.
+        assertEquals("", r.controller.echoedText)
+        assertTrue(r.injector.emitted.none { it is Emitted.Back })
+        assertTrue(r.scheduler.closed, "the debounce timer must not outlive the worker")
         // The quit path unhooks AFTER shutdown: a key swallowed now would be
         // eaten by a worker that no longer exists.
         assertFalse(r.key(RawKey.Letter('a')))
         assertFalse(r.key(RawKey.Space))
-        assertEquals(listOf("আমি"), r.injector.texts)
+        assertEquals(listOf("আ", "ম", "ি"), r.injector.texts)
         r.controller.shutdown() // idempotent
+    }
+
+    // MARK: - the performance fix (Defect 1)
+
+    @Test
+    fun theTypingPathNeverQueriesSuggestions() {
+        val r = rig()
+        r.type("bangla")
+        assertTrue(r.key(RawKey.Backspace))
+        r.idle()
+        // THE pin. `getSuggestions` costs ~7.5 ms per keystroke against the
+        // real dictionary — 370x the ~17 us conversion — and running it per
+        // letter is exactly what the user reported as lag. It now happens only
+        // behind the debounce, so a burst of typing queries it zero times.
+        assertEquals(0, r.engine.suggests.get(), "suggest() must never run on a keystroke")
+        assertEquals(7, r.engine.converts.get(), "conversion stays synchronous — it is free")
+        assertEquals("বাংলা", r.controller.echoedText, "the live echo is the FULL conversion")
+    }
+
+    @Test
+    fun theCandidateStripArrivesAfterTheDebounce() {
+        val r = rig()
+        r.type("kmn")
+        r.idle()
+        assertEquals(emptyList(), r.listener.candidates.last(), "no strip while the user is typing")
+
+        val echoedBeforeStrip = r.injector.emitted
+        r.settle()
+        assertEquals(1, r.engine.suggests.get(), "one query for the whole word, not one per letter")
+        val strip = r.listener.candidates.last()
+        assertEquals("কেমন", strip.first())
+        assertEquals("kmn", strip.last(), "the raw roman escape hatch stays reachable")
+        // The strip appearing must not disturb the text: the word on screen was
+        // already the full-pipeline answer, so the refine injects nothing.
+        assertEquals(echoedBeforeStrip, r.injector.emitted)
+    }
+
+    @Test
+    fun aRefineForAnOlderBufferIsDiscarded() {
+        val r = rig()
+        r.type("km")
+        r.idle()
+        // Arm the debounce for "km", then type on before it fires — the timer
+        // thread can always lose this race with a fast typist.
+        val stale = r.scheduler.armed()
+        r.type("n")
+        r.idle()
+        stale()
+        r.idle()
+        // The generation guard threw it away: no strip for the word the user
+        // has already typed past.
+        assertEquals(emptyList(), r.listener.candidates.last())
+
+        // …and the live one still works.
+        r.settle()
+        assertEquals("কেমন", r.listener.candidates.last().first())
+    }
+
+    @Test
+    fun aFinishedWordDropsThePendingRefine() {
+        val r = rig()
+        r.type("ami")
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
+        // Nothing armed: there is no word to suggest alternatives for, so the
+        // engine is never asked.
+        assertFalse(r.scheduler.fire())
+        assertEquals(0, r.engine.suggests.get())
+    }
+
+    // MARK: - the echo safety rule (Defect 2)
+
+    @Test
+    fun aModeChangeClearsTheEchoWithoutBackspaces() {
+        val r = rig()
+        r.type("ami")
+        r.idle()
+        val before = r.injector.emitted
+        // The user reached the tray or the control window to do this, so our
+        // caret is not necessarily the focused one any more.
+        r.controller.setModeExternal(Mode.ENGLISH)
+        r.idle()
+        assertEquals(before, r.injector.emitted, "a mode change must inject nothing at all")
+        assertEquals("", r.controller.echoedText)
+    }
+
+    @Test
+    fun everyEchoEndingPathIsBackspaceFree() {
+        // One place that names the complete list. Each of these ends a word
+        // WITHOUT the guarantee that the caret is still where we left it, and
+        // a backspace sent in any of them deletes text the user typed
+        // themselves — the one failure mode of this design that destroys work.
+        for (ending in listOf<(Rig) -> Unit>(
+            { it.key(RawKey.FocusChanged) },
+            { it.controller.setModeExternal(Mode.ENGLISH) },
+            { it.key(RawKey.ToggleHotkey) },
+            { it.key(RawKey.Unmanaged(0x25)) }, // left arrow: the caret moves
+            { it.controller.shutdown() },
+        )) {
+            val r = rig()
+            r.type("ami")
+            r.idle()
+            val before = r.injector.emitted
+            ending(r)
+            if (!r.controller.isStopped) r.idle()
+            assertEquals("", r.controller.echoedText, "the ledger must be cleared")
+            assertTrue(
+                r.injector.emitted.drop(before.size).none { it is Emitted.Back },
+                "no path that loses the caret may send a backspace",
+            )
+        }
+    }
+
+    @Test
+    fun aCommitOfTextAlreadyOnScreenInjectsNothing() {
+        val r = rig()
+        r.type("ami")
+        r.idle()
+        val before = r.injector.emitted.size
+        // Space, Enter and Tab all end the word. With the conversion computed
+        // synchronously, what is on screen IS the commit — so all three are
+        // pure state changes as far as the user's document is concerned.
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
+        assertEquals(before, r.injector.emitted.size)
+
+        r.type("ami")
+        r.idle()
+        assertTrue(r.key(RawKey.Enter))
+        r.idle()
+        assertEquals(listOf(Emitted.Key(RawKey.Enter)), r.injector.emitted.drop(before + 4))
     }
 }

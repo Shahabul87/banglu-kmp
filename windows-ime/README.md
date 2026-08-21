@@ -28,9 +28,15 @@ windows-ime/src/main/kotlin/com/banglu/winime/
 ├── Controller.kt         The mode machine: hook thread → single worker
 │                         thread → Composer/engine/injector. Owns the
 │                         swallow rules (what gets claimed vs. passed
-│                         through) and the FIFO ordering guarantee (a
+│                         through), the FIFO ordering guarantee (a
 │                         committed word always reaches the app before a
-│                         forwarded key that followed it).
+│                         forwarded key that followed it), and the ECHO
+│                         LEDGER — the text it has physically typed into
+│                         the focused window for the word being formed,
+│                         and the only text it may ever backspace.
+├── DebounceScheduler.kt  The 120 ms idle timer behind the suggestion
+│                         query. Its task only ENQUEUES onto the worker;
+│                         the engine has exactly one lane.
 ├── composer/Composer.kt  The pure-Kotlin typing state machine — a
 │                         line-faithful port of macos-ime's Composer.swift,
 │                         re-expressed for a hook app (no marked text; a
@@ -38,6 +44,9 @@ windows-ime/src/main/kotlin/com/banglu/winime/
 │                         ForwardKey action the controller re-injects).
 │                         Pending-space দাঁড়ি model, tight punctuation,
 │                         ০-৯ digits, WYSIWYG commit. Zero Win32/JNA imports.
+│                         Engine work is split by measured cost: convert
+│                         (~17 us) is synchronous per keystroke,
+│                         refineCandidates (~7.5 ms) is not.
 ├── AppCompat.kt          Per-exe passthrough table. Password managers
 │                         (KeePass, KeePassXC, 1Password, Bitwarden) are
 │                         passthrough by default; overrides persist to
@@ -46,13 +55,14 @@ windows-ime/src/main/kotlin/com/banglu/winime/
 │                         port of desktop-app's FileStorage.
 ├── WinPrefs.kt           WinPrefsStore (mode/digits/start-on-login prefs)
 │                         and StartupRegistry (the HKCU Run-key toggle).
-├── ui/PreviewWindow.kt   The caret-anchored, non-activating preview strip
-│                         (forming word + up to 6 candidate chips, the last
-│                         of which is always the raw roman escape hatch) —
-│                         the Windows stand-in for macOS marked text. The
-│                         chip count is `Composer.MAX_CANDIDATES`, the same
-│                         number the digit keys 1-6 pick from: a strip that
-│                         showed fewer would hide a pickable candidate.
+├── ui/PreviewWindow.kt   The caret-anchored, non-activating suggestion
+│                         strip: up to 6 candidate chips, the last of which
+│                         is always the raw roman escape hatch. It does NOT
+│                         show the forming word — that is typed straight
+│                         into the user's document (see "Live echo" below).
+│                         The chip count is `Composer.MAX_CANDIDATES`, the
+│                         same number the digit keys 1-6 pick from: a strip
+│                         that showed fewer would hide a pickable candidate.
 └── hook/                 THE ONLY PACKAGE THAT MAY IMPORT com.sun.jna.
     ├── LowLevelHook.kt       WH_KEYBOARD_LL on a dedicated message-pump
     │                         thread, plus a foreground-window watcher and
@@ -90,9 +100,10 @@ part of `check`, so it also runs in CI.
 ## Build and test
 
 ```bash
-./gradlew :windows-ime:test    # 63 tests: Composer pins, Controller ordering/
+./gradlew :windows-ime:test    # 74 tests: Composer pins, Controller ordering/
                                 # swallow rules, AppCompat, WinStorage, WinPrefs,
-                                # StartupRegistry OS-guard, an engine smoke test —
+                                # StartupRegistry OS-guard, the echo-diff and
+                                # backspace-safety pins, an engine smoke test —
                                 # all driven against the real repo-root
                                 # dictionary.sqlite, same wall discipline as
                                 # :desktop-app:test.
@@ -180,6 +191,52 @@ app, whether the machine had just resumed/locked, whether anything was
 loading heavily), because that context is the only lead we will ever get
 about which callbacks Windows considered slow.
 
+## Live echo: the word appears in the document as it is typed
+
+Bangla is typed straight into whatever window has focus, letter by letter, the
+way Avro does it — not held in a popup until space. The controller keeps a
+ledger of what it has injected for the word currently forming and reconciles it
+against each new conversion with a common-prefix diff: send
+`(echoed.length - commonPrefix)` backspaces, then type the rest. `ami` costs
+three inserts and no deletions (আ, ম, ি — each conversion extends the last);
+`kmn` costs ক, িমি, then three backspaces and েমন, because কেমন shares only its
+first character with কিমি.
+
+**The safety rule.** Backspaces are only ever sent while our own caret is
+demonstrably still the focused one. Four paths end a word WITHOUT that
+guarantee — a foreground change, a mode switch (the user reached our tray or
+window to make it), an unmanaged key such as an arrow that moves the caret, and
+shutdown — and every one of them clears the ledger without injecting anything.
+A backspace on any of those paths would delete text the user typed themselves.
+`ControllerTest.everyEchoEndingPathIsBackspaceFree` names the complete list in
+one place; treat it as the pin that guards the user's documents.
+
+Because the conversion is computed synchronously, what is on screen is already
+the final answer, so committing a word (space, Enter, Tab) normally injects
+nothing at all — the WYSIWYG contract holds by construction rather than by
+agreement between two code paths.
+
+## Typing latency: what runs per keystroke
+
+Measured against the real dictionary, warmed, on the prefix workload a real
+keystroke produces:
+
+| call                       | per keystroke | where it runs                 |
+|----------------------------|---------------|-------------------------------|
+| `convertForInstantPreview` | ~20 us        | degraded path only (see below)|
+| `convertWord`              | ~17 us        | synchronously, every keystroke|
+| `getSuggestions(raw, 5)`   | ~7488 us      | debounced, 120 ms idle        |
+
+The suggestion query is ~370x everything else and was the whole of the reported
+lag; it is now the only thing on a timer. Conversion is cheap enough to stay
+synchronous, and keeping it there is what makes the live echo final rather than
+an approximation that gets rewritten under the user.
+
+`ComposerEngine.instant` (the rule-only layer) is the degraded path: it needs no
+dictionary, no SQLite and no learned data, so when the full pipeline throws the
+composer still produces the user's word instead of losing it — and reports the
+fault through the tray rather than degrading in silence.
+
 ## Passthrough apps (`winime-appcompat.json`)
 
 `AppCompat` keeps a per-exe list of applications that must never have their
@@ -240,6 +297,25 @@ process.
   — the manual gate that actually proves this app works on Windows. Nothing
   under `hook/` is considered verified until this has been run, by hand, on
   a real laptop.
+
+## Getting the control window back
+
+Hiding the control window does not stop typing — the keyboard is the product
+and the window is only its control panel. Three routes bring it back, and all
+three work whether it is hidden, minimised, or merely buried behind Word:
+
+1. **Click the tray icon.** This is the primary route and the one Windows users
+   try first (`Tray(onAction = …)` in `Main.kt`).
+2. Tray menu → **"বাংলু উইন্ডো দেখান"**.
+3. It also comes to the FRONT when it is already open: the window keys its
+   `toFront()`/`requestFocus()` on a show-request counter, not on visibility, so
+   a show that finds it already visible is never a silent no-op.
+
+The first time the window is hidden in a session, a tray notification says the
+app is still running and how to get back. Once per session, not per hide.
+
+Only **"বন্ধ করুন"** quits: it shuts the controller's worker down, unhooks, and
+exits. The window's close box hides.
 
 ## A note on v1 scope: no settings window
 

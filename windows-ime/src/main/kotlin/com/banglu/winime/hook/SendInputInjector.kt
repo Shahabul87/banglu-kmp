@@ -36,6 +36,20 @@ class SendInputInjector : TextInjector {
         send(inputs)
     }
 
+    override fun injectBackspaces(count: Int) {
+        if (count <= 0) return
+        // ONE SendInput call, not [count] of them: a single call is delivered
+        // to the host's input queue as an indivisible block, so a real
+        // keystroke the user makes mid-correction cannot land between two of
+        // our backspaces and be deleted by the rest.
+        val inputs = allocate(count * 2)
+        for (i in 0 until count) {
+            vkEvent(inputs[i * 2], VK_BACK.toLong(), up = false)
+            vkEvent(inputs[i * 2 + 1], VK_BACK.toLong(), up = true)
+        }
+        send(inputs)
+    }
+
     override fun injectKey(key: RawKey) {
         when (key) {
             RawKey.Enter -> injectVk(VK_RETURN)

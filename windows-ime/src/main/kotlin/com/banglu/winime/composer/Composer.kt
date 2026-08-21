@@ -14,13 +14,21 @@ sealed interface ComposerKey {
 
 /**
  * What the hook must do in response to a key. Unlike IMK on macOS, the hook
- * swallows every key itself, so there is no marked text (Preview replaces
- * setMarked as our OWN preview window) and "let this key through" means a
- * later task must re-inject it synthetically (ForwardKey replaces
- * passThrough).
+ * swallows every key itself, so there is no marked text: the forming word is
+ * echoed straight into the focused application and corrected in place
+ * (Preview), the way Avro does it. "Let this key through" means a later task
+ * must re-inject it synthetically (ForwardKey replaces passThrough).
  */
 sealed interface ComposerAction {
-    /** "" + "" = hide the preview window. */
+    /**
+     * The word being typed, as it should now READ IN THE HOST APPLICATION.
+     * The controller echoes it there immediately (in-place, by diffing against
+     * what it echoed last), so this is not a hint to a popup — it is the text
+     * the user is looking at. `""` means the word is gone: un-type it.
+     *
+     * Emitted by the live path only. A word that ENDS emits [Commit] instead,
+     * which seals the same text into the document.
+     */
     data class Preview(val bangla: String, val raw: String) : ComposerAction
     /** Inject as unicode text. */
     data class Commit(val text: String) : ComposerAction
@@ -31,7 +39,29 @@ sealed interface ComposerAction {
 
 /** The engine seam: full-pipeline convert + ranked suggestions. */
 interface ComposerEngine {
+    /**
+     * Rule-only, zero-I/O transliteration — the same call the Android hot path
+     * and the desktop editor use for their instant preview. It needs no
+     * dictionary, no SQLite and no learned data, which is exactly why it is the
+     * degraded path when [convert] cannot answer.
+     */
+    fun instant(raw: String): String
+
+    /**
+     * The full pipeline. Measured at ~17 us per keystroke on the real
+     * dictionary (its caches are warm by the second letter), so it stays
+     * SYNCHRONOUS on the typing path: the user sees the true Bangla the
+     * instant they type it rather than watching a rule-only approximation
+     * change under them when a later pass lands.
+     */
     fun convert(raw: String): String
+
+    /**
+     * Ranked alternatives. ~7.5 ms per keystroke on the real dictionary — 370x
+     * everything else, and the entire reason typing felt slow. NEVER called
+     * from the typing path; only from [Composer.refineCandidates], behind the
+     * controller's debounce.
+     */
     fun suggest(raw: String, limit: Int = 6): List<String>
 
     /**
@@ -50,9 +80,14 @@ interface ComposerEngine {
  * a Windows keyboard hook. Pure logic, no JNA/Win32 imports.
  *
  * দাঁড়ি uses the pending-space model: the hook cannot edit text already
- * injected into the host app, so a space after a word commits the word and
+ * committed to the host app, so a space after a word commits the word and
  * HOLDS the space; what arrives next decides whether it becomes " ", "। ",
  * or is swallowed (tight punctuation).
+ *
+ * The engine work is split by cost, not by convenience: conversion is
+ * synchronous on the typing path (~17 us) and the suggestion query is not
+ * (~7.5 ms). [refineCandidates] is the second half, driven by the controller's
+ * debounce and guarded by [generation].
  */
 class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true) {
     // Read on the worker thread (Controller.handle), written from the UI
@@ -65,6 +100,7 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
     private var formingBangla = ""
     private var candidates: List<String> = emptyList()
     private var dariJustCommitted = false
+    private var gen = 0L
 
     var pendingSpace: Boolean = false
         private set
@@ -72,8 +108,24 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
     /** True while a word is being typed. */
     val forming: Boolean get() = formingRaw.isNotEmpty()
 
+    /**
+     * Bumped every time the forming buffer changes or ends. A debounced
+     * candidate query carries the generation it was scheduled for and
+     * [refineCandidates] discards it if this has moved on — the guard IS the
+     * staleness check, so a slow query for `kmn` can never overwrite the strip
+     * for `kmna`.
+     */
+    val generation: Long get() = gen
+
     /** Fires on every candidate pick; the caller decides whether to learn. */
     var onPick: ((raw: String, bangla: String, wasPrimary: Boolean) -> Unit)? = null
+
+    /**
+     * Reports a full-pipeline conversion that threw. The word is NOT lost when
+     * this fires — the rule-only layer produced the text instead — but the
+     * failure must still reach the user's tray rather than degrading silently.
+     */
+    var onConversionFault: ((Throwable) -> Unit)? = null
 
     companion object {
         private val tightPunctuation = setOf(",", "।", "?", "!")
@@ -148,7 +200,11 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
             } else {
                 val raw = formingRaw
                 clearForming()
-                listOf(ComposerAction.Preview("", ""), ComposerAction.Commit(raw), ComposerAction.Candidates(emptyList()))
+                // No Preview("") ahead of the Commit: the Bangla is already on
+                // screen, and asking for an empty preview first would un-type
+                // it only for the commit to type the roman over the gap. The
+                // commit itself is the reconciliation target.
+                listOf(ComposerAction.Commit(raw), ComposerAction.Candidates(emptyList()))
             }
         }
 
@@ -190,14 +246,42 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
 
     // MARK: - internals
 
+    /**
+     * The typing path. Conversion only — the suggestion list is NOT computed
+     * here: `suggest` costs ~7.5 ms against the real dictionary and running it
+     * per letter is what made typing lag. It is dropped to empty (which hides
+     * the popup) and re-filled by [refineCandidates] once the user pauses.
+     *
+     * Dropping rather than keeping the previous list is deliberate: those
+     * entries were ranked for a SHORTER buffer, and picking one would commit
+     * that older word's Bangla under the current raw key — teaching the engine
+     * a mapping the user never made.
+     */
     private fun refresh(out: MutableList<ComposerAction>) {
+        gen++
         if (formingRaw.isEmpty()) {
             clearForming()
             out.add(ComposerAction.Preview("", ""))
             out.add(ComposerAction.Candidates(emptyList()))
             return
         }
-        formingBangla = engine.convert(formingRaw)
+        formingBangla = liveConversion(formingRaw)
+        candidates = emptyList()
+        out.add(ComposerAction.Preview(formingBangla, formingRaw))
+        out.add(ComposerAction.Candidates(emptyList()))
+    }
+
+    /**
+     * The debounced half: the ranked alternatives for the buffer as it stood at
+     * [generation]. Returns nothing at all when the buffer has moved on, so a
+     * result the user has already typed past is discarded rather than shown.
+     *
+     * It deliberately does NOT touch [formingBangla]: the conversion on screen
+     * is already the full-pipeline answer, so there is nothing here to correct
+     * and the text never moves under the user when the strip appears.
+     */
+    fun refineCandidates(generation: Long): List<ComposerAction> {
+        if (generation != gen || formingRaw.isEmpty()) return emptyList()
         // Five, not six: the raw roman appended below is a real candidate and
         // has to fit inside the SAME window the two pick paths cover — digits
         // 1..6 here, six chips in PreviewWindow. Asking for six put the
@@ -206,16 +290,37 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
         val list = engine.suggest(formingRaw, MAX_ENGINE_SUGGESTIONS).toMutableList()
         if (formingRaw !in list) list.add(formingRaw) // raw = inline English
         candidates = list
-        out.add(ComposerAction.Preview(formingBangla, formingRaw))
-        out.add(ComposerAction.Candidates(candidates))
+        return listOf(ComposerAction.Candidates(candidates))
     }
 
-    /** WYSIWYG: commits exactly formingBangla — never re-converts. */
+    /**
+     * A full-pipeline fault must cost the user accuracy, not their word: the
+     * rule layer reads only immutable tables, so it still answers when the
+     * store is mid-failure, and the letter they just typed still appears.
+     */
+    private fun liveConversion(raw: String): String = try {
+        engine.convert(raw)
+    } catch (t: Throwable) {
+        // If the rule layer is down too the engine is simply gone: let THAT
+        // throwable out and leave the controller's reset path to handle it,
+        // rather than reporting the same dead engine twice per keystroke.
+        val fallback = engine.instant(raw)
+        onConversionFault?.invoke(t)
+        fallback
+    }
+
+    /**
+     * WYSIWYG: commits exactly formingBangla — never re-converts. No
+     * Preview("") precedes it; the committed text IS the reconciliation
+     * target, and with the conversion computed synchronously it already equals
+     * what the host application shows, so the commit normally injects nothing
+     * at all.
+     */
     private fun commitForming(): List<ComposerAction> {
         val text = formingBangla
         clearForming()
         dariJustCommitted = false
-        return listOf(ComposerAction.Preview("", ""), ComposerAction.Commit(text), ComposerAction.Candidates(emptyList()))
+        return listOf(ComposerAction.Commit(text), ComposerAction.Candidates(emptyList()))
     }
 
     private fun releasePendingSpace(): List<ComposerAction> {
@@ -226,6 +331,7 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
     }
 
     private fun clearForming() {
+        gen++
         formingRaw = ""
         formingBangla = ""
         candidates = emptyList()
