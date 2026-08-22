@@ -113,16 +113,20 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           MSI=$(ls windows-ime/build/compose/binaries/main/msi/*.msi)
           VERSION="${TAG#windows-v}"
-          # sha256sum ships with Git for Windows' bash on this runner and
-          # streams the file rather than reading ~150MB into memory.
-          SHA=$(sha256sum "$MSI" | cut -d' ' -f1)
           URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$(basename "$MSI")"
-          # Python builds the JSON so the Bengali notes line is escaped by a
-          # real JSON encoder — a quote or a backslash in that file must not be
-          # able to produce a manifest the app then refuses to parse.
+          # Python does the hashing and the encoding. Hashing: it streams the
+          # ~150MB file in chunks and needs no coreutils on the runner.
+          # Encoding: the Bengali notes line goes through a real JSON encoder,
+          # so a quote or a backslash in that file cannot produce a manifest
+          # the app then refuses to parse (which would silently stop updates).
           cat > gen_manifest.py <<'PYEOF'
-          import json, os, sys
-          version, url, sha, notes_file = sys.argv[1:5]
+          import hashlib, json, os, sys
+          version, url, msi, notes_file = sys.argv[1:5]
+          digest = hashlib.sha256()
+          with open(msi, "rb") as handle:
+              for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                  digest.update(chunk)
+          sha = digest.hexdigest()
           notes = ""
           if os.path.exists(notes_file):
               with open(notes_file, encoding="utf-8") as handle:
@@ -136,7 +140,7 @@ jobs:
                   ensure_ascii=False,
               )
           PYEOF
-          python gen_manifest.py "$VERSION" "$URL" "$SHA" windows-ime/update-notes.txt
+          python gen_manifest.py "$VERSION" "$URL" "$MSI" windows-ime/update-notes.txt
           rm gen_manifest.py
           cat windows-update.json
 
