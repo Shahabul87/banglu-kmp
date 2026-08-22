@@ -243,9 +243,6 @@ fun main() = application {
         hook.onRearm = { publishHookState() }
         hook.start(controller)
         publishHookState()
-        // ⚠ SPIKE ONLY — inert unless BANGLU_MSIX_SPIKE=1; delete with
-        // MsixSpikeProbe.kt and .github/workflows/windows-ime-msix-spike.yml.
-        if (MsixSpikeProbe.enabled()) runCatching { MsixSpikeProbe.run(hook.isInstalled) }
     }
 
     /**
