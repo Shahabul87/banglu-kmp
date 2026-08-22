@@ -34,7 +34,7 @@ windows-ime/src/main/kotlin/com/banglu/winime/
 │                         LEDGER — the text it has physically typed into
 │                         the focused window for the word being formed,
 │                         and the only text it may ever backspace.
-├── DebounceScheduler.kt  The 120 ms idle timer behind the suggestion
+├── DebounceScheduler.kt  The 45 ms idle timer behind the suggestion
 │                         query. Its task only ENQUEUES onto the worker;
 │                         the engine has exactly one lane.
 ├── composer/Composer.kt  The pure-Kotlin typing state machine — a
@@ -42,11 +42,11 @@ windows-ime/src/main/kotlin/com/banglu/winime/
 │                         re-expressed for a hook app (no marked text; a
 │                         "let this key through" decision becomes a
 │                         ForwardKey action the controller re-injects).
-│                         Pending-space দাঁড়ি model, tight punctuation,
-│                         ০-৯ digits, WYSIWYG commit. Zero Win32/JNA imports.
-│                         Engine work is split by measured cost: convert
-│                         (~17 us) is synchronous per keystroke,
-│                         refineCandidates (~7.5 ms) is not.
+│                         Immediate-space দাঁড়ি model (see below), tight
+│                         punctuation, ০-৯ digits, WYSIWYG commit. Zero
+│                         Win32/JNA imports. Engine work is split by measured
+│                         cost: convert is synchronous per keystroke,
+│                         refineCandidates (~2.3 ms) is not.
 ├── AppCompat.kt          Per-exe passthrough table. Password managers
 │                         (KeePass, KeePassXC, 1Password, Bitwarden) are
 │                         passthrough by default; overrides persist to
@@ -100,7 +100,7 @@ part of `check`, so it also runs in CI.
 ## Build and test
 
 ```bash
-./gradlew :windows-ime:test    # 74 tests: Composer pins, Controller ordering/
+./gradlew :windows-ime:test    # 83 tests: Composer pins, Controller ordering/
                                 # swallow rules, AppCompat, WinStorage, WinPrefs,
                                 # StartupRegistry OS-guard, the echo-diff and
                                 # backspace-safety pins, an engine smoke test —
@@ -203,34 +203,86 @@ three inserts and no deletions (আ, ম, ি — each conversion extends the la
 first character with কিমি.
 
 **The safety rule.** Backspaces are only ever sent while our own caret is
-demonstrably still the focused one. Four paths end a word WITHOUT that
+demonstrably still the focused one. Five paths end a word WITHOUT that
 guarantee — a foreground change, a mode switch (the user reached our tray or
-window to make it), an unmanaged key such as an arrow that moves the caret, and
-shutdown — and every one of them clears the ledger without injecting anything.
-A backspace on any of those paths would delete text the user typed themselves.
-`ControllerTest.everyEchoEndingPathIsBackspaceFree` names the complete list in
-one place; treat it as the pin that guards the user's documents.
+window to make it), an unmanaged key such as an arrow that moves the caret,
+fault recovery, and shutdown — and every one of them clears the ledger without
+injecting anything. A backspace on any of those paths would delete text the
+user typed themselves. `ControllerTest.everyEchoEndingPathIsBackspaceFree`
+names the complete list in one place; treat it as the pin that guards the
+user's documents.
 
 Because the conversion is computed synchronously, what is on screen is already
-the final answer, so committing a word (space, Enter, Tab) normally injects
-nothing at all — the WYSIWYG contract holds by construction rather than by
-agreement between two code paths.
+the final answer, so committing a word (Enter, Tab) normally injects nothing at
+all — the WYSIWYG contract holds by construction rather than by agreement
+between two code paths.
+
+## Space and দাঁড়ি: immediate, then retroactively corrected
+
+Pressing space **always writes a space, immediately and visibly**. Pressing it
+a second time takes that space back out and writes `। ` in its place. That is
+what Avro does and what a Bangla typist expects.
+
+| state when Space is pressed  | what the user sees                       |
+|------------------------------|------------------------------------------|
+| a word is forming            | the word is sealed and a space appears   |
+| the space we just wrote      | it is deleted and `। ` appears in its place |
+| anything else                | a plain space (a third space is just a space) |
+
+Tight punctuation (`,` `।` `?` `!` — and `.`, which maps to `।` first) does the
+same thing: `আমি ` plus `,` deletes the space and gives `আমি,`. Enter, Tab,
+Escape, an arrow key, a backspace and a focus change all leave an already-typed
+space exactly as it is.
+
+This module inherited the **pending-space** model from the macOS input method,
+where IMK gives no way back into committed text so the space had to be held
+until the next keystroke disambiguated it. That was wrong here — this app
+injects backspaces already — and it shipped as a defect: the user pressed
+space, saw nothing happen, pressed it again, and got a দাঁড়ি they never asked
+for. The deferred model and its pins are gone.
+
+**The one deletion that reaches outside the echo ledger** is that retro-দাঁড়ি
+(and the space a tight mark swallows). It is armed only while the space we
+wrote is still the last character in the document, and every key that is not
+the one consuming it disarms it — which is also why an armed space keeps the
+composer "active" in the hook's mirror: it is what routes an arrow key through
+the worker instead of letting it move the caret behind our back. **Residual
+risk, stated rather than hidden:** a mouse click that moves the caret *within
+the same window* is invisible to a keyboard hook, so a user who types `word `,
+clicks elsewhere, and then presses space loses one character at the new caret.
+Avro has the identical exposure; closing it needs a low-level mouse hook, which
+is a deliberate v2 decision.
 
 ## Typing latency: what runs per keystroke
 
 Measured against the real dictionary, warmed, on the prefix workload a real
 keystroke produces:
 
-| call                       | per keystroke | where it runs                 |
-|----------------------------|---------------|-------------------------------|
-| `convertForInstantPreview` | ~20 us        | degraded path only (see below)|
-| `convertWord`              | ~17 us        | synchronously, every keystroke|
-| `getSuggestions(raw, 5)`   | ~7488 us      | debounced, 120 ms idle        |
+| call                     | per call | where it runs                  |
+|--------------------------|----------|--------------------------------|
+| `convertWord`            | ~0.74 ms | synchronously, every keystroke |
+| `getSuggestions(raw, 3)` | ~2.25 ms | debounced, 45 ms idle          |
+| `getSuggestions(raw, 5)` | ~2.37 ms | debounced, 45 ms idle          |
+| `getSuggestions(raw, 6)` | ~2.65 ms | debounced, 45 ms idle          |
 
-The suggestion query is ~370x everything else and was the whole of the reported
-lag; it is now the only thing on a timer. Conversion is cheap enough to stay
+(Warmed, over a 22-prefix keystroke workload on the real dictionary. The
+candidate *count* is not the lever — the cost is the lookup, not the list — so
+the strip still shows six chips.)
+
+The suggestion query is the expensive one and was the whole of the reported
+lag; it is the only thing on a timer. Conversion is cheap enough to stay
 synchronous, and keeping it there is what makes the live echo final rather than
 an approximation that gets rewritten under the user.
+
+**The strip is not blanked between keystrokes.** It used to be — the candidate
+list was dropped on every letter and refilled only after a 120 ms pause, which
+is longer than the 40-90 ms gap between two letters, so a user typing normally
+saw no suggestions at all ("suggestion is gone"). Now a keystroke leaves the
+list alone and the debounce replaces it, so the popup is populated for the whole
+time a word is being typed and empty the moment it is committed. The list
+records which buffer it was ranked for: a pick from a momentarily stale strip
+still commits the chip the user clicked (WYSIWYG), but never teaches the engine
+a mapping they did not make.
 
 `ComposerEngine.instant` (the rule-only layer) is the degraded path: it needs no
 dictionary, no SQLite and no learned data, so when the full pipeline throws the

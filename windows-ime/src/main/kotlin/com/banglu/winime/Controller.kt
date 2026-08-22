@@ -335,17 +335,12 @@ class Controller(
             }
 
             is RawKey.Unmanaged -> {
-                // A held space is one the user already typed and can see the
-                // effect of; focusLost() discards it, which is right when focus
-                // really left and wrong here, where the next thing they typed
-                // belongs after that space.
-                val heldSpace = composer.pendingSpace && !composer.forming
                 // An unmanaged key is an arrow, Home, End, a bracket — several
                 // of them MOVE THE CARET, and the ones that do not are still
-                // about to. The forming word is already on screen, so ending
-                // composition here means sealing the ledger, never editing it.
+                // about to. The forming word (and any space after it) is
+                // already on screen, so ending composition here means sealing
+                // the ledger, never editing it.
                 abandonComposition()
-                if (heldSpace) injector.injectText(" ")
                 injector.injectVirtualKey(key.vk, key.shift)
             }
 
@@ -379,7 +374,7 @@ class Controller(
      * action is to stop tracking it.
      */
     private fun abandonComposition() {
-        val ending = composer.forming || composer.pendingSpace
+        val ending = composer.forming || composer.retroSpaceArmed
         composer.focusLost() // discards its actions ON PURPOSE — see above
         echoed = ""
         refineScheduler.cancel()
@@ -398,6 +393,7 @@ class Controller(
         for (action in actions) {
             when (action) {
                 is ComposerAction.Commit -> commitEcho(action.text)
+                is ComposerAction.DeleteBack -> deleteCommitted(action.count)
                 is ComposerAction.ForwardKey -> injector.injectKey(toRawKey(action.key))
                 is ComposerAction.Preview -> reconcileEcho(action.bangla)
                 is ComposerAction.Candidates -> candidates = action.list
@@ -446,6 +442,35 @@ class Controller(
         echoed = ""
     }
 
+    /**
+     * Un-types text this controller committed on the IMMEDIATELY PRECEDING
+     * keystroke — the space that a second space turns into a দাঁড়ি, or that a
+     * tight punctuation mark swallows.
+     *
+     * This is the one deletion that reaches outside the echo ledger, and it is
+     * safe for exactly one reason: the composer only arms it while the space it
+     * wrote is still the last character in the document, and every path that
+     * loses the caret — focus change, mode switch, an unmanaged key, fault
+     * recovery, shutdown — runs [abandonComposition], which calls
+     * `composer.focusLost()` and disarms it. Nothing here may ever be given a
+     * count derived from anything other than that one-keystroke-old space.
+     *
+     * Residual risk, stated rather than hidden: a mouse click that moves the
+     * caret WITHIN the same window is invisible to a keyboard hook, so a user
+     * who types `word `, clicks elsewhere, and then presses space loses one
+     * character at the new caret. Avro has the identical exposure; closing it
+     * needs a low-level mouse hook, which is a deliberate v2 decision.
+     */
+    private fun deleteCommitted(count: Int) {
+        if (count <= 0) return
+        // The ledger must be empty here by construction (the composer arms the
+        // retro-space only after a commit cleared it). If it ever is not, the
+        // pending echo is the newer text and deleting behind it would corrupt
+        // the word — so reconcile the ledger away first rather than guess.
+        check(echoed.isEmpty()) { "a retro delete must never run while a word is echoed" }
+        injector.injectBackspaces(count)
+    }
+
     /** Arms (or drops) the debounced suggestion query for the current buffer. */
     private fun updateRefineSchedule() {
         if (!composer.forming) {
@@ -463,8 +488,15 @@ class Controller(
         runCatching { onError?.invoke(t) }
     }
 
+    /**
+     * The retro-space counts as "busy" deliberately. It is what routes Enter,
+     * Tab, Escape, Backspace and an unmanaged key through the worker after a
+     * space, and each of those disarms it — without that, an arrow key would
+     * pass straight through, move the caret, and leave the next space free to
+     * backspace whatever now sits behind it.
+     */
     private fun syncMirror() {
-        composerBusy = composer.forming || composer.pendingSpace
+        composerBusy = composer.forming || composer.retroSpaceArmed
     }
 
     private fun toComposerKey(key: RawKey): ComposerKey? = when (key) {

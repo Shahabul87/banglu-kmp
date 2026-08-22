@@ -40,6 +40,23 @@ private class FakeInjector : TextInjector {
     val emitted: List<Emitted> get() = synchronized(calls) { calls.toList() }
     val texts: List<String> get() = emitted.filterIsInstance<Emitted.Text>().map { it.text }
     val keys: List<RawKey> get() = emitted.filterIsInstance<Emitted.Key>().map { it.key }
+
+    /**
+     * What the focused application would be holding, given everything we
+     * injected in order. The space/দাঁড়ি model both writes and un-writes
+     * committed text, so the emission list alone no longer says what the user
+     * sees — this does.
+     */
+    val document: String
+        get() = buildString {
+            for (call in emitted) when (call) {
+                is Emitted.Text -> append(call.text)
+                is Emitted.Back -> repeat(minOf(call.count, length)) { deleteCharAt(length - 1) }
+                else -> Unit
+            }
+        }
+
+    val backspaces: List<Int> get() = emitted.filterIsInstance<Emitted.Back>().map { it.count }
 }
 
 private class FakeListener : ControllerListener {
@@ -230,15 +247,87 @@ class ControllerTest {
 
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        // The space is HELD (pending-space দাঁড়ি model) and the word needed no
-        // injection at all — it has been on screen since the user typed it.
-        assertEquals(listOf("আ", "ম", "ি"), r.injector.texts)
+        // THE defect this round fixes. The space appears the instant it is
+        // pressed. The word itself needed no injection — it has been on screen
+        // since the user typed it — so the last thing emitted is the space.
+        assertEquals(
+            listOf(
+                Emitted.Text("আ"),
+                Emitted.Text("ম"),
+                Emitted.Text("ি"),
+                Emitted.Text(" "),
+            ),
+            r.injector.emitted,
+        )
+        assertEquals("আমি ", r.injector.document)
         assertEquals("", r.controller.echoedText, "the word belongs to the document now")
 
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        assertEquals(listOf("আ", "ম", "ি", "। "), r.injector.texts)
+        // …and the second space converts the pair in place: exactly one
+        // backspace takes the space away, then the দাঁড়ি lands.
+        assertEquals(
+            listOf(Emitted.Back(1), Emitted.Text("। ")),
+            r.injector.emitted.drop(4),
+        )
+        assertEquals("আমি। ", r.injector.document)
+        assertEquals(listOf(1), r.injector.backspaces, "exactly one backspace, for the space")
         assertTrue(r.injector.keys.isEmpty())
+
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
+        // A third space is a plain space — one দাঁড়ি per sentence break.
+        assertEquals("আমি।  ", r.injector.document)
+        assertEquals(listOf(1), r.injector.backspaces)
+    }
+
+    @Test
+    fun tightPunctuationTakesBackTheSpaceAlreadyTyped() {
+        val r = rig()
+        r.type("ami")
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
+        assertEquals("আমি ", r.injector.document)
+
+        assertTrue(r.key(RawKey.Punct(",")))
+        r.idle()
+        assertEquals("আমি,", r.injector.document)
+        assertEquals(listOf(1), r.injector.backspaces)
+    }
+
+    @Test
+    fun enterAfterASpaceLeavesTheSpaceAlone() {
+        val r = rig()
+        r.type("ami")
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
+        assertTrue(r.key(RawKey.Enter))
+        r.idle()
+        assertEquals("আমি ", r.injector.document, "Enter must not rewrite a space retroactively")
+        assertTrue(r.injector.backspaces.isEmpty())
+        assertEquals(listOf(RawKey.Enter), r.injector.keys)
+        assertEquals(Emitted.Key(RawKey.Enter), r.injector.emitted.last(), "the app still gets it")
+    }
+
+    @Test
+    fun backspaceAfterASpaceIsForwardedToTheHost() {
+        val r = rig()
+        r.type("ami")
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
+        val afterSpace = r.injector.emitted
+        assertEquals("আমি ", r.injector.document, "the space is already real")
+
+        // Claimed (the retro-space keeps the composer active) but not acted on:
+        // the space is ordinary document text now, so the host deletes it. The
+        // old model had to materialise the held space here first; this one has
+        // nothing to do but forward the key.
+        assertTrue(r.key(RawKey.Backspace))
+        r.idle()
+        assertEquals(listOf(Emitted.Key(RawKey.Backspace)), r.injector.emitted.drop(afterSpace.size))
+        assertTrue(r.injector.backspaces.isEmpty(), "we never delete it ourselves")
+        // …and composition really ended: the next backspace is the app's.
+        assertFalse(r.key(RawKey.Backspace))
     }
 
     @Test
@@ -312,8 +401,8 @@ class ControllerTest {
         val gate = GateEngine(gateOn = "k")
         val r = rig(gate)
         r.type("ami")
-        assertTrue(r.key(RawKey.Space)) // commits আমি, holds the space
-        assertTrue(r.key(RawKey.Space)) // commits "। " — the composer is now IDLE
+        assertTrue(r.key(RawKey.Space)) // commits আমি and a visible space
+        assertTrue(r.key(RawKey.Space)) // rewrites it as "। " — the composer is now IDLE
         assertTrue(r.key(RawKey.Letter('k')))
         assertTrue(gate.entered.await(30, TimeUnit.SECONDS), "worker never reached the gate")
         try {
@@ -329,6 +418,8 @@ class ControllerTest {
                 Emitted.Text("আ"),
                 Emitted.Text("ম"),
                 Emitted.Text("ি"),
+                Emitted.Text(" "),
+                Emitted.Back(1),
                 Emitted.Text("। "),
                 Emitted.Text("ক"),
                 Emitted.Key(RawKey.Enter),
@@ -353,8 +444,8 @@ class ControllerTest {
         // From here this is exactly the race pinned above, on a rig that has
         // simply been used first.
         r.type("ami")
-        assertTrue(r.key(RawKey.Space)) // commits আমি, holds the space
-        assertTrue(r.key(RawKey.Space)) // commits "। " — the composer is now IDLE
+        assertTrue(r.key(RawKey.Space)) // commits আমি and a visible space
+        assertTrue(r.key(RawKey.Space)) // rewrites it as "। " — the composer is now IDLE
         assertTrue(r.key(RawKey.Letter('k')))
         assertTrue(gate.entered.await(30, TimeUnit.SECONDS), "worker never reached the gate")
         try {
@@ -368,6 +459,8 @@ class ControllerTest {
                 Emitted.Text("আ"),
                 Emitted.Text("ম"),
                 Emitted.Text("ি"),
+                Emitted.Text(" "),
+                Emitted.Back(1),
                 Emitted.Text("। "),
                 Emitted.Text("ক"),
                 Emitted.Key(RawKey.Enter),
@@ -442,7 +535,9 @@ class ControllerTest {
         // Nothing from a passthrough app ever reached the composer: exactly one
         // letter — the notepad.exe one — was ever converted and echoed.
         assertEquals(listOf(Emitted.Text("আ")), r.injector.emitted)
-        assertEquals(1, r.listener.candidates.size)
+        // …and typing never reports a candidate list at all: the strip is only
+        // ever told about a list the debounce actually produced.
+        assertTrue(r.listener.candidates.isEmpty())
     }
 
     @Test
@@ -487,8 +582,10 @@ class ControllerTest {
 
         r.controller.pickCandidate(1)
         r.idle()
-        // কেমন → কেম in place: one backspace, nothing retyped.
-        assertEquals(Emitted.Back(1), r.injector.emitted.last())
+        // কেমন → "কেম " in place: one backspace takes the ন off, and the space
+        // that ends the word goes on. A pick ends a word the way space does.
+        assertEquals(listOf(Emitted.Back(1), Emitted.Text(" ")), r.injector.emitted.drop(4))
+        assertEquals("কেম ", r.injector.document)
         // Non-primary choice: the engine learns it (S26 law, explicit choice).
         assertEquals(listOf("kmn" to "কেম"), r.engine.taught)
 
@@ -497,15 +594,15 @@ class ControllerTest {
         r.settle()
         r.controller.pickCandidate(0)
         r.idle()
-        // The pending space from the first pick, the echo again, and then a
-        // primary pick that injects NOTHING: it is what is already on screen.
+        // The echo again, then a primary pick that injects only its trailing
+        // space: the word itself is already on screen.
         assertEquals(
             listOf(
-                Emitted.Text(" "),
                 Emitted.Text("ক"),
                 Emitted.Text("িমি"),
                 Emitted.Back(3),
                 Emitted.Text("েমন"),
+                Emitted.Text(" "),
             ),
             r.injector.emitted.drop(afterFirstPick),
         )
@@ -559,19 +656,54 @@ class ControllerTest {
     }
 
     @Test
-    fun eachHandledKeyProducesAtMostOneCandidatesCall() {
+    fun theStripIsToldOnlyWhenItsContentChanges() {
         val r = rig()
         r.type("ami")
         r.idle()
-        assertEquals(3, r.listener.candidates.size, "one coalesced UI call per keystroke")
-        // Typing does not query suggestions, so the strip stays hidden until
-        // the user pauses — and the word itself is in their document, not here.
-        assertTrue(r.listener.candidates.all { it.isEmpty() })
+        // Typing does not query suggestions AND does not blank the strip, so
+        // there is nothing to tell the UI: no call, no hide, no flicker.
+        assertTrue(r.listener.candidates.isEmpty(), "a keystroke must not churn the popup")
         assertEquals("আমি", r.controller.echoedText)
+
+        r.settle()
+        assertEquals(1, r.listener.candidates.size)
+        assertTrue(r.listener.candidates.last().isNotEmpty(), "the strip fills after the debounce")
 
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        assertEquals(4, r.listener.candidates.size)
+        // The word is finished: the popup has nothing left to describe.
+        assertEquals(2, r.listener.candidates.size)
+        assertEquals(emptyList(), r.listener.candidates.last())
+    }
+
+    /**
+     * The second reported defect ("suggestion is gone"), end to end. The strip
+     * must be populated for the whole time a word is being typed — not only
+     * during a pause longer than the gap between two letters.
+     */
+    @Test
+    fun theStripStaysPopulatedWhileTheWordIsTyped() {
+        val r = rig()
+        r.type("k")
+        r.settle()
+        assertTrue(r.listener.candidates.last().isNotEmpty())
+
+        r.type("m")
+        r.idle()
+        assertTrue(
+            r.listener.candidates.last().isNotEmpty(),
+            "the strip must not blank out between keystrokes",
+        )
+        r.settle()
+        r.type("n")
+        r.idle()
+        assertTrue(r.listener.candidates.last().isNotEmpty())
+        r.settle()
+        assertEquals("কেমন", r.listener.candidates.last().first())
+
+        // …and it disappears the moment the word is committed.
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
         assertEquals(emptyList(), r.listener.candidates.last())
     }
 
@@ -603,25 +735,31 @@ class ControllerTest {
     }
 
     @Test
-    fun escapeIsForwardedToTheAppWhileAPendingSpaceIsHeld() {
+    fun escapeAfterASpaceReachesTheAppAndDisarmsTheRetroDari() {
         val r = rig()
         r.type("ami")
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        assertEquals(listOf("আ", "ম", "ি"), r.injector.texts)
+        assertEquals("আমি ", r.injector.document)
 
-        // The pending space keeps the composer active, so Escape is ours to
-        // handle — but the app MUST still get it: Escape closes dialogs, and a
+        // The armed retro-space keeps the composer active, so Escape is ours to
+        // order — but the app MUST still get it: Escape closes dialogs, and a
         // word-then-space is the state a user spends most of their time in.
         assertTrue(r.key(RawKey.Escape))
         r.idle()
-        assertEquals(listOf(Emitted.Key(RawKey.Escape)), r.injector.emitted.drop(3))
+        assertEquals(listOf(Emitted.Key(RawKey.Escape)), r.injector.emitted.drop(4))
 
-        // And it keeps working — the pending space survives, so the next Escape
-        // takes the same path rather than silently dying.
-        assertTrue(r.key(RawKey.Escape))
+        // Escape can have dismissed anything — a dialog, an autocomplete list —
+        // so the caret is no longer reliably ours and the retro-দাঁড়ি is
+        // disarmed. The composer is idle, so the NEXT Escape is the app's
+        // outright: it still reaches the application, we simply stop touching it.
+        assertFalse(r.key(RawKey.Escape))
+        assertEquals(listOf(RawKey.Escape), r.injector.keys)
+        // …and a space now writes a plain space, not a retroactive দাঁড়ি.
+        assertTrue(r.key(RawKey.Space))
         r.idle()
-        assertEquals(listOf(RawKey.Escape, RawKey.Escape), r.injector.keys)
+        assertEquals("আমি  ", r.injector.document)
+        assertTrue(r.injector.backspaces.isEmpty(), "a disarmed retro-space never deletes")
 
         // While a word IS forming, Escape cancels to the raw roman instead —
         // nothing is forwarded to the app. The Bangla is already on screen, so
@@ -632,7 +770,6 @@ class ControllerTest {
         r.idle()
         assertEquals(
             listOf(
-                Emitted.Text(" "), // the held space, released by the letter
                 Emitted.Text("ক"),
                 Emitted.Text("িমি"),
                 Emitted.Back(3),
@@ -642,7 +779,7 @@ class ControllerTest {
             ),
             r.injector.emitted.drop(beforeKmn),
         )
-        assertEquals(listOf(RawKey.Escape, RawKey.Escape), r.injector.keys)
+        assertEquals(listOf(RawKey.Escape), r.injector.keys)
     }
 
     @Test
@@ -684,15 +821,17 @@ class ControllerTest {
     }
 
     @Test
-    fun unmanagedKeyAfterAHeldSpaceKeepsTheSpace() {
+    fun unmanagedKeyAfterASpaceKeepsTheSpaceAndDisarmsTheRetroDari() {
         val r = rig()
         r.type("ami")
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        assertEquals(listOf("আ", "ম", "ি"), r.injector.texts)
+        assertEquals("আমি ", r.injector.document)
 
-        // The pending space keeps the composer active, so the key is ours to
-        // order — but the space the user already typed must not vanish with it.
+        // The armed retro-space keeps the composer active, so the key is ours
+        // to order — and that is exactly why it must be: an arrow key moves the
+        // caret, and a retro-দাঁড়ি backspace afterwards would land on the
+        // user's own text. Routing it through the worker is what disarms it.
         assertTrue(r.key(RawKey.Unmanaged(0x39, shift = true)))
         r.idle()
         assertEquals(
@@ -705,6 +844,10 @@ class ControllerTest {
             ),
             r.injector.emitted,
         )
+        // Disarmed: the next space is a plain space and deletes nothing.
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
+        assertTrue(r.injector.backspaces.isEmpty())
     }
 
     @Test
@@ -751,7 +894,7 @@ class ControllerTest {
         r.type("ami")
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        assertEquals(listOf("আ", "ম", "আ", "ম", "ি"), r.injector.texts)
+        assertEquals(listOf("আ", "ম", "আ", "ম", "ি", " "), r.injector.texts)
         assertEquals(1, synchronized(errors) { errors.size })
     }
 
@@ -775,7 +918,7 @@ class ControllerTest {
         r.type("ami")
         assertTrue(r.key(RawKey.Space))
         r.controller.shutdown()
-        assertEquals(listOf("আ", "ম", "ি"), r.injector.texts)
+        assertEquals(listOf("আ", "ম", "ি", " "), r.injector.texts)
         // Quitting must never backspace: the user's word is theirs, and the
         // process is going away with no way to put anything back.
         assertEquals("", r.controller.echoedText)
@@ -785,7 +928,7 @@ class ControllerTest {
         // eaten by a worker that no longer exists.
         assertFalse(r.key(RawKey.Letter('a')))
         assertFalse(r.key(RawKey.Space))
-        assertEquals(listOf("আ", "ম", "ি"), r.injector.texts)
+        assertEquals(listOf("আ", "ম", "ি", " "), r.injector.texts)
         r.controller.shutdown() // idempotent
     }
 
@@ -811,7 +954,7 @@ class ControllerTest {
         val r = rig()
         r.type("kmn")
         r.idle()
-        assertEquals(emptyList(), r.listener.candidates.last(), "no strip while the user is typing")
+        assertTrue(r.listener.candidates.isEmpty(), "no query, and no strip churn, while typing")
 
         val echoedBeforeStrip = r.injector.emitted
         r.settle()
@@ -837,8 +980,8 @@ class ControllerTest {
         stale()
         r.idle()
         // The generation guard threw it away: no strip for the word the user
-        // has already typed past.
-        assertEquals(emptyList(), r.listener.candidates.last())
+        // has already typed past — the UI is not told anything at all.
+        assertTrue(r.listener.candidates.isEmpty())
 
         // …and the live one still works.
         r.settle()
@@ -879,44 +1022,63 @@ class ControllerTest {
         // WITHOUT the guarantee that the caret is still where we left it, and
         // a backspace sent in any of them deletes text the user typed
         // themselves — the one failure mode of this design that destroys work.
-        for (ending in listOf<(Rig) -> Unit>(
-            { it.key(RawKey.FocusChanged) },
-            { it.controller.setModeExternal(Mode.ENGLISH) },
-            { it.key(RawKey.ToggleHotkey) },
-            { it.key(RawKey.Unmanaged(0x25)) }, // left arrow: the caret moves
-            { it.controller.shutdown() },
-        )) {
-            val r = rig()
-            r.type("ami")
-            r.idle()
-            val before = r.injector.emitted
-            ending(r)
-            if (!r.controller.isStopped) r.idle()
-            assertEquals("", r.controller.echoedText, "the ledger must be cleared")
-            assertTrue(
-                r.injector.emitted.drop(before.size).none { it is Emitted.Back },
-                "no path that loses the caret may send a backspace",
-            )
+        //
+        // Run twice: once mid-word (only the echo ledger is at stake) and once
+        // with a space already written, where the retro-দাঁড়ি is armed and
+        // there is a second way to send a backspace. Every path must disarm it,
+        // which is also why a space keeps the composer "active" in the mirror.
+        for (trailingSpace in listOf(false, true)) {
+            for (ending in listOf<(Rig) -> Unit>(
+                { it.key(RawKey.FocusChanged) },
+                { it.controller.setModeExternal(Mode.ENGLISH) },
+                { it.key(RawKey.ToggleHotkey) },
+                { it.key(RawKey.Unmanaged(0x25)) }, // left arrow: the caret moves
+                { it.controller.shutdown() },
+            )) {
+                val r = rig()
+                r.type("ami")
+                if (trailingSpace) r.key(RawKey.Space)
+                r.idle()
+                val before = r.injector.emitted
+                ending(r)
+                if (!r.controller.isStopped) r.idle()
+                assertEquals("", r.controller.echoedText, "the ledger must be cleared")
+                assertTrue(
+                    r.injector.emitted.drop(before.size).none { it is Emitted.Back },
+                    "no path that loses the caret may send a backspace",
+                )
+                if (trailingSpace && !r.controller.isStopped) {
+                    // …and it stays disarmed afterwards: the space that follows
+                    // must be a plain space, never a delete-and-rewrite.
+                    r.key(RawKey.Space)
+                    r.idle()
+                    assertTrue(
+                        r.injector.emitted.drop(before.size).none { it is Emitted.Back },
+                        "a path that lost the caret must not leave the retro-দাঁড়ি armed",
+                    )
+                }
+            }
         }
     }
 
     @Test
-    fun aCommitOfTextAlreadyOnScreenInjectsNothing() {
+    fun aCommitOfTextAlreadyOnScreenInjectsOnlyWhatIsNew() {
         val r = rig()
         r.type("ami")
         r.idle()
         val before = r.injector.emitted.size
         // Space, Enter and Tab all end the word. With the conversion computed
-        // synchronously, what is on screen IS the commit — so all three are
-        // pure state changes as far as the user's document is concerned.
+        // synchronously, the WORD is already on screen — so the only thing a
+        // commit can inject is what the key itself adds: a space, or nothing.
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        assertEquals(before, r.injector.emitted.size)
+        assertEquals(listOf(Emitted.Text(" ")), r.injector.emitted.drop(before))
 
         r.type("ami")
         r.idle()
         assertTrue(r.key(RawKey.Enter))
         r.idle()
+        // Enter adds no text of its own: the word costs nothing to commit.
         assertEquals(listOf(Emitted.Key(RawKey.Enter)), r.injector.emitted.drop(before + 4))
     }
 }

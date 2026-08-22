@@ -55,19 +55,28 @@ class DebounceScheduler(
          * How long the user must pause before we ask the engine for the
          * suggestion list.
          *
-         * `getSuggestions` measures ~7.5 ms per keystroke against the real
-         * dictionary — three orders of magnitude more than the conversion
-         * itself (~17 us) and the one call that made typing feel slow. It is
-         * therefore the ONLY thing left on a timer.
+         * `getSuggestions` measured 2.3 ms per call against the real dictionary
+         * (warmed, over a 22-prefix keystroke workload; 2.25 ms at limit 3 and
+         * 2.65 ms at limit 6, so the count is not the lever — the cost is the
+         * lookup). That is still far more than the conversion beside it, which
+         * is why it is the only thing left on a timer.
          *
-         * 120 ms sits in the gap between the two rhythms that matter: inside a
-         * fast typist's burst the letters land 40-90 ms apart, so a whole word
-         * collapses into a single engine query instead of one per letter; and
-         * the pause before reaching for space, a digit or the mouse is longer
-         * than this, so the strip is already up by the time the user looks for
-         * it. Shorter re-introduces the per-letter query this fix removes;
-         * much longer and the suggestions feel like they arrive late.
+         * **45 ms, down from 120 ms.** 120 ms was chosen to collapse a typing
+         * burst into one query, and it did — but combined with a strip that was
+         * blanked on every keystroke it meant a user typing at a normal 40-90 ms
+         * per letter never saw suggestions at all, which is exactly what they
+         * reported. Two things changed together: the strip now survives a
+         * keystroke (`Composer.refresh` no longer clears it), and this dropped
+         * to 45 ms so the list is at most one short pause behind the buffer.
+         *
+         * 45 ms is under the 60-90 ms rhythm of ordinary typing, so the list
+         * refreshes between most keystrokes and the strip is populated the
+         * whole time a word is being typed. The cost is bounded and off the
+         * hook thread: at worst one 2.3 ms query per letter on the worker lane,
+         * which can delay the next letter's echo by that much and nothing more.
+         * Going much lower buys freshness nobody can perceive; going back up
+         * re-creates the "suggestion is gone" report.
          */
-        const val REFINE_DEBOUNCE_MS = 120L
+        const val REFINE_DEBOUNCE_MS = 45L
     }
 }

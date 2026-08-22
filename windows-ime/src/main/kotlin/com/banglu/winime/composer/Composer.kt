@@ -32,6 +32,22 @@ sealed interface ComposerAction {
     data class Preview(val bangla: String, val raw: String) : ComposerAction
     /** Inject as unicode text. */
     data class Commit(val text: String) : ComposerAction
+
+    /**
+     * Delete [count] characters THIS composer committed on the immediately
+     * preceding keystroke — never anything older, and never anything the user
+     * typed themselves.
+     *
+     * It exists because this host can edit text it has already committed (the
+     * controller injects backspaces; that is how the live echo corrects a word
+     * in place). Exactly two things need it: the second space that turns
+     * `শব্দ ` into `শব্দ। `, and the tight punctuation that turns `শব্দ ` into
+     * `শব্দ,`. Both fire on the very next key after the space was written, with
+     * no intervening focus change — every path that ends composition without
+     * that guarantee clears the arming flag first.
+     */
+    data class DeleteBack(val count: Int) : ComposerAction
+
     /** Re-inject the original key event (Enter/Tab/Backspace/Escape). */
     data class ForwardKey(val key: ComposerKey) : ComposerAction
     data class Candidates(val list: List<String>) : ComposerAction
@@ -48,19 +64,21 @@ interface ComposerEngine {
     fun instant(raw: String): String
 
     /**
-     * The full pipeline. Measured at ~17 us per keystroke on the real
-     * dictionary (its caches are warm by the second letter), so it stays
-     * SYNCHRONOUS on the typing path: the user sees the true Bangla the
-     * instant they type it rather than watching a rule-only approximation
-     * change under them when a later pass lands.
+     * The full pipeline. Cheap enough (its caches are warm by the second
+     * letter) to stay SYNCHRONOUS on the typing path: the user sees the true
+     * Bangla the instant they type it rather than watching a rule-only
+     * approximation change under them when a later pass lands.
      */
     fun convert(raw: String): String
 
     /**
-     * Ranked alternatives. ~7.5 ms per keystroke on the real dictionary — 370x
-     * everything else, and the entire reason typing felt slow. NEVER called
-     * from the typing path; only from [Composer.refineCandidates], behind the
-     * controller's debounce.
+     * Ranked alternatives. ~2.3 ms per call on the real dictionary — several
+     * times the conversion beside it, and the reason typing felt slow when it
+     * ran per letter. NEVER called from the typing path; only from
+     * [Composer.refineCandidates], behind the controller's debounce.
+     *
+     * The cost barely moves with [limit] (2.25 ms at 3, 2.65 ms at 6): it is
+     * the lookup, not the size of the list.
      */
     fun suggest(raw: String, limit: Int = 6): List<String>
 
@@ -75,19 +93,38 @@ interface ComposerEngine {
 }
 
 /**
- * The IME's typing state machine — a line-faithful Kotlin port of
+ * The IME's typing state machine — descended from
  * macos-ime/Sources/BangluCore/Composer.swift (macOS S51), re-expressed for
  * a Windows keyboard hook. Pure logic, no JNA/Win32 imports.
  *
- * দাঁড়ি uses the pending-space model: the hook cannot edit text already
- * committed to the host app, so a space after a word commits the word and
- * HOLDS the space; what arrives next decides whether it becomes " ", "। ",
- * or is swallowed (tight punctuation).
+ * **This host can edit text it has already committed**, and that single fact
+ * is what separates it from the macOS original. IMK gave the Swift composer no
+ * way back into committed text, so it used the *pending-space* model: a space
+ * after a word committed the word and HELD the space, and the next keystroke
+ * decided whether that space became " ", "। ", or vanished. Here the controller
+ * injects backspaces — it is how the live echo rewrites `কিমি` into `কেমন`
+ * mid-word — so holding the space bought nothing and cost everything: the user
+ * pressed space, saw no space, pressed it again, and got a দাঁড়ি they never
+ * asked for.
+ *
+ * The model is therefore *immediate, retroactively corrected*, which is what
+ * Avro does and what the user expects:
+ *
+ * | state                     | Space                      | tight punctuation      |
+ * |---------------------------|----------------------------|------------------------|
+ * | a word is forming         | commit the word + `" "`    | commit the word + mark |
+ * | a space we just wrote     | delete it, write `"। "`    | delete it, write mark  |
+ * | anything else             | `" "`                      | mark                   |
+ *
+ * The middle row is the only place this composer ever deletes committed text,
+ * it can only fire on the keystroke IMMEDIATELY after the space was written,
+ * and [retroSpaceArmed] — the flag that permits it — is cleared by every other
+ * key and by [focusLost]. See [ComposerAction.DeleteBack].
  *
  * The engine work is split by cost, not by convenience: conversion is
- * synchronous on the typing path (~17 us) and the suggestion query is not
- * (~7.5 ms). [refineCandidates] is the second half, driven by the controller's
- * debounce and guarded by [generation].
+ * synchronous on the typing path (tens of microseconds) and the suggestion
+ * query is not (~2.3 ms). [refineCandidates] is the second half, driven by the
+ * controller's debounce and guarded by [generation].
  */
 class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true) {
     // Read on the worker thread (Controller.handle), written from the UI
@@ -99,10 +136,27 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
     private var formingRaw = ""
     private var formingBangla = ""
     private var candidates: List<String> = emptyList()
-    private var dariJustCommitted = false
+
+    /**
+     * The raw buffer [candidates] was ranked for. The strip is deliberately NOT
+     * blanked between keystrokes any more (that is what made it invisible while
+     * typing), so it can lag the buffer by one debounce interval; this is how a
+     * pick knows whether the list still describes what the user typed.
+     */
+    private var candidatesRaw = ""
     private var gen = 0L
 
-    var pendingSpace: Boolean = false
+    /**
+     * True while the last thing committed is a plain space THIS composer wrote
+     * immediately after finishing a word, with no other key since.
+     *
+     * It is the sole licence to delete committed text (the retro-দাঁড়ি and the
+     * space a tight mark swallows), so every key that is not the space or the
+     * punctuation that consumes it clears the flag, and so does [focusLost] —
+     * which the controller calls on focus change, mode switch, an unmanaged
+     * caret-moving key, and fault recovery.
+     */
+    var retroSpaceArmed: Boolean = false
         private set
 
     /** True while a word is being typed. */
@@ -141,28 +195,32 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
 
     fun handle(key: ComposerKey): List<ComposerAction> = when (key) {
         is ComposerKey.Letter -> {
-            val out = releasePendingSpace().toMutableList()
+            // The space this letter follows is already in the document; all
+            // that ends here is its licence to be rewritten as a দাঁড়ি.
+            retroSpaceArmed = false
             formingRaw += key.c
+            val out = mutableListOf<ComposerAction>()
             refresh(out)
             out
         }
 
         ComposerKey.Space -> {
             if (forming) {
-                val out = commitForming()
-                pendingSpace = true
+                // The word AND the space, in one commit: the space must be
+                // visible the instant the user presses the key, not held back
+                // waiting for the next one to disambiguate it.
+                val out = commitForming(trailing = " ")
+                retroSpaceArmed = true
                 out
-            } else if (pendingSpace) {
-                pendingSpace = false
-                if (dariJustCommitted) {
-                    dariJustCommitted = false
-                    listOf(ComposerAction.Commit(" "))
-                } else {
-                    dariJustCommitted = true
-                    listOf(ComposerAction.Commit("। "))
-                }
+            } else if (retroSpaceArmed) {
+                // The second space of a sentence break. The first one is one
+                // keystroke old and still the last character in the document,
+                // so it can simply be taken back.
+                retroSpaceArmed = false
+                listOf(ComposerAction.DeleteBack(1), ComposerAction.Commit("। "))
             } else {
-                dariJustCommitted = false
+                // Third and later spaces, and any space that does not follow a
+                // word of ours: one দাঁড়ি per sentence break, never two.
                 listOf(ComposerAction.Commit(" "))
             }
         }
@@ -173,12 +231,11 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
                 val out = mutableListOf<ComposerAction>()
                 refresh(out)
                 out
-            } else if (pendingSpace) {
-                // The user saw themselves type a space; make it real, then
-                // let the host's own backspace delete it.
-                pendingSpace = false
-                listOf(ComposerAction.Commit(" "), ComposerAction.ForwardKey(ComposerKey.Backspace))
             } else {
+                // Nothing of ours is editable any more — including a space we
+                // wrote, which is now ordinary document text. Forwarding lets
+                // the host delete whatever is actually behind the caret.
+                retroSpaceArmed = false
                 listOf(ComposerAction.ForwardKey(ComposerKey.Backspace))
             }
         }
@@ -188,7 +245,8 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
             if (forming && candidates.isNotEmpty() && n != null && n in 1..MAX_CANDIDATES && n - 1 < candidates.size) {
                 pick(n - 1)
             } else {
-                val out = (if (forming) commitForming() else releasePendingSpace()).toMutableList()
+                val out = (if (forming) commitForming() else emptyList()).toMutableList()
+                retroSpaceArmed = false
                 out.add(ComposerAction.Commit(if (banglaDigits) bengaliDigit(key.c) else key.c.toString()))
                 out
             }
@@ -196,6 +254,10 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
 
         ComposerKey.Escape -> {
             if (!forming) {
+                // Escape can dismiss a dialog, an autocomplete list, anything —
+                // after which the caret is not reliably ours. Disarm rather
+                // than risk a retro-দাঁড়ি backspace landing on someone's text.
+                retroSpaceArmed = false
                 listOf(ComposerAction.ForwardKey(ComposerKey.Escape))
             } else {
                 val raw = formingRaw
@@ -210,7 +272,9 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
 
         ComposerKey.Enter, ComposerKey.Tab -> {
             val out = (if (forming) commitForming() else emptyList()).toMutableList()
-            pendingSpace = false
+            // A space already written stays a space: nothing about pressing
+            // Enter says the user meant to end a sentence.
+            retroSpaceArmed = false
             out.add(ComposerAction.ForwardKey(key))
             out
         }
@@ -218,18 +282,20 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
         is ComposerKey.Punctuation -> {
             val out = (if (forming) commitForming() else emptyList()).toMutableList()
             val mapped = if (key.p == ".") "।" else key.p
-            if (pendingSpace) {
-                pendingSpace = false
-                if (mapped !in tightPunctuation) out.add(ComposerAction.Commit(" "))
+            // Tight punctuation hugs the word: `আমি ,` is wrong in Bangla as it
+            // is in English, so the space typed one keystroke ago comes back
+            // out. (The check runs on the MAPPED character — "." is "।" first.)
+            if (retroSpaceArmed && mapped in tightPunctuation) {
+                out.add(ComposerAction.DeleteBack(1))
             }
+            retroSpaceArmed = false
             out.add(ComposerAction.Commit(mapped))
-            dariJustCommitted = (mapped == "।")
             out
         }
     }
 
     fun focusLost(): List<ComposerAction> {
-        pendingSpace = false
+        retroSpaceArmed = false
         return if (!forming) emptyList() else commitForming()
     }
 
@@ -237,10 +303,15 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
         if (!forming || index < 0 || index >= candidates.size) return emptyList()
         val choice = candidates[index]
         val wasPrimary = choice == formingBangla
-        onPick?.invoke(formingRaw, choice, wasPrimary)
+        // WYSIWYG for the strip: the user gets the chip they clicked. But a
+        // strip ranked for a SHORTER buffer must never TEACH — `kmn` → `কিমি`
+        // is a mapping the user never made, and learned.json is forever.
+        if (candidatesRaw == formingRaw) onPick?.invoke(formingRaw, choice, wasPrimary)
         formingBangla = choice
-        val out = commitForming()
-        pendingSpace = true
+        // A pick ends the word exactly the way space does, space included: the
+        // user's next letter starts the next word.
+        val out = commitForming(trailing = " ")
+        retroSpaceArmed = true
         return out
     }
 
@@ -248,14 +319,17 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
 
     /**
      * The typing path. Conversion only — the suggestion list is NOT computed
-     * here: `suggest` costs ~7.5 ms against the real dictionary and running it
-     * per letter is what made typing lag. It is dropped to empty (which hides
-     * the popup) and re-filled by [refineCandidates] once the user pauses.
+     * here: `suggest` costs ~2.3 ms against the real dictionary against tens of
+     * microseconds for the conversion, and running it per letter is what made
+     * typing lag. [refineCandidates] fills it behind the controller's debounce.
      *
-     * Dropping rather than keeping the previous list is deliberate: those
-     * entries were ranked for a SHORTER buffer, and picking one would commit
-     * that older word's Bangla under the current raw key — teaching the engine
-     * a mapping the user never made.
+     * It does NOT blank the strip either, and that is the fix for the second
+     * reported defect. Blanking it here meant the popup was hidden on every
+     * keystroke and only reappeared after a pause LONGER than the gap between
+     * two letters — so a user typing normally saw no suggestions at all. The
+     * list now survives the keystroke and is replaced when the fresh one lands;
+     * [candidatesRaw] records which buffer it belongs to so a pick from a
+     * momentarily stale strip can be committed without being learned.
      */
     private fun refresh(out: MutableList<ComposerAction>) {
         gen++
@@ -266,9 +340,7 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
             return
         }
         formingBangla = liveConversion(formingRaw)
-        candidates = emptyList()
         out.add(ComposerAction.Preview(formingBangla, formingRaw))
-        out.add(ComposerAction.Candidates(emptyList()))
     }
 
     /**
@@ -290,6 +362,7 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
         val list = engine.suggest(formingRaw, MAX_ENGINE_SUGGESTIONS).toMutableList()
         if (formingRaw !in list) list.add(formingRaw) // raw = inline English
         candidates = list
+        candidatesRaw = formingRaw
         return listOf(ComposerAction.Candidates(candidates))
     }
 
@@ -314,20 +387,17 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
      * Preview("") precedes it; the committed text IS the reconciliation
      * target, and with the conversion computed synchronously it already equals
      * what the host application shows, so the commit normally injects nothing
-     * at all.
+     * at all beyond [trailing].
+     *
+     * [trailing] rides along in the SAME commit rather than as a second action
+     * so the controller's diff sees one target: committing `কেম ` over an
+     * echoed `কেমন` is one backspace and one insert, not a rewrite followed by
+     * an append.
      */
-    private fun commitForming(): List<ComposerAction> {
-        val text = formingBangla
+    private fun commitForming(trailing: String = ""): List<ComposerAction> {
+        val text = formingBangla + trailing
         clearForming()
-        dariJustCommitted = false
         return listOf(ComposerAction.Commit(text), ComposerAction.Candidates(emptyList()))
-    }
-
-    private fun releasePendingSpace(): List<ComposerAction> {
-        if (!pendingSpace) return emptyList()
-        pendingSpace = false
-        dariJustCommitted = false
-        return listOf(ComposerAction.Commit(" "))
     }
 
     private fun clearForming() {
@@ -335,6 +405,7 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
         formingRaw = ""
         formingBangla = ""
         candidates = emptyList()
+        candidatesRaw = ""
     }
 }
 

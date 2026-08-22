@@ -37,6 +37,26 @@ class ComposerTest {
     private fun candidates(actions: List<ComposerAction>) =
         actions.filterIsInstance<ComposerAction.Candidates>().last().list
 
+    /**
+     * What the focused application would end up holding, applied in order —
+     * the only honest way to assert a model that BOTH writes and un-writes
+     * committed text.
+     */
+    private fun document(actions: List<ComposerAction>): String {
+        val sb = StringBuilder()
+        for (action in actions) when (action) {
+            is ComposerAction.Commit -> sb.append(action.text)
+            is ComposerAction.DeleteBack -> repeat(minOf(action.count, sb.length)) {
+                sb.deleteCharAt(sb.length - 1)
+            }
+            else -> Unit
+        }
+        return sb.toString()
+    }
+
+    private fun deletions(actions: List<ComposerAction>) =
+        actions.filterIsInstance<ComposerAction.DeleteBack>()
+
     private fun type(c: Composer, s: String): List<ComposerAction> =
         s.flatMap { c.handle(ComposerKey.Letter(it)) }
 
@@ -49,66 +69,91 @@ class ComposerTest {
     private fun settle(c: Composer): List<ComposerAction> = c.refineCandidates(c.generation)
 
     @Test
-    fun spaceCommitsExactlyThePreview() {
+    fun spaceCommitsThePreviewAndAVisibleSpaceAtOnce() {
         val c = composer()
         val typed = type(c, "ami")
         val lastPreview = previews(typed).last()
         assertEquals("আমি", lastPreview.bangla)
         assertEquals("ami", lastPreview.raw)
-        // WYSIWYG law: the space commit must equal the last previewed
-        // Bangla exactly — never a re-conversion of the raw buffer.
-        assertEquals(lastPreview.bangla, commits(c.handle(ComposerKey.Space)))
+        // WYSIWYG law: the commit must contain the last previewed Bangla
+        // exactly — never a re-conversion of the raw buffer — and the space
+        // the user pressed must be part of the SAME commit, so it reaches the
+        // document on this keystroke rather than the next one.
+        val actions = c.handle(ComposerKey.Space)
+        assertEquals("${lastPreview.bangla} ", commits(actions))
+        assertTrue(deletions(actions).isEmpty(), "the first space deletes nothing")
+        assertTrue(c.retroSpaceArmed)
     }
 
     @Test
-    fun doubleSpaceMakesDari() {
+    fun doubleSpaceRewritesTheSpaceAsDari() {
         val c = composer()
         type(c, "ami")
-        assertEquals("আমি", commits(c.handle(ComposerKey.Space)))
-        assertEquals("। ", commits(c.handle(ComposerKey.Space)))
+        val first = c.handle(ComposerKey.Space)
+        val second = c.handle(ComposerKey.Space)
+        // The space is one keystroke old and still the last character, so it
+        // comes back out and the দাঁড়ি takes its place — visibly, now.
+        assertEquals(listOf(ComposerAction.DeleteBack(1)), deletions(second))
+        assertEquals("আমি। ", document(first + second))
+        assertFalse(c.retroSpaceArmed, "the দাঁড়ি is not itself retro-convertible")
     }
 
     @Test
-    fun tripleSpaceAlternates() {
+    fun tripleSpaceAddsAPlainSpaceNotASecondDari() {
         val c = composer()
         type(c, "ami")
-        assertEquals("আমি", commits(c.handle(ComposerKey.Space)))
-        assertEquals("। ", commits(c.handle(ComposerKey.Space)))
-        // dariJustCommitted flips back off: third space is a plain space,
-        // not another দাঁড়ি.
-        assertEquals(" ", commits(c.handle(ComposerKey.Space)))
+        val all = c.handle(ComposerKey.Space) +
+            c.handle(ComposerKey.Space) +
+            c.handle(ComposerKey.Space)
+        assertEquals("আমি।  ", document(all))
+        assertEquals(1, deletions(all).size, "one দাঁড়ি per sentence break, one deletion")
     }
 
     @Test
-    fun letterAfterPendingSpaceReleasesPlainSpace() {
+    fun letterAfterASpaceJustStartsTheNextWord() {
         val c = composer()
         type(c, "ami")
-        c.handle(ComposerKey.Space) // commits আমি, holds the space
-        assertTrue(c.pendingSpace)
+        val space = c.handle(ComposerKey.Space)
+        assertTrue(c.retroSpaceArmed)
         val actions = c.handle(ComposerKey.Letter('k'))
-        assertEquals(" ", commits(actions))
-        assertFalse(c.pendingSpace)
+        // Nothing to release: the space was written when it was pressed.
+        assertEquals("", commits(actions))
+        assertTrue(deletions(actions).isEmpty())
+        assertFalse(c.retroSpaceArmed)
         assertTrue(c.forming)
-        val preview = previews(actions).last()
-        assertEquals("k", preview.raw)
+        assertEquals("k", previews(actions).last().raw)
+        assertEquals("আমি ", document(space + actions))
     }
 
     @Test
-    fun tightPunctuationSwallowsPendingSpace() {
+    fun tightPunctuationTakesBackTheSpaceAlreadyTyped() {
         val c = composer()
         type(c, "ami")
-        c.handle(ComposerKey.Space)
-        assertEquals(",", commits(c.handle(ComposerKey.Punctuation(","))))
+        val space = c.handle(ComposerKey.Space)
+        val comma = c.handle(ComposerKey.Punctuation(","))
+        assertEquals(listOf(ComposerAction.DeleteBack(1)), deletions(comma))
+        assertEquals("আমি,", document(space + comma))
     }
 
     @Test
     fun periodMapsToDariAndIsTight() {
         val c = composer()
         type(c, "ami")
-        c.handle(ComposerKey.Space)
+        val space = c.handle(ComposerKey.Space)
         // "." maps to দাঁড়ি first, THEN the tight-punctuation check runs on
-        // the mapped character — no space is inserted before it.
-        assertEquals("।", commits(c.handle(ComposerKey.Punctuation("."))))
+        // the mapped character — the space in front of it is taken back.
+        val dot = c.handle(ComposerKey.Punctuation("."))
+        assertEquals("আমি।", document(space + dot))
+        assertFalse(c.retroSpaceArmed)
+    }
+
+    @Test
+    fun punctuationWithNoSpaceInFrontDeletesNothing() {
+        val c = composer()
+        type(c, "ami")
+        val actions = c.handle(ComposerKey.Punctuation(","))
+        assertEquals("আমি,", document(actions))
+        assertTrue(deletions(actions).isEmpty(), "there is no space of ours to take back")
     }
 
     @Test
@@ -126,10 +171,29 @@ class ComposerTest {
         type(c, "kmn") // primary কেমন, candidate[1] কেম (real-engine pin)
         settle(c)
         val actions = c.handle(ComposerKey.Digit('2'))
-        assertEquals("কেম", commits(actions))
+        // The pick ends the word exactly the way space does, space included.
+        assertEquals("কেম ", commits(actions))
         assertEquals(Triple("kmn", "কেম", false), picked)
-        assertTrue(c.pendingSpace)
+        assertTrue(c.retroSpaceArmed)
         assertFalse(c.forming)
+    }
+
+    @Test
+    fun aPickFromAStaleStripIsCommittedButNeverLearned() {
+        val c = composer()
+        var picked: Triple<String, String, Boolean>? = null
+        c.onPick = { raw, bangla, wasPrimary -> picked = Triple(raw, bangla, wasPrimary) }
+        type(c, "km")
+        val stripForKm = candidates(settle(c)) // the strip describes "km"
+        assertTrue(stripForKm.size > 1)
+        type(c, "n") // the user typed on; the strip has not caught up yet
+        val choice = stripForKm[1]
+        val actions = c.pick(1)
+        // WYSIWYG for the strip: they clicked it, they get it…
+        assertEquals("$choice ", commits(actions))
+        // …but `kmn -> <a candidate ranked for km>` is a mapping the user never
+        // made, and learned.json is forever.
+        assertEquals(null, picked, "a stale strip must never teach")
     }
 
     @Test
@@ -142,10 +206,15 @@ class ComposerTest {
         // Asking for a full six put the escape hatch at index 6, where neither
         // a digit (Composer bounds them to 1..6) nor a chip (the preview strip
         // renders MAX_CANDIDATES of them) could ever reach it.
-        assertEquals(6, list.size, "a word with plenty of candidates must fill the window exactly")
+        assertEquals(
+            Composer.MAX_CANDIDATES,
+            list.size,
+            "a word with plenty of candidates must fill the window exactly",
+        )
         assertEquals("kmn", list.last(), "the raw roman is always the last candidate")
         // …and the digit for that last position really commits it.
-        assertEquals("kmn", commits(c.handle(ComposerKey.Digit('6'))))
+        val lastDigit = '0' + Composer.MAX_CANDIDATES
+        assertEquals("kmn ", commits(c.handle(ComposerKey.Digit(lastDigit))))
         assertFalse(c.forming)
     }
 
@@ -161,17 +230,16 @@ class ComposerTest {
     }
 
     @Test
-    fun backspaceWithPendingSpaceMaterializesIt() {
+    fun backspaceAfterASpaceIsTheHostsToHandle() {
         val c = composer()
         type(c, "ami")
         c.handle(ComposerKey.Space)
-        assertTrue(c.pendingSpace)
+        assertTrue(c.retroSpaceArmed)
         val actions = c.handle(ComposerKey.Backspace)
-        assertEquals(
-            listOf(ComposerAction.Commit(" "), ComposerAction.ForwardKey(ComposerKey.Backspace)),
-            actions,
-        )
-        assertFalse(c.pendingSpace)
+        // The space is already ordinary document text — nothing to materialise
+        // and nothing of ours to delete. The host's own backspace removes it.
+        assertEquals(listOf(ComposerAction.ForwardKey(ComposerKey.Backspace)), actions)
+        assertFalse(c.retroSpaceArmed)
     }
 
     @Test
@@ -182,7 +250,21 @@ class ComposerTest {
         assertEquals("আমি", commits(actions))
         assertEquals(ComposerAction.ForwardKey(ComposerKey.Enter), actions.last())
         assertFalse(c.forming)
-        assertFalse(c.pendingSpace)
+        assertFalse(c.retroSpaceArmed)
+    }
+
+    @Test
+    fun enterAfterASpaceLeavesTheSpaceAlone() {
+        val c = composer()
+        type(c, "ami")
+        val space = c.handle(ComposerKey.Space)
+        val enter = c.handle(ComposerKey.Enter)
+        // Pressing Enter says nothing about ending a sentence: no retroactive
+        // দাঁড়ি, no deletion, and the key still reaches the application.
+        assertTrue(deletions(enter).isEmpty())
+        assertEquals("আমি ", document(space + enter))
+        assertEquals(ComposerAction.ForwardKey(ComposerKey.Enter), enter.last())
+        assertFalse(c.retroSpaceArmed)
     }
 
     @Test
@@ -202,14 +284,15 @@ class ComposerTest {
         assertEquals("আমি", commits(c.focusLost()))
         assertFalse(c.forming)
 
-        // pendingSpace path: the held space must be dropped silently — no
-        // trailing space is injected into the host app on focus loss.
+        // After a space there is nothing left to flush — it is already in the
+        // document — and focus loss must only DISARM the retro-দাঁড়ি, never
+        // inject or delete anything at the caret it no longer owns.
         val c2 = composer()
         type(c2, "ami")
         c2.handle(ComposerKey.Space)
-        assertTrue(c2.pendingSpace)
+        assertTrue(c2.retroSpaceArmed)
         assertTrue(c2.focusLost().isEmpty())
-        assertFalse(c2.pendingSpace)
+        assertFalse(c2.retroSpaceArmed)
     }
 
     @Test
@@ -222,13 +305,13 @@ class ComposerTest {
         settle(c)
         val primaryActions = c.pick(0)
         assertEquals(Triple("kmn", "কেমন", true), picked)
-        assertEquals("কেমন", commits(primaryActions))
+        assertEquals("কেমন ", commits(primaryActions))
 
         type(c, "kmn")
         settle(c)
         val altActions = c.pick(1)
         assertEquals(Triple("kmn", "কেম", false), picked)
-        assertEquals("কেম", commits(altActions))
+        assertEquals("কেম ", commits(altActions))
     }
 
     // MARK: - the cost split (the performance fix)
@@ -273,7 +356,10 @@ class ComposerTest {
     @Test
     fun candidatesArriveOnlyWithTheRefine() {
         val c = composer()
-        assertTrue(candidates(type(c, "kmn")).isEmpty(), "the strip is empty while typing")
+        assertTrue(
+            type(c, "kmn").none { it is ComposerAction.Candidates },
+            "a keystroke never reports a candidate list — it does not have one",
+        )
         val list = candidates(settle(c))
         assertEquals("কেমন", list.first())
         assertEquals("kmn", list.last())
@@ -281,6 +367,48 @@ class ComposerTest {
         // was already the full-pipeline answer, so nothing moves under the user
         // when the strip appears.
         assertTrue(settle(c).none { it is ComposerAction.Preview })
+    }
+
+    /**
+     * The second reported defect, at its source. Blanking the strip on every
+     * keystroke meant it could only be on screen during a pause LONGER than the
+     * gap between two letters — so someone typing normally saw no suggestions
+     * at all. A keystroke must leave the strip alone.
+     */
+    @Test
+    fun aKeystrokeDoesNotBlankTheStrip() {
+        val c = composer()
+        type(c, "km")
+        val forKm = candidates(settle(c))
+        assertTrue(forKm.isNotEmpty())
+
+        val next = type(c, "n")
+        assertTrue(
+            next.none { it is ComposerAction.Candidates },
+            "the strip must survive the keystroke rather than being hidden and re-shown",
+        )
+        // …and the fresh list replaces it as soon as the debounce lands.
+        assertEquals("কেমন", candidates(settle(c)).first())
+    }
+
+    @Test
+    fun finishingAWordEmptiesTheStrip() {
+        val c = composer()
+        type(c, "kmn")
+        assertTrue(candidates(settle(c)).isNotEmpty())
+        // Space, Enter, Tab and a punctuation mark all end the word, and the
+        // popup has nothing left to describe.
+        assertEquals(emptyList(), candidates(c.handle(ComposerKey.Space)))
+
+        type(c, "kmn")
+        assertTrue(candidates(settle(c)).isNotEmpty())
+        assertEquals(emptyList(), candidates(c.handle(ComposerKey.Enter)))
+
+        // Un-typing the whole buffer empties it too.
+        type(c, "kmn")
+        assertTrue(candidates(settle(c)).isNotEmpty())
+        repeat(2) { c.handle(ComposerKey.Backspace) }
+        assertEquals(emptyList(), candidates(c.handle(ComposerKey.Backspace)))
     }
 
     @Test
@@ -313,7 +441,7 @@ class ComposerTest {
         // The word still appears — the rule layer needs no dictionary at all —
         // and the failure is reported rather than swallowed.
         assertEquals("আমি", previews(type(c, "ami")).last().bangla)
-        assertEquals("আমি", commits(c.handle(ComposerKey.Space)))
+        assertEquals("আমি ", commits(c.handle(ComposerKey.Space)))
         assertEquals(3, faults.size)
     }
 }

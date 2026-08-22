@@ -83,6 +83,12 @@ private const val MAX_CANDIDATES = Composer.MAX_CANDIDATES
  * on Windows a freshly shown window is exactly the thing most likely to be
  * activated by the window manager.
  *
+ * [visible] is driven by "is there at least one candidate?" and nothing else,
+ * so an empty box can never appear. Keeping it on screen for the whole word
+ * rather than per keystroke is the composer's job: it no longer blanks its
+ * candidate list on every letter, which is what used to hide this window
+ * during the entire time the user was typing.
+ *
  * **It must never take focus.** A preview that activates steals the next
  * keystroke from Word, and the user's sentence lands in a 460px strip they
  * cannot even see the caret in.

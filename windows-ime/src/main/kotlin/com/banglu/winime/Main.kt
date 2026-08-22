@@ -377,7 +377,13 @@ private class UiState(initialMode: Mode = Mode.BANGLA) {
      */
     var controlShowRequests by mutableStateOf(0)
 
-    /** An empty candidate list is the composer's "hide" (KeyPorts). */
+    /**
+     * Visible if and only if there is something to show. An empty candidate
+     * list is the composer's "hide" (KeyPorts), and because the popup renders
+     * chips and nothing else, a list-driven predicate is the ONLY one that
+     * cannot put an empty box on the user's screen — deriving it from the
+     * forming word would.
+     */
     val previewVisible: Boolean get() = candidates.isNotEmpty()
 }
 
