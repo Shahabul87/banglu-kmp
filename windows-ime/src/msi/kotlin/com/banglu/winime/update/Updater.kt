@@ -1,5 +1,9 @@
 package com.banglu.winime.update
 
+import com.banglu.winime.AppVersion
+import com.banglu.winime.UpdateGateway
+import com.banglu.winime.UpdateStatus
+import com.banglu.winime.Version
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -13,6 +17,15 @@ import java.time.Duration
 
 /**
  * বাংলু টাইপার's in-app updater — and the ONLY networked code in this module.
+ *
+ * ## Which builds contain it
+ *
+ * This file lives in `src/msi/kotlin`, the WEBSITE edition's source set, so it
+ * is compiled into the MSI build and is physically absent from the Microsoft
+ * Store build (`-PbangluStore=true`). The Store updates Store apps, an MSIX
+ * container refuses the loopback socket pair the JDK web client's constructor
+ * opens, and a package that must never open a socket should not ship a socket
+ * library. See `EditionPorts.kt`.
  *
  * ## Why this file exists at all
  *
@@ -63,9 +76,6 @@ private const val MAX_MSI_BYTES = 512L * 1024 * 1024
 
 private const val MAX_REDIRECTS = 5
 
-/** The classpath resource `generateVersionResource` writes at build time. */
-private const val VERSION_RESOURCE = "/banglu-typer-version.txt"
-
 /**
  * The published update descriptor.
  *
@@ -86,71 +96,6 @@ data class UpdateManifest(
 sealed interface UpdateDecision {
     object None : UpdateDecision
     data class Available(val manifest: UpdateManifest) : UpdateDecision
-}
-
-/** Everything the control window renders about updates, in one value. */
-data class UpdateUi(
-    val line: String = "",
-    /** True only when there is a verified-shape update the user may install. */
-    val actionable: Boolean = false,
-    /** True while a check/download/install is in flight — disables the button. */
-    val busy: Boolean = false,
-)
-
-/**
- * What version this build is.
- *
- * `jpackage.app-version` is written into `app/BangluTyper.cfg` by jpackage and
- * is the truth for an installed app. The generated resource covers a dev run
- * and the CI app image. If NEITHER answers — or either answers something that
- * is not a version — [current] is null and the updater offers nothing at all:
- * an app that does not know what it is must never conclude that something else
- * is newer.
- */
-object AppVersion {
-    val current: String? by lazy {
-        resolve(System.getProperty("jpackage.app-version"), bundled())
-    }
-
-    internal fun resolve(jpackageProperty: String?, bundledResource: String?): String? =
-        listOfNotNull(jpackageProperty, bundledResource)
-            .map { it.trim() }
-            .firstOrNull { Version.parse(it) != null }
-
-    private fun bundled(): String? = runCatching {
-        AppVersion::class.java.getResourceAsStream(VERSION_RESOURCE)
-            ?.use { it.readBytes().toString(Charsets.UTF_8) }
-    }.getOrNull()
-}
-
-/**
- * Dotted-numeric version ordering, and nothing else.
- *
- * Anything that is not one-to-four ASCII numeric components — `v1.2`,
- * `1.0.3-beta`, `garbage`, an empty string, a full-width digit — fails to
- * parse, and an unparseable version is never "newer". A published manifest
- * whose version field is junk must therefore leave the user exactly where they
- * are; it must never read as an upgrade.
- */
-internal object Version {
-    private val SHAPE = Regex("""\d{1,9}(\.\d{1,9}){0,3}""")
-
-    fun parse(raw: String): List<Int>? {
-        val trimmed = raw.trim()
-        if (!SHAPE.matches(trimmed)) return null
-        return trimmed.split('.').map { it.toInt() }
-    }
-
-    fun isNewer(candidate: String, current: String): Boolean {
-        val a = parse(candidate) ?: return false
-        val b = parse(current) ?: return false
-        for (i in 0 until maxOf(a.size, b.size)) {
-            val left = a.getOrElse(i) { 0 }
-            val right = b.getOrElse(i) { 0 }
-            if (left != right) return left > right
-        }
-        return false
-    }
 }
 
 /** The host allowlist and the URL shapes this app will and will not fetch. */
@@ -390,8 +335,8 @@ private const val LINE_INSTALLING =
 class UpdateService(
     private val downloadDir: File,
     private val currentVersion: String? = AppVersion.current,
-    private val report: (UpdateUi) -> Unit,
-) {
+    private val report: (UpdateStatus) -> Unit,
+) : UpdateGateway {
     // Not injectable, deliberately: the seam a test would use to swap this out
     // is also the seam that would let a future caller hand this class a
     // different, unaudited transport. The decision logic every test cares
@@ -408,18 +353,18 @@ class UpdateService(
      * nothing — or could not reach the network at all — says nothing, because
      * a fresh install on a train should not open with an error.
      */
-    fun check(manual: Boolean) {
+    override fun check(manual: Boolean) {
         if (busy) return
         busy = true
         try {
-            if (manual) report(UpdateUi(line = LINE_CHECKING, busy = true))
+            if (manual) report(UpdateStatus(line = LINE_CHECKING, busy = true))
             prune()
             val uri = Net.manifestUri
             val body = uri?.let { http.fetchText(it, MAX_MANIFEST_BYTES) }
             when (val decision = UpdatePlan.decide(body, currentVersion)) {
                 is UpdateDecision.Available -> {
                     pending = decision.manifest
-                    report(UpdateUi(line = offerLine(decision.manifest), actionable = true))
+                    report(UpdateStatus(line = offerLine(decision.manifest), actionable = true))
                 }
                 UpdateDecision.None -> {
                     pending = null
@@ -428,7 +373,7 @@ class UpdateService(
                         body == null -> LINE_CHECK_FAILED
                         else -> "$LINE_UP_TO_DATE (v${currentVersion ?: "?"})"
                     }
-                    report(UpdateUi(line = line))
+                    report(UpdateStatus(line = line))
                 }
             }
         } catch (t: Throwable) {
@@ -436,7 +381,7 @@ class UpdateService(
             // broken response can never take the keyboard down with it.
             System.err.println("Banglu update check failed: $t")
             pending = null
-            report(UpdateUi(line = if (manual) LINE_CHECK_FAILED else ""))
+            report(UpdateStatus(line = if (manual) LINE_CHECK_FAILED else ""))
         } finally {
             busy = false
         }
@@ -452,40 +397,40 @@ class UpdateService(
      * Every failure branch leaves the app running, the offer intact, and one
      * explanatory line in the control window.
      */
-    fun install(onInstallerStarted: () -> Unit) {
+    override fun install(onInstallerStarted: () -> Unit) {
         val manifest = pending ?: return
         if (busy) return
         busy = true
         try {
             val uri = Net.safeUri(manifest.url)
             if (uri == null) {
-                report(UpdateUi(line = LINE_DOWNLOAD_FAILED, actionable = true))
+                report(UpdateStatus(line = LINE_DOWNLOAD_FAILED, actionable = true))
                 return
             }
             val target = File(downloadDir, "BangluTyper-${manifest.version}.msi")
-            report(UpdateUi(line = downloadLine(0), busy = true))
+            report(UpdateStatus(line = downloadLine(0), busy = true))
             val hashed = http.download(uri, target, MAX_MSI_BYTES) { percent ->
-                report(UpdateUi(line = downloadLine(percent), busy = true))
+                report(UpdateStatus(line = downloadLine(percent), busy = true))
             }
             if (hashed == null) {
                 target.delete()
-                report(UpdateUi(line = LINE_DOWNLOAD_FAILED, actionable = true))
+                report(UpdateStatus(line = LINE_DOWNLOAD_FAILED, actionable = true))
                 return
             }
-            report(UpdateUi(line = LINE_VERIFYING, busy = true))
+            report(UpdateStatus(line = LINE_VERIFYING, busy = true))
             if (!Checksum.verifyOrDelete(target, manifest.sha256)) {
-                report(UpdateUi(line = LINE_CHECKSUM_FAILED, actionable = true))
+                report(UpdateStatus(line = LINE_CHECKSUM_FAILED, actionable = true))
                 return
             }
             if (!Installer.launch(target)) {
-                report(UpdateUi(line = LINE_INSTALLER_FAILED, actionable = true))
+                report(UpdateStatus(line = LINE_INSTALLER_FAILED, actionable = true))
                 return
             }
-            report(UpdateUi(line = LINE_INSTALLING, busy = true))
+            report(UpdateStatus(line = LINE_INSTALLING, busy = true))
             onInstallerStarted()
         } catch (t: Throwable) {
             System.err.println("Banglu update install failed: $t")
-            report(UpdateUi(line = LINE_DOWNLOAD_FAILED, actionable = true))
+            report(UpdateStatus(line = LINE_DOWNLOAD_FAILED, actionable = true))
         } finally {
             busy = false
         }

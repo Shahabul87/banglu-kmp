@@ -22,8 +22,6 @@ import com.banglu.winime.hook.LowLevelHook
 import com.banglu.winime.hook.SendInputInjector
 import com.banglu.winime.ui.ControlWindow
 import com.banglu.winime.ui.PreviewWindow
-import com.banglu.winime.update.UpdateService
-import com.banglu.winime.update.UpdateUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -190,9 +188,15 @@ fun main() = application {
     // storage, and `verifyUpdaterIsolation` fails the build if that changes.
     // Every write it makes lands on Compose state through EventQueue, the same
     // rule the controller's worker and the hook's pump thread already follow.
+    //
+    // NULL in the Microsoft Store edition, where the updater does not exist in
+    // the package at all (EditionPorts.kt). Every use below is gated on
+    // `Edition.hasUpdater` rather than on the null itself, so the Store build
+    // draws no update surface whatsoever — no row, no menu item, no preference
+    // — instead of an inert one.
     var autoUpdateChecked by remember { mutableStateOf(initialPrefs.autoUpdate) }
     val updates = remember {
-        UpdateService(downloadDir = File(bangluDir, "updates")) { state: UpdateUi ->
+        Edition.updateGateway(File(bangluDir, "updates")) { state: UpdateStatus ->
             EventQueue.invokeLater {
                 ui.updateLine = state.line
                 ui.updateActionable = state.actionable
@@ -203,7 +207,8 @@ fun main() = application {
 
     /** Never on the UI thread, never on the typing path — IO, always. */
     fun checkForUpdates(manual: Boolean) {
-        scope.launch(Dispatchers.IO) { updates.check(manual) }
+        val gateway = updates ?: return
+        scope.launch(Dispatchers.IO) { gateway.check(manual) }
     }
 
     /**
@@ -214,8 +219,9 @@ fun main() = application {
      * the upgrade in-place and reboot-free.
      */
     fun installUpdate() {
+        val gateway = updates ?: return
         scope.launch(Dispatchers.IO) {
-            updates.install { EventQueue.invokeLater { quitApp() } }
+            gateway.install { EventQueue.invokeLater { quitApp() } }
         }
     }
 
@@ -294,8 +300,9 @@ fun main() = application {
     // the work happens on Dispatchers.IO and its only output is one line of
     // Compose state.
     LaunchedEffect(Unit) {
-        if (initialPrefs.autoUpdate) {
-            withContext(Dispatchers.IO) { updates.check(manual = false) }
+        val gateway = updates
+        if (gateway != null && initialPrefs.autoUpdate) {
+            withContext(Dispatchers.IO) { gateway.check(manual = false) }
         }
     }
 
@@ -336,38 +343,36 @@ fun main() = application {
                 controller.banglaDigits = checked
                 updatePrefs { it.copy(banglaDigits = checked) }
             }
-            CheckboxItem(text = "লগইনে চালু হবে", checked = startOnLoginChecked) { checked ->
-                if (checked) {
-                    val exePath = resolveExePath()
-                    if (exePath == null) {
-                        // Can't honour it: a Run key pointing at bare `java`
-                        // with no classpath would fail silently at every
-                        // login. Leave the checkbox and the pref exactly as
-                        // they were rather than promising something we can't
-                        // deliver in a dev run.
-                        return@CheckboxItem
-                    }
-                    applyStartupRegistryChange(scope, trayState, enabled = true, exePath = exePath) {
-                        startOnLoginChecked = true
-                        updatePrefs { it.copy(startOnLogin = true) }
-                    }
-                } else {
-                    // The delete branch never reads exePath.
-                    applyStartupRegistryChange(scope, trayState, enabled = false, exePath = "") {
-                        startOnLoginChecked = false
-                        updatePrefs { it.copy(startOnLogin = false) }
+            // A real toggle only where the app can actually deliver it. In the
+            // Microsoft Store edition `startOnLogin` is null — a packaged app's
+            // start-on-login is a manifest StartupTask that Windows owns — so
+            // the tray states where the setting lives instead of offering a
+            // switch that would do nothing. Exactly one of these two branches
+            // renders; never both, never neither (EditionPorts).
+            val startupControl = Edition.startOnLogin
+            if (startupControl != null) {
+                CheckboxItem(text = "লগইনে চালু হবে", checked = startOnLoginChecked) { checked ->
+                    applyStartOnLoginChange(scope, trayState, startupControl, checked) {
+                        startOnLoginChecked = checked
+                        updatePrefs { it.copy(startOnLogin = checked) }
                     }
                 }
+            } else {
+                Edition.startupNote?.let { note -> Item(note, enabled = false) {} }
             }
-            // Governs the AUTOMATIC startup check only. "আপডেট দেখুন" below
-            // works regardless — switching this off must mean "stop looking on
-            // your own", never "refuse to look when I ask".
-            CheckboxItem(text = "স্বয়ংক্রিয় আপডেট", checked = autoUpdateChecked) { checked ->
-                autoUpdateChecked = checked
-                updatePrefs { it.copy(autoUpdate = checked) }
+            if (Edition.hasUpdater) {
+                // Governs the AUTOMATIC startup check only. "আপডেট দেখুন" below
+                // works regardless — switching this off must mean "stop looking
+                // on your own", never "refuse to look when I ask".
+                CheckboxItem(text = "স্বয়ংক্রিয় আপডেট", checked = autoUpdateChecked) { checked ->
+                    autoUpdateChecked = checked
+                    updatePrefs { it.copy(autoUpdate = checked) }
+                }
             }
             Separator()
-            Item("আপডেট দেখুন", enabled = !ui.updateBusy) { checkForUpdates(manual = true) }
+            if (Edition.hasUpdater) {
+                Item("আপডেট দেখুন", enabled = !ui.updateBusy) { checkForUpdates(manual = true) }
+            }
             // Names the SYMPTOM, not the mechanism. `HOOK_DOWN` above only
             // appears when Windows told us the install failed; a hook Windows
             // silently dropped still leaves us holding a handle, so the tray
@@ -395,6 +400,11 @@ fun main() = application {
         updateLine = ui.updateLine,
         updateActionable = ui.updateActionable,
         updateBusy = ui.updateBusy,
+        // Which build this is, in the one place a user will find it when we
+        // ask them "which version are you running?" — the two editions differ
+        // in ways (updater, start-on-login) that a bug report cannot be read
+        // without knowing which one is installed.
+        versionLine = EditionInfo.line,
         onUpdate = { installUpdate() },
         onMode = { controller.setModeExternal(it) },
         onHide = { hideControlWindow() },
@@ -625,36 +635,28 @@ private fun openUrl(url: String) {
 }
 
 /**
- * Best-effort executable path for the "start on login" Run-key entry —
- * `null` in a dev run, where there is no single meaningful exe (the JVM
- * launcher, not a packaged app). Never logged (CLAUDE.md secrets policy);
- * the caller must not persist or act on a `null` result as if it succeeded.
- */
-private fun resolveExePath(): String? =
-    runCatching { ProcessHandle.current().info().command().orElse(null) }.getOrNull()
-
-/**
- * Runs [StartupRegistry.set] off the Compose-for-Desktop/AWT event thread
- * (review finding, Task 8 round 2): `reg.exe` is a real synchronous process
- * launch, bounded by [StartupRegistry]'s own timeout but still potentially
- * seconds long on registry virtualization/AV interception/Group Policy, and
- * that thread also services the whole tray menu and the preview window — a
- * stuck `reg.exe` inline in the checkbox callback would freeze both.
+ * Runs [StartOnLoginControl.set] off the Compose-for-Desktop/AWT event thread
+ * (review finding, Task 8 round 2): the MSI edition's implementation is a real
+ * synchronous `reg.exe` launch, bounded by its own timeout but still
+ * potentially seconds long on registry virtualization/AV interception/Group
+ * Policy, and that thread also services the whole tray menu and the preview
+ * window — a stuck `reg.exe` inline in the checkbox callback would freeze both.
  *
- * `onSuccess` (the checkbox flip + the pref write) runs ONLY when `reg`
- * confirmed a zero exit within the timeout; a failure or timeout leaves the
- * checkbox and the pref exactly as they were and surfaces a tray warning
- * instead of silently claiming the Run key was written.
+ * `onSuccess` (the checkbox flip + the pref write) runs ONLY on a confirmed
+ * success; any failure — including a dev run where there is no single
+ * meaningful executable to point a Run key at — leaves the checkbox and the
+ * pref exactly as they were and surfaces a tray warning instead of silently
+ * claiming the setting was applied.
  */
-private fun applyStartupRegistryChange(
+private fun applyStartOnLoginChange(
     scope: CoroutineScope,
     trayState: TrayState,
+    control: StartOnLoginControl,
     enabled: Boolean,
-    exePath: String,
     onSuccess: () -> Unit,
 ) {
     scope.launch(Dispatchers.IO) {
-        val ok = StartupRegistry.set(enabled, exePath)
+        val ok = control.set(enabled)
         EventQueue.invokeLater {
             if (ok) {
                 onSuccess()

@@ -53,13 +53,14 @@ windows-ime/src/main/kotlin/com/banglu/winime/
 │                         %USERPROFILE%\.banglu\winime-appcompat.json.
 ├── WinStorage.kt         PlatformStorage backing learned.json — a direct
 │                         port of desktop-app's FileStorage.
-├── WinPrefs.kt           WinPrefsStore (mode/digits/start-on-login/auto-update
-│                         prefs) and StartupRegistry (the HKCU Run-key toggle).
-├── update/Updater.kt     THE ONLY FILE IN THIS MODULE THAT TOUCHES THE
-│                         NETWORK. Version comparison, manifest parsing, the
-│                         host allowlist, the download + SHA-256 check, and
-│                         the msiexec handoff. It imports no engine, no typing
-│                         state and no storage — see "Updating" below.
+├── WinPrefs.kt           WinPrefsStore — mode/digits/start-on-login/auto-update
+│                         prefs on disk.
+├── AppVersion.kt         What version this build is (jpackage property, then
+│                         the generated resource) and dotted-numeric ordering.
+├── EditionPorts.kt       THE EDITION SEAM. UpdateGateway, StartOnLoginControl,
+│                         UpdateStatus and the EditionPorts contract that the
+│                         two `Edition` objects implement — see "Two editions"
+│                         below. Main.kt talks to these, never to the updater.
 ├── ui/PreviewWindow.kt   The caret-anchored, non-activating suggestion
 │                         strip: up to 6 candidate chips, the last of which
 │                         is always the raw roman escape hatch. It does NOT
@@ -80,7 +81,63 @@ windows-ime/src/main/kotlin/com/banglu/winime/
     │                         preview window's anchor point.
     └── ForegroundApp.kt      Resolves and caches the focused window's exe
                               name, for the passthrough table.
+
+windows-ime/src/msi/kotlin/com/banglu/winime/     ← WEBSITE edition only
+├── Edition.kt            hasUpdater = true, Run-key start-on-login.
+├── StartupRegistry.kt    The HKCU Run-key toggle + RunKeyStartOnLogin.
+└── update/Updater.kt     THE ONLY FILE IN THIS MODULE THAT TOUCHES THE
+                          NETWORK. Version comparison, manifest parsing, the
+                          host allowlist, the download + SHA-256 check, and
+                          the msiexec handoff. It imports no engine, no typing
+                          state and no storage — see "Updating" below.
+
+windows-ime/src/store/kotlin/com/banglu/winime/   ← MICROSOFT STORE edition only
+└── Edition.kt            hasUpdater = false, no start-on-login control — one
+                          disabled tray line pointing at Windows Settings.
+
+windows-ime/msix/         AppxManifest generation inputs and the two PowerShell
+                          scripts (pack / sign-for-sideload) that the release
+                          and smoke workflows both call.
 ```
+
+## Two editions, one app
+
+There is one codebase and two builds. `-PbangluStore=true` selects the
+Microsoft Store edition; everything else is the default website edition.
+
+| | website (default) | Microsoft Store (`-PbangluStore=true`) |
+|---|---|---|
+| package | jpackage MSI, downloaded from craftsai.org | MSIX, installed from the Store |
+| signing | unsigned (SmartScreen warning) | Microsoft re-signs at ingestion |
+| updates | the in-app updater in `update/` | the Store |
+| start on login | `HKCU\…\Run`, tray checkbox | manifest `StartupTask`, Windows Settings → Apps → Startup |
+| extra source set | `src/msi/kotlin` | `src/store/kotlin` |
+| tests | 124 (`src/test` + `src/msiTest`) | 102 (`src/test` + `src/storeTest`) |
+
+**How to tell which build you are running:** the control window's footer ends
+with a version line — `সংস্করণ 1.0.1 · ওয়েবসাইট সংস্করণ (website)` or
+`সংস্করণ 1.0.1 · Microsoft Store সংস্করণ (store)`. Ask for that line in any
+bug report; the two editions genuinely behave differently.
+
+**Why the Store build has no updater.** It is not tidiness. The JDK's web
+client opens an internal loopback socket pair in its CONSTRUCTOR, and an MSIX
+container refuses it: the app died at start-up with `Unable to establish
+loopback connection`, and neither `internetClient` nor
+`privateNetworkClientServer` fixed it (`.superpowers/sdd/2026-08-20-windows-ime/msix-spike.md`).
+Excising `update/` from the Store source set removes the crash, removes the
+only networking the app has, and matches how Store apps are supposed to update.
+`verifyStoreEdition` is the gate that keeps it out.
+
+**Why the Store build has no start-on-login toggle.** A Run key names an
+absolute path; a packaged app lives under `C:\Program Files\WindowsApps\…`,
+where the directory name changes with every version and the user cannot reach
+it. MSIX's own mechanism is a `windows.startupTask` manifest extension, which
+the package declares with `Enabled="true"` — and the OS owns the switch from
+then on (**Settings → Apps → Startup**, or Task Manager's Startup tab).
+Toggling it from inside the app needs the WinRT `StartupTask` API, which is not
+reachable here without a second native-interop layer outside `hook/` — a repo
+isolation law. So the tray shows one disabled line saying where the setting
+lives. An absent feature with a signpost beats a switch that lies.
 
 ### The isolation laws
 
@@ -112,10 +169,15 @@ part of `check`, so it also runs in CI.
 ./gradlew :windows-ime:verifyUpdaterIsolation
 ```
 
-fails the build if any file outside `update/` names an HTTP client
+fails the build if any compiled file outside `update/` names an HTTP client
 (`java.net.http`, `HttpClient`, `URLConnection`, `java.net.Socket`), and
 equally fails it if any file inside `update/` names the engine, the composer,
-the controller or storage. The first half means the hook, the controller and
+the controller or storage. It walks `src/main/kotlin` **and** the selected
+edition source set, so neither edition can smuggle a socket in through its own
+tree. A third gate, `verifyStoreEdition`, runs only for `-PbangluStore=true`
+and is stricter still: the Store build may not name a network type, a
+`CurrentVersion\Run` key or the updater ANYWHERE, because there confinement is
+not enough — the code must be absent. The first half means the hook, the controller and
 the composer are structurally unable to open a socket; the second means the
 one file that *can* reach the network cannot see a single character the user
 typed. Those two greps are the mechanism behind the privacy claim below —
@@ -125,7 +187,7 @@ registered. It also runs as part of `check`.
 ## Build and test
 
 ```bash
-./gradlew :windows-ime:test    # 111 tests: Composer pins, Controller ordering/
+./gradlew :windows-ime:test    # 124 tests: Composer pins, Controller ordering/
                                 # swallow rules, AppCompat, WinStorage, WinPrefs,
                                 # StartupRegistry OS-guard, the echo-diff and
                                 # backspace-safety pins, the updater wall
@@ -137,9 +199,17 @@ registered. It also runs as part of `check`.
                                 # this module performs a network call.
 
 ./gradlew :windows-ime:check   # test + verifyHookIsolation + verifyUpdaterIsolation
-                                # + verifyPackagedDictionary (the last one only
-                                # bites once resources/common/dictionary.sqlite
-                                # exists — see Packaging below)
+                                # + verifyStoreEdition + verifyPackagedDictionary
+                                # (the last one only bites once
+                                # resources/common/dictionary.sqlite exists —
+                                # see Packaging below)
+
+./gradlew :windows-ime:check -PbangluStore=true
+                                # 102 tests: the SAME wall against the Store
+                                # source set, plus StoreEditionTest (the
+                                # updater's classes and the Run-key writer must
+                                # not exist) and verifyStoreEdition. Both
+                                # editions are gated in CI; neither is optional.
 
 ./gradlew :windows-ime:build   # compiles clean on the Mac dev machine. This is
                                 # NOT a Windows runtime check — see below.
@@ -242,6 +312,63 @@ accepted, and documented limitation for v1 (same posture as macOS IME's
 ad-hoc-signed, developer-machine-only v1 distribution), not a bug to chase.
 Public, signed distribution is a deliberate later decision, same as the macOS
 notarization decision.
+
+## Packaging the Microsoft Store MSIX
+
+The Store package is built by the `store-msix` job in
+`.github/workflows/windows-ime-release.yml`, alongside — never instead of —
+the MSI. Both run on every `windows-v*` tag and every manual dispatch.
+
+```
+:windows-ime:check -PbangluStore=true              # the Store edition's own wall
+:windows-ime:createDistributable -PbangluStore=true # the app image
+:windows-ime:generateAppxManifest                   # build/msix/AppxManifest.xml
+:windows-ime:generateMsixAssets                     # build/msix/Assets/*.png
+windows-ime/msix/pack.ps1                           # MakeAppx -> BangluTyper.msix
+```
+
+The artifact to download and upload to Partner Center is
+**`banglu-typer-store-msix`**; `banglu-typer-store-manifest` carries the same
+run's manifest and tiles for review without unzipping 136 MB.
+
+**The manifest is generated, not hand-maintained.** `generateAppxManifest`
+parses `windows-ime/store-identity.md` for `Package/Identity/Name`,
+`Package/Identity/Publisher` and `Package/Properties/PublisherDisplayName`, and
+stamps `bangluTyperVersion` with a fourth component of `0` (the Store reserves
+the revision component and rejects a non-zero one). Partner Center rejects an
+upload whose identity differs from what it assigned by even a character, so
+there is exactly one place those strings live.
+
+**The manifest declares `runFullTrust`**, the restricted capability a Win32
+desktop app in the Store uses. It requires a written justification on Partner
+Center's Submission options page, reviewed by a human. AutoHotkey's Store
+Edition — an Appx whose entire purpose is a global `WH_KEYBOARD_LL` hook — is
+the precedent that this is grantable for an app like ours; it is not a
+guarantee.
+
+**Visual assets** are generated from the existing `icons/banglu.ico` rather
+than drawn fresh: every entry in that file is a PNG, so `generateMsixAssets`
+extracts the 256x256 one and downsamples it to `StoreLogo` (50), `Square44x44`
+(44) plus its target-size variants (16, 24, 32, 48, 256), `Square71x71` (71),
+`Square150x150` (150), `Square310x310` (310), and `Wide310x150` (the mark
+centred at tile height on a transparent field, not stretched). Eleven files.
+
+**The Store package is NOT signed by us.** Microsoft re-signs at ingestion and
+rejects a submission that arrives already signed. `sign-for-sideload.ps1` signs
+a *separate copy* for testing, with a throwaway self-signed certificate whose
+subject is read out of the manifest so it matches `Identity/Publisher` exactly
+(`Add-AppxPackage` refuses the package otherwise). The file uploaded to Partner
+Center stays byte-identical to MakeAppx's output.
+
+**Proof that it starts.** The `msix` job in `windows-ime-smoke.yml` packs the
+Store edition, signs a sideload copy, installs it, asserts the installed
+package family name is the one Partner Center assigned and that the
+`windows.startupTask` survived packaging, then launches the app twice — once
+with output captured inside the container, once through
+`shell:AppsFolder\…!BangluTyper` the way a user does. A healthy tray app never
+exits, so the pass condition is *still running after 90 seconds with nothing on
+stderr*. That job exists because the packaging spike watched this exact app die
+inside a container; "the MSI starts" proves nothing about the MSIX.
 
 ## Known limitation: elevated applications
 

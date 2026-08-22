@@ -87,6 +87,13 @@ fun ControlWindow(
     updateLine: String,
     updateActionable: Boolean,
     updateBusy: Boolean,
+    /**
+     * "সংস্করণ 1.0.1 · Microsoft Store সংস্করণ (store)" — version AND edition,
+     * because the two editions genuinely behave differently (the Store one has
+     * no updater and no start-on-login toggle) and a bug report that does not
+     * say which one is installed cannot be acted on.
+     */
+    versionLine: String,
     onUpdate: () -> Unit,
     onMode: (Mode) -> Unit,
     onHide: () -> Unit,
@@ -97,7 +104,7 @@ fun ControlWindow(
     // note. A window sized for the common case clipped the footer clean off
     // the moment an update appeared, taking প্রস্থান with it; the flexible
     // spacer above the footer absorbs the slack when no update is pending.
-    val state: WindowState = rememberWindowState(width = 440.dp, height = 496.dp)
+    val state: WindowState = rememberWindowState(width = 440.dp, height = 520.dp)
     Window(
         // The close box hides; it never quits. The keyboard is the product and
         // it must survive the user tidying their desktop.
@@ -112,7 +119,7 @@ fun ControlWindow(
         // footer the moment an update appeared.
         LaunchedEffect(updateLine.isEmpty()) {
             state.size = androidx.compose.ui.unit.DpSize(
-                440.dp, if (updateLine.isEmpty()) 496.dp else 566.dp,
+                440.dp, if (updateLine.isEmpty()) 520.dp else 590.dp,
             )
         }
         LaunchedEffect(showRequests) {
@@ -159,7 +166,7 @@ fun ControlWindow(
                     UpdateRow(updateLine, updateActionable, updateBusy, onUpdate)
                 }
                 Spacer(Modifier.weight(1f))
-                Footer(onHide = onHide, onQuit = onQuit)
+                Footer(versionLine = versionLine, onHide = onHide, onQuit = onQuit)
             }
         }
     }
@@ -342,7 +349,7 @@ private fun UpdateRow(line: String, actionable: Boolean, busy: Boolean, onUpdate
 }
 
 @Composable
-private fun Footer(onHide: () -> Unit, onQuit: () -> Unit) {
+private fun Footer(versionLine: String, onHide: () -> Unit, onQuit: () -> Unit) {
     Box(Modifier.fillMaxWidth().height(1.dp).background(Hairline))
     Spacer(Modifier.height(15.dp))
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -359,6 +366,17 @@ private fun Footer(onHide: () -> Unit, onQuit: () -> Unit) {
         color = Muted.copy(alpha = 0.8f),
         fontSize = 11.sp,
         lineHeight = 16.sp,
+        fontFamily = BengaliFont,
+    )
+    // Quietest thing in the window on purpose: nobody reads it until we ask
+    // them to. Quiet, though, not faint — at 0.55 alpha it was a shade a user
+    // reading it back over the phone would have to squint at, which defeats the
+    // point of putting it here.
+    Spacer(Modifier.height(8.dp))
+    Text(
+        versionLine,
+        color = Muted.copy(alpha = 0.68f),
+        fontSize = 10.sp,
         fontFamily = BengaliFont,
     )
 }

@@ -73,3 +73,167 @@ jobs:
           if ($exited -and $p.ExitCode -ne 0) {
             throw "app exited with code $($p.ExitCode) — see output above"
           }
+
+  # ── The same question, asked of the Microsoft Store package ────────────────
+  #
+  # An MSIX container is a genuinely different runtime: the packaging spike
+  # watched this exact app die at start-up inside one, on the JDK web client's
+  # constructor, while the identical unpackaged image ran fine. So "the MSI
+  # starts" says nothing about whether the Store build starts, and this job is
+  # what closes that gap. It packs the Store edition exactly as the release
+  # workflow does, signs a SEPARATE copy so Windows will install it, installs
+  # it, and launches it twice.
+  #
+  # PASS = the tray app is still running after 90 seconds with no exception on
+  # stderr. A healthy tray app never exits; anything that exits, crashed.
+  msix:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download compiled dictionary (release asset)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download dictionary --pattern dictionary.sqlite --output dictionary.sqlite --repo "$GITHUB_REPOSITORY"
+          mkdir -p windows-ime/resources/common
+          cp dictionary.sqlite windows-ime/resources/common/dictionary.sqlite
+
+      # Console launcher, for the same reason the MSI smoke uses one: a
+      # GUI-subsystem jpackage app reports every startup failure as the same
+      # opaque dialog with the real cause discarded. The subsystem does not
+      # change JVM behaviour, so what this proves about start-up holds for the
+      # GUI build the release workflow ships.
+      - name: Build the Store edition app image (console launcher)
+        shell: bash
+        env:
+          BANGLU_JDK: ${{ env.JAVA_HOME }}
+        run: |
+          ./gradlew :windows-ime:createDistributable \
+            :windows-ime:generateAppxManifest :windows-ime:generateMsixAssets \
+            --no-daemon -PbangluStore=true -PbangluConsole=true
+
+      - name: Pack + sign a sideload copy
+        shell: pwsh
+        run: |
+          $image = Get-ChildItem -Directory windows-ime/build/compose/binaries/main/app |
+            Select-Object -First 1
+          if (-not $image) { throw "createDistributable produced no app image" }
+          & windows-ime/msix/pack.ps1 `
+            -AppImage $image.FullName `
+            -Manifest windows-ime/build/msix/AppxManifest.xml `
+            -Assets windows-ime/build/msix/Assets `
+            -Out windows-ime/build/msix/out/BangluTyper.msix
+          & windows-ime/msix/sign-for-sideload.ps1 `
+            -Msix windows-ime/build/msix/out/BangluTyper.msix `
+            -Manifest windows-ime/build/msix/AppxManifest.xml `
+            -Out windows-ime/build/msix/out/BangluTyper-sideload.msix
+
+      - name: Install it
+        shell: pwsh
+        run: |
+          Add-AppxPackage -Path windows-ime/build/msix/out/BangluTyper-sideload.msix
+          $pkg = Get-AppxPackage -Name BangluTyper.BangluTyper
+          if (-not $pkg) { throw "the package did not install" }
+          Write-Host "PackageFullName   : $($pkg.PackageFullName)"
+          Write-Host "PackageFamilyName : $($pkg.PackageFamilyName)"
+          Write-Host "InstallLocation   : $($pkg.InstallLocation)"
+          # The PFN Partner Center assigned. If this ever differs, the package
+          # is not the one the Store will accept.
+          if ($pkg.PackageFamilyName -ne 'BangluTyper.BangluTyper_zxkv5b2y5hwhy') {
+            throw "unexpected package family name — identity does not match store-identity.md"
+          }
+          # Proof the manifest's startup task survived packaging: this is what
+          # replaces the MSI's HKCU Run key, and it is the one Task-2 claim a
+          # human cannot easily check by looking at the app.
+          $tasks = (Get-AppxPackageManifest $pkg.PackageFullName).Package.Applications.Application.Extensions.Extension |
+            Where-Object { $_.Category -eq 'windows.startupTask' }
+          if (-not $tasks) { throw "the installed package declares no windows.startupTask" }
+          Write-Host "startupTask       : TaskId=$($tasks.StartupTask.TaskId) Enabled=$($tasks.StartupTask.Enabled)"
+
+      # Launch 1 — inside the container WITH captured output. A plain
+      # shell:AppsFolder activation gives package identity but discards
+      # everything the app prints, and the whole point of this run is to read
+      # what it prints.
+      - name: Launch it in the container and capture output
+        shell: pwsh
+        run: |
+          $pkg = Get-AppxPackage -Name BangluTyper.BangluTyper
+          $exe = Join-Path $pkg.InstallLocation 'BangluTyper.exe'
+          $out = Join-Path $PWD 'msix-out.txt'
+          $err = Join-Path $PWD 'msix-err.txt'
+          $batch = Join-Path $env:TEMP 'banglu-msix-launch.cmd'
+          Set-Content -Path $batch -Encoding ASCII -Value "@echo off`r`n`"$exe`" > `"$out`" 2> `"$err`""
+
+          $launched = Get-Date
+          Invoke-CommandInDesktopPackage `
+            -PackageFamilyName $pkg.PackageFamilyName `
+            -AppId 'BangluTyper' `
+            -Command $env:ComSpec `
+            -Args "/c `"$batch`"" `
+            -PreventBreakaway
+
+          # Appear, then survive. 90s covers the ~15s dictionary attach with
+          # room to spare; the updater crash the spike hit killed the app in
+          # under ten.
+          $appeared = $false
+          while (((Get-Date) - $launched).TotalSeconds -lt 60) {
+            if (Get-Process BangluTyper -ErrorAction SilentlyContinue) { $appeared = $true; break }
+            Start-Sleep -Seconds 2
+          }
+          Write-Host "=== appeared: $appeared ==="
+          while (((Get-Date) - $launched).TotalSeconds -lt 90) { Start-Sleep -Seconds 5 }
+          $alive = [bool](Get-Process BangluTyper -ErrorAction SilentlyContinue)
+          Write-Host "=== exited-within-90s: $(-not $alive) ==="
+
+          Get-Process BangluTyper -ErrorAction SilentlyContinue | Stop-Process -Force
+          Get-Process cmd -ErrorAction SilentlyContinue |
+            Where-Object { $_.StartTime -gt $launched } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 3
+
+          Write-Host "=== STDOUT ==="
+          if (Test-Path $out) { Get-Content $out } else { Write-Host "(none)" }
+          Write-Host "=== STDERR ==="
+          $stderr = if (Test-Path $err) { Get-Content $err } else { @() }
+          if ($stderr) { $stderr } else { Write-Host "(none)" }
+
+          if (-not $appeared) { throw "the packaged app never started — see output above" }
+          if (-not $alive) { throw "the packaged app exited within 90s — see output above" }
+          if ($stderr -match 'Exception|Error:') {
+            throw "the packaged app printed an exception — see STDERR above"
+          }
+
+      # Launch 2 — the activation a real user performs (Start menu / taskbar).
+      # No output to read here, only the question "does clicking it work": the
+      # container is the same, but the activation path is not.
+      - name: Launch it the way a user does
+        shell: pwsh
+        run: |
+          $pkg = Get-AppxPackage -Name BangluTyper.BangluTyper
+          $launched = Get-Date
+          Start-Process "shell:AppsFolder\$($pkg.PackageFamilyName)!BangluTyper"
+          $appeared = $false
+          while (((Get-Date) - $launched).TotalSeconds -lt 60) {
+            if (Get-Process BangluTyper -ErrorAction SilentlyContinue) { $appeared = $true; break }
+            Start-Sleep -Seconds 2
+          }
+          while (((Get-Date) - $launched).TotalSeconds -lt 90) { Start-Sleep -Seconds 5 }
+          $alive = [bool](Get-Process BangluTyper -ErrorAction SilentlyContinue)
+          Write-Host "=== shell activation — appeared: $appeared, exited-within-90s: $(-not $alive) ==="
+          Get-Process BangluTyper -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not $appeared) { throw "shell:AppsFolder activation never produced a process" }
+          if (-not $alive) { throw "shell:AppsFolder activation exited within 90s" }
+
+      - name: Uninstall
+        if: always()
+        shell: pwsh
+        run: |
+          Get-AppxPackage -Name BangluTyper.BangluTyper | Remove-AppxPackage -ErrorAction SilentlyContinue
+          Write-Host "removed"

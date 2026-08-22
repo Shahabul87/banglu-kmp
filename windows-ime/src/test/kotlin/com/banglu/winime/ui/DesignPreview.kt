@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.application
+import com.banglu.winime.EditionInfo
 import com.banglu.winime.Mode
 
 /**
@@ -45,6 +46,10 @@ fun main() {
             },
             updateActionable = variant == "update",
             updateBusy = false,
+            // The real thing, so the preview shows which edition it was built
+            // with: run the task with -PbangluStore=true to review the Store
+            // build's window (no update row, Store label on the version line).
+            versionLine = EditionInfo.line,
             onUpdate = {},
             onMode = { mode = it },
             onHide = { exitApplication() },
