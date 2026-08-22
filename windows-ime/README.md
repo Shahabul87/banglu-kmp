@@ -125,7 +125,7 @@ registered. It also runs as part of `check`.
 ## Build and test
 
 ```bash
-./gradlew :windows-ime:test    # 110 tests: Composer pins, Controller ordering/
+./gradlew :windows-ime:test    # 111 tests: Composer pins, Controller ordering/
                                 # swallow rules, AppCompat, WinStorage, WinPrefs,
                                 # StartupRegistry OS-guard, the echo-diff and
                                 # backspace-safety pins, the updater wall
