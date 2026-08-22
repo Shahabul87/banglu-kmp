@@ -97,7 +97,7 @@ fun ControlWindow(
     // note. A window sized for the common case clipped the footer clean off
     // the moment an update appeared, taking প্রস্থান with it; the flexible
     // spacer above the footer absorbs the slack when no update is pending.
-    val state: WindowState = rememberWindowState(width = 440.dp, height = 566.dp)
+    val state: WindowState = rememberWindowState(width = 440.dp, height = 496.dp)
     Window(
         // The close box hides; it never quits. The keyboard is the product and
         // it must survive the user tidying their desktop.
@@ -106,6 +106,15 @@ fun ControlWindow(
         state = state,
         resizable = false,
     ) {
+        // The update row is the only thing that changes the content's height,
+        // so the window follows it. A window fixed at the tallest state leaves
+        // dead air in the common one; fixed at the shortest, it clipped the
+        // footer the moment an update appeared.
+        LaunchedEffect(updateLine.isEmpty()) {
+            state.size = androidx.compose.ui.unit.DpSize(
+                440.dp, if (updateLine.isEmpty()) 496.dp else 566.dp,
+            )
+        }
         LaunchedEffect(showRequests) {
             // Minimised counts as hidden to the user, so un-minimise before
             // raising: toFront() on an iconified window does nothing visible.
@@ -341,7 +350,7 @@ private fun Footer(onHide: () -> Unit, onQuit: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         // Quitting stops Bangla typing everywhere. It gets a quiet text action,
         // not a slab that mirrors the mode switch sitting above it.
-        TextAction("প্রস্থান", Danger, enabled = true, onClick = onQuit)
+        TextAction("প্রস্থান", Danger, enabled = true, quiet = true, onClick = onQuit)
     }
     Spacer(Modifier.height(10.dp))
     Text(
@@ -372,13 +381,20 @@ private fun GhostButton(label: String, modifier: Modifier, onClick: () -> Unit) 
 }
 
 @Composable
-private fun TextAction(label: String, tint: Color, enabled: Boolean, onClick: () -> Unit) {
+private fun TextAction(
+    label: String,
+    tint: Color,
+    enabled: Boolean,
+    quiet: Boolean = false,
+    onClick: () -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val color by animateColorAsState(
         when {
-            !enabled -> Muted
+            !enabled -> Muted.copy(alpha = 0.6f)
             hovered -> tint
+            quiet -> Muted
             else -> tint.copy(alpha = 0.78f)
         },
         tween(160),
@@ -412,14 +428,24 @@ private fun heroDetail(engineReady: Boolean, hookHealthy: Boolean, mode: Mode): 
         else -> "উপরে বাংলা চাপলেই আবার লেখা শুরু হবে।"
     }
 
-private val Ink = Color(0xFF141110)
-private val Surface = Color(0xFF1D1A18)
-private val Raised = Color(0xFF262220)
-private val Hairline = Color(0xFF322D29)
-private val Cream = Color(0xFFF2EBE3)
-private val Muted = Color(0xFF988C82)
-private val Brand = Color(0xFFE08A4C)
-private val Slate = Color(0xFF8FA9B6)
-private val Mint = Color(0xFF7FC8A0)
-private val Amber = Color(0xFFE0B44C)
-private val Danger = Color(0xFFCC8080)
+/**
+ * The Banglu palette, not a new one.
+ *
+ * Taken from the two surfaces that already shipped: `#080D16` ink and
+ * `#FF7A59` coral are the Android app's own (MainActivity), and the desktop
+ * editor's EditorTheme uses the same ink with `#0D1524`/`#1E293B`/`#101A2A`
+ * for its card, border and field. Sky `#64D2FF` is the editor's cool accent,
+ * used here for English mode so the two typing modes read as two temperatures
+ * of one brand rather than two unrelated colours.
+ */
+private val Ink = Color(0xFF080D16)
+private val Surface = Color(0xFF0D1524)
+private val Raised = Color(0xFF101A2A)
+private val Hairline = Color(0xFF1E293B)
+private val Cream = Color(0xFFF3F7FF)
+private val Muted = Color(0xFF7C8BA1)
+private val Brand = Color(0xFFFF7A59)
+private val Slate = Color(0xFF64D2FF)
+private val Mint = Color(0xFF34C759)
+private val Amber = Color(0xFFFFA48F)
+private val Danger = Color(0xFFFF7A59)
