@@ -269,3 +269,19 @@ val verifyUpdaterIsolation by tasks.registering {
     }
 }
 tasks.named("check") { dependsOn(verifyUpdaterIsolation) }
+
+/**
+ * Renders the control window on the developer's machine so its design can be
+ * SEEN rather than guessed at. The app proper is Win32-only, but the window is
+ * pure Compose with no JNA in its tree, so it renders anywhere.
+ *
+ *   ./gradlew :windows-ime:previewControlWindow
+ *   ./gradlew :windows-ime:previewControlWindow -Dbanglu.preview.mode=update
+ */
+val previewControlWindow by tasks.registering(JavaExec::class) {
+    group = "banglu"
+    description = "Open the control window for design review (dev machine, no hook)"
+    mainClass.set("com.banglu.winime.ui.DesignPreviewKt")
+    classpath = sourceSets["test"].runtimeClasspath
+    systemProperty("banglu.preview.mode", providers.systemProperty("banglu.preview.mode").getOrElse("bangla"))
+}
