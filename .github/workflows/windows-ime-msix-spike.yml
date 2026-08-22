@@ -196,6 +196,34 @@ jobs:
           "PFN=$($pkg.PackageFamilyName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           "PKG_EXE=$($pkg.InstallLocation)\BangluTyper.exe" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
+      # Isolates run 1's start-up crash ("Unable to establish loopback
+      # connection") from our application code. It runs the RUNNER's JDK, not
+      # the packaged one, inside the package container — Invoke-CommandInDesktop
+      # Package confers package identity on whatever executable it launches —
+      # so the answer is about MSIX network isolation and nothing else.
+      - name: Is loopback usable inside the container at all?
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force -Path C:\spike | Out-Null
+          Copy-Item windows-ime/msix-spike/LoopbackProbe.java C:\spike\LoopbackProbe.java -Force
+          "@echo off`r`n`"$env:JAVA_HOME\bin\java.exe`" C:\spike\LoopbackProbe.java > C:\spike\loopback-out.txt 2>&1" |
+            Set-Content -Encoding ASCII C:\spike\run-loopback.cmd
+          try {
+            Invoke-CommandInDesktopPackage -PackageFamilyName $env:PFN -AppId 'BangluTyper' `
+              -Command 'C:\Windows\System32\cmd.exe' -Args '/c C:\spike\run-loopback.cmd' `
+              -PreventBreakaway -ErrorAction Stop
+            Write-Host 'loopback probe launched inside the package container'
+          } catch {
+            Write-Host "could not launch loopback probe in package context: $($_.Exception.Message)"
+          }
+          Start-Sleep -Seconds 60
+          Write-Host '=== PACKAGED loopback probe ==='
+          if (Test-Path C:\spike\loopback-out.txt) { Get-Content C:\spike\loopback-out.txt } else { Write-Host '(no output)' }
+          # The control: identical program, same JDK, NO package identity.
+          Write-Host '=== UNPACKAGED loopback probe (control) ==='
+          & "$env:JAVA_HOME\bin\java.exe" C:\spike\LoopbackProbe.java 2>&1 | Write-Host
+
       # Launching through Invoke-CommandInDesktopPackage gives the process real
       # package identity AND a console whose stdout we can redirect — a plain
       # `shell:AppsFolder` activation gives identity but discards everything the
@@ -265,7 +293,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           New-Item -ItemType Directory -Force -Path spike-out | Out-Null
-          foreach ($f in 'ctl-out.txt','ctl-err.txt','C:\spike\pkg-out.txt',
+          foreach ($f in 'ctl-out.txt','ctl-err.txt','C:\spike\pkg-out.txt','C:\spike\loopback-out.txt',
                          "$env:USERPROFILE\.banglu\msix-spike.log",
                          "$env:TEMP\banglu-msix-spike.log") {
             if (Test-Path $f) { Copy-Item $f spike-out -Force -ErrorAction SilentlyContinue }

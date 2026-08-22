@@ -48,7 +48,22 @@
     </Application>
   </Applications>
 
+  <!--
+    RUN 2 CHANGE. Run 1 declared runFullTrust ALONE and the packaged app died
+    at start-up with "Unable to establish loopback connection" out of
+    java.net.http.HttpClient's constructor (the in-app updater builds one
+    eagerly at composition). The same app image, unpackaged, ran fine — so the
+    cause is MSIX network isolation, not our code. internetClient is what a
+    Store desktop app declares to be allowed outbound HTTP;
+    privateNetworkClientServer is included because HttpClient's selector opens
+    a loopback socket PAIR, which is a local server as well as a client.
+
+    Whether either is sufficient is the question run 2 answers — see
+    LoopbackProbe.java, which tests the primitive directly.
+  -->
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
+    <Capability Name="internetClient" />
+    <Capability Name="privateNetworkClientServer" />
   </Capabilities>
 </Package>

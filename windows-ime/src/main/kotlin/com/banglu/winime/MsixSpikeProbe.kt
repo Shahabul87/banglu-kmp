@@ -26,8 +26,17 @@ import java.io.File
 internal object MsixSpikeProbe {
 
     const val ENV_FLAG = "BANGLU_MSIX_SPIKE"
+    const val PROPERTY_FLAG = "banglu.msix.spike"
 
-    fun enabled(): Boolean = System.getenv(ENV_FLAG) == "1"
+    /**
+     * Two flags because a packaged app cannot be given an environment: Windows
+     * activates it through the AppX service, not from the shell that asked for
+     * it, so the env var reaches an unpackaged dev run and nothing else. The
+     * system property is set by editing the app image's own `.cfg` before
+     * packaging, which is the only channel that survives MSIX activation.
+     */
+    fun enabled(): Boolean =
+        System.getenv(ENV_FLAG) == "1" || System.getProperty(PROPERTY_FLAG) == "1"
 
     /** Called once, from the hook-start path, on a background thread. */
     fun run(hookInstalled: Boolean) {
