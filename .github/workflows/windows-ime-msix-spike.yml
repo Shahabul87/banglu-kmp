@@ -224,6 +224,60 @@ jobs:
           Write-Host '=== UNPACKAGED loopback probe (control) ==='
           & "$env:JAVA_HOME\bin\java.exe" C:\spike\LoopbackProbe.java 2>&1 | Write-Host
 
+      # A, B, C and D, measured on the PRODUCTION classes but without Compose
+      # and without the updater — because the app itself cannot reach them
+      # inside a container (it dies building an HttpClient at composition). The
+      # harness runs on the PACKAGED runtime, off the PACKAGED classpath, with
+      # package identity, so everything except the entry point matches the app.
+      - name: PACKAGED probe harness (A/B/C/D on production classes)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $install = (Get-AppxPackage -Name 'BangluTyper.BangluTyper').InstallLocation
+          $javaExe = "$install\runtime\bin\java.exe"
+          Write-Host "packaged java: $javaExe (exists=$(Test-Path $javaExe))"
+          "@echo off`r`n`"$javaExe`" -Dbanglu.msix.spike=1 -cp `"$install\app\*`" com.banglu.winime.MsixSpikeMainKt > C:\spike\harness-out.txt 2>&1" |
+            Set-Content -Encoding ASCII C:\spike\run-harness.cmd
+          Get-Content C:\spike\run-harness.cmd
+          try {
+            Invoke-CommandInDesktopPackage -PackageFamilyName $env:PFN -AppId 'BangluTyper' `
+              -Command 'C:\Windows\System32\cmd.exe' -Args '/c C:\spike\run-harness.cmd' `
+              -PreventBreakaway -ErrorAction Stop
+            Write-Host 'harness launched inside the package container'
+          } catch {
+            Write-Host "could not launch harness in package context: $($_.Exception.Message)"
+          }
+          Start-Sleep -Seconds 90
+          Write-Host '=== PACKAGED HARNESS OUTPUT ==='
+          if (Test-Path C:\spike\harness-out.txt) { Get-Content C:\spike\harness-out.txt } else { Write-Host '(no output)' }
+
+          # FINDING C, read immediately and BEFORE the unpackaged control runs:
+          # the control writes to the very directory under test, so anything
+          # found after it would be unattributable.
+          Write-Host '=== FINDING C (packaged harness only) — %USERPROFILE%\.banglu ==='
+          if (Test-Path "$env:USERPROFILE\.banglu") {
+            Get-ChildItem -Recurse -Force "$env:USERPROFILE\.banglu" | Select-Object FullName,Length | Format-Table -AutoSize
+            foreach ($f in 'learned.json','msix-spike.log') {
+              $p = "$env:USERPROFILE\.banglu\$f"
+              if (Test-Path $p) { Write-Host "--- $p ---"; Get-Content $p }
+            }
+          } else { Write-Host "$env:USERPROFILE\.banglu DOES NOT EXIST" }
+          Write-Host '=== FINDING C — package private store ==='
+          Get-ChildItem -Recurse -Force "$env:LOCALAPPDATA\Packages\$env:PFN\LocalCache" -ErrorAction SilentlyContinue |
+            Where-Object { -not $_.PSIsContainer } | Select-Object FullName,Length | Format-Table -AutoSize
+          Write-Host '=== FINDING C — anywhere else on the box ==='
+          Get-ChildItem C:\Users -Recurse -Depth 10 -Force -Include 'msix-spike.log','learned.json' -ErrorAction SilentlyContinue |
+            Select-Object FullName,Length | Format-Table -AutoSize
+
+          # The control for the same harness: identical classes, run from the
+          # BUILD output with no package identity. Any A/B/D difference between
+          # the two blocks is attributable to MSIX alone.
+          Write-Host '=== UNPACKAGED HARNESS OUTPUT (control) ==='
+          $ctlJava = "$env:PKG_ROOT\runtime\bin\java.exe"
+          if (-not (Test-Path $ctlJava)) { $ctlJava = "$env:JAVA_HOME\bin\java.exe" }
+          Write-Host "control java: $ctlJava"
+          & $ctlJava -Dbanglu.msix.spike=1 -cp "$env:PKG_ROOT\app\*" com.banglu.winime.MsixSpikeMainKt 2>&1 | Write-Host
+
       # Launching through Invoke-CommandInDesktopPackage gives the process real
       # package identity AND a console whose stdout we can redirect — a plain
       # `shell:AppsFolder` activation gives identity but discards everything the
