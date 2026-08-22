@@ -234,8 +234,20 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           $install = (Get-AppxPackage -Name 'BangluTyper.BangluTyper').InstallLocation
+          Write-Host "=== packaged runtime\bin ==="
+          Get-ChildItem "$install\runtime\bin" -ErrorAction SilentlyContinue |
+            Select-Object Name,Length | Format-Table -AutoSize
+          # jpackage strips the runtime's native commands, so the app image has
+          # no java.exe of its own — only BangluTyper.exe, whose main class is
+          # fixed. The runner's JDK is therefore the launcher; the CLASSES are
+          # still the packaged ones, and the process still has package identity,
+          # which is what A/B/C/D actually turn on. (That the BUNDLED runtime
+          # itself starts under MSIX is already established by runs 1 and 2:
+          # BangluTyper.exe got all the way to Compose composition before the
+          # updater killed it.)
           $javaExe = "$install\runtime\bin\java.exe"
-          Write-Host "packaged java: $javaExe (exists=$(Test-Path $javaExe))"
+          if (-not (Test-Path $javaExe)) { $javaExe = "$env:JAVA_HOME\bin\java.exe" }
+          Write-Host "harness java: $javaExe (exists=$(Test-Path $javaExe))"
           "@echo off`r`n`"$javaExe`" -Dbanglu.msix.spike=1 -cp `"$install\app\*`" com.banglu.winime.MsixSpikeMainKt > C:\spike\harness-out.txt 2>&1" |
             Set-Content -Encoding ASCII C:\spike\run-harness.cmd
           Get-Content C:\spike\run-harness.cmd
@@ -273,10 +285,13 @@ jobs:
           # BUILD output with no package identity. Any A/B/D difference between
           # the two blocks is attributable to MSIX alone.
           Write-Host '=== UNPACKAGED HARNESS OUTPUT (control) ==='
-          $ctlJava = "$env:PKG_ROOT\runtime\bin\java.exe"
-          if (-not (Test-Path $ctlJava)) { $ctlJava = "$env:JAVA_HOME\bin\java.exe" }
+          # Same launcher as the packaged side, so the ONLY difference between
+          # the two blocks is package identity. The -D argument is quoted: bare,
+          # PowerShell splits `-Dbanglu.msix.spike=1` into two arguments and java
+          # then looks for a main class called ".msix.spike=1".
+          $ctlJava = "$env:JAVA_HOME\bin\java.exe"
           Write-Host "control java: $ctlJava"
-          & $ctlJava -Dbanglu.msix.spike=1 -cp "$env:PKG_ROOT\app\*" com.banglu.winime.MsixSpikeMainKt 2>&1 | Write-Host
+          & $ctlJava '-Dbanglu.msix.spike=1' '-cp' "$env:PKG_ROOT\app\*" 'com.banglu.winime.MsixSpikeMainKt' 2>&1 | Write-Host
 
       # Launching through Invoke-CommandInDesktopPackage gives the process real
       # package identity AND a console whose stdout we can redirect — a plain
