@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
@@ -52,6 +53,12 @@ import com.banglu.winime.Mode
  * [showRequests] counts "bring this window back" requests, including ones made
  * while it is already open — a click on the tray icon while the window sits
  * behind Word must raise it, not silently do nothing.
+ *
+ * [updateLine] is the updater's ONLY surface. Updates never interrupt typing,
+ * never raise a dialog and never send a tray balloon; they say their piece
+ * here, in one line, or say nothing at all. An empty string renders nothing —
+ * which is what an automatic check that found no update, or could not reach
+ * the network, leaves behind.
  */
 @Composable
 fun ControlWindow(
@@ -61,12 +68,16 @@ fun ControlWindow(
     bootStatus: String,
     hookHealthy: Boolean,
     engineReady: Boolean,
+    updateLine: String,
+    updateActionable: Boolean,
+    updateBusy: Boolean,
+    onUpdate: () -> Unit,
     onMode: (Mode) -> Unit,
     onHide: () -> Unit,
     onQuit: () -> Unit,
 ) {
     if (!visible) return
-    val state: WindowState = rememberWindowState(width = 460.dp, height = 470.dp)
+    val state: WindowState = rememberWindowState(width = 460.dp, height = 530.dp)
     Window(
         // The close box hides; it never quits. The keyboard is the product and
         // it must survive the user tidying their desktop.
@@ -128,6 +139,29 @@ fun ControlWindow(
             TryBox(BengaliFont)
 
             Spacer(Modifier.weight(1f))
+            if (updateLine.isNotEmpty()) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        updateLine,
+                        color = if (updateActionable) Mint else Dim,
+                        fontSize = 12.sp,
+                        fontFamily = BengaliFont,
+                        modifier = Modifier.weight(1f),
+                    )
+                    // The button appears only when there is something real to
+                    // install, and goes away while a download is running: a
+                    // second click would restart the transfer from zero.
+                    if (updateActionable && !updateBusy) {
+                        ModeButton("আপডেট করুন", true, Brand, BengaliFont, Modifier.width(132.dp)) {
+                            onUpdate()
+                        }
+                    }
+                }
+            }
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),

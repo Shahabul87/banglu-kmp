@@ -28,6 +28,26 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # Bump discipline, enforced before anything expensive runs. Windows
+      # Installer compares ProductVersion (from `bangluTyperVersion`) and the
+      # in-app updater compares the manifest version (from the tag): if those
+      # two disagree, the MSI either looks like a downgrade to the installer or
+      # is invisible to every already-installed copy. Both failures are silent
+      # at build time and only show up on a user's machine, so they are caught
+      # here instead — in five seconds rather than after a twenty-minute build.
+      - name: Tag must match bangluTyperVersion
+        if: startsWith(github.ref, 'refs/tags/windows-v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_VERSION=$(grep -oE 'val bangluTyperVersion = "[0-9.]+"' windows-ime/build.gradle.kts | grep -oE '[0-9]+(\.[0-9]+)+')
+          TAG_VERSION="${GITHUB_REF_NAME#windows-v}"
+          echo "build.gradle.kts=$BUILD_VERSION tag=$TAG_VERSION"
+          if [ "$BUILD_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match bangluTyperVersion=$BUILD_VERSION in windows-ime/build.gradle.kts — bump one of them"
+            exit 1
+          fi
+
       # windows-latest defaults new shell steps to PowerShell; every step
       # below uses POSIX syntax (heredocs, $(...), &&), so shell: bash is
       # explicit throughout (Git for Windows ships bash on this runner).
@@ -80,12 +100,53 @@ jobs:
           name: banglu-typer-windows-msi
           path: windows-ime/build/compose/binaries/main/msi/*.msi
 
-      - name: Attach MSI to GitHub release
+      # The in-app updater's whole input, generated from the MSI that was just
+      # built so the two can never describe different files. Computed here
+      # rather than written by hand for exactly that reason: a hand-maintained
+      # checksum is a checksum that eventually does not match, and a mismatch
+      # aborts the user's update.
+      - name: Generate windows-update.json
+        if: startsWith(github.ref, 'refs/tags/windows-v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          MSI=$(ls windows-ime/build/compose/binaries/main/msi/*.msi)
+          VERSION="${TAG#windows-v}"
+          # sha256sum ships with Git for Windows' bash on this runner and
+          # streams the file rather than reading ~150MB into memory.
+          SHA=$(sha256sum "$MSI" | cut -d' ' -f1)
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$(basename "$MSI")"
+          # Python builds the JSON so the Bengali notes line is escaped by a
+          # real JSON encoder — a quote or a backslash in that file must not be
+          # able to produce a manifest the app then refuses to parse.
+          cat > gen_manifest.py <<'PYEOF'
+          import json, os, sys
+          version, url, sha, notes_file = sys.argv[1:5]
+          notes = ""
+          if os.path.exists(notes_file):
+              with open(notes_file, encoding="utf-8") as handle:
+                  notes = handle.readline().strip()
+          if not notes:
+              notes = "উন্নতি ও ত্রুটি সংশোধন।"
+          with open("windows-update.json", "w", encoding="utf-8") as handle:
+              json.dump(
+                  {"version": version, "url": url, "sha256": sha, "notes": notes},
+                  handle,
+                  ensure_ascii=False,
+              )
+          PYEOF
+          python gen_manifest.py "$VERSION" "$URL" "$SHA" windows-ime/update-notes.txt
+          rm gen_manifest.py
+          cat windows-update.json
+
+      - name: Attach MSI + update manifest to GitHub release
         if: startsWith(github.ref, 'refs/tags/windows-v')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           MSI=$(ls windows-ime/build/compose/binaries/main/msi/*.msi)
           # Re-running this workflow for a tag that already has a release is
@@ -93,7 +154,34 @@ jobs:
           # fails outright on an existing tag. Upload into the existing
           # release instead, replacing the asset, so a re-run is idempotent.
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$MSI" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$TAG" "$MSI" windows-update.json --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" --title "বাংলু টাইপার $TAG" --repo "$GITHUB_REPOSITORY" --notes "বাংলু টাইপার (Windows IME) — unsigned MSI installer." "$MSI"
+            gh release create "$TAG" --title "বাংলু টাইপার $TAG" --repo "$GITHUB_REPOSITORY" --notes "বাংলু টাইপার (Windows IME) — unsigned MSI installer." "$MSI" windows-update.json
+          fi
+
+      # The one URL the app is compiled to fetch, forever:
+      #   .../releases/download/windows-update/windows-update.json
+      #
+      # It cannot use GitHub's `/releases/latest/download/` shortcut, because
+      # this repository's "latest" release is a desktop-v* one — বাংলু এডিটর's
+      # installers live here too — so `latest` would hand the Windows app a
+      # manifest that has nothing to do with it. A dedicated, permanent release
+      # holds the pointer instead. It is uploaded from the SAME bytes generated
+      # in the step above, in the same run, so the pointer and the copy
+      # attached to the real release cannot drift. Marked prerelease so this
+      # bookkeeping release never becomes the repo's visible "Latest".
+      - name: Publish the stable update pointer
+        if: startsWith(github.ref, 'refs/tags/windows-v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view windows-update --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload windows-update windows-update.json --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create windows-update --repo "$GITHUB_REPOSITORY" --prerelease \
+              --title "বাংলু টাইপার — আপডেট পয়েন্টার" \
+              --notes "বাংলু টাইপার (Windows) এই ফাইলটি দেখে বোঝে নতুন সংস্করণ এসেছে কিনা। এটি মুছবেন না।" \
+              windows-update.json
           fi

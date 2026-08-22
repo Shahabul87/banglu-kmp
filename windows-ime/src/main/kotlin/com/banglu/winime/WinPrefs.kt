@@ -19,6 +19,16 @@ data class WinPrefs(
     val banglaDigits: Boolean = true,
     val startOnLogin: Boolean = true,
     val mode: String = "BANGLA",
+    /**
+     * Governs the AUTOMATIC startup update check and nothing else. Turning it
+     * off never disables the manual "আপডেট দেখুন" action — a user who asks
+     * always gets an answer. Defaults ON: a keyboard that silently stays
+     * broken because its owner never went looking for a fix is the failure
+     * mode this whole feature exists to end. The default also means an older
+     * prefs file (written before this field existed) opts in, which is the
+     * intended reading of a missing value.
+     */
+    val autoUpdate: Boolean = true,
 )
 
 /**

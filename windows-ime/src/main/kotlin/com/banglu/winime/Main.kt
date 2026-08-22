@@ -22,6 +22,8 @@ import com.banglu.winime.hook.LowLevelHook
 import com.banglu.winime.hook.SendInputInjector
 import com.banglu.winime.ui.ControlWindow
 import com.banglu.winime.ui.PreviewWindow
+import com.banglu.winime.update.UpdateService
+import com.banglu.winime.update.UpdateUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -182,6 +184,41 @@ fun main() = application {
         exitApplication()
     }
 
+    // ── In-app update ────────────────────────────────────────────────────────
+    // Constructed with a directory and a reporting callback and NOTHING else:
+    // it has no reference to the engine, the composer, the controller or
+    // storage, and `verifyUpdaterIsolation` fails the build if that changes.
+    // Every write it makes lands on Compose state through EventQueue, the same
+    // rule the controller's worker and the hook's pump thread already follow.
+    var autoUpdateChecked by remember { mutableStateOf(initialPrefs.autoUpdate) }
+    val updates = remember {
+        UpdateService(downloadDir = File(bangluDir, "updates")) { state: UpdateUi ->
+            EventQueue.invokeLater {
+                ui.updateLine = state.line
+                ui.updateActionable = state.actionable
+                ui.updateBusy = state.busy
+            }
+        }
+    }
+
+    /** Never on the UI thread, never on the typing path — IO, always. */
+    fun checkForUpdates(manual: Boolean) {
+        scope.launch(Dispatchers.IO) { updates.check(manual) }
+    }
+
+    /**
+     * Download → verify → hand to msiexec → quit. The quit is not politeness:
+     * Windows Installer cannot replace an executable the running app holds
+     * open, and a file it cannot replace is exactly what makes it schedule the
+     * work for next boot and ask for a restart. Leaving promptly is what keeps
+     * the upgrade in-place and reboot-free.
+     */
+    fun installUpdate() {
+        scope.launch(Dispatchers.IO) {
+            updates.install { EventQueue.invokeLater { quitApp() } }
+        }
+    }
+
     /** Publishes the hook's own truth; called from the pump thread as well. */
     fun publishHookState() {
         val installed = hook.isInstalled
@@ -251,6 +288,17 @@ fun main() = application {
         )
     }
 
+    // Its own effect, deliberately not folded into the boot fold above: an
+    // update is the fix for a dictionary that failed to load, so the check
+    // must still run when booting FAILED. Nothing here can block typing —
+    // the work happens on Dispatchers.IO and its only output is one line of
+    // Compose state.
+    LaunchedEffect(Unit) {
+        if (initialPrefs.autoUpdate) {
+            withContext(Dispatchers.IO) { updates.check(manual = false) }
+        }
+    }
+
     // Rendered once per state, not per recomposition: the tray icon is the only
     // always-visible surface this app has, and the question it exists to answer
     // is "am I typing Bangla right now?" (spec §5).
@@ -311,7 +359,15 @@ fun main() = application {
                     }
                 }
             }
+            // Governs the AUTOMATIC startup check only. "আপডেট দেখুন" below
+            // works regardless — switching this off must mean "stop looking on
+            // your own", never "refuse to look when I ask".
+            CheckboxItem(text = "স্বয়ংক্রিয় আপডেট", checked = autoUpdateChecked) { checked ->
+                autoUpdateChecked = checked
+                updatePrefs { it.copy(autoUpdate = checked) }
+            }
             Separator()
+            Item("আপডেট দেখুন", enabled = !ui.updateBusy) { checkForUpdates(manual = true) }
             // Names the SYMPTOM, not the mechanism. `HOOK_DOWN` above only
             // appears when Windows told us the install failed; a hook Windows
             // silently dropped still leaves us holding a handle, so the tray
@@ -336,6 +392,10 @@ fun main() = application {
         bootStatus = ui.bootStatus,
         hookHealthy = ui.hookInstalled,
         engineReady = ui.engineReady,
+        updateLine = ui.updateLine,
+        updateActionable = ui.updateActionable,
+        updateBusy = ui.updateBusy,
+        onUpdate = { installUpdate() },
         onMode = { controller.setModeExternal(it) },
         onHide = { hideControlWindow() },
         onQuit = { quitApp() },
@@ -376,6 +436,15 @@ private class UiState(initialMode: Mode = Mode.BANGLA) {
      * this counter instead of on visibility.
      */
     var controlShowRequests by mutableStateOf(0)
+
+    /**
+     * The updater's entire footprint on the UI. Empty line = say nothing,
+     * which is what an automatic check that found nothing (or failed) leaves
+     * behind: an update must never nag, and must never interrupt typing.
+     */
+    var updateLine by mutableStateOf("")
+    var updateActionable by mutableStateOf(false)
+    var updateBusy by mutableStateOf(false)
 
     /**
      * Visible if and only if there is something to show. An empty candidate

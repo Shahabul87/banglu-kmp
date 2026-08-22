@@ -53,8 +53,13 @@ windows-ime/src/main/kotlin/com/banglu/winime/
 │                         %USERPROFILE%\.banglu\winime-appcompat.json.
 ├── WinStorage.kt         PlatformStorage backing learned.json — a direct
 │                         port of desktop-app's FileStorage.
-├── WinPrefs.kt           WinPrefsStore (mode/digits/start-on-login prefs)
-│                         and StartupRegistry (the HKCU Run-key toggle).
+├── WinPrefs.kt           WinPrefsStore (mode/digits/start-on-login/auto-update
+│                         prefs) and StartupRegistry (the HKCU Run-key toggle).
+├── update/Updater.kt     THE ONLY FILE IN THIS MODULE THAT TOUCHES THE
+│                         NETWORK. Version comparison, manifest parsing, the
+│                         host allowlist, the download + SHA-256 check, and
+│                         the msiexec handoff. It imports no engine, no typing
+│                         state and no storage — see "Updating" below.
 ├── ui/PreviewWindow.kt   The caret-anchored, non-activating suggestion
 │                         strip: up to 6 candidate chips, the last of which
 │                         is always the raw roman escape hatch. It does NOT
@@ -77,7 +82,11 @@ windows-ime/src/main/kotlin/com/banglu/winime/
                               name, for the passthrough table.
 ```
 
-### The isolation law
+### The isolation laws
+
+There are two, and both are Gradle tasks rather than conventions.
+
+**JNA stays in `hook/`.**
 
 `hook/` is the only package in this module allowed to import `com.sun.jna.*`.
 Everything else — the composer, the controller, the tray/preview UI, storage,
@@ -97,20 +106,40 @@ which walks every `.kt` file under `src/main/kotlin` outside `hook/` and
 fails the build if any of them contains `import com.sun.jna`. It runs as
 part of `check`, so it also runs in CI.
 
+**The network stays in `update/`, and typing stays out of it.**
+
+```
+./gradlew :windows-ime:verifyUpdaterIsolation
+```
+
+fails the build if any file outside `update/` names an HTTP client
+(`java.net.http`, `HttpClient`, `URLConnection`, `java.net.Socket`), and
+equally fails it if any file inside `update/` names the engine, the composer,
+the controller or storage. The first half means the hook, the controller and
+the composer are structurally unable to open a socket; the second means the
+one file that *can* reach the network cannot see a single character the user
+typed. Those two greps are the mechanism behind the privacy claim below —
+both directions are verified to actually fail the build, not merely
+registered. It also runs as part of `check`.
+
 ## Build and test
 
 ```bash
-./gradlew :windows-ime:test    # 83 tests: Composer pins, Controller ordering/
+./gradlew :windows-ime:test    # 110 tests: Composer pins, Controller ordering/
                                 # swallow rules, AppCompat, WinStorage, WinPrefs,
                                 # StartupRegistry OS-guard, the echo-diff and
-                                # backspace-safety pins, an engine smoke test —
-                                # all driven against the real repo-root
-                                # dictionary.sqlite, same wall discipline as
-                                # :desktop-app:test.
+                                # backspace-safety pins, the updater wall
+                                # (version ordering, manifest degradation,
+                                # checksum-abort, host allowlist), an engine
+                                # smoke test — all driven against the real
+                                # repo-root dictionary.sqlite, same wall
+                                # discipline as :desktop-app:test. No test in
+                                # this module performs a network call.
 
-./gradlew :windows-ime:check   # test + verifyHookIsolation + verifyPackagedDictionary
-                                # (the last one only bites once resources/common/
-                                # dictionary.sqlite exists — see Packaging below)
+./gradlew :windows-ime:check   # test + verifyHookIsolation + verifyUpdaterIsolation
+                                # + verifyPackagedDictionary (the last one only
+                                # bites once resources/common/dictionary.sqlite
+                                # exists — see Packaging below)
 
 ./gradlew :windows-ime:build   # compiles clean on the Mac dev machine. This is
                                 # NOT a Windows runtime check — see below.
@@ -133,15 +162,23 @@ Building the actual MSI needs a Windows runner (jpackage cannot cross-compile
 from macOS) and the full 143MB `dictionary.sqlite`, so it happens in CI, not
 locally:
 
-1. Push a tag matching `windows-v*` (e.g. `windows-v1.0.0`).
-2. `.github/workflows/windows-ime-release.yml` runs on `windows-latest`: it
+1. Bump `bangluTyperVersion` in `windows-ime/build.gradle.kts` — the single
+   source of truth for the MSI's `packageVersion`, the version resource the
+   running app reads, and the version in the published update manifest.
+2. Push a tag matching `windows-v<that same version>` (e.g. `windows-v1.0.1`).
+   The workflow's first step fails the run if the tag and
+   `bangluTyperVersion` disagree.
+3. `.github/workflows/windows-ime-release.yml` runs on `windows-latest`: it
    downloads `dictionary.sqlite` from this repo's `dictionary` release asset,
    verifies its version against `DictionaryVersion.REQUIRED` (the same
    cross-surface version gate every other host enforces), stages it into
    `windows-ime/resources/common/dictionary.sqlite`, runs `:windows-ime:test`,
    then `:windows-ime:packageMsi`.
-3. The MSI is uploaded as a workflow artifact and, for a `windows-v*` tag
-   push, attached to a GitHub release.
+4. The MSI is uploaded as a workflow artifact and, for a `windows-v*` tag
+   push, attached to a GitHub release together with a generated
+   `windows-update.json` (see **Updating** below). `workflow_dispatch` still
+   produces the artifact and creates no release, so a private test build costs
+   nothing public.
 
 The packaging config lives in `windows-ime/build.gradle.kts`
 (`compose.desktop.application.nativeDistributions`): `TargetFormat.Msi` only,
@@ -153,6 +190,50 @@ stale dictionary — it reads the packaged sqlite file's own version metadata
 and compares it against `DictionaryVersion.REQUIRED`, failing the build
 rather than shipping an installer that silently degrades to seed-only
 conversion at runtime.
+
+### Upgrades install in place, and never ask for a reboot
+
+Two lines in the `windows { }` block carry this, and both are load-bearing.
+
+**`upgradeUuid`** is a fixed GUID identifying the *product family*. jpackage
+generates a random one per build when none is given, which is what the first
+MSIs shipped with — so every build was, to Windows Installer, an unrelated
+product. Installing a new one therefore did not replace the old one: both sat
+in Add/Remove Programs, the new installer could not overwrite files the
+running old app held open, and Windows Installer's standard answer to a locked
+file is to schedule the replacement for the next boot and ask the user to
+restart. That is where "why do I have to restart the PC after reinstalling?"
+came from. With a stable UpgradeCode the installer runs its
+FindRelatedProducts/RemoveExistingProducts sequence instead: the old version is
+removed and the new one installed as one transaction, in place, with no second
+entry and nothing left to schedule. **Never change that GUID** — every already
+installed copy would become un-upgradable.
+
+**`perUserInstall`** puts the app under `%LOCALAPPDATA%` instead of Program
+Files. An in-place upgrade of a per-machine install needs elevation, so every
+update would raise a UAC prompt, and files under Program Files held open by the
+running app are exactly what pushes the installer toward reboot-scheduling.
+
+The updater also passes `REBOOT=ReallySuppress` to `msiexec`, which is the belt
+to that pair of braces: even if something were still locked, Windows Installer
+reports it rather than scheduling a restart and prompting for one.
+
+**One-time cost, stated plainly.** An already-installed 1.0.0 has *no*
+UpgradeCode at all, so it is not part of the new product family and 1.0.1 will
+not replace it. Uninstall বাংলু টাইপার once from Add/Remove Programs before
+installing 1.0.1. From 1.0.1 onward, upgrades are in place and silent. Nothing
+in `%USERPROFILE%\.banglu` is touched by any of this — learned words
+(`learned.json`), preferences (`winime-prefs.json`) and the passthrough list
+(`winime-appcompat.json`) live outside the install root, so uninstalling,
+upgrading and reinstalling all preserve them.
+
+**If a user runs the MSI by hand while the app is running**, Windows Installer
+detects the files in use and (with the full UI) shows its "the following
+applications are using files that need to be updated" page, offering to close
+them. Letting it close বাংলু টাইপার is the right answer and the upgrade
+completes in place. Declining leaves files locked, and *that* is the one path
+that can still end in a restart prompt. The in-app updater avoids the question
+entirely by quitting before the installer gets that far.
 
 **Unsigned installer.** v1 ships an unsigned MSI — there is no Authenticode
 certificate. This means Windows SmartScreen shows "Windows protected your PC"
@@ -331,10 +412,82 @@ pattern as `WinStorage.kt`'s desktop counterpart, guarded by the
 `isPlausibleDynamicMapping` anti-poisoning check in the shared engine (never
 bypassed, per repo invariant 11).
 
-Same privacy law as every other Banglu surface (invariant 12): this module
-has no HTTP client, no telemetry dependency, and no network capability of
-any kind. Keystrokes are converted entirely on-device and never leave the
-process.
+Same privacy law as every other Banglu surface (invariant 12): **conversion is
+entirely on-device and nothing derived from a keystroke ever leaves the
+machine.** There is no telemetry, no analytics, no crash reporting and no
+account of any kind.
+
+There is exactly one network feature, and it is described in full below.
+
+## Updating
+
+The app can update itself, so a fix reaches users without them downloading and
+reinstalling an MSI by hand.
+
+**What it does, in order.** On startup — if **স্বয়ংক্রিয় আপডেট** is on — and
+whenever the user picks tray → **আপডেট দেখুন**, the app fetches a small JSON
+manifest. If it names a version newer than this build, the control window shows
+one line (`নতুন সংস্করণ 1.0.2 এসেছে — …`) and an **আপডেট করুন** button. Pressing
+it downloads the MSI into `%USERPROFILE%\.banglu\updates`, showing percentage
+progress, verifies its SHA-256 against the manifest, launches
+`msiexec /i <file> /qb REBOOT=ReallySuppress`, and quits immediately — the app
+must not be holding its own files open while the installer replaces them.
+
+**jpackage's MSI does not relaunch the app afterwards**, so the app stays closed
+when the install finishes. The message says so rather than pretending
+otherwise: *"ইনস্টল শেষ হলে Start মেনু থেকে আবার চালু করুন"*. Users who have
+**লগইনে চালু হবে** on get it back automatically at their next sign-in.
+
+**Every failure is silent-but-honest.** No network, a 404, a redirect off the
+allowlist, a malformed or truncated manifest, a garbage version string, a
+checksum mismatch, an installer that will not start — none of them throws, none
+of them touches typing, and none of them opens a dialog or a tray balloon. They
+produce at most one line in the control window, and *only when the user asked*:
+an automatic check that failed says nothing at all, because a fresh install on
+a train should not open with an error. A download whose checksum does not match
+is deleted, not kept.
+
+**স্বয়ংক্রিয় আপডেট governs the automatic check only.** It defaults ON,
+persists through `WinPrefsStore` like every other toggle, and a prefs file
+written before the setting existed reads as ON. Turning it off never disables
+**আপডেট দেখুন** — it means "stop looking on your own", not "refuse to look when
+I ask".
+
+### The exact network surface
+
+| | |
+|---|---|
+| **Hosts** | `github.com`, and the `*.githubusercontent.com` host GitHub redirects release downloads to. Nothing else. |
+| **Method** | `GET`, unauthenticated, of a static file. |
+| **Sent** | Nothing. No request body, no cookies, no headers of our own, no query string, no version number, no identifier, no machine or user attribute. |
+| **When** | Once at startup (if the toggle is on), and when the user asks. Never on the typing path. |
+| **Where** | `update/Updater.kt`, and nowhere else in the module. |
+
+Those claims are enforced rather than asserted. Redirects are **not** followed
+by the HTTP client (`Redirect.NEVER`); each hop is resolved by hand and its
+host re-checked against the allowlist before another byte is sent, so a
+redirect cannot walk the download off GitHub. Every URL the app itself
+authors — the manifest URL and the download URL inside the manifest — must pass
+a check that rejects a query string, a fragment and user-info outright, which
+is what makes "we send nothing about the user" something you can verify by
+reading `Net.safeUri` rather than something you have to believe. (A hop GitHub
+redirects us to *may* carry a query: its CDN URLs are signed. We never add one.)
+`verifyUpdaterIsolation` keeps HTTP out of every other file and keeps the engine,
+the composer, the controller and storage out of this one.
+
+### Publishing an update
+
+`windows-update.json` is generated by the release workflow from the MSI it just
+built — `{"version", "url", "sha256", "notes"}` — so the checksum and the file
+can never describe different builds. It is attached to the same GitHub release
+as the MSI *and* uploaded to a permanent pointer release tagged
+`windows-update`, from the same bytes in the same run. The app fetches the
+pointer, because this repository's `latest` release belongs to বাংলু এডিটর
+(`desktop-v*`) and would hand the Windows app the wrong manifest.
+
+The `notes` line is the first line of `windows-ime/update-notes.txt` — edit it
+in the same commit that bumps `bangluTyperVersion`, and it becomes the sentence
+users read beside the update offer.
 
 ## Further reading
 
@@ -372,8 +525,9 @@ exits. The window's close box hides.
 ## A note on v1 scope: no settings window
 
 The design spec sketches a dedicated `ui/SettingsWindow.kt`. v1 does not have
-one — the two settings that exist (Bengali digits, start-on-login) are tray
-`CheckboxItem`s, and the passthrough app list has no UI at all: it is edited
+one — the three settings that exist (Bengali digits, start-on-login,
+automatic updates) are tray `CheckboxItem`s, and the passthrough app list has
+no UI at all: it is edited
 by hand, and it takes a restart, as documented under **Passthrough apps**
 above. `AppCompat.add`/`remove` exist and are tested, but nothing in the
 running app calls them yet — a settings window is what would. That window is

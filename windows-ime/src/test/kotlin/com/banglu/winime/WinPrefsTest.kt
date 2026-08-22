@@ -15,13 +15,43 @@ class WinPrefsTest {
         assertTrue(prefs.banglaDigits)
         assertTrue(prefs.startOnLogin)
         assertEquals("BANGLA", prefs.mode)
+        // Automatic update checking is ON out of the box: a keyboard that
+        // stays broken because nobody went looking for the fix is the failure
+        // this defaults against.
+        assertTrue(prefs.autoUpdate)
     }
 
     @Test fun roundTripsAllFields() {
         val dir = tempDir()
-        val custom = WinPrefs(banglaDigits = false, startOnLogin = false, mode = "ENGLISH")
+        val custom = WinPrefs(
+            banglaDigits = false,
+            startOnLogin = false,
+            mode = "ENGLISH",
+            autoUpdate = false,
+        )
         fresh(dir).save(custom)
         assertEquals(custom, fresh(dir).load())
+    }
+
+    @Test fun autoUpdateRoundTripsBothWays() {
+        val dir = tempDir()
+        val store = fresh(dir)
+        store.save(store.load().copy(autoUpdate = false))
+        assertFalse(fresh(dir).load().autoUpdate)
+        store.save(store.load().copy(autoUpdate = true))
+        assertTrue(fresh(dir).load().autoUpdate)
+    }
+
+    @Test fun aPrefsFileWrittenBeforeAutoUpdateExistedOptsIn() {
+        // Upgrading from 1.0.0 must not leave the user with update checking
+        // silently off — a missing field reads as the default, which is ON.
+        val dir = tempDir()
+        java.io.File(dir, "winime-prefs.json")
+            .writeText("""{"banglaDigits":false,"startOnLogin":true,"mode":"OFF"}""")
+        val loaded = fresh(dir).load()
+        assertTrue(loaded.autoUpdate)
+        assertEquals("OFF", loaded.mode)
+        assertFalse(loaded.banglaDigits)
     }
 
     @Test fun roundTripsOffMode() {

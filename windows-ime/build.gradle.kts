@@ -9,6 +9,19 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+/**
+ * THE single source of truth for this app's version.
+ *
+ * It stamps three things that must never disagree: the MSI's `packageVersion`
+ * (what Windows Installer compares to decide "is this an upgrade?"), the
+ * generated `banglu-typer-version.txt` resource the running app reads to know
+ * what it is, and the `version` field of the update manifest the release
+ * workflow publishes. An update that does not increment this is invisible to
+ * both Windows Installer and the in-app updater, so BUMP IT on every shippable
+ * change (same discipline as android-keyboard's versionCode/versionName).
+ */
+val bangluTyperVersion = "1.0.1"
+
 dependencies {
     implementation(project(":shared"))
     implementation(compose.desktop.currentOs)
@@ -21,6 +34,49 @@ dependencies {
     implementation("net.java.dev.jna:jna-platform:5.14.0")
     testImplementation(kotlin("test"))
 }
+
+/**
+ * The MSI ships no HTTP stack it does not use.
+ *
+ * `:shared`'s jvmMain declares `ktor-client-okhttp` transitively for other
+ * consumers; nothing in `shared/src` imports `io.ktor` or `okhttp` (verified by
+ * grep), and this module's only network code is [java.net.http.HttpClient] from
+ * the JDK. Dragging ktor + okhttp + okio (13 jars, ~3.1 MB) into an app whose
+ * whole promise is "your typing never leaves your machine" would put three
+ * general-purpose HTTP clients on the classpath that no code path can reach —
+ * a claim nobody can audit by reading the code.
+ *
+ * Scoped to THIS project's configurations only: `:shared` and every other
+ * consumer keep their dependencies untouched.
+ */
+configurations.configureEach {
+    exclude(group = "io.ktor")
+    exclude(group = "com.squareup.okhttp3")
+    exclude(group = "com.squareup.okio")
+}
+
+/**
+ * Writes [bangluTyperVersion] into a classpath resource so the running app can
+ * read its own version without a hardcoded Kotlin constant that would silently
+ * drift from `packageVersion`. `jpackage.app-version` (set in
+ * `app/BangluTyper.cfg` by jpackage) is the authoritative answer for an
+ * INSTALLED app; this resource is what makes a `./gradlew :windows-ime:run` dev
+ * session — and the smoke workflow's app image — able to answer too.
+ */
+val generatedVersionDir = layout.buildDirectory.dir("generated/bangluVersion")
+val generateVersionResource by tasks.registering {
+    val outDir = generatedVersionDir
+    val version = bangluTyperVersion
+    inputs.property("version", version)
+    outputs.dir(outDir)
+    doLast {
+        val file = outDir.get().file("banglu-typer-version.txt").asFile
+        file.parentFile.mkdirs()
+        file.writeText(version)
+    }
+}
+sourceSets.named("main") { resources.srcDir(generatedVersionDir) }
+tasks.named("processResources") { dependsOn(generateVersionResource) }
 
 compose.desktop {
     application {
@@ -39,9 +95,17 @@ compose.desktop {
             // jpackage builds a MINIMAL runtime; Compose's default module set
             // omits these. jdeps-verified requirements of our jars — without
             // java.sql the installed app dies at first convert (JDBC store).
-            modules("java.sql", "java.instrument", "java.management", "jdk.unsupported")
+            // java.net.http carries HttpClient, the JDK's own HTTP stack and
+            // the ONLY networking this app has (update/Updater.kt). Without it
+            // the installed app dies with NoClassDefFoundError the first time
+            // it checks for an update — a jpackage runtime contains exactly the
+            // modules named here.
+            modules(
+                "java.sql", "java.instrument", "java.management",
+                "jdk.unsupported", "java.net.http",
+            )
             packageName = "BangluTyper"
-            packageVersion = "1.0.0"
+            packageVersion = bangluTyperVersion
             description = "Type Bangla anywhere on Windows"
             vendor = "Banglu"
             licenseFile.set(rootProject.layout.projectDirectory.file("LICENSE"))
@@ -52,6 +116,31 @@ compose.desktop {
             windows {
                 iconFile.set(project.layout.projectDirectory.file("icons/banglu.ico"))
                 menu = true; shortcut = true
+                // ── THE UPGRADE CODE — NEVER CHANGE THIS VALUE ──────────────
+                // Windows Installer identifies a *product family* by its
+                // UpgradeCode. jpackage generates a RANDOM one per build when
+                // none is given, so every MSI we shipped was a different
+                // product: installing 1.0.1 next to 1.0.0 left both in Add/
+                // Remove Programs, the new one could not replace files the
+                // running old one held open, and Windows Installer's answer to
+                // a locked file is to schedule the replacement for next boot —
+                // which is exactly the "restart your PC" prompt users hit.
+                // With a stable UpgradeCode the FindRelatedProducts/
+                // RemoveExistingProducts sequence runs instead: the old version
+                // is uninstalled and the new one installed in one transaction,
+                // in place. Change this value and every already-installed copy
+                // becomes un-upgradable forever.
+                upgradeUuid = "32c380f5-14c1-4cf8-b3fb-cca107852703"
+                // Per-user install (%LOCALAPPDATA%), not Program Files. Two
+                // reasons, both about the update story: an in-place upgrade of
+                // a per-machine install needs elevation, so every silent update
+                // would raise a UAC prompt; and files under Program Files held
+                // open by the running app are precisely what pushes Windows
+                // Installer into reboot-scheduling. ONE-TIME COST: an existing
+                // per-machine 1.0.0 is a different product (no UpgradeCode at
+                // all) and is not replaced — it must be uninstalled by hand
+                // once. From 1.0.1 onward upgrades are in place and silent.
+                perUserInstall = true
                 // -PbangluConsole=true builds a console launcher. A GUI-subsystem
                 // jpackage app reports every startup failure as the same opaque
                 // "Failed to launch JVM" box with the real cause discarded; the
@@ -135,3 +224,48 @@ val verifyHookIsolation by tasks.registering {
     }
 }
 tasks.named("check") { dependsOn(verifyHookIsolation) }
+
+/**
+ * The privacy boundary, enforced the same way the JNA one is.
+ *
+ * This module's rule used to be "no network capability anywhere". The in-app
+ * updater is a deliberate, narrow exception, and "narrow" has to be a property
+ * of the source tree rather than a promise in a README:
+ *
+ *  1. Only `update/` may name an HTTP client. Every other file — the hook, the
+ *     controller, the composer, storage, the UI — stays structurally unable to
+ *     open a socket, so nothing derived from a keystroke has anywhere to go.
+ *  2. `update/` may not reach the engine, the composer, the controller or
+ *     storage. The one file that CAN talk to the network cannot see a single
+ *     character the user typed.
+ *
+ * Together those two greps are the actual guarantee behind the README's
+ * privacy claim.
+ */
+val verifyUpdaterIsolation by tasks.registering {
+    val srcRoot = project.layout.projectDirectory.dir("src/main/kotlin").asFile
+    inputs.dir(srcRoot)
+    doLast {
+        val networkTokens = listOf("java.net.http", "HttpClient", "URLConnection", "java.net.Socket")
+        val typingTokens = listOf(
+            "com.banglu.engine", "com.banglu.winime.composer", "SmartEngine",
+            "WinStorage", "Controller", "Composer",
+        )
+        val files = srcRoot.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+        val networkOutside = files
+            .filter { !it.path.contains("/update/") }
+            .filter { f -> networkTokens.any { f.readText().contains(it) } }
+            .map { it.relativeTo(srcRoot).path }
+        require(networkOutside.isEmpty()) {
+            "HTTP client references outside update/ (privacy boundary): $networkOutside"
+        }
+        val typingInside = files
+            .filter { it.path.contains("/update/") }
+            .filter { f -> typingTokens.any { f.readText().contains(it) } }
+            .map { it.relativeTo(srcRoot).path }
+        require(typingInside.isEmpty()) {
+            "update/ must not reach the engine/composer/controller/storage: $typingInside"
+        }
+    }
+}
+tasks.named("check") { dependsOn(verifyUpdaterIsolation) }

@@ -39,6 +39,18 @@ jobs:
           BANGLU_JDK: ${{ env.JAVA_HOME }}
         run: ./gradlew :windows-ime:createDistributable --no-daemon -PbangluConsole=true
 
+      # Proof that the version wiring is real: jpackage writes app.version into
+      # this file and the launcher turns it into the `jpackage.app-version`
+      # system property the updater reads to know what build it is. If this
+      # ever printed 1.0.0 while build.gradle.kts said otherwise, every update
+      # offer would be wrong.
+      - name: Show the packaged app version
+        shell: bash
+        run: |
+          CFG=$(find windows-ime/build/compose/binaries/main/app -name 'BangluTyper.cfg' | head -1)
+          echo "=== $CFG ==="
+          cat "$CFG"
+
       - name: Launch it and capture output
         shell: pwsh
         run: |
