@@ -1,0 +1,322 @@
+# ⚠ THROWAWAY SPIKE — SAFE TO DELETE.
+#
+# This workflow exists to answer ONE question before we commit to (or walk away
+# from) the Microsoft Store: does বাংলু টাইপার still work when Windows runs it
+# as an MSIX-packaged, containerised app? The fallback if it does not is buying
+# a code-signing certificate, so the answer is worth a workflow run.
+#
+# It builds the console app image the way `windows-ime-smoke.yml` does, runs it
+# UNPACKAGED first as the control, then packs the same image into a self-signed
+# MSIX, installs it, launches it with package identity, and compares. The app
+# carries a temporary probe (windows-ime/.../MsixSpikeProbe.kt) that is inert
+# unless `-Dbanglu.msix.spike=1` is set — this workflow injects that flag into
+# the app image's own .cfg, so nothing a user ever installs is affected.
+#
+# Delete this file, MsixSpikeProbe.kt, and its one call site in Main.kt when the
+# Store decision is made.
+name: windows-ime-msix-spike
+
+on:
+  workflow_dispatch:
+
+jobs:
+  spike:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Runner facts (what OS are we actually testing on?)
+        shell: pwsh
+        run: |
+          Get-ComputerInfo -Property WindowsProductName,WindowsVersion,OsBuildNumber,OsHardwareAbstractionLayer |
+            Format-List
+          Write-Host "whoami: $(whoami)"
+          Write-Host "session id: $((Get-Process -Id $PID).SessionId)"
+          Write-Host "Appx module: $((Get-Module -ListAvailable Appx | Select-Object -First 1).Version)"
+
+      - name: Download compiled dictionary (release asset)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download dictionary --pattern dictionary.sqlite --output dictionary.sqlite --repo "$GITHUB_REPOSITORY"
+
+      - name: Stage dictionary for windows-ime resources
+        shell: bash
+        run: |
+          mkdir -p windows-ime/resources/common
+          cp dictionary.sqlite windows-ime/resources/common/dictionary.sqlite
+
+      - name: Build console app image
+        shell: bash
+        env:
+          BANGLU_JDK: ${{ env.JAVA_HOME }}
+        run: ./gradlew :windows-ime:createDistributable --no-daemon -PbangluConsole=true
+
+      # The probe flag goes into the app image's OWN launcher config, not into
+      # the source and not into the packaging defaults. Both the control run and
+      # the packaged run therefore execute byte-identical application code, and
+      # the only difference between them is MSIX itself.
+      - name: Arm the spike probe in the app image cfg
+        shell: pwsh
+        run: |
+          $cfg = (Get-ChildItem -Recurse -Filter 'BangluTyper.cfg' windows-ime/build/compose/binaries/main/app | Select-Object -First 1).FullName
+          Write-Host "cfg: $cfg"
+          $lines = [System.Collections.ArrayList](Get-Content $cfg)
+          $idx = $lines.IndexOf('[JavaOptions]')
+          if ($idx -ge 0) { $lines.Insert($idx + 1, 'java-options=-Dbanglu.msix.spike=1') }
+          else { [void]$lines.Add('[JavaOptions]'); [void]$lines.Add('java-options=-Dbanglu.msix.spike=1') }
+          Set-Content -Path $cfg -Value $lines
+          Write-Host "=== cfg after ==="
+          Get-Content $cfg
+
+      # ── CONTROL: the SAME app image, unpackaged ──────────────────────────────
+      # Without this, a failure under MSIX could equally well be "GitHub runners
+      # cannot install a global keyboard hook at all" — an answer about CI, not
+      # about MSIX. This step is what makes the packaged result attributable.
+      - name: CONTROL run (unpackaged app image)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $exe = (Get-ChildItem -Recurse -Filter BangluTyper.exe windows-ime/build/compose/binaries/main/app | Select-Object -First 1).FullName
+          Write-Host "launching UNPACKAGED $exe"
+          $p = Start-Process -FilePath $exe -PassThru -RedirectStandardOutput ctl-out.txt -RedirectStandardError ctl-err.txt
+          $exited = $p.WaitForExit(180000)
+          Write-Host "=== control exited-within-180s: $exited ==="
+          if ($exited) { Write-Host "=== control exit code: $($p.ExitCode) ===" } else { Stop-Process -Id $p.Id -Force }
+          Write-Host "=== CONTROL STDOUT ==="; if (Test-Path ctl-out.txt) { Get-Content ctl-out.txt } else { Write-Host '(none)' }
+          Write-Host "=== CONTROL STDERR ==="; if (Test-Path ctl-err.txt) { Get-Content ctl-err.txt } else { Write-Host '(none)' }
+          Write-Host "=== CONTROL: %USERPROFILE%\.banglu ==="
+          if (Test-Path "$env:USERPROFILE\.banglu") {
+            Get-ChildItem -Force "$env:USERPROFILE\.banglu" | Select-Object FullName,Length | Format-Table -AutoSize
+          } else { Write-Host '(.banglu does not exist)' }
+
+      # Wiped so anything found after the packaged run was written BY the
+      # packaged run — otherwise the control's own learned.json would be
+      # mistaken for proof that MSIX writes reach the shared directory.
+      - name: Clear control artefacts from the shared directory
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force "$env:USERPROFILE\.banglu" -ErrorAction SilentlyContinue
+          Remove-Item -Force "$env:TEMP\banglu-msix-spike.log" -ErrorAction SilentlyContinue
+          Write-Host "cleared: .banglu exists = $(Test-Path "$env:USERPROFILE\.banglu")"
+
+      # ── MSIX packaging ───────────────────────────────────────────────────────
+      - name: Write AppxManifest + logo assets into the app image
+        shell: pwsh
+        run: |
+          $root = (Get-ChildItem -Directory windows-ime/build/compose/binaries/main/app | Select-Object -First 1).FullName
+          Write-Host "package root: $root"
+          "PKG_ROOT=$root" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          $assets = Join-Path $root 'Assets'
+          New-Item -ItemType Directory -Force -Path $assets | Out-Null
+          Add-Type -AssemblyName System.Drawing
+          foreach ($s in 44,150,50) {
+            $ico = New-Object System.Drawing.Icon('windows-ime/icons/banglu.ico', $s, $s)
+            $bmp = New-Object System.Drawing.Bitmap($ico.ToBitmap(), $s, $s)
+            $name = switch ($s) { 44 {'Square44x44Logo.png'} 150 {'Square150x150Logo.png'} 50 {'StoreLogo.png'} }
+            $bmp.Save((Join-Path $assets $name), [System.Drawing.Imaging.ImageFormat]::Png)
+          }
+          Get-ChildItem $assets | Select-Object Name,Length | Format-Table -AutoSize
+          # runFullTrust is THE capability that makes a Win32 desktop app legal
+          # inside MSIX; without it the app has no business calling SetWindowsHookEx.
+          $manifest = @'
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+  <Identity Name="BangluTyper.BangluTyper" Publisher="CN=B71AC99C-C3DF-48A2-B8A6-957E15042785" Version="1.0.1.0" ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>Banglu Typer (spike)</DisplayName>
+    <PublisherDisplayName>Banglu Typer</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+  <Resources><Resource Language="en-us" /></Resources>
+  <Applications>
+    <Application Id="BangluTyper" Executable="BangluTyper.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Banglu Typer (spike)" Description="Type Bangla anywhere on Windows"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
+'@
+          Set-Content -Path (Join-Path $root 'AppxManifest.xml') -Value $manifest -Encoding UTF8
+          Write-Host "app image size: $([math]::Round((Get-ChildItem -Recurse $root | Measure-Object Length -Sum).Sum / 1MB, 1)) MB"
+
+      - name: Locate Windows SDK tooling
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $bins = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^10\.' } | Sort-Object Name -Descending
+          Write-Host "SDK bin dirs: $($bins.Name -join ', ')"
+          foreach ($tool in 'makeappx.exe','signtool.exe') {
+            $found = $null
+            foreach ($b in $bins) { $c = Join-Path $b.FullName "x64\$tool"; if (Test-Path $c) { $found = $c; break } }
+            if (-not $found) { Write-Host "BLOCKED: $tool not found on this runner" }
+            else {
+              Write-Host "$tool -> $found"
+              "$($tool.Split('.')[0].ToUpper())=$found" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+            }
+          }
+
+      - name: Pack, sign, trust
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          if (-not $env:MAKEAPPX) { throw 'BLOCKED: no makeappx.exe — MSIX cannot be built on this runner' }
+          & $env:MAKEAPPX pack /d "$env:PKG_ROOT" /p banglu-spike.msix /o
+          Write-Host "makeappx exit: $LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: makeappx pack failed (see output above)' }
+          $size = (Get-Item banglu-spike.msix).Length
+          Write-Host "=== MSIX SIZE: $size bytes ($([math]::Round($size/1MB,1)) MB) ==="
+
+          # MUST equal Package/Identity/Publisher exactly (the real Partner
+          # Center identity, windows-ime/store-identity.md) or Add-AppxPackage
+          # refuses the package for publisher mismatch. Using the real value
+          # makes this a rehearsal of the actual upload, not an approximation.
+          $cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=B71AC99C-C3DF-48A2-B8A6-957E15042785' `
+            -KeyUsage DigitalSignature -FriendlyName 'Banglu MSIX spike' `
+            -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3','2.5.29.19={text}Subject Type:End Entity')
+          $pw = ConvertTo-SecureString -String 'spike-only-throwaway' -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert.PSPath -FilePath spike.pfx -Password $pw | Out-Null
+          Export-Certificate -Cert $cert.PSPath -FilePath spike.cer | Out-Null
+          & $env:SIGNTOOL sign /fd SHA256 /f spike.pfx /p 'spike-only-throwaway' banglu-spike.msix
+          Write-Host "signtool exit: $LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: signing failed' }
+          Import-Certificate -FilePath spike.cer -CertStoreLocation 'Cert:\LocalMachine\Root' | Out-Null
+          Import-Certificate -FilePath spike.cer -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
+          Write-Host 'certificate trusted (LocalMachine Root + TrustedPeople)'
+
+          # Sideload + Invoke-CommandInDesktopPackage both want these.
+          $k = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock'
+          New-Item -Path $k -Force | Out-Null
+          New-ItemProperty -Path $k -Name AllowDevelopmentWithoutDevLicense -Value 1 -PropertyType DWORD -Force | Out-Null
+          New-ItemProperty -Path $k -Name AllowAllTrustedApps -Value 1 -PropertyType DWORD -Force | Out-Null
+          Write-Host 'developer/sideload policy set'
+
+      - name: Install the package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          try { Add-AppxPackage -Path banglu-spike.msix -ErrorAction Stop; Write-Host 'Add-AppxPackage OK' }
+          catch {
+            Write-Host "BLOCKED: Add-AppxPackage failed: $($_.Exception.Message)"
+            Get-AppxLog -All -ErrorAction SilentlyContinue | Select-Object -First 40 | Format-List
+            throw
+          }
+          $pkg = Get-AppxPackage -Name 'BangluTyper.BangluTyper'
+          $pkg | Format-List Name,PackageFullName,PackageFamilyName,InstallLocation,Status
+          "PFN=$($pkg.PackageFamilyName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "PKG_EXE=$($pkg.InstallLocation)\BangluTyper.exe" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      # Launching through Invoke-CommandInDesktopPackage gives the process real
+      # package identity AND a console whose stdout we can redirect — a plain
+      # `shell:AppsFolder` activation gives identity but discards everything the
+      # app prints, which is the whole evidence base for A, B and D.
+      - name: PACKAGED run (with package identity)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force -Path C:\spike | Out-Null
+          "@echo off`r`n`"$env:PKG_EXE`" > C:\spike\pkg-out.txt 2>&1" |
+            Set-Content -Encoding ASCII C:\spike\run-packaged.cmd
+          Get-Content C:\spike\run-packaged.cmd
+          $launched = $false
+          try {
+            Invoke-CommandInDesktopPackage -PackageFamilyName $env:PFN -AppId 'BangluTyper' `
+              -Command 'C:\Windows\System32\cmd.exe' -Args '/c C:\spike\run-packaged.cmd' `
+              -PreventBreakaway -ErrorAction Stop
+            $launched = $true
+            Write-Host 'launched via Invoke-CommandInDesktopPackage (stdout captured)'
+          } catch {
+            Write-Host "Invoke-CommandInDesktopPackage unavailable/failed: $($_.Exception.Message)"
+            Write-Host 'falling back to shell activation (no stdout; probe log files only)'
+            Start-Process "shell:AppsFolder\$env:PFN!BangluTyper"
+            $launched = $true
+          }
+          if (-not $launched) { throw 'BLOCKED: could not launch the packaged app' }
+          # Same budget as the control: dictionary attach dominates start-up.
+          Start-Sleep -Seconds 180
+          Write-Host '=== running Banglu processes ==='
+          Get-Process -Name BangluTyper -ErrorAction SilentlyContinue |
+            Select-Object Id,ProcessName,Path,SessionId | Format-Table -AutoSize
+          Write-Host '=== PACKAGED STDOUT/STDERR ==='
+          if (Test-Path C:\spike\pkg-out.txt) { Get-Content C:\spike\pkg-out.txt } else { Write-Host '(not captured — shell activation path)' }
+
+      - name: FINDING C — hunt for the probe drops from OUTSIDE the container
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Write-Host '=== 1. the shared directory the desktop editor also uses ==='
+          if (Test-Path "$env:USERPROFILE\.banglu") {
+            Get-ChildItem -Recurse -Force "$env:USERPROFILE\.banglu" | Select-Object FullName,Length | Format-Table -AutoSize
+            if (Test-Path "$env:USERPROFILE\.banglu\msix-spike.log") {
+              Write-Host '--- contents ---'; Get-Content "$env:USERPROFILE\.banglu\msix-spike.log"
+            }
+          } else { Write-Host "$env:USERPROFILE\.banglu DOES NOT EXIST" }
+
+          Write-Host '=== 2. the package private store (where redirection would send it) ==='
+          $pkgStore = "$env:LOCALAPPDATA\Packages\$env:PFN"
+          if (Test-Path $pkgStore) {
+            Get-ChildItem -Recurse -Force $pkgStore -ErrorAction SilentlyContinue |
+              Select-Object FullName,Length | Format-Table -AutoSize
+          } else { Write-Host "$pkgStore DOES NOT EXIST" }
+
+          Write-Host '=== 3. anywhere else under C:\Users ==='
+          Get-ChildItem C:\Users -Recurse -Depth 10 -Force -Include 'msix-spike.log','banglu-msix-spike.log','learned.json' -ErrorAction SilentlyContinue |
+            Select-Object FullName,Length | Format-Table -AutoSize
+
+          Write-Host '=== 4. temp drop ==='
+          if (Test-Path "$env:TEMP\banglu-msix-spike.log") {
+            Write-Host "$env:TEMP\banglu-msix-spike.log"; Get-Content "$env:TEMP\banglu-msix-spike.log"
+          } else { Write-Host '(no temp drop)' }
+
+      - name: Collect everything as an artifact
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force -Path spike-out | Out-Null
+          foreach ($f in 'ctl-out.txt','ctl-err.txt','C:\spike\pkg-out.txt',
+                         "$env:USERPROFILE\.banglu\msix-spike.log",
+                         "$env:TEMP\banglu-msix-spike.log") {
+            if (Test-Path $f) { Copy-Item $f spike-out -Force -ErrorAction SilentlyContinue }
+          }
+          if (Test-Path banglu-spike.msix) {
+            "msix bytes: $((Get-Item banglu-spike.msix).Length)" | Set-Content spike-out\sizes.txt
+          }
+          Get-ChildItem spike-out | Format-Table -AutoSize
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: msix-spike-output
+          path: spike-out
+          if-no-files-found: warn
+
+      - name: Tear the package back down
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Get-Process -Name BangluTyper -ErrorAction SilentlyContinue | Stop-Process -Force
+          Get-AppxPackage -Name 'BangluTyper.BangluTyper' | Remove-AppxPackage -ErrorAction SilentlyContinue
+          Write-Host 'uninstalled'
