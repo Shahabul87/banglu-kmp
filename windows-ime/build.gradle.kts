@@ -252,9 +252,14 @@ val verifyHookIsolation by tasks.registering {
     compiledSourceRoots.forEach { inputs.dir(it) }
     doLast {
         val offenders = compiledKotlinFiles()
-            .filterNot { (_, f) -> f.path.contains("/hook/") }
+            // invariantSeparatorsPath, not `path`: on a Windows runner the
+            // separator is a backslash, so a literal "/hook/" test never
+            // matched and the gate reported the hook's OWN files as the
+            // violation — the first time it ran on windows-latest it failed
+            // the Store build for having a hook layer at all.
+            .filterNot { (_, f) -> f.invariantSeparatorsPath.contains("/hook/") }
             .filter { (_, f) -> f.readText().contains("import com.sun.jna") }
-            .map { (root, f) -> f.relativeTo(root.parentFile.parentFile).path }
+            .map { (root, f) -> f.relativeTo(root.parentFile.parentFile).invariantSeparatorsPath }
         require(offenders.isEmpty()) {
             "JNA imports outside hook/ (spec isolation law): $offenders"
         }
@@ -289,14 +294,14 @@ val verifyUpdaterIsolation by tasks.registering {
         )
         val files = compiledKotlinFiles()
         val networkOutside = files
-            .filterNot { (_, f) -> f.path.contains("/update/") }
+            .filterNot { (_, f) -> f.invariantSeparatorsPath.contains("/update/") }
             .filter { (_, f) -> networkTokens.any { f.readText().contains(it) } }
             .map { (root, f) -> f.relativeTo(root.parentFile.parentFile).path }
         require(networkOutside.isEmpty()) {
             "HTTP client references outside update/ (privacy boundary): $networkOutside"
         }
         val typingInside = files
-            .filter { (_, f) -> f.path.contains("/update/") }
+            .filter { (_, f) -> f.invariantSeparatorsPath.contains("/update/") }
             .filter { (_, f) -> typingTokens.any { f.readText().contains(it) } }
             .map { (root, f) -> f.relativeTo(root.parentFile.parentFile).path }
         require(typingInside.isEmpty()) {
