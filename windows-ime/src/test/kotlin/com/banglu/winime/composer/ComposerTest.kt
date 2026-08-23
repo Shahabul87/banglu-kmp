@@ -1,6 +1,7 @@
 package com.banglu.winime.composer
 
 import com.banglu.engine.SmartEngineAdapter
+import com.banglu.winime.AdapterComposerEngine
 import com.banglu.winime.TestEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,18 +15,10 @@ import kotlin.test.assertTrue
  */
 class ComposerTest {
 
-    private object RealComposerEngine : ComposerEngine {
-        override fun instant(raw: String): String =
-            SmartEngineAdapter.convertForInstantPreview(raw)
-
-        override fun convert(raw: String): String = SmartEngineAdapter.convertWord(raw).bengali
-        override fun suggest(raw: String, limit: Int): List<String> =
-            SmartEngineAdapter.getSuggestions(raw, limit).map { it.bengali }
-    }
-
     private fun composer(): Composer {
         TestEngine.boot()
-        return Composer(RealComposerEngine)
+        // The production seam (S130): the same context-aware object Main wires.
+        return Composer(AdapterComposerEngine)
     }
 
     private fun commits(actions: List<ComposerAction>) =
@@ -238,7 +231,11 @@ class ComposerTest {
         val actions = c.handle(ComposerKey.Backspace)
         // The space is already ordinary document text — nothing to materialise
         // and nothing of ours to delete. The host's own backspace removes it.
-        assertEquals(listOf(ComposerAction.ForwardKey(ComposerKey.Backspace)), actions)
+        // (S130 pin update: the backspace also hides the prediction strip the
+        // space put up, in the same batch.)
+        assertEquals(ComposerAction.ForwardKey(ComposerKey.Backspace), actions.first())
+        assertTrue(deletions(actions).isEmpty(), "nothing of ours to delete")
+        assertEquals(emptyList(), candidates(actions))
         assertFalse(c.retroSpaceArmed)
     }
 
@@ -326,12 +323,12 @@ class ComposerTest {
             return SmartEngineAdapter.convertForInstantPreview(raw)
         }
 
-        override fun convert(raw: String): String {
+        override fun convert(raw: String, prev1: String?, prev2: String?): String {
             converts++
             return SmartEngineAdapter.convertWord(raw).bengali
         }
 
-        override fun suggest(raw: String, limit: Int): List<String> {
+        override fun suggest(raw: String, limit: Int, prev1: String?, prev2: String?): List<String> {
             suggests++
             return SmartEngineAdapter.getSuggestions(raw, limit).map { it.bengali }
         }
@@ -391,15 +388,27 @@ class ComposerTest {
         assertEquals("কেমন", candidates(settle(c)).first())
     }
 
+    /**
+     * S130 pin update (documented decision): Space no longer leaves the strip
+     * empty — it hands it to the NEXT-WORD PREDICTIONS, the same row Android
+     * and banglu-web show after a commit. Enter still empties it (the key may
+     * have sent the message or left the field), and so does un-typing the
+     * buffer.
+     */
     @Test
-    fun finishingAWordEmptiesTheStrip() {
+    fun finishingAWordHandsTheStripToPredictionsOrEmptiesIt() {
         val c = composer()
         type(c, "kmn")
         assertTrue(candidates(settle(c)).isNotEmpty())
-        // Space, Enter, Tab and a punctuation mark all end the word, and the
-        // popup has nothing left to describe.
-        assertEquals(emptyList(), candidates(c.handle(ComposerKey.Space)))
+        val afterSpace = c.handle(ComposerKey.Space)
+            .filterIsInstance<ComposerAction.Candidates>().last()
+        assertTrue(afterSpace.predictions, "after a space the strip is the prediction row")
+        assertEquals(
+            SmartEngineAdapter.getNextWordPredictions(null, "কেমন", 5).map { it.bengali },
+            afterSpace.list,
+        )
 
+        c.focusLost() // reset the ledger so each leg starts clean
         type(c, "kmn")
         assertTrue(candidates(settle(c)).isNotEmpty())
         assertEquals(emptyList(), candidates(c.handle(ComposerKey.Enter)))
@@ -433,8 +442,11 @@ class ComposerTest {
         val faults = mutableListOf<Throwable>()
         val engine = object : ComposerEngine {
             override fun instant(raw: String) = SmartEngineAdapter.convertForInstantPreview(raw)
-            override fun convert(raw: String): String = error("store is gone")
-            override fun suggest(raw: String, limit: Int) = emptyList<String>()
+            override fun convert(raw: String, prev1: String?, prev2: String?): String =
+                error("store is gone")
+
+            override fun suggest(raw: String, limit: Int, prev1: String?, prev2: String?) =
+                emptyList<String>()
         }
         val c = Composer(engine)
         c.onConversionFault = { faults += it }

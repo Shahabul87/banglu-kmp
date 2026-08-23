@@ -379,7 +379,7 @@ class Controller(
         echoed = ""
         refineScheduler.cancel()
         syncMirror()
-        if (ending) listener.onCandidates(emptyList())
+        if (ending) listener.onCandidates(emptyList(), predictions = false)
     }
 
     /**
@@ -389,17 +389,17 @@ class Controller(
      */
     private fun dispatch(actions: List<ComposerAction>) {
         if (actions.isEmpty()) return
-        var candidates: List<String>? = null
+        var candidates: ComposerAction.Candidates? = null
         for (action in actions) {
             when (action) {
                 is ComposerAction.Commit -> commitEcho(action.text)
                 is ComposerAction.DeleteBack -> deleteCommitted(action.count)
                 is ComposerAction.ForwardKey -> injector.injectKey(toRawKey(action.key))
                 is ComposerAction.Preview -> reconcileEcho(action.bangla)
-                is ComposerAction.Candidates -> candidates = action.list
+                is ComposerAction.Candidates -> candidates = action
             }
         }
-        candidates?.let(listener::onCandidates)
+        candidates?.let { listener.onCandidates(it.list, it.predictions) }
     }
 
     /**

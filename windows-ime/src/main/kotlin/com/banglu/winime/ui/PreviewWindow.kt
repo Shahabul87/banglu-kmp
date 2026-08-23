@@ -97,6 +97,7 @@ private const val MAX_CANDIDATES = Composer.MAX_CANDIDATES
 fun PreviewWindow(
     visible: Boolean,
     candidates: List<String>,
+    predictions: Boolean = false,
     onPick: (Int) -> Unit,
 ) {
     val state = rememberWindowState(width = WIDTH_DP.dp, height = HEIGHT_DP.dp)
@@ -126,12 +127,12 @@ fun PreviewWindow(
         // Re-anchored on every show: between two words the caret has usually
         // moved, and the user may have switched application entirely.
         LaunchedEffect(visible) { if (visible) placeUnderCaret(window) }
-        PreviewCard(candidates = candidates, onPick = onPick)
+        PreviewCard(candidates = candidates, predictions = predictions, onPick = onPick)
     }
 }
 
 @Composable
-private fun PreviewCard(candidates: List<String>, onPick: (Int) -> Unit) {
+private fun PreviewCard(candidates: List<String>, predictions: Boolean, onPick: (Int) -> Unit) {
     Surface(
         modifier = Modifier.fillMaxSize(),
         shape = RoundedCornerShape(12.dp),
@@ -145,14 +146,21 @@ private fun PreviewCard(candidates: List<String>, onPick: (Int) -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             candidates.take(MAX_CANDIDATES).forEachIndexed { index, candidate ->
-                CandidateChip(index = index, text = candidate, onClick = { onPick(index) })
+                CandidateChip(
+                    index = index,
+                    text = candidate,
+                    // Predictions are click-only: after a space, digits type
+                    // digits, so a digit hint on these chips would lie.
+                    showDigit = !predictions,
+                    onClick = { onPick(index) },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun CandidateChip(index: Int, text: String, onClick: () -> Unit) {
+private fun CandidateChip(index: Int, text: String, showDigit: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
@@ -164,8 +172,9 @@ private fun CandidateChip(index: Int, text: String, onClick: () -> Unit) {
     ) {
         // The same number that picks this candidate from the keyboard: while a
         // word is forming, Composer maps digits 1-6 onto the candidate list —
-        // the same six entries this row renders.
-        Text(
+        // the same six entries this row renders. Prediction chips (S130) hide
+        // it, because digits do not pick predictions.
+        if (showDigit) Text(
             text = bengaliDigit(index + 1),
             color = Sky,
             fontSize = 11.sp,

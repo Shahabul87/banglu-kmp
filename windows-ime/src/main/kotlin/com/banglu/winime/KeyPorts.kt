@@ -81,8 +81,12 @@ interface ControllerListener {
      * The forming word itself is NOT reported here any more: it is echoed
      * live into the focused application as the user types, so the popup shows
      * suggestions and nothing else. An empty list is the hide signal.
+     *
+     * [predictions] = true means the list holds next-word predictions after a
+     * commit (S130), not alternatives for a forming word: they are click-only,
+     * so the strip must not paint the digit hints that pick candidates.
      */
-    fun onCandidates(candidates: List<String>)
+    fun onCandidates(candidates: List<String>, predictions: Boolean)
     fun onModeChanged(mode: Mode)
 }
 

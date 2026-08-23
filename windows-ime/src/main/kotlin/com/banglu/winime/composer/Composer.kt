@@ -50,10 +50,25 @@ sealed interface ComposerAction {
 
     /** Re-inject the original key event (Enter/Tab/Backspace/Escape). */
     data class ForwardKey(val key: ComposerKey) : ComposerAction
-    data class Candidates(val list: List<String>) : ComposerAction
+
+    /**
+     * What the strip should show. [predictions] distinguishes the two things
+     * it can hold: ranked alternatives for the word being typed (pickable by
+     * digit AND click), or next-word predictions after a commit (click-only —
+     * digits after a space type digits, so the strip must not paint digit
+     * hints that would lie).
+     */
+    data class Candidates(val list: List<String>, val predictions: Boolean = false) : ComposerAction
 }
 
-/** The engine seam: full-pipeline convert + ranked suggestions. */
+/**
+ * The engine seam: full-pipeline convert + ranked suggestions, S130: with the
+ * committed-word context Android and banglu-web have always passed. [prev1]
+ * is the word committed immediately before the one in question, [prev2] the
+ * one before that — the trigram/bigram rerank inputs. Null means "no trusted
+ * context": start of a document, after a focus change, after the user edited
+ * committed text.
+ */
 interface ComposerEngine {
     /**
      * Rule-only, zero-I/O transliteration — the same call the Android hot path
@@ -64,23 +79,23 @@ interface ComposerEngine {
     fun instant(raw: String): String
 
     /**
-     * The full pipeline. Cheap enough (its caches are warm by the second
-     * letter) to stay SYNCHRONOUS on the typing path: the user sees the true
-     * Bangla the instant they type it rather than watching a rule-only
-     * approximation change under them when a later pass lands.
+     * The full pipeline, context-reranked — the call shape of Android's
+     * `convertWordWithContext`. Cheap enough (10-40 µs on the real dictionary,
+     * context rerank included) to stay SYNCHRONOUS on the typing path: the
+     * user sees the true Bangla the instant they type it rather than watching
+     * a rule-only approximation change under them when a later pass lands.
      */
-    fun convert(raw: String): String
+    fun convert(raw: String, prev1: String? = null, prev2: String? = null): String
 
     /**
-     * Ranked alternatives. ~2.3 ms per call on the real dictionary — several
+     * Ranked alternatives, context-promoted — Android's
+     * `getSuggestionsWithContext`, so the chip the context lane would commit
+     * leads the strip. ~0.3-0.6 ms per call on the real dictionary — many
      * times the conversion beside it, and the reason typing felt slow when it
      * ran per letter. NEVER called from the typing path; only from
      * [Composer.refineCandidates], behind the controller's debounce.
-     *
-     * The cost barely moves with [limit] (2.25 ms at 3, 2.65 ms at 6): it is
-     * the lookup, not the size of the list.
      */
-    fun suggest(raw: String, limit: Int = 6): List<String>
+    fun suggest(raw: String, limit: Int = 6, prev1: String? = null, prev2: String? = null): List<String>
 
     /**
      * Teach the engine one explicit, user-chosen alternative — the call shape
@@ -90,6 +105,24 @@ interface ComposerEngine {
      * a read-only host need not implement it.
      */
     fun selected(raw: String, bangla: String) {}
+
+    /**
+     * One observed (previous, next) commit pair for personalized next-word
+     * prediction — `SmartEngineAdapter.recordNextWordUsage`. The composer only
+     * calls this when the two words are PROVABLY adjacent: it wrote both, with
+     * exactly one plain space between them and no focus change, punctuation,
+     * দাঁড়ি, Enter or edit in the gap — the same adjacency Android proves by
+     * reading the field, established here by construction instead.
+     */
+    fun recordCommitPair(prev: String, next: String) {}
+
+    /**
+     * Next-word predictions for the strip after a commit — Android's
+     * `getNextWordPredictions(prev2, prev1, limit)`. ~5 µs on the real
+     * dictionary, which is why the composer may call it inside the commit
+     * path itself.
+     */
+    fun predictNext(prev2: String?, prev1: String, limit: Int): List<String> = emptyList()
 }
 
 /**
@@ -136,6 +169,39 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
     private var formingRaw = ""
     private var formingBangla = ""
     private var candidates: List<String> = emptyList()
+
+    /**
+     * S130 — the context ledger: the last two words this composer committed,
+     * newest in [prev1]. They are what Android reads back from the field
+     * before every conversion; a keyboard hook cannot read the field, so the
+     * composer keeps its own record and DROPS it the moment it might be wrong
+     * (focus change, a forwarded backspace that edits committed text, fault
+     * recovery — every caller of [focusLost] and the not-forming Backspace).
+     *
+     * Punctuation, দাঁড়ি and Enter deliberately do NOT clear it: the Android
+     * IME's ledger survives those too, and parity means converting `kmon`
+     * after `আমি,` the same way the phone does.
+     */
+    private var prev1: String? = null
+    private var prev2: String? = null
+
+    /**
+     * True while [prev1] is provably adjacent to whatever commits next — the
+     * gap since [prev1]'s commit holds exactly one plain space (the trailing
+     * space of a Space/pick commit) and nothing else has happened. This is
+     * the licence to call [ComposerEngine.recordCommitPair]: Android proves
+     * the same adjacency by reading the field before recording; here it is
+     * established by construction and revoked by every event that breaks it —
+     * punctuation, দাঁড়ি, digits, Enter/Tab/Escape, edits, focus loss.
+     */
+    private var chainIntact = false
+
+    /**
+     * Next-word predictions currently on the strip (click-only). Non-empty
+     * only immediately after a Space/pick commit; any other key clears it,
+     * so a click on a stale strip can never plant a word mid-typing.
+     */
+    private var predictions: List<String> = emptyList()
 
     /**
      * The raw buffer [candidates] was ranked for. The strip is deliberately NOT
@@ -191,6 +257,13 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
          */
         const val MAX_CANDIDATES = 6
         private const val MAX_ENGINE_SUGGESTIONS = MAX_CANDIDATES - 1
+
+        /** Android shows five next-word predictions; parity keeps it five. */
+        private const val PREDICTION_LIMIT = 5
+
+        /** Both halves of a recorded pair must be Bengali — Android's rule. */
+        private fun isBengaliWord(word: String): Boolean =
+            word.any { it in 'ঀ'..'৿' }
     }
 
     fun handle(key: ComposerKey): List<ComposerAction> = when (key) {
@@ -198,6 +271,10 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
             // The space this letter follows is already in the document; all
             // that ends here is its licence to be rewritten as a দাঁড়ি.
             retroSpaceArmed = false
+            // The strip may keep painting predictions for one debounce beat,
+            // but a click on it must be inert from this keystroke on — the
+            // refine for the new buffer is what replaces the pixels.
+            predictions = emptyList()
             formingRaw += key.c
             val out = mutableListOf<ComposerAction>()
             refresh(out)
@@ -217,11 +294,22 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
                 // keystroke old and still the last character in the document,
                 // so it can simply be taken back.
                 retroSpaceArmed = false
-                listOf(ComposerAction.DeleteBack(1), ComposerAction.Commit("। "))
+                // The sentence is over on both counts: no pair is recorded
+                // across a দাঁড়ি, and the predictions were for a sentence
+                // that just ended.
+                chainIntact = false
+                val out = mutableListOf<ComposerAction>(
+                    ComposerAction.DeleteBack(1),
+                    ComposerAction.Commit("। "),
+                )
+                clearPredictions(out)
+                out
             } else {
                 // Third and later spaces, and any space that does not follow a
                 // word of ours: one দাঁড়ি per sentence break, never two.
-                listOf(ComposerAction.Commit(" "))
+                val out = mutableListOf<ComposerAction>(ComposerAction.Commit(" "))
+                clearPredictions(out)
+                out
             }
         }
 
@@ -234,9 +322,16 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
             } else {
                 // Nothing of ours is editable any more — including a space we
                 // wrote, which is now ordinary document text. Forwarding lets
-                // the host delete whatever is actually behind the caret.
+                // the host delete whatever is actually behind the caret — and
+                // whatever it deletes may BE the word the ledger remembers, so
+                // the context is gone with it (S130).
                 retroSpaceArmed = false
-                listOf(ComposerAction.ForwardKey(ComposerKey.Backspace))
+                clearContext()
+                val out = mutableListOf<ComposerAction>(
+                    ComposerAction.ForwardKey(ComposerKey.Backspace),
+                )
+                clearPredictions(out)
+                out
             }
         }
 
@@ -247,6 +342,11 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
             } else {
                 val out = (if (forming) commitForming() else emptyList()).toMutableList()
                 retroSpaceArmed = false
+                // `আমি ১ কেমন` is not an adjacent pair (Android's field check
+                // refuses it too) — and digits never pick predictions: after a
+                // space the user typing 1 wants ১, not the first chip.
+                chainIntact = false
+                clearPredictions(out)
                 out.add(ComposerAction.Commit(if (banglaDigits) bengaliDigit(key.c) else key.c.toString()))
                 out
             }
@@ -258,10 +358,22 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
                 // after which the caret is not reliably ours. Disarm rather
                 // than risk a retro-দাঁড়ি backspace landing on someone's text.
                 retroSpaceArmed = false
-                listOf(ComposerAction.ForwardKey(ComposerKey.Escape))
+                chainIntact = false
+                val out = mutableListOf<ComposerAction>(
+                    ComposerAction.ForwardKey(ComposerKey.Escape),
+                )
+                clearPredictions(out)
+                out
             } else {
                 val raw = formingRaw
                 clearForming()
+                // The roman stays as typed. It still becomes the context —
+                // the word before the NEXT word really is `fb` — but a pair
+                // with a non-Bengali half is never recorded, and the chain
+                // does not survive an escape.
+                prev2 = prev1
+                prev1 = raw
+                chainIntact = false
                 // No Preview("") ahead of the Commit: the Bangla is already on
                 // screen, and asking for an empty preview first would un-type
                 // it only for the commit to type the roman over the gap. The
@@ -273,8 +385,12 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
         ComposerKey.Enter, ComposerKey.Tab -> {
             val out = (if (forming) commitForming() else emptyList()).toMutableList()
             // A space already written stays a space: nothing about pressing
-            // Enter says the user meant to end a sentence.
+            // Enter says the user meant to end a sentence. But on Windows the
+            // key may have sent a chat message or moved to another field, so
+            // no pair is recorded across it (S130).
             retroSpaceArmed = false
+            chainIntact = false
+            clearPredictions(out)
             out.add(ComposerAction.ForwardKey(key))
             out
         }
@@ -289,6 +405,10 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
                 out.add(ComposerAction.DeleteBack(1))
             }
             retroSpaceArmed = false
+            // `আমি, কেমন` is not an adjacent pair — but the ledger survives:
+            // the Android IME still converts কেমন knowing আমি (parity).
+            chainIntact = false
+            clearPredictions(out)
             out.add(ComposerAction.Commit(mapped))
             out
         }
@@ -296,11 +416,19 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
 
     fun focusLost(): List<ComposerAction> {
         retroSpaceArmed = false
-        return if (!forming) emptyList() else commitForming()
+        // Flush FIRST: the stranded word is real text in the old window, and
+        // its pair with the word before it is real adjacency — then drop the
+        // ledger, because nothing about the old document proves anything
+        // about wherever the caret is now.
+        val actions = if (forming) commitForming() else emptyList()
+        clearContext()
+        predictions = emptyList()
+        return actions
     }
 
     fun pick(index: Int): List<ComposerAction> {
-        if (!forming || index < 0 || index >= candidates.size) return emptyList()
+        if (!forming) return pickPrediction(index)
+        if (index < 0 || index >= candidates.size) return emptyList()
         val choice = candidates[index]
         val wasPrimary = choice == formingBangla
         // WYSIWYG for the strip: the user gets the chip they clicked. But a
@@ -312,6 +440,26 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
         // user's next letter starts the next word.
         val out = commitForming(trailing = " ")
         retroSpaceArmed = true
+        return out
+    }
+
+    /**
+     * A click on a prediction chip (S130): commits the predicted word plus the
+     * space that ends it, exactly the way Android's prediction row does, and
+     * keeps the chain going — the next strip predicts what follows THIS word.
+     *
+     * Only reachable while [predictions] is non-empty, which by construction
+     * means the last thing committed was `word + " "` and nothing has happened
+     * since — so the pair (prev1, prediction) is adjacent and recordable.
+     */
+    private fun pickPrediction(index: Int): List<ComposerAction> {
+        if (index < 0 || index >= predictions.size) return emptyList()
+        val word = predictions[index]
+        gen++
+        val out = mutableListOf<ComposerAction>(ComposerAction.Commit("$word "))
+        finishWord(word, spaceFollows = true)
+        retroSpaceArmed = true
+        out.add(ComposerAction.Candidates(predictions, predictions = predictions.isNotEmpty()))
         return out
     }
 
@@ -359,7 +507,7 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
         // 1..6 here, six chips in PreviewWindow. Asking for six put the
         // escape hatch at index 6 whenever the engine filled the list, where
         // no digit and no chip could reach it.
-        val list = engine.suggest(formingRaw, MAX_ENGINE_SUGGESTIONS).toMutableList()
+        val list = engine.suggest(formingRaw, MAX_ENGINE_SUGGESTIONS, prev1, prev2).toMutableList()
         if (formingRaw !in list) list.add(formingRaw) // raw = inline English
         candidates = list
         candidatesRaw = formingRaw
@@ -372,7 +520,7 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
      * store is mid-failure, and the letter they just typed still appears.
      */
     private fun liveConversion(raw: String): String = try {
-        engine.convert(raw)
+        engine.convert(raw, prev1, prev2)
     } catch (t: Throwable) {
         // If the rule layer is down too the engine is simply gone: let THAT
         // throwable out and leave the controller's reset path to handle it,
@@ -395,9 +543,66 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
      * an append.
      */
     private fun commitForming(trailing: String = ""): List<ComposerAction> {
-        val text = formingBangla + trailing
+        val word = formingBangla
         clearForming()
-        return listOf(ComposerAction.Commit(text), ComposerAction.Candidates(emptyList()))
+        finishWord(word, spaceFollows = trailing == " ")
+        return listOf(
+            ComposerAction.Commit(word + trailing),
+            // Ends the word's candidate strip — and, after a space, replaces
+            // it with the next-word predictions in the same listener call, so
+            // the window never flickers through an empty state between them.
+            ComposerAction.Candidates(predictions, predictions = predictions.isNotEmpty()),
+        )
+    }
+
+    /**
+     * The context bookkeeping every finished word runs (S130): record the
+     * adjacent pair when the chain permits it, shift the ledger, and fetch
+     * the next-word predictions when a space follows. Engine faults here may
+     * cost personalization or a strip — never the word, which is already in
+     * [ComposerAction.Commit] by the time this runs.
+     */
+    private fun finishWord(word: String, spaceFollows: Boolean) {
+        if (word.isBlank()) {
+            chainIntact = false
+            predictions = emptyList()
+            return
+        }
+        val previous = prev1
+        if (chainIntact && previous != null && isBengaliWord(previous) && isBengaliWord(word)) {
+            try {
+                engine.recordCommitPair(previous, word)
+            } catch (t: Throwable) {
+                onConversionFault?.invoke(t)
+            }
+        }
+        prev2 = prev1
+        prev1 = word
+        chainIntact = spaceFollows
+        predictions = if (spaceFollows) {
+            try {
+                engine.predictNext(prev2, word, PREDICTION_LIMIT)
+            } catch (t: Throwable) {
+                onConversionFault?.invoke(t)
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+    }
+
+    /** The ledger can no longer be trusted — see [prev1] for the reasons. */
+    private fun clearContext() {
+        prev1 = null
+        prev2 = null
+        chainIntact = false
+    }
+
+    /** Hides a prediction strip, emitting only when there is one to hide. */
+    private fun clearPredictions(out: MutableList<ComposerAction>) {
+        if (predictions.isEmpty()) return
+        predictions = emptyList()
+        out.add(ComposerAction.Candidates(emptyList()))
     }
 
     private fun clearForming() {

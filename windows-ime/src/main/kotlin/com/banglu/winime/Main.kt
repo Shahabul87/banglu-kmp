@@ -16,7 +16,6 @@ import androidx.compose.ui.window.rememberTrayState
 import com.banglu.engine.JvmSqliteDictionaryLoader
 import com.banglu.engine.JvmSqlitePhoneticIndexStore
 import com.banglu.engine.SmartEngineAdapter
-import com.banglu.winime.composer.ComposerEngine
 import com.banglu.winime.hook.ForegroundApp
 import com.banglu.winime.hook.LowLevelHook
 import com.banglu.winime.hook.SendInputInjector
@@ -130,7 +129,7 @@ fun main() = application {
     val elevation = remember { InjectionWarning(trayState) }
     val controller = remember {
         Controller(
-            engine = WinEngine,
+            engine = AdapterComposerEngine,
             injector = TaggingInjector(SendInputInjector()),
             compat = AppCompat(bangluDir),
             listener = UiListener(ui) { mode ->
@@ -414,6 +413,7 @@ fun main() = application {
     PreviewWindow(
         visible = ui.previewVisible,
         candidates = ui.candidates,
+        predictions = ui.predictions,
         onPick = { index -> controller.pickCandidate(index) },
     )
 }
@@ -429,6 +429,9 @@ private class UiState(initialMode: Mode = Mode.BANGLA) {
     var hookInstalled by mutableStateOf(false)
     var mode by mutableStateOf(initialMode)
     var candidates by mutableStateOf(emptyList<String>())
+
+    /** S130: true while [candidates] holds next-word predictions (click-only chips). */
+    var predictions by mutableStateOf(false)
 
     /**
      * The control window is visible on launch and stays reachable from the
@@ -478,42 +481,16 @@ private class UiListener(
      * so this is the one place mode persistence needs to hook in. */
     private val onModeChangedExtra: (Mode) -> Unit = {},
 ) : ControllerListener {
-    override fun onCandidates(candidates: List<String>) {
-        EventQueue.invokeLater { ui.candidates = candidates }
+    override fun onCandidates(candidates: List<String>, predictions: Boolean) {
+        EventQueue.invokeLater {
+            ui.candidates = candidates
+            ui.predictions = predictions
+        }
     }
 
     override fun onModeChanged(mode: Mode) {
         EventQueue.invokeLater { ui.mode = mode }
         onModeChangedExtra(mode)
-    }
-}
-
-/**
- * The engine seam. Called only from the controller's single worker thread, so
- * it needs no lock of its own — `SmartEngine` is not internally thread-safe,
- * and that single lane IS the guarantee. Do not add a second caller.
- */
-private object WinEngine : ComposerEngine {
-    // Rule-only, zero I/O — the same call the Android hot path and the desktop
-    // editor's EngineFacade.instant use. Here it is the degraded path: it needs
-    // no store, so it still answers when the full pipeline throws.
-    override fun instant(raw: String): String =
-        SmartEngineAdapter.convertForInstantPreview(raw)
-
-    override fun convert(raw: String): String =
-        SmartEngineAdapter.convertWord(raw).bengali
-
-    override fun suggest(raw: String, limit: Int): List<String> =
-        SmartEngineAdapter.getSuggestions(raw, limit).map { it.bengali }
-
-    override fun selected(raw: String, bangla: String) {
-        // Reached only for a non-primary pick (S26 law, enforced in Controller).
-        SmartEngineAdapter.onWordSelected(
-            phonetic = raw,
-            bengali = bangla,
-            learnAsWord = false,
-            explicitChoice = true,
-        )
     }
 }
 

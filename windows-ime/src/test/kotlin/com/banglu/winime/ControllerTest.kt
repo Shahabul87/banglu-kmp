@@ -62,7 +62,7 @@ private class FakeInjector : TextInjector {
 private class FakeListener : ControllerListener {
     private val candidateCalls = mutableListOf<List<String>>()
     private val modeCalls = mutableListOf<Mode>()
-    override fun onCandidates(candidates: List<String>) {
+    override fun onCandidates(candidates: List<String>, predictions: Boolean) {
         synchronized(candidateCalls) { candidateCalls += candidates }
     }
 
@@ -138,19 +138,28 @@ private open class RecordingEngine : ComposerEngine {
         return SmartEngineAdapter.convertForInstantPreview(raw)
     }
 
-    override fun convert(raw: String): String {
+    override fun convert(raw: String, prev1: String?, prev2: String?): String {
         converts.incrementAndGet()
-        return SmartEngineAdapter.convertWord(raw).bengali
+        return SmartEngineAdapter.convertWordWithContext(raw, listOfNotNull(prev2, prev1)).bengali
     }
 
-    override fun suggest(raw: String, limit: Int): List<String> {
+    override fun suggest(raw: String, limit: Int, prev1: String?, prev2: String?): List<String> {
         suggests.incrementAndGet()
-        return SmartEngineAdapter.getSuggestions(raw, limit).map { it.bengali }
+        return SmartEngineAdapter.getSuggestionsWithContext(raw, listOfNotNull(prev2, prev1), limit)
+            .map { it.bengali }
     }
 
     override fun selected(raw: String, bangla: String) {
         synchronized(learned) { learned += raw to bangla }
     }
+
+    // S130: the context lane, same calls as AdapterComposerEngine.
+    override fun recordCommitPair(prev: String, next: String) {
+        SmartEngineAdapter.recordNextWordUsage(prev, next)
+    }
+
+    override fun predictNext(prev2: String?, prev1: String, limit: Int): List<String> =
+        SmartEngineAdapter.getNextWordPredictions(prev2, prev1, limit).map { it.bengali }
 
     val taught: List<Pair<String, String>> get() = synchronized(learned) { learned.toList() }
 }
@@ -162,12 +171,12 @@ private open class RecordingEngine : ComposerEngine {
 private class GateEngine(private val gateOn: String) : RecordingEngine() {
     val entered = CountDownLatch(1)
     val release = CountDownLatch(1)
-    override fun convert(raw: String): String {
+    override fun convert(raw: String, prev1: String?, prev2: String?): String {
         if (raw == gateOn) {
             entered.countDown()
             release.await(20, TimeUnit.SECONDS)
         }
-        return super.convert(raw)
+        return super.convert(raw, prev1, prev2)
     }
 }
 
@@ -186,9 +195,9 @@ private class FlakyEngine : RecordingEngine() {
         return super.instant(raw)
     }
 
-    override fun convert(raw: String): String {
+    override fun convert(raw: String, prev1: String?, prev2: String?): String {
         if (failing) error("engine blew up converting '$raw'")
-        return super.convert(raw)
+        return super.convert(raw, prev1, prev2)
     }
 }
 
@@ -279,6 +288,42 @@ class ControllerTest {
         // A third space is a plain space — one দাঁড়ি per sentence break.
         assertEquals("আমি।  ", r.injector.document)
         assertEquals(listOf(1), r.injector.backspaces)
+    }
+
+    /**
+     * S130: the prediction row, end to end through the worker. After a space
+     * commit the strip holds next-word predictions; clicking one injects the
+     * word plus its space, the chain keeps predicting, and the retro-space
+     * still turns a following double-space into a দাঁড়ি.
+     */
+    @Test
+    fun aPredictionClickTypesTheWordAndKeepsTheChainGoing() {
+        val r = rig()
+        r.type("kmon")
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
+        assertEquals("কেমন ", r.injector.document)
+        val predicted = r.listener.candidates.last()
+        assertEquals(
+            SmartEngineAdapter.getNextWordPredictions(null, "কেমন", 5).map { it.bengali },
+            predicted,
+        )
+        assertTrue(predicted.isNotEmpty(), "কেমন has trigram followers in the corpus")
+
+        r.controller.pickCandidate(0)
+        r.idle()
+        assertEquals("কেমন ${predicted.first()} ", r.injector.document)
+        // The chain moved on: the strip now predicts what follows the pick.
+        assertEquals(
+            SmartEngineAdapter.getNextWordPredictions("কেমন", predicted.first(), 5)
+                .map { it.bengali },
+            r.listener.candidates.last(),
+        )
+
+        // The pick's trailing space is one keystroke old — দাঁড়ি law holds.
+        assertTrue(r.key(RawKey.Space))
+        r.idle()
+        assertEquals("কেমন ${predicted.first()}। ", r.injector.document)
     }
 
     @Test
@@ -671,9 +716,14 @@ class ControllerTest {
 
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        // The word is finished: the popup has nothing left to describe.
+        // The word is finished: exactly one more call — the strip flips from
+        // the word's candidates to the next-word predictions (S130 pin
+        // update), never through an empty intermediate state.
         assertEquals(2, r.listener.candidates.size)
-        assertEquals(emptyList(), r.listener.candidates.last())
+        assertEquals(
+            SmartEngineAdapter.getNextWordPredictions(null, "আমি", 5).map { it.bengali },
+            r.listener.candidates.last(),
+        )
     }
 
     /**
@@ -701,10 +751,14 @@ class ControllerTest {
         r.settle()
         assertEquals("কেমন", r.listener.candidates.last().first())
 
-        // …and it disappears the moment the word is committed.
+        // …and the moment the word is committed it becomes the prediction
+        // row for the word that follows (S130 pin update).
         assertTrue(r.key(RawKey.Space))
         r.idle()
-        assertEquals(emptyList(), r.listener.candidates.last())
+        assertEquals(
+            SmartEngineAdapter.getNextWordPredictions(null, "কেমন", 5).map { it.bengali },
+            r.listener.candidates.last(),
+        )
     }
 
     @Test
