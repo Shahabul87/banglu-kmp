@@ -65,4 +65,22 @@ object CaretLocator {
             null
         }
     }
+
+    /**
+     * The focused window's rectangle in physical screen pixels, or null —
+     * S132's fallback anchor when no caret exists AND the mouse is parked
+     * outside the window (the taskbar screenshot). Returned as
+     * [left, top, right, bottom] so the ui layer never sees a JNA type.
+     */
+    fun foregroundWindowRect(): IntArray? {
+        return try {
+            val user32 = User32.INSTANCE
+            val foreground = user32.GetForegroundWindow() ?: return null
+            val rect = WinDef.RECT()
+            if (!user32.GetWindowRect(foreground, rect)) return null
+            intArrayOf(rect.left, rect.top, rect.right, rect.bottom)
+        } catch (_: Throwable) {
+            null
+        }
+    }
 }

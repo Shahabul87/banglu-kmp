@@ -124,9 +124,22 @@ fun PreviewWindow(
             window.focusableWindowState = false
             window.isAutoRequestFocus = false
         }
-        // Re-anchored on every show: between two words the caret has usually
-        // moved, and the user may have switched application entirely.
-        LaunchedEffect(visible) { if (visible) placeUnderCaret(window) }
+        // S132: re-anchored on every strip CHANGE, not only on show — the
+        // prediction row keeps the window visible across whole sentences, and
+        // a show-only anchor froze it at its first-ever position (the field
+        // screenshot: pinned to the taskbar while the user typed at the top
+        // of the screen). Each refine/commit is a natural "the text moved"
+        // signal; placeNearText itself skips sub-jitter moves.
+        LaunchedEffect(visible, candidates) {
+            if (visible) {
+                placeNearText(window)
+            } else {
+                // The strip hid — Enter, punctuation, focus loss. The held
+                // anchor's claim to "this is where the text is" ends with it;
+                // the next word re-plans from the caret or the fresh mouse.
+                lastAnchor = null
+            }
+        }
         PreviewCard(candidates = candidates, predictions = predictions, onPick = onPick)
     }
 }
@@ -195,36 +208,61 @@ private fun bengaliDigit(n: Int): String =
     n.toString().map { if (it in '0'..'9') '০' + (it - '0') else it }.joinToString("")
 
 /**
- * Anchors the strip under the caret, or under the mouse pointer when the
- * focused application hides its caret (Chrome and every Electron app do), and
- * keeps it inside the screen it lands on.
+ * The last anchor actually used, stamped with the window rect it was taken
+ * in — StripAnchor's "hold still while typing" input. AWT-thread only (both
+ * writers are LaunchedEffect bodies of the one PreviewWindow instance).
+ */
+private var lastAnchor: Pair<AnchorPoint, AnchorRect>? = null
+
+/** Moves smaller than this are caret jitter, not the text moving. */
+private const val REANCHOR_THRESHOLD_PX = 12
+
+/**
+ * Anchors the strip near the text being typed: under the caret where the app
+ * exposes one, else via [StripAnchor]'s fallback chain (held position →
+ * mouse-inside-window → window bottom-center), and keeps it inside the
+ * screen it lands on.
  *
  * Never allowed to throw: a positioning failure must cost a badly placed
  * preview, not a dead composition.
  */
-private fun placeUnderCaret(window: java.awt.Window) {
+private fun placeNearText(window: java.awt.Window) {
     runCatching {
-        val anchor = anchorPoint()
-        val screen = screenBoundsFor(anchor)
-        val x = anchor.x.coerceIn(screen.x, maxOf(screen.x, screen.x + screen.width - window.width))
-        val y = (anchor.y + CARET_GAP_PX)
+        // GetGUIThreadInfo/GetWindowRect answer in physical pixels; AWT
+        // places windows in user-space units (physical ÷ display scale) on a
+        // DPI-aware JVM, so on a 150% laptop an unconverted caret would put
+        // the strip a third of the screen away. MouseInfo already reports
+        // user space, hence no conversion there.
+        val scale = displayScale()
+        val caret = CaretLocator.caretScreenPos()?.let {
+            AnchorPoint((it.first / scale).roundToInt(), (it.second / scale).roundToInt())
+        }
+        val rect = CaretLocator.foregroundWindowRect()?.let {
+            AnchorRect(
+                (it[0] / scale).roundToInt(),
+                (it[1] / scale).roundToInt(),
+                (it[2] / scale).roundToInt(),
+                (it[3] / scale).roundToInt(),
+            )
+        }
+        val mouse = MouseInfo.getPointerInfo()?.location?.let { AnchorPoint(it.x, it.y) }
+        val anchor = StripAnchor.plan(caret, mouse, rect, lastAnchor) ?: return
+        rect?.let { lastAnchor = anchor to it }
+        val previous = window.location
+        val point = Point(anchor.x, anchor.y)
+        val screen = screenBoundsFor(point)
+        val x = point.x.coerceIn(screen.x, maxOf(screen.x, screen.x + screen.width - window.width))
+        val y = (point.y + CARET_GAP_PX)
             .coerceIn(screen.y, maxOf(screen.y, screen.y + screen.height - window.height))
+        // Sub-jitter moves are skipped: a layered always-on-top window that
+        // twitches a few pixels per refine is worse than one that holds.
+        if (kotlin.math.abs(x - previous.x) < REANCHOR_THRESHOLD_PX &&
+            kotlin.math.abs(y - previous.y) < REANCHOR_THRESHOLD_PX
+        ) {
+            return
+        }
         window.setLocation(x, y)
     }
-}
-
-private fun anchorPoint(): Point {
-    val caret = CaretLocator.caretScreenPos()
-    if (caret != null) {
-        // GetGUIThreadInfo answers in physical pixels; AWT places windows in
-        // user-space units (physical ÷ display scale) on a DPI-aware JVM, so on
-        // a 150% laptop an unconverted caret would put the strip a third of the
-        // screen away. MouseInfo already reports user space, hence no
-        // conversion on the fallback path.
-        val scale = displayScale()
-        return Point((caret.first / scale).roundToInt(), (caret.second / scale).roundToInt())
-    }
-    return MouseInfo.getPointerInfo()?.location ?: Point(0, 0)
 }
 
 /**

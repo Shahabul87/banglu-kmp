@@ -118,6 +118,25 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      */
     private val containsWordMemo = com.banglu.engine.util.LruCache<String, Boolean>(MAX_STORE_MEMO)
 
+    /**
+     * LRU memo over [PhoneticIndexStore.lookupEnglish] — misses included ("" is
+     * the miss sentinel; no english_lexicon value is empty). S131.1: the
+     * honesty guard consults the lexicon on EVERY conversion, and the live
+     * echo converts on every keystroke, so an unmemoized read was one sqlite
+     * query per keystroke — visible typing lag on an AV-hooked laptop disk.
+     * Cleared in [clearCache] (and therefore on [setPhoneticIndex]).
+     */
+    private val englishLexiconMemo = com.banglu.engine.util.LruCache<String, String>(MAX_STORE_MEMO)
+
+    /** All wrapper-path english_lexicon reads go through here — see the memo. */
+    private fun lookupEnglishMemo(key: String): String? {
+        val store = phoneticIndex ?: return null
+        englishLexiconMemo[key]?.let { return it.ifEmpty { null } }
+        val result = store.lookupEnglish(key)
+        englishLexiconMemo[key] = result ?: ""
+        return result
+    }
+
     private data class InflectionalSuffix(val phonetic: String, val bengali: String)
 
     private data class CandidatePath(
@@ -1073,7 +1092,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // mirrors it) shows লাইন while Space commits লিনে (observed on the
         // 192-memoryClass emulator).
         if (key in ENGLISH_PRIMARY_INTENT) {
-            phoneticIndex?.lookupEnglish(key)?.let { en ->
+            lookupEnglishMemo(key)?.let { en ->
                 if (en != raw.bengali) {
                     return ConversionResult(
                         bengali = en,
@@ -1093,7 +1112,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // frequency validator); getSuggestions always offers the loanword as
         // a chip either way.
         if (EnglishDetector.isEnglish(key) && raw.confidence < 1.0) {
-            phoneticIndex?.lookupEnglish(key)?.let { en ->
+            lookupEnglishMemo(key)?.let { en ->
                 if (en != raw.bengali &&
                     validator.getFrequency(en) > maxOf(validator.getFrequency(raw.bengali), 6) * 4
                 ) {
@@ -1184,7 +1203,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private fun tryEnglishHonestyFlip(key: String, raw: ConversionResult): ConversionResult? {
         if (raw.confidence >= 0.99) return null
         if (' ' in raw.bengali) return null
-        val en = phoneticIndex?.lookupEnglish(key) ?: return null
+        val en = lookupEnglishMemo(key) ?: return null
         if (en == raw.bengali) return null
         // The compiler's HABIT alias rows are CURATED chat spellings whose
         // phonetic fidelity is deliberately loose (issa→ইচ্ছা, S27 class) —
@@ -1522,7 +1541,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // reads as the keyboard swapping their word). Identical conditions:
         // validator loaded, detector hit, sub-1.0 confidence, 4x frequency.
         if (validator.isLoaded() && EnglishDetector.isEnglish(key) && raw.confidence < 1.0) {
-            phoneticIndex?.lookupEnglish(key)?.let { en ->
+            lookupEnglishMemo(key)?.let { en ->
                 if (en != raw.bengali &&
                     validator.getFrequency(en) > maxOf(validator.getFrequency(raw.bengali), 6) * 4
                 ) {
@@ -1562,7 +1581,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // preview, matching the wrapper which also cannot flip without the
         // lexicon.
         if (key in ENGLISH_PRIMARY_INTENT) {
-            phoneticIndex?.lookupEnglish(key)?.let { en ->
+            lookupEnglishMemo(key)?.let { en ->
                 return ConversionResult(en, 0.93, ResolutionSource.ENGLISH_LEXICON, emptyList())
             }
         }
@@ -2017,7 +2036,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // S24: the loanword rendering is always one tap away for English keys
         // (time -> টাইম chip even while টিমে holds the primary).
         if (EnglishDetector.isEnglish(key)) {
-            phoneticIndex?.lookupEnglish(key)?.let { en ->
+            lookupEnglishMemo(key)?.let { en ->
                 if (seen.add(en)) {
                     suggestions.add(
                         SmartSuggestion(en, 0.9, "english_lexicon", key, "tier0_english")
@@ -3016,7 +3035,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (!validator.isLoaded() || isProtectedFromJunkRescue(key, raw) || !isJunkPipelineResult(raw)) {
             return null
         }
-        val en = phoneticIndex?.lookupEnglish(key) ?: return null
+        val en = lookupEnglishMemo(key) ?: return null
         if (en == raw.bengali || validator.getFrequency(en) <= validator.getFrequency(raw.bengali)) {
             return null
         }
@@ -6559,6 +6578,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     fun clearCache() {
         wordCache.clear()
         storeLookupMemo.clear()
+        englishLexiconMemo.clear()
         containsWordMemo.clear()
     }
 
