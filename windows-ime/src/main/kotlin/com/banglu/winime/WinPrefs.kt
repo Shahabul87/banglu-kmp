@@ -29,6 +29,12 @@ data class WinPrefs(
      * intended reading of a missing value.
      */
     val autoUpdate: Boolean = true,
+    /**
+     * The last version the tray balloon announced ([UpdateNotice]) — "" means
+     * never. Persisted so the once-per-version rule survives the restart that
+     * happens at every Windows login.
+     */
+    val updateNoticeVersion: String = "",
 )
 
 /**

@@ -28,9 +28,16 @@ class WinPrefsTest {
             startOnLogin = false,
             mode = "ENGLISH",
             autoUpdate = false,
+            updateNoticeVersion = "1.0.4",
         )
         fresh(dir).save(custom)
         assertEquals(custom, fresh(dir).load())
+    }
+
+    @Test fun theUpdateNoticeLedgerStartsEmpty() {
+        // Empty = "never announced anything": the first offer a fresh install
+        // ever sees gets its one balloon.
+        assertEquals("", fresh().load().updateNoticeVersion)
     }
 
     @Test fun autoUpdateRoundTripsBothWays() {

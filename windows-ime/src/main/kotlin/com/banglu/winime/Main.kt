@@ -194,12 +194,32 @@ fun main() = application {
     // draws no update surface whatsoever — no row, no menu item, no preference
     // — instead of an inert one.
     var autoUpdateChecked by remember { mutableStateOf(initialPrefs.autoUpdate) }
+    // The once-per-version balloon ledger, seeded from disk so a login-time
+    // restart cannot re-announce a version the user was already told about.
+    val announcedUpdate = remember {
+        java.util.concurrent.atomic.AtomicReference(initialPrefs.updateNoticeVersion)
+    }
     val updates = remember {
         Edition.updateGateway(File(bangluDir, "updates")) { state: UpdateStatus ->
             EventQueue.invokeLater {
                 ui.updateLine = state.line
                 ui.updateActionable = state.actionable
                 ui.updateBusy = state.busy
+                // The "come look" signal (UpdateNotice): the window shows the
+                // real offer; this balloon just makes sure a user who never
+                // opens the window still hears about it — once per version.
+                val offered = state.offeredVersion
+                if (UpdateNotice.shouldAnnounce(offered, announcedUpdate.get())) {
+                    announcedUpdate.set(offered)
+                    updatePrefs { it.copy(updateNoticeVersion = offered!!) }
+                    trayState.sendNotification(
+                        Notification(
+                            title = UpdateNotice.TITLE,
+                            message = UpdateNotice.message(offered!!),
+                            type = Notification.Type.Info,
+                        )
+                    )
+                }
             }
         }
     }

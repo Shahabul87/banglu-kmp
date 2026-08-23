@@ -425,7 +425,13 @@ class UpdateService(
             when (val decision = UpdatePlan.decide(body, currentVersion)) {
                 is UpdateDecision.Available -> {
                     pending = decision.manifest
-                    report(UpdateStatus(line = offerLine(decision.manifest), actionable = true))
+                    report(
+                        UpdateStatus(
+                            line = offerLine(decision.manifest),
+                            actionable = true,
+                            offeredVersion = decision.manifest.version,
+                        )
+                    )
                 }
                 UpdateDecision.None -> {
                     pending = null

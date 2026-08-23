@@ -48,6 +48,12 @@ data class UpdateStatus(
     val actionable: Boolean = false,
     /** True while a check/download/install is in flight — disables the button. */
     val busy: Boolean = false,
+    /**
+     * The version a CHECK just found, and nothing else — progress and failure
+     * reports leave it null, so the once-per-version tray balloon
+     * ([UpdateNotice]) can never re-fire off a download line.
+     */
+    val offeredVersion: String? = null,
 )
 
 /**
