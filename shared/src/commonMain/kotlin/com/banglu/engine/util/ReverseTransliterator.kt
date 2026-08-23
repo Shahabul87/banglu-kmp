@@ -30,6 +30,11 @@ object ReverseTransliterator {
      * contains ~13.5K words encoded in the decomposed form, so every public
      * entry point must normalize before parsing.
      *
+     * Deliberately NUKTA-ONLY: the S104 validator compaction folds its whole
+     * word list through this function, and widening it re-keys frequency data
+     * (তোমার-class twins merge). The decomposed two-part vowel signs have
+     * their own narrow fold, [foldVowelSigns] — see it for the S131 story.
+     *
      * Public: the dictionary compiler reuses this exact mapping to fold the
      * word list before keying, so the compiled `words` table and the engine's
      * runtime comparisons agree on the precomposed form.
@@ -40,6 +45,22 @@ object ReverseTransliterator {
             .replace("ড়", "ড়") // ড + ় -> ড়
             .replace("ঢ়", "ঢ়") // ঢ + ় -> ঢ়
             .replace("য়", "য়") // য + ় -> য়
+    }
+
+
+    /**
+     * S131, the NARROW half of the fold: only the decomposed two-part vowel
+     * signs (ে+া→ো, ে+ৗ→ৌ) — the encoding of the 333 poisoned shadow words.
+     * Used at the store/dictionary ingestion boundaries, where the WIDE
+     * [foldNukta] must not run: 13.5K corpus words are legitimately keyed in
+     * the decomposed-nukta form and folding them there reshuffles rankings
+     * and frequencies the whole pin wall depends on.
+     */
+    fun foldVowelSigns(text: String): String {
+        if (!text.contains('\u09C7')) return text
+        return text
+            .replace("\u09C7\u09BE", "\u09CB") // ে + া -> ো
+            .replace("\u09C7\u09D7", "\u09CC") // ে + ৗ -> ৌ
     }
 
     // ========================================================================
@@ -404,7 +425,9 @@ object ReverseTransliterator {
      */
     fun reverseWord(bengali: String): String {
         if (bengali.isEmpty()) return ""
-        return reverseWordInternal(foldNukta(bengali))
+        // S131: a decomposed \u09c7+\u09be must read as \u09cb, or the shadow-word
+        // poison class reverse-reads as the very English word it hijacked.
+        return reverseWordInternal(foldVowelSigns(foldNukta(bengali)))
     }
 
     /**

@@ -277,6 +277,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         internal fun isEnglishPrimaryIntentKey(key: String): Boolean =
             key in ENGLISH_PRIMARY_INTENT
 
+        /**
+         * S131: the reverse-transliteration overlap below which a Bengali
+         * result does NOT own an english_lexicon key. Measured on the real
+         * dictionary: genuine collisions score 1.0 (নামে="name", টিমে="time",
+         * প্রিন্টের="printer"); poisoned extended-dict aliases score ~0.55
+         * (রোল vs "real", রোড vs "read"). 0.75 splits with margin.
+         */
+        private const val ENGLISH_HONESTY_OWNERSHIP_FLOOR = 0.75
+
         private val MOBILE_SHORTHAND_OVERRIDES: Map<String, String> = mapOf(
             "amr" to "আমার",
             "tomr" to "তোমার",
@@ -729,7 +738,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private fun storeLookup(key: String): List<PhoneticIndexHit> {
         val store = phoneticIndex ?: return emptyList()
         storeLookupMemo[key]?.let { return it }
-        val hits = applyEvidenceMargin(store.lookupExact(key))
+        // S131: fold decomposed vowel-sign twins at the store boundary — the
+        // compiled db carries 333 words in the র+ে+া+ল encoding, and text we
+        // commit must never be mis-encoded even when such a row wins.
+        val hits = applyEvidenceMargin(store.lookupExact(key)).map { hit ->
+            val folded = ReverseTransliterator.foldVowelSigns(hit.bengali)
+            if (folded == hit.bengali) hit else hit.copy(bengali = folded)
+        }
         storeLookupMemo[key] = hits
         return hits
     }
@@ -1070,6 +1085,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 }
             }
         }
+        // S131: English-word honesty — deliberately BEFORE the validator gate
+        // (it needs only the lexicon store, so lite mode is protected too).
+        tryEnglishHonestyFlip(key, raw)?.let { return it }
         if (!validator.isLoaded()) return raw
         // General 4x-margin rule for weakly-attested squatters (needs the
         // frequency validator); getSuggestions always offers the loanword as
@@ -1139,6 +1157,60 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         return corrected.copy(
             alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.7))) +
                 raw.alternatives.filter { it.bengali != corrected.bengali }.take(2)
+        )
+    }
+
+    /**
+     * S131: English-word honesty (Windows field report 2026-08-23, real ->
+     * রোল). banglu-web's dictionary-extended.json carries poisoned rows —
+     * {"bengali": "রোল", "phonetics": ["real"]}@68 — that the compiler bakes
+     * into extended_phonetics, so the dictionary layer "exactly" claims a
+     * real English word with a Bengali word that cannot be read as it, on
+     * every surface at once.
+     *
+     * The law: a key the curated english_lexicon knows may only be kept by a
+     * Bengali result that phonetically OWNS it. Ownership is measured the
+     * same way the learning guard measures plausibility — reverse-transliterate
+     * the Bengali and score the overlap — but with a hard floor: genuine
+     * collisions read back perfectly (নামে="name", টিমে="time",
+     * প্রিন্টের="printer", all 1.0) while the poisoned class cannot
+     * (রোল="rol" vs "real" = 0.554). Below the floor the lexicon rendering
+     * wins, and only when it, itself, reads BETTER as the key than the
+     * squatter does (রিয়েল=0.63 > রোল=0.554) — which also shields curated
+     * seeds whose lexicon twin is cruder than the pipeline's answer
+     * (college: কলেজ@0.998 vs the lexicon's কলিজ@0.22, no flip), on top of
+     * the >= 0.99 curated-confidence exemption.
+     */
+    private fun tryEnglishHonestyFlip(key: String, raw: ConversionResult): ConversionResult? {
+        if (raw.confidence >= 0.99) return null
+        if (' ' in raw.bengali) return null
+        val en = phoneticIndex?.lookupEnglish(key) ?: return null
+        if (en == raw.bengali) return null
+        // The compiler's HABIT alias rows are CURATED chat spellings whose
+        // phonetic fidelity is deliberately loose (issa→ইচ্ছা, S27 class) —
+        // and CMU carries proper nouns ("issa"→ইসা) that must never outrank
+        // them. A store-attested habit alias for this exact (key, word) pair
+        // is a deliberate decision; the honesty flip stands down.
+        if (storeLookup(key).any {
+                it.priority == PhoneticIndexHit.PRIORITY_HABIT && it.bengali == raw.bengali
+            }
+        ) {
+            return null
+        }
+        val incumbentReverse = ReverseTransliterator.reverseWord(raw.bengali)
+        if (incumbentReverse.isEmpty()) return null
+        val incumbent = PhoneticOverlapScorer.score(key, incumbentReverse).score
+        if (incumbent >= ENGLISH_HONESTY_OWNERSHIP_FLOOR) return null
+        val lexicon = PhoneticOverlapScorer.score(key, ReverseTransliterator.reverseWord(en)).score
+        if (lexicon <= incumbent) return null
+        return ConversionResult(
+            bengali = en,
+            confidence = 0.93,
+            source = ResolutionSource.ENGLISH_LEXICON,
+            alternatives = (
+                listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.8))) +
+                    raw.alternatives.take(2)
+                ).distinctBy { it.bengali }.filter { it.bengali != en }
         )
     }
 
@@ -1463,6 +1535,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 }
             }
         }
+        // S131 mirror — the SAME shared guard as the commit wrapper, not a
+        // copy (the S83 drift lesson): the preview must not show রোল while
+        // Space commits রিয়েল.
+        tryEnglishHonestyFlip(key, raw)?.let { return it.copy(alternatives = emptyList()) }
         return tryJunkLexiconRescue(key, raw) ?: raw
     }
 
@@ -1873,10 +1949,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (key.length >= 3) {
             phoneticIndex?.let { store ->
                 for ((index, hit) in store.lookupPrefix(key, 8).withIndex()) {
-                    if (seen.add(hit.bengali)) {
+                    // S131: continuations reach the strip (and a click commits
+                    // them) — fold the decomposed-vowel twins here too.
+                    val continuation = ReverseTransliterator.foldVowelSigns(hit.bengali)
+                    if (seen.add(continuation)) {
                         suggestions.add(
                             SmartSuggestion(
-                                bengali = hit.bengali,
+                                bengali = continuation,
                                 confidence = maxOf(0.68, 0.90 - index * 0.03),
                                 source = "corpus_prefix",
                                 phonetic = key,
