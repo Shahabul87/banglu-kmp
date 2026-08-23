@@ -163,6 +163,26 @@ jobs:
             gh release create "$TAG" --title "বাংলু টাইপার $TAG" --repo "$GITHUB_REPOSITORY" --notes "বাংলু টাইপার (Windows IME) — unsigned MSI installer." "$MSI" windows-update.json
           fi
 
+      # www.bangluweb.com's ডাউনলোড section links a STABLE file name —
+      # .../releases/download/downloads/BangluTyper.msi — so the homepage
+      # never carries a stale version number. Refreshed here from the same
+      # bytes just attached to the versioned release. The `downloads` release
+      # is permanent bookkeeping, exactly like `windows-update` below.
+      - name: Refresh the stable website download alias
+        if: startsWith(github.ref, 'refs/tags/windows-v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          MSI=$(ls windows-ime/build/compose/binaries/main/msi/*.msi)
+          cp "$MSI" BangluTyper.msi
+          if gh release view downloads --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload downloads BangluTyper.msi --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            echo "::warning::the 'downloads' release is missing — the website alias was not refreshed"
+          fi
+
       # The one URL the app is compiled to fetch, forever:
       #   .../releases/download/windows-update/windows-update.json
       #
