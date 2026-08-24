@@ -208,6 +208,11 @@ class BangluIMEService : InputMethodService(),
      *  (not the user's setting) — lets a pack-missing error walk back online
      *  instead of dead-ending. */
     private var voiceOfflineForcedBySession = false
+
+    /** S133: true once ANY speech reached this dictation session (beginning-
+     *  of-speech, a partial, or a result). The silence cap on a session that
+     *  heard nothing shows MIC_SILENT instead of stopping "gracefully". */
+    private var voiceHeardSpeechThisSession = false
     /** S55 (F-ANDROID-006): fires if startListening() gets no
      *  RecognitionListener callback at all within the timeout — the
      *  recognizer is dead, not slow. Disarmed by every callback. */
@@ -2440,6 +2445,7 @@ class BangluIMEService : InputMethodService(),
         voiceFruitlessRestarts = 0
         voiceBusyRestarts = 0
         voiceWedgeRestarts = 0
+        voiceHeardSpeechThisSession = false
         voiceTokenRefineJob?.cancel()
         voiceTokenRefineJob = null
         voicePartialGeneration++
@@ -2617,6 +2623,7 @@ class BangluIMEService : InputMethodService(),
                 if (isStale()) return
                 pokeVoiceWatchdog()
                 log("voice: beginning")
+                voiceHeardSpeechThisSession = true
                 voiceFruitlessRestarts = 0
                 voiceBusyRestarts = 0
                 voiceWedgeRestarts = 0
@@ -2691,7 +2698,8 @@ class BangluIMEService : InputMethodService(),
                     fruitlessRestarts = voiceFruitlessRestarts,
                     maxFruitlessRestarts = VOICE_MAX_FRUITLESS_RESTARTS,
                     busyRestarts = voiceBusyRestarts,
-                    maxBusyRestarts = VOICE_MAX_BUSY_RESTARTS
+                    maxBusyRestarts = VOICE_MAX_BUSY_RESTARTS,
+                    heardSpeechThisSession = voiceHeardSpeechThisSession
                 )
                 when (action) {
                     VoiceSessionPolicy.VoiceAction.RetryOffline -> {
@@ -2800,6 +2808,7 @@ class BangluIMEService : InputMethodService(),
                 }
 
                 log("voice: result='$best'")
+                voiceHeardSpeechThisSession = true
                 if (best.isEmpty()) {
                     log("voice: result already committed by pause timer")
                     voiceCarry.closeTranscript()
@@ -2843,6 +2852,7 @@ class BangluIMEService : InputMethodService(),
                     ?.let { stripAutoCommittedVoicePrefix(it) }
                     .orEmpty()
                 if (partial.isNotEmpty()) {
+                    voiceHeardSpeechThisSession = true
                     log("voice: partial='$partial'")
                     suggestions.clear()
                     renderVoicePartialIncrementally(partial)

@@ -78,3 +78,51 @@ class VoicePartialDiffTest {
         assertEquals(" আজ আসবো না", p.insert)
     }
 }
+
+// ── S133: the revision-vs-fresh-segment discriminator ────────────────────
+// Field report (2026-08-23, third round of this bug): "one sentence or words
+// is repeated several times". The S120 trace itself was a FIRST-WORD revision
+// ("অনেক" → "অ১নেক") — exact word equality saw no common prefix, called it a
+// fresh segment, and appended the whole hypothesis after itself. Fuzzy word
+// matching (small edit distance = the recognizer respelling the same audio)
+// must fold such hypotheses into the revision paths.
+
+class S133FirstWordRevisionTest {
+
+    @Test
+    fun firstWordRespellingRewritesInsteadOfDuplicating() {
+        // The exact S120 smoking-gun shape: live text on screen, next
+        // hypothesis revises the FIRST word's spelling and adds one word.
+        // The fuzzy overlap proves it is the SAME utterance — the hypothesis
+        // replaces the live region (word-for-word rewrite plus the new word),
+        // it must NEVER append after it (that was the duplication).
+        val p = VoicePartialDiff.diff("অনেক রাত হয়ে", "অ১নেক রাত হয়ে গেছে")!!
+        assertEquals("অনেক রাত হয়ে".length, p.deleteCount)
+        assertEquals("অ১নেক রাত হয়ে গেছে", p.insert)
+        assertEquals("অ১নেক রাত হয়ে গেছে", p.newLiveText)
+    }
+
+    @Test
+    fun aShorterRespelledInterimIsIgnored() {
+        // Same revision, but the hypothesis is a SHORTER interim — owing
+        // nothing. Without the fuzzy-covered guard this deleted live words.
+        assertNull(VoicePartialDiff.diff("অনেক রাত হয়ে", "অ১নেক রাত"))
+    }
+
+    @Test
+    fun respelledFirstWordWithRewrittenTailRewritesTheRegion() {
+        val p = VoicePartialDiff.diff("অনেক রাত হয়ে", "অ১নেক রাত হবে")!!
+        assertEquals("অনেক রাত হয়ে".length, p.deleteCount)
+        assertEquals("অ১নেক রাত হবে", p.insert)
+        assertEquals("অ১নেক রাত হবে", p.newLiveText)
+    }
+
+    @Test
+    fun genuinelyNewSpeechStillAppendsAsAFreshSegment() {
+        // The S56 data-loss protection must survive: a hypothesis sharing no
+        // similar words is a fresh segment — append, never delete.
+        val p = VoicePartialDiff.diff("আজ সকালে বাজারে", "তারপর বাসায় ফিরলাম")!!
+        assertEquals(0, p.deleteCount)
+        assertEquals(" তারপর বাসায় ফিরলাম", p.insert)
+    }
+}

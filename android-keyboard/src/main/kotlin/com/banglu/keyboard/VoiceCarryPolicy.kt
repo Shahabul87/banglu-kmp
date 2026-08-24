@@ -87,22 +87,37 @@ class VoiceCarryPolicy {
         var clean = text.trim()
         if (clean.isEmpty()) return clean
 
-        // 1. Cross-restart textual overlap (probationary). A probationary
-        //    carry the hypothesis does not overlap is genuinely new speech
-        //    (the S56 contract) — the carry dies immediately so it can never
-        //    mis-strip a later sentence starting with the same words.
+        // 1. Cross-restart overlap (probationary). S133: WORD-based with
+        //    fuzzy equality — the re-heard utterance comes back with revised
+        //    spellings ("অনেক" → "অ১নেক"), and the old exact startsWith test
+        //    died on one changed character, re-appending the whole committed
+        //    transcript once per error restart (field report round three of
+        //    this bug). A probationary carry the hypothesis does not overlap
+        //    is still genuinely new speech (the S56 contract) — the carry
+        //    dies immediately so it can never mis-strip a later sentence
+        //    starting with the same words.
         if (restartCarry.isNotEmpty()) {
+            val carryWords = restartCarry.split(whitespace)
+            val hypWords = clean.split(whitespace)
+            var matched = 0
+            while (matched < carryWords.size && matched < hypWords.size &&
+                VoiceWordMatch.similar(carryWords[matched], hypWords[matched])
+            ) {
+                matched++
+            }
             clean = when {
-                clean == restartCarry -> {
-                    probation = false
+                // Fully covered (equal or a late, shorter re-hear): stale —
+                // re-appending it would duplicate committed text. An exact-
+                // length match confirms the overlap and ends probation.
+                matched == hypWords.size -> {
+                    if (matched == carryWords.size) probation = false
                     ""
                 }
-                // A late, SHORTER hypothesis of already-committed speech is
-                // stale — re-appending it would duplicate committed text.
-                restartCarry.startsWith(clean) -> ""
-                clean.startsWith("$restartCarry ") -> {
+                // Carry fully covered with words to spare: the overlap is
+                // confirmed; only the extra words are owed.
+                matched == carryWords.size -> {
                     probation = false
-                    clean.removePrefix(restartCarry).trimStart()
+                    hypWords.drop(matched).joinToString(" ")
                 }
                 else -> {
                     if (probation) {

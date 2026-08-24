@@ -48,11 +48,38 @@ object VoicePartialDiff {
             common++
         }
 
-        if (common == 0) {
-            // Fresh segment (recognizer reset): append, never delete.
+        // S133: the fresh-segment/interim questions are decided with FUZZY
+        // word equality — the recognizer respells the same audio between
+        // hypotheses ("অনেক" → "অ১নেক", the S120 trace), and exact matching
+        // turned a first-word respelling into "no overlap".
+        var fuzzyCommon = 0
+        while (fuzzyCommon < prevWords.size && fuzzyCommon < partWords.size &&
+            VoiceWordMatch.similar(prevWords[fuzzyCommon], partWords[fuzzyCommon])
+        ) {
+            fuzzyCommon++
+        }
+
+        // A SHORTER hypothesis entirely fuzzy-covered by the live words is a
+        // stale, respelled interim — it owes nothing (the exact-text shorter
+        // case is handled by the startsWith branch above).
+        if (fuzzyCommon == partWords.size && partWords.size < prevWords.size) return null
+
+        if (fuzzyCommon == 0) {
+            // Fresh segment (recognizer reset): append, never delete. Only a
+            // hypothesis whose FIRST word is not even a respelling of ours
+            // qualifies — the old exact test here is what duplicated whole
+            // sentences once per first-word revision (field report: "one
+            // sentence repeated several times").
             val boundary = if (previous.last().isWhitespace()) "" else " "
             val insert = boundary + partial
             return Patch(0, insert, previous + insert)
+        }
+
+        if (common == 0) {
+            // Same utterance (fuzzy overlap proves it) respelled from the
+            // very first word: adopt the hypothesis wholesale. Word count is
+            // preserved by construction — this is a rewrite, never a loss.
+            return Patch(previous.length, partial, partial)
         }
 
         // Rewrite of the tail after a stable word prefix: replace only the

@@ -112,6 +112,13 @@ object VoiceSessionPolicy {
      *   watchdog (no callback at all), this IS a callback every time, so
      *   only a counted cap stops the "restart forever" loop.
      * @param maxBusyRestarts session cap on consecutive busy cycles
+     * @param heardSpeechThisSession S133: whether ANY speech reached this
+     *   dictation session (a partial, a result, or onBeginningOfSpeech).
+     *   The silence cap on a session that heard NOTHING is not a user who
+     *   stopped talking — it is a mic that never delivered (held by another
+     *   app, OEM routing), and ending it "gracefully" is exactly the field
+     *   report "no error shows up but no voice is picked up". Defaults to
+     *   true so the safe direction (no new message) is the fallback.
      */
     fun onError(
         error: Int,
@@ -121,7 +128,8 @@ object VoiceSessionPolicy {
         fruitlessRestarts: Int,
         maxFruitlessRestarts: Int,
         busyRestarts: Int,
-        maxBusyRestarts: Int
+        maxBusyRestarts: Int,
+        heardSpeechThisSession: Boolean = true
     ): VoiceAction {
         if (error in OFFLINE_PACK_MISSING_ERRORS) {
             // S69: if WE forced offline (the user didn't ask for it), the
@@ -138,7 +146,14 @@ object VoiceSessionPolicy {
         if (error in SILENT_ERRORS) {
             val nextCount = fruitlessRestarts + 1
             return if (nextCount >= maxFruitlessRestarts) {
-                VoiceAction.GracefulStop
+                // S133: silence after real dictation = the user stopped
+                // talking (graceful, no nag). Silence in a session that
+                // never heard ONE word = the mic never delivered — say so.
+                if (heardSpeechThisSession) {
+                    VoiceAction.GracefulStop
+                } else {
+                    VoiceAction.ShowMessage(VoiceInputState.MIC_SILENT)
+                }
             } else {
                 VoiceAction.RestartSameMode
             }

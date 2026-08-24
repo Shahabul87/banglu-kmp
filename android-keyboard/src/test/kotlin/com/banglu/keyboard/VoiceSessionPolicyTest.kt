@@ -184,3 +184,37 @@ class VoiceSessionPolicyTest {
         assertEquals(VoiceSessionPolicy.VoiceAction.ShowMessage(VoiceInputState.ERROR), action)
     }
 }
+
+// ── S133: a mic that never delivered a word must SAY so ──────────────────
+// Field report: "some phone it does not shows up any error but no voice is
+// picking up". The silence cap ended with GracefulStop — right for a user
+// who stopped talking after real dictation, silent-wrong for a mic that
+// heard NOTHING the whole session (held by another app, OEM routing).
+
+class S133MicSilentTest {
+
+    private fun silenceCap(heard: Boolean) = VoiceSessionPolicy.onError(
+        error = VoiceSessionPolicy.ERROR_NO_MATCH,
+        networkRetryUsed = false,
+        offlineRetryUsed = false,
+        offlineForcedBySession = false,
+        fruitlessRestarts = 2,
+        maxFruitlessRestarts = 3,
+        busyRestarts = 0,
+        maxBusyRestarts = 3,
+        heardSpeechThisSession = heard,
+    )
+
+    @Test
+    fun silenceCapWithNothingEverHeardShowsTheMicSilentMessage() {
+        assertEquals(
+            VoiceSessionPolicy.VoiceAction.ShowMessage(VoiceInputState.MIC_SILENT),
+            silenceCap(heard = false),
+        )
+    }
+
+    @Test
+    fun silenceCapAfterRealDictationStaysGraceful() {
+        assertEquals(VoiceSessionPolicy.VoiceAction.GracefulStop, silenceCap(heard = true))
+    }
+}

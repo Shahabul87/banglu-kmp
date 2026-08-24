@@ -37,7 +37,13 @@ enum class VoiceInputState {
      *  restarting past the busy-retry cap (a stolen recognition slot never
      *  clears on its own) — give up with an actionable message instead of
      *  destroy+recreate looping forever. */
-    BUSY_GIVEUP
+    BUSY_GIVEUP,
+    /** S133: the silence cap fired on a session that never heard ONE word —
+     *  a mic that never delivered (held by another app, muted, OEM audio
+     *  routing), not a user who stopped talking. Ending that "gracefully"
+     *  was the field report "no error shows up but no voice is picked up";
+     *  this state carries the actionable message instead. */
+    MIC_SILENT
 }
 
 enum class ThemeMode {

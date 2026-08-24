@@ -121,3 +121,41 @@ class VoiceCarryPolicyTest {
         assertEquals("যাই হোক", c.strip("যাই হোক"))
     }
 }
+
+// ── S133: the restart carry must survive recognizer respelling ───────────
+// The within-session strip went word-count-based in S121, but the CROSS-
+// RESTART carry stayed exact-text: one revised character in the re-heard
+// hypothesis's first word killed the probationary carry and the entire
+// committed transcript re-appended — once per error restart.
+
+class S133RestartCarryRevisionTest {
+
+    @Test
+    fun aRevisedRehearStripsByFuzzyWordPrefix() {
+        val c = VoiceCarryPolicy()
+        c.append("অনেক রাত হয়ে গেছে")
+        c.armProbation()
+        // The new session re-hears the interrupted utterance; the recognizer
+        // respells the first word and continues with new speech.
+        assertEquals("তাই ঘুমাবো", c.strip("অ১নেক রাত হয়ে গেছে তাই ঘুমাবো"))
+    }
+
+    @Test
+    fun aRevisedShorterRehearOwesNothing() {
+        val c = VoiceCarryPolicy()
+        c.append("অনেক রাত হয়ে গেছে")
+        c.armProbation()
+        assertEquals("", c.strip("অ১নেক রাত হয়ে"))
+    }
+
+    @Test
+    fun genuinelyNewSpeechStillKillsTheCarry() {
+        // The S56 contract survives: divergence = new speech, carry dies so a
+        // later sentence starting with the same words is never mis-stripped.
+        val c = VoiceCarryPolicy()
+        c.append("অনেক রাত")
+        c.armProbation()
+        assertEquals("এখন সকাল হলো", c.strip("এখন সকাল হলো"))
+        assertEquals("অনেক রাত ভালো", c.strip("অনেক রাত ভালো"))
+    }
+}

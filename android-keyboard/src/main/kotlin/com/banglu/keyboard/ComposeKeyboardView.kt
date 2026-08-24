@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -827,6 +828,8 @@ private fun VoiceStatusPanel(
         VoiceInputState.OFFLINE_PACK_MISSING -> "\u0985\u09ab\u09b2\u09be\u0987\u09a8\u09c7 \u09ac\u09be\u0982\u09b2\u09be \u09ad\u09df\u09c7\u09b8 \u09aa\u09cd\u09af\u09be\u0995 \u09a8\u09c7\u0987"
         // S55 (review follow-up): busy-retry cap exceeded
         VoiceInputState.BUSY_GIVEUP -> "\u09ad\u09df\u09c7\u09b8 \u098f\u0996\u09a8 \u09ac\u09cd\u09af\u09b8\u09cd\u09a4"
+        // S133: whole session heard nothing \u2014 the mic never delivered.
+        VoiceInputState.MIC_SILENT -> "\u0995\u09bf\u099b\u09c1 \u09b6\u09cb\u09a8\u09be \u09af\u09be\u09af\u09bc\u09a8\u09bf"
         VoiceInputState.IDLE -> ""
     }
     val detail = when (state) {
@@ -841,6 +844,9 @@ private fun VoiceStatusPanel(
         VoiceInputState.WATCHDOG_TIMEOUT -> "সাড়া নেই — Gboard-এ ভয়েস কাজ করে কি না দেখুন"
         VoiceInputState.OFFLINE_PACK_MISSING -> "\u0987\u09a8\u09cd\u099f\u09be\u09b0\u09a8\u09c7\u099f \u099a\u09be\u09b2\u09c1 \u0995\u09b0\u09c1\u09a8 \u09ac\u09be Google \u0985\u09cd\u09af\u09be\u09aa \u09a5\u09c7\u0995\u09c7 \u09ac\u09be\u0982\u09b2\u09be \u09aa\u09cd\u09af\u09be\u0995 \u09a8\u09be\u09ae\u09be\u09a8"
         VoiceInputState.BUSY_GIVEUP -> "\u098f\u0995\u099f\u09c1 \u09aa\u09b0\u09c7 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8"
+        // S133: point at the two real causes \u2014 another app holding the mic,
+        // or the phone's own voice input being broken.
+        VoiceInputState.MIC_SILENT -> "\u09ae\u09be\u0987\u0995\u09cd\u09b0\u09cb\u09ab\u09cb\u09a8 \u0995\u09bf \u0985\u09a8\u09cd\u09af \u0985\u09cd\u09af\u09be\u09aa \u09ac\u09cd\u09af\u09ac\u09b9\u09be\u09b0 \u0995\u09b0\u099b\u09c7? \u09ac\u09a8\u09cd\u09a7 \u0995\u09b0\u09c7 \u0986\u09ac\u09be\u09b0 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8"
         else -> ""
     }
     val isActive = state == VoiceInputState.LISTENING || state == VoiceInputState.PROCESSING
@@ -849,7 +855,8 @@ private fun VoiceStatusPanel(
         state == VoiceInputState.UNAVAILABLE ||
         state == VoiceInputState.BUSY_GIVEUP ||
         state == VoiceInputState.WATCHDOG_TIMEOUT ||
-        state == VoiceInputState.OFFLINE_PACK_MISSING
+        state == VoiceInputState.OFFLINE_PACK_MISSING ||
+        state == VoiceInputState.MIC_SILENT
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1422,13 +1429,44 @@ private fun BangluSuggestionRow(
     // fresh top-ranked chips off-screen left. Every list update is a new
     // ranking — snap back so rank 1 is always visible.
     val stripState = rememberLazyListState()
-    LaunchedEffect(suggestions) { stripState.scrollToItem(0) }
+
+    // S133 (field report: "they need to press the words many times but still
+    // words not selected"): the strip used to mutate UNDER the finger — an
+    // async refine landing mid-press replaced the chips and snapped the list
+    // to item 0, which cancels the in-progress tap gesture and can dispose
+    // the very chip being pressed. Gboard's rule, adopted: the strip does
+    // not update while a touch is active. [frozen] pins the rendered list
+    // from finger-down to finger-up; the pointer observation is pass-through
+    // (Initial pass, nothing consumed), so chip clicks behave exactly as
+    // before — they just fire on chips that hold still.
+    val latestSuggestions = rememberUpdatedState(suggestions)
+    var frozen by remember { mutableStateOf<List<SmartSuggestion>?>(null) }
+    val shown = frozen ?: suggestions
+    LaunchedEffect(shown, frozen == null) {
+        // Snap only while no finger is down: a programmatic scroll during a
+        // press is precisely the gesture-cancel this fix removes.
+        if (frozen == null) stripState.scrollToItem(0)
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(scaledDp(TopStripHeight))
-            .background(colors.suggestionBg),
+            .background(colors.suggestionBg)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    frozen = latestSuggestions.value
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Final)
+                            if (event.changes.none { it.pressed }) break
+                        }
+                    } finally {
+                        frozen = null
+                    }
+                }
+            },
         verticalAlignment = Alignment.CenterVertically
     ) {
         LazyRow(
@@ -1440,8 +1478,8 @@ private fun BangluSuggestionRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            items(suggestions, key = { "${it.bengali}|${it.source}|${it.tier}" }) { suggestion ->
-                val isFirst = suggestion == suggestions.firstOrNull()
+            items(shown, key = { "${it.bengali}|${it.source}|${it.tier}" }) { suggestion ->
+                val isFirst = suggestion == shown.firstOrNull()
                 // Feature 4.4: Prediction chips use different styling
                 val isPrediction = suggestion.tier == "prediction"
                 val isPunctuation = suggestion.tier == "punctuation"
