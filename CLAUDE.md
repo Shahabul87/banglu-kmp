@@ -31,8 +31,18 @@ Future revenue = optional premium (AI rewrite via the :ui process, power-user
 packs). NO cloud API on the keystroke path — decided 2026-07-03 (latency,
 cost, and privacy-promise reasons; see memory + git history).
 
-**Current status (2026-08-17):** ONE ENGINE, FIVE SURFACES.
-- **Android** v1.5.69 (2106), db 3.9.4 — S110-S113 book-register block
+**Current status (2026-08-26):** ONE ENGINE, SIX SURFACES (Windows IME
+বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **Android** v1.5.82 (2119), db 3.9.6 — S135 production-readiness round
+  (docs/audits/audit-android-production-readiness-2026-08-26.md verified
+  true and fixed: cross-process "clear learned data" via BangluPrefsProvider
+  METHOD_ERASE_LEARNING — the :ui process has NO engine storage, erase only
+  in the keyboard process; ClipboardHistoryPolicy — sensitive-clip/-field
+  guard + one-hour expiry; dedicated `identity_assist` switch for saved
+  emails; semantic onClick/customActions on every key for TalkBack/Switch
+  Access; release script asserts clean tree + AAB embedded revision == HEAD
+  + owner-only signing files; privacy policy rewritten from the artifact).
+  S133 voice/tap fixes. Before that: S110-S113 book-register block
   (book-corpus study harness + literary pin wall; plural-suffix and samasa
   composition; khanda-ta ৎ/ত্ twin fold; book_lexicon.tsv ingestion; OOV
   onset-integrity honesty floor; ato-class arbitration). Before that: S109

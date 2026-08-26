@@ -13,49 +13,63 @@
 </head>
 <body>
     <h1>Banglu Keyboard - Privacy Policy</h1>
-    <p class="updated">Last updated: June 11, 2026</p>
+    <p class="updated">Last updated: August 26, 2026 &middot; Applies to Banglu Bengali Keyboard for Android 1.5.82 and later</p>
 
     <h2>Overview</h2>
-    <p>Banglu Keyboard ("we", "our", "the app") is a Bengali phonetic keyboard for Android. Core keyboard typing and phonetic conversion work offline on your device and do not send typed text to Banglu's servers. Optional account, sync, subscription, and voice features may use network services as described below.</p>
+    <p>Banglu Bengali Keyboard ("the app") is a phonetic keyboard that converts English letters into Bengali text. The app works entirely on your device: typing, phonetic conversion, suggestions, and learning never leave your phone. This version <strong>does not request the INTERNET permission</strong> and has no account, sign-in, sync, or subscription feature. The only time anything leaves your device is optional voice typing, which uses the speech recognition service already on your phone.</p>
 
-    <h2>Data Collection</h2>
-    <p><strong>Banglu Keyboard does not sell personal data and does not collect keystrokes for advertising.</strong></p>
+    <h2>What the app does not do</h2>
     <ul>
-        <li><strong>No keystroke logging for ads or analytics.</strong> Banglu does not record or transmit your typed keyboard text for advertising or analytics.</li>
-        <li><strong>Offline core typing.</strong> Bengali phonetic conversion, local suggestions, and the bundled dictionary can work offline without a Banglu account.</li>
-        <li><strong>Account data.</strong> If you create an account, Banglu may store your name, email, device identifier, authentication tokens, subscription state, and sync metadata needed for account features.</li>
-        <li><strong>Dictionary sync.</strong> If you sign in and use sync, custom conversions and selected dictionary preferences may be sent to Banglu's backend so they can work across devices.</li>
-        <li><strong>Voice typing is optional.</strong> When you tap the microphone, Banglu uses your device's Android speech recognition provider. Audio may be sent to that provider, such as Google, for transcription. Banglu does not store voice audio.</li>
-        <li><strong>Internet may be used for account, sync, subscription, backend, and voice features.</strong> Core keyboard typing works offline.</li>
-        <li><strong>No analytics or tracking.</strong> We do not use any analytics SDKs, crash reporters, or advertising frameworks.</li>
+        <li><strong>No keystroke logging.</strong> The app never records or transmits what you type.</li>
+        <li><strong>No analytics, advertising, or tracking.</strong> No analytics SDK, crash reporter, or advertising framework is included.</li>
+        <li><strong>No network access.</strong> The keyboard process cannot open a network connection &mdash; the app does not hold the INTERNET permission.</li>
+        <li><strong>No selling of data.</strong> There is nothing collected to sell.</li>
     </ul>
 
-    <h2>Data Stored on Device</h2>
-    <p>The following data is stored on your device. If you sign in and enable sync, selected account and dictionary data may be synced with Banglu's backend so your preferences can work across devices:</p>
+    <h2>Data stored on your device</h2>
+    <p>Everything below stays in the app's private storage on your phone. It is excluded from Android cloud backup and device-to-device transfer, is not readable by other apps, and is removed when you uninstall the app.</p>
     <ul>
-        <li><strong>Learned words:</strong> When you select a word from suggestions, the app remembers your preference to improve future suggestions. This is stored in Android SharedPreferences.</li>
-        <li><strong>Custom conversions:</strong> If you add your own typing formula, it is stored locally and may sync if you are signed in and use sync.</li>
-        <li><strong>Clipboard history:</strong> If you open Banglu's clipboard panel, the app may save recent copied text locally so you can paste it again. You can clear clipboard history from the keyboard clipboard panel. Clipboard history is not sent to Banglu's backend.</li>
-        <li><strong>Settings:</strong> Your keyboard preferences (theme, haptic feedback, sound, etc.) are stored in SharedPreferences.</li>
-        <li><strong>Dictionary:</strong> A pre-compiled Bengali dictionary (read-only) is bundled with the app for offline phonetic conversion.</li>
+        <li><strong>Keyboard preferences:</strong> theme, height, sounds, haptics, and similar settings.</li>
+        <li><strong>Learned words and chosen spellings:</strong> when you pick a suggestion, the app remembers that choice so the same word converts your way next time.</li>
+        <li><strong>Custom conversions:</strong> typing formulas you add yourself.</li>
+        <li><strong>Next-word pairs:</strong> which word you tend to type after another, used for on-device next-word suggestions.</li>
+        <li><strong>English typing learning:</strong> words you use while typing in English mode, for English suggestions.</li>
+        <li><strong>Saved email addresses (identity assist):</strong> when you finish typing an email address in an email field, the app can remember up to eight addresses so it can offer them as one-tap fills in other email fields. It never remembers anything typed in password, one-time-code, or "no personalized learning" fields. Controlled by <strong>Settings &rarr; "ইমেইল ঠিকানা মনে রাখা"</strong>; switching it off deletes the saved addresses immediately.</li>
+        <li><strong>Clipboard history:</strong> when you open the keyboard's clipboard panel, the app can keep up to twelve recently copied texts so you can paste them again. Each item is kept for <strong>one hour</strong> and then deleted automatically. The app never stores a clip the source app marked as sensitive (for example a password copied from a password manager), and never stores clips while you are in a password, one-time-code, or "no personalized learning" field. You can clear the panel at any time with its clear button.</li>
+        <li><strong>Local diagnostics counters:</strong> a few anonymous numbers (event counts, typing latency) shown on the in-app Diagnostics screen. They contain no typed text and never leave the phone.</li>
+        <li><strong>Dictionary:</strong> the bundled Bengali dictionary (read-only) is copied to the app's private storage for offline conversion.</li>
     </ul>
+
+    <h2>Deleting your data</h2>
+    <ul>
+        <li><strong>Settings &rarr; "শেখা শব্দ মুছুন"</strong> deletes every category of learned data at once &mdash; learned words and chosen spellings, custom conversions, next-word pairs, English typing learning, and saved email addresses. The app confirms deletion only after the data has actually been removed.</li>
+        <li><strong>Settings switches</strong> let you stop learning, stop the personal dictionary, or stop remembering email addresses (which also deletes the addresses already saved).</li>
+        <li>The <strong>clipboard panel's clear button</strong> deletes clipboard history; items also expire on their own after one hour.</li>
+        <li><strong>Uninstalling</strong> the app removes all of the above.</li>
+    </ul>
+
+    <h2>Voice typing</h2>
+    <p>Voice typing is optional and only starts when you tap the microphone. Before the first use the app explains this and asks for the microphone permission. Speech is handled by the Android speech recognition service installed on your phone &mdash; typically Google's, or your device maker's. Depending on that provider and your device settings, audio may be processed on the device (when an offline Bengali speech pack is installed) or sent to the provider's servers for transcription; the provider's own privacy policy applies to that processing. Banglu never stores audio and never receives it &mdash; the transcribed text is inserted directly into what you are typing.</p>
 
     <h2>Permissions</h2>
-    <p>Banglu Keyboard may request these permissions:</p>
+    <p>The app requests only:</p>
     <ul>
-        <li><strong>VIBRATE:</strong> Used for haptic feedback when pressing keys. This can be disabled in the app settings.</li>
-        <li><strong>RECORD_AUDIO:</strong> Used only when you tap the microphone for voice typing.</li>
-        <li><strong>INTERNET:</strong> Used for account login, sync, subscription/backend features, and network-dependent voice recognition.</li>
+        <li><strong>VIBRATE:</strong> haptic feedback when pressing keys. Accesses no personal data.</li>
+        <li><strong>RECORD_AUDIO:</strong> used only while you are actively using voice typing.</li>
     </ul>
+    <p>The app does not request INTERNET, ACCESS_NETWORK_STATE, BILLING, contacts, location, storage, or any other permission.</p>
 
-    <h2>Third-Party Services</h2>
-    <p>Banglu does not integrate advertising or analytics SDKs. Voice typing uses the Android speech recognition service available on your device, which may be provided by Google or another system speech provider. Google sign-in and Google Play Billing may be used if you choose account or subscription features.</p>
+    <h2>Data sharing</h2>
+    <p>Banglu shares no data with anyone. The one exception is voice typing, where the audio goes to your phone's speech recognition provider as described above.</p>
 
-    <h2>Children's Privacy</h2>
-    <p>The app is not directed to children under 13.</p>
+    <h2>Children's privacy</h2>
+    <p>The app is not directed to children under 13 and collects no personal information from anyone.</p>
 
-    <h2>Changes to This Policy</h2>
-    <p>We may update this privacy policy from time to time. Any changes will be reflected in the "Last updated" date above.</p>
+    <h2>Future features</h2>
+    <p>If a later version adds optional features that need the network (for example an account or cross-device sync), that version will request the permissions it needs, this policy will be updated first, and those features will stay separate from the keyboard's typing process.</p>
+
+    <h2>Changes to this policy</h2>
+    <p>Changes are posted here with an updated date.</p>
 
     <h2>Contact</h2>
     <p>If you have questions about this privacy policy, please contact us at: <strong>isham251087@gmail.com</strong></p>

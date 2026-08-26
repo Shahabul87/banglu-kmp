@@ -43,10 +43,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -2103,6 +2106,11 @@ private fun EnterActionKey(
             .semantics {
                 role = Role.Button
                 contentDescription = "Enter"
+                // S135 (F-005): keys handle touch through raw pointerInput,
+                // which exposes NO accessibility action — TalkBack / Switch
+                // Access announced every key but could not press one. The
+                // semantic click is the assistive path; touch is unchanged.
+                onClick { currentOnClick(); true }
             }
             .pointerInput(label) {
                 // S13: commit on DOWN like letter keys \u2014 detectTapGestures
@@ -2247,6 +2255,22 @@ private fun KeyButton(
                     accessibilityLabel
                 } else {
                     "$accessibilityLabel. Long press for alternatives"
+                }
+                // S135 (F-005): assistive activation (see EnterActionKey).
+                // Position-aware keys get the key centre; nothing was
+                // committed on press, so alternatives INSERT (never replace).
+                onClick {
+                    val clickAt = currentOnClickAt
+                    if (clickAt != null) clickAt(0.5f) else currentOnClick()
+                    true
+                }
+                if (longPressOptions.isNotEmpty()) {
+                    customActions = longPressOptions.map { option ->
+                        CustomAccessibilityAction("Insert ${option.label}") {
+                            onTextInput(option.input)
+                            true
+                        }
+                    }
                 }
             }
             .pointerInput(longPressOptions) {
@@ -2429,6 +2453,12 @@ private fun SpaceBar(
             .semantics {
                 role = Role.Button
                 contentDescription = "Spacebar. Drag left or right to move cursor"
+                // S135 (F-005): assistive activation + cursor moves as actions.
+                onClick { currentOnClick(); true }
+                customActions = listOf(
+                    CustomAccessibilityAction("Move cursor left") { currentOnCursorMove(-1); true },
+                    CustomAccessibilityAction("Move cursor right") { currentOnCursorMove(1); true }
+                )
             }
             .pointerInput(Unit) {
                 // S13: single gesture owner. The old detectDragGestures +
@@ -2555,6 +2585,11 @@ private fun BackspaceKey(
             .semantics {
                 role = Role.Button
                 contentDescription = "Backspace. Hold to delete faster"
+                // S135 (F-005): assistive activation; word delete as an action.
+                onClick { currentOnBackspace(); true }
+                customActions = listOf(
+                    CustomAccessibilityAction("Delete previous word") { currentOnBackspaceWord(); true }
+                )
             }
             .pointerInput(Unit) {
                 detectTapGestures(
@@ -2653,6 +2688,11 @@ private fun NumberKey(
             .semantics {
                 role = Role.Button
                 contentDescription = "Number $displayNumber, long press for $symbol"
+                // S135 (F-005): assistive activation; the symbol as an action.
+                onClick { currentOnNumberPress(number); true }
+                customActions = listOf(
+                    CustomAccessibilityAction("Type $symbol") { currentOnSymbolPress(symbol); true }
+                )
             }
             .pointerInput(Unit) {
                 detectTapGestures(

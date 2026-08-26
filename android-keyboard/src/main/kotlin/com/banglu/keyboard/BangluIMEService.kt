@@ -15,7 +15,6 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.text.InputType
-import android.util.Base64
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
@@ -73,7 +72,7 @@ class BangluIMEService : InputMethodService(),
     // ── State ──────────────────────────────────────────────────────────────
     private var buffer = ""
     private val suggestions = mutableStateListOf<SmartSuggestion>()
-    private val clipboardHistory = mutableStateListOf<String>()
+    private val clipboardHistory = mutableStateListOf<ClipboardHistoryPolicy.Entry>()
     private val keyboardMode = mutableStateOf(KeyboardMode.BANGLU)
     private val shiftState = mutableStateOf(ShiftState.OFF)
 
@@ -272,7 +271,7 @@ class BangluIMEService : InputMethodService(),
     // auto-unshift re-executed the whole key tree. Fields are created once.
     private val kbSuggestionsProvider: () -> List<SmartSuggestion> = { suggestions.toList() }
     private val kbVoiceLevelProvider: () -> Float = { voiceInputLevel.value }
-    private val kbClipboardItemsProvider: () -> List<String> = { clipboardHistory.toList() }
+    private val kbClipboardItemsProvider: () -> List<String> = { clipboardHistory.map { it.text } }
     private val kbRecentEmojisProvider: () -> List<String> = { recentEmojis.toList() }
     private val kbOnKeyPress: (Char) -> Unit = { onKeyPress(it) }
     private val kbOnLetterTouch: (Char, Char?, Char?, Float) -> Unit =
@@ -334,7 +333,13 @@ class BangluIMEService : InputMethodService(),
         // setting.
         if (key != null && key.startsWith("diag_")) return@OnSharedPreferenceChangeListener
         reloadSettings()
-        if (key == "auth_user_id" || key == "auth_email" || key == "subscription_plan" || key == "lite_mode") {
+        // S135 (F-001): the settings screen erases learned data through
+        // BangluPrefsProvider in THIS process and stamps this key — the live
+        // engine (dictionary-backed learned words, bigrams, preference maps)
+        // is rebuilt clean here, so the keyboard forgets immediately.
+        if (key == "auth_user_id" || key == "auth_email" || key == "subscription_plan" || key == "lite_mode" ||
+            key == BangluPrefsProvider.KEY_LEARNING_ERASED_AT
+        ) {
             reloadUserLearningAsync()
         }
     }
@@ -347,6 +352,8 @@ class BangluIMEService : InputMethodService(),
     val keyPreviewEnabled = mutableStateOf(true)
     val typingLearningEnabled = mutableStateOf(true)
     val personalDictionaryEnabled = mutableStateOf(true)
+    /** S135 (F-004): dedicated saved-email identity switch (see settings). */
+    val identityAssistEnabled = mutableStateOf(true)
     val liteModeEnabled = mutableStateOf(false)
     val themeMode = mutableStateOf("dark")
     val keyboardHeightMode = mutableStateOf("normal")
@@ -417,8 +424,6 @@ class BangluIMEService : InputMethodService(),
         /** S98: identity-assist chips (email fills / domain completions). */
         private const val IDENTITY_FILL_SOURCE = "identity_fill"
         private const val MAX_RECENT_EMOJIS = 40
-        private const val MAX_CLIPBOARD_HISTORY = 12
-        private const val MAX_CLIPBOARD_ITEM_CHARS = 1_000
         private val GAP_PUNCTUATION_MARKS = listOf("\u0964", ",", "?", "!", "\u0983", ":")
     }
 
@@ -916,6 +921,7 @@ class BangluIMEService : InputMethodService(),
         keyPreviewEnabled.value = prefs.getBoolean("key_preview", true)
         typingLearningEnabled.value = prefs.getBoolean("typing_learning", true)
         personalDictionaryEnabled.value = prefs.getBoolean("personal_dictionary", true)
+        identityAssistEnabled.value = prefs.getBoolean("identity_assist", true)
         // Full dictionary by default (fresh installs get predictions + context
         // reranking + strong gates). shouldUseLiteDictionary() still forces lite
         // on low-RAM devices, and every heavy loader degrades gracefully on OOM.
@@ -931,7 +937,8 @@ class BangluIMEService : InputMethodService(),
         defaultLetterMode = if (defaultMode == "english") KeyboardMode.ENGLISH else KeyboardMode.BANGLU
         SmartEngineAdapter.configureLearning(
             enabled = typingLearningEnabled.value,
-            personalDictionary = personalDictionaryEnabled.value
+            personalDictionary = personalDictionaryEnabled.value,
+            identityAssist = identityAssistEnabled.value
         )
     }
 
@@ -981,7 +988,7 @@ class BangluIMEService : InputMethodService(),
         SmartEngineAdapter.configurePersistenceScope(serviceScope)
 
         log("onCreate: Initializing SmartEngine...")
-        serviceScope.launch {
+        initialEngineLoadJob = serviceScope.launch {
             try {
                 // S29: the seed-dictionary build took ~650ms ON the main thread
                 // here — on 2GB devices the IME process is killed and recreated
@@ -1020,12 +1027,17 @@ class BangluIMEService : InputMethodService(),
      *  once more with the LATEST profile instead of racing it. */
     private var engineRebuildInFlight = false
     private var engineRebuildPending = false
+    /** S135: the cold-start load; a rebuild request (erase, profile flip)
+     *  that lands while it is still running waits for it instead of racing
+     *  two initialize() calls over the same storage snapshot. */
+    private var initialEngineLoadJob: Job? = null
 
     private fun reloadUserLearningAsync() {
         // S44 (audit finding): the rebuild serves the seed engine for seconds —
         // learning must close for the whole window, not just the first boot.
         dictionaryReadyForLearning = false
         serviceScope.launch {
+            initialEngineLoadJob?.join()
             if (engineRebuildInFlight) {
                 engineRebuildPending = true
                 return@launch
@@ -1781,7 +1793,8 @@ class BangluIMEService : InputMethodService(),
 
     /** Sensitive fields (password/OTP/no-learning) are excluded absolutely. */
     private fun identityAssistAllowed(): Boolean =
-        imeSessionVisible && suggestionsEnabled.value && !sensitiveInputMode
+        imeSessionVisible && suggestionsEnabled.value && !sensitiveInputMode &&
+            personalDictionaryEnabled.value && identityAssistEnabled.value
 
     /** The whitespace-delimited token directly before the cursor. */
     private fun identityTokenBeforeCursor(ic: InputConnection): String {
@@ -3715,6 +3728,7 @@ class BangluIMEService : InputMethodService(),
             letterModeBeforeSymbols = keyboardMode.value
         }
         ensureClipboardHistoryLoaded()
+        pruneClipboardHistory()
         captureCurrentSystemClipboard()
         keyboardMode.value = KeyboardMode.CLIPBOARD
         resetShiftState()
@@ -4142,29 +4156,27 @@ class BangluIMEService : InputMethodService(),
         val manager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
         val clip = manager.primaryClip ?: return
         if (clip.itemCount <= 0) return
+        // S135 (F-003): honor the source app's sensitivity marker (password
+        // managers, OTP autofill) and never learn from a sensitive field —
+        // decided BEFORE the clip text is even read.
+        val clipIsSensitive = clip.description?.extras
+            ?.getBoolean(ClipboardHistoryPolicy.EXTRA_IS_SENSITIVE, false) == true
+        if (!ClipboardHistoryPolicy.shouldRemember(sensitiveInputMode, clipIsSensitive)) return
         val text = clip.getItemAt(0)
             ?.coerceToText(this)
             ?.toString()
-            ?.trim()
             .orEmpty()
-        if (text.isNotBlank()) rememberClipboardItem(text)
+        rememberClipboardItem(text)
     }
 
     private fun loadClipboardHistory() {
         if (!::prefs.isInitialized) return
+        val entries = ClipboardHistoryPolicy.decode(
+            prefs.getString(PREF_CLIPBOARD_HISTORY, null),
+            System.currentTimeMillis()
+        )
         clipboardHistory.clear()
-        prefs.getString(PREF_CLIPBOARD_HISTORY, "")
-            .orEmpty()
-            .split("|")
-            .mapNotNull { encoded ->
-                if (encoded.isBlank()) return@mapNotNull null
-                runCatching {
-                    String(Base64.decode(encoded, Base64.NO_WRAP), Charsets.UTF_8)
-                }.getOrNull()
-            }
-            .filter { it.isNotBlank() }
-            .take(MAX_CLIPBOARD_HISTORY)
-            .forEach { clipboardHistory.add(it) }
+        clipboardHistory.addAll(entries)
         clipboardHistoryLoaded = true
     }
 
@@ -4172,15 +4184,25 @@ class BangluIMEService : InputMethodService(),
         if (!clipboardHistoryLoaded) loadClipboardHistory()
     }
 
+    /** S135: entries older than [ClipboardHistoryPolicy.RETENTION_MS] die on
+     *  every panel open, not just on process restart. */
+    private fun pruneClipboardHistory() {
+        val pruned = ClipboardHistoryPolicy.prune(clipboardHistory.toList(), System.currentTimeMillis())
+        if (pruned.size == clipboardHistory.size) return
+        clipboardHistory.clear()
+        clipboardHistory.addAll(pruned)
+        persistClipboardHistory()
+    }
+
     private fun rememberClipboardItem(text: String) {
         ensureClipboardHistoryLoaded()
-        val clean = text.trim().take(MAX_CLIPBOARD_ITEM_CHARS)
-        if (clean.isBlank()) return
-        clipboardHistory.remove(clean)
-        clipboardHistory.add(0, clean)
-        while (clipboardHistory.size > MAX_CLIPBOARD_HISTORY) {
-            clipboardHistory.removeAt(clipboardHistory.lastIndex)
-        }
+        // S135 (F-003): a paste INTO a password/OTP/no-learning field still
+        // works; the field just never feeds history.
+        if (!ClipboardHistoryPolicy.shouldRemember(sensitiveInputMode, clipIsSensitive = false)) return
+        val next = ClipboardHistoryPolicy.remember(clipboardHistory.toList(), text, System.currentTimeMillis())
+        if (next == clipboardHistory.toList()) return
+        clipboardHistory.clear()
+        clipboardHistory.addAll(next)
         persistClipboardHistory()
     }
 
@@ -4192,10 +4214,9 @@ class BangluIMEService : InputMethodService(),
 
     private fun persistClipboardHistory() {
         if (!::prefs.isInitialized) return
-        val encoded = clipboardHistory.joinToString("|") {
-            Base64.encodeToString(it.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-        }
-        prefs.edit().putString(PREF_CLIPBOARD_HISTORY, encoded).apply()
+        prefs.edit()
+            .putString(PREF_CLIPBOARD_HISTORY, ClipboardHistoryPolicy.encode(clipboardHistory.toList()))
+            .apply()
     }
 
     private fun clearCommitCaches() {

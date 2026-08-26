@@ -128,13 +128,22 @@ class AndroidStorage(context: Context) : PlatformStorage {
     // English-typing learning, and saved email identities behind while the
     // UI claimed the data was gone. Keys are removed outright.
     override suspend fun clearAllLearningData() {
+        // S135 (F-001): commit, not apply — the caller reports "deleted" to
+        // the user only after this returns, so the file write must be done,
+        // not queued. Always off the main thread (provider binder thread /
+        // persistence dispatcher).
         prefs.edit()
             .remove(scopedKey(KEY_LEARNED_WORDS))
             .remove(scopedKey(KEY_CUSTOM_CONVERSIONS))
             .remove(scopedKey(KEY_USER_BIGRAMS))
             .remove(scopedKey(KEY_ENGLISH_USER_DATA))
             .remove(scopedKey(KEY_IDENTITY_USER_DATA))
-            .apply()
+            .commit()
+    }
+
+    /** S135 (F-004): drop ONLY the saved email identities, durably. */
+    fun clearIdentityUserData() {
+        prefs.edit().remove(scopedKey(KEY_IDENTITY_USER_DATA)).commit()
     }
 
     override suspend fun getUserBigrams(): Map<String, Map<String, Int>> {

@@ -31,7 +31,15 @@ class BangluPrefsProvider : ContentProvider() {
     companion object {
         const val METHOD_GET_ALL = "get_all"
         const val METHOD_PUT_BATCH = "put_batch"
+        /** S135 (F-001): erase learned data INSIDE the keyboard process. */
+        const val METHOD_ERASE_LEARNING = "erase_learning"
+        const val ERASE_SCOPE_ALL = "all"
+        const val ERASE_SCOPE_IDENTITY = "identity"
         const val KEY_REMOVALS = "__removals"
+        const val KEY_OK = "__ok"
+        /** Written after every successful erase; the IME's preference listener
+         *  rebuilds its engine on this key so the live keyboard forgets too. */
+        const val KEY_LEARNING_ERASED_AT = "learning_erased_at"
 
         fun authority(context: Context): String = "${context.packageName}.prefs"
 
@@ -73,8 +81,47 @@ class BangluPrefsProvider : ContentProvider() {
                 editor.apply()
                 Bundle()
             }
+            METHOD_ERASE_LEARNING -> Bundle().apply {
+                putBoolean(KEY_OK, eraseLearning(context, arg))
+            }
             else -> null
         }
+    }
+
+    /**
+     * S135 (F-001, production audit): "Clear learned data" used to call
+     * SmartEngineAdapter.eraseAllLearning() from the `:ui` process, where the
+     * adapter's storage is never attached — the null-safe call skipped the
+     * persisted keys and the settings screen still toasted success. Android
+     * processes share no singleton memory, so the ONLY place an erase is real
+     * is this process: the SharedPreferences instance here is the one the IME
+     * writes through, and the adapter here is the one serving keystrokes.
+     *
+     * Runs on a binder thread; every step is durable (commit) before `true`
+     * is returned. Any throwable → false, and the caller must NOT claim
+     * success.
+     */
+    private fun eraseLearning(context: Context, scope: String?): Boolean = try {
+        val storage = AndroidStorage(context.applicationContext)
+        when (scope) {
+            ERASE_SCOPE_IDENTITY -> {
+                // Live memory + persisted blob; the IME needs no rebuild for
+                // this — the identity store is not baked into the engine.
+                com.banglu.engine.SmartEngineAdapter.clearIdentity()
+                storage.clearIdentityUserData()
+                true
+            }
+            else -> {
+                // Persisted keys first (storage may be unattached when the IME
+                // service is not running in this process), then live memory,
+                // then the stamp that makes a running IME rebuild its engine.
+                kotlinx.coroutines.runBlocking { storage.clearAllLearningData() }
+                kotlinx.coroutines.runBlocking { com.banglu.engine.SmartEngineAdapter.eraseAllLearning() }
+                prefs(context).edit().putLong(KEY_LEARNING_ERASED_AT, System.currentTimeMillis()).commit()
+            }
+        }
+    } catch (_: Throwable) {
+        false
     }
 
     override fun query(uri: Uri, p: Array<out String>?, s: String?, a: Array<out String>?, o: String?): Cursor? = null
@@ -92,6 +139,24 @@ class BangluPrefsProvider : ContentProvider() {
  * the settings UI owns its own state and never needs them.
  */
 fun remoteBangluPrefs(context: Context): SharedPreferences = RemoteBangluPrefs(context.applicationContext)
+
+/**
+ * S135 (F-001): `:ui`-side entry point for erasing learned data. Blocking IPC
+ * into the keyboard process — call off the main thread. Returns true only
+ * when the keyboard process confirmed the persisted keys AND its live engine
+ * state are gone; the caller shows success only on true.
+ *
+ * @param scope [BangluPrefsProvider.ERASE_SCOPE_ALL] or
+ *   [BangluPrefsProvider.ERASE_SCOPE_IDENTITY]
+ */
+fun eraseLearningInKeyboardProcess(context: Context, scope: String): Boolean = try {
+    val uri = Uri.parse("content://${BangluPrefsProvider.authority(context)}")
+    context.applicationContext.contentResolver
+        .call(uri, BangluPrefsProvider.METHOD_ERASE_LEARNING, scope, null)
+        ?.getBoolean(BangluPrefsProvider.KEY_OK, false) == true
+} catch (_: Exception) {
+    false
+}
 
 private class RemoteBangluPrefs(private val context: Context) : SharedPreferences {
 

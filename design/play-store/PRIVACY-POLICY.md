@@ -1,51 +1,68 @@
 # Privacy Policy — Banglu Bengali Keyboard
 
-**Last updated:** July 10, 2026
+**Last updated:** August 26, 2026
+**Applies to:** Banglu Bengali Keyboard for Android, version 1.5.82 and later
 
 ## Overview
 
-Banglu Bengali Keyboard ("the App") is a phonetic keyboard application that converts English letters to Bengali text. Core keyboard typing and phonetic conversion work offline on your device and do not send typed text to Banglu's servers. Optional account, sync, subscription, and voice features may use network services as described below. Your privacy is important to us.
+Banglu Bengali Keyboard ("the App") is a phonetic keyboard that converts English letters into Bengali text. The App works entirely on your device: typing, phonetic conversion, suggestions, and learning never leave your phone. This version of the Android app **does not request the INTERNET permission** and has no account, sign-in, sync, or subscription feature. The only time anything leaves your device is optional voice typing, which uses the speech recognition service already on your phone (see "Voice typing" below).
 
-## Data Collection
+## What the App does not do
 
-Banglu does not sell personal data and does not collect keystrokes for advertising. Specifically:
+- **No keystroke logging:** the App never records or transmits what you type.
+- **No analytics, advertising, or tracking:** no analytics SDK, crash reporter, or advertising framework is included.
+- **No network access:** the keyboard process cannot open a network connection — the App does not hold the INTERNET permission.
+- **No selling of data:** there is nothing collected to sell.
 
-- **No keystroke logging:** Banglu does not record or transmit your typed keyboard text for advertising or analytics
-- **Offline core typing:** Bengali phonetic conversion, local suggestions, and the bundled dictionary can work offline without a Banglu account
-- **Account data:** If you create an account, Banglu may store your email/name, subscription state, and sync metadata needed for login and account features
-- **Dictionary sync:** If you sign in and use sync, custom conversions and selected dictionary preferences may be synced with Banglu's backend so they can work across devices
-- **No analytics:** Nothing about your typing or usage is ever transmitted anywhere. The app keeps a few anonymous counters (e.g., crash and event counts, typing-latency numbers) strictly on your device to power the local Diagnostics screen — they contain no typed text and never leave your phone
-- **No third-party services:** We do not integrate any advertising, analytics, or data collection SDKs
+## Data stored on your device
 
-## Data Storage
+Everything below stays in the App's private storage on your phone. It is excluded from Android cloud backup and device-to-device transfer, is not readable by other apps, and is removed when you uninstall the App.
 
-The following data is stored on your device. If you sign in and enable sync, selected account and dictionary data may also be synced with Banglu's backend:
+- **Keyboard preferences:** theme, height, sounds, haptics, and similar settings.
+- **Learned words and chosen spellings:** when you pick a suggestion, the App remembers that choice so the same word converts your way next time.
+- **Custom conversions:** typing formulas you add yourself.
+- **Next-word pairs:** which word you tend to type after another, used for on-device next-word suggestions.
+- **English typing learning:** words you use while typing in English mode, for English suggestions.
+- **Saved email addresses (identity assist):** when you finish typing an email address in an email field, the App can remember up to eight addresses so it can offer them as one-tap fills in other email fields. It never remembers anything typed in password, one-time-code, or "no personalized learning" fields. This is controlled by **Settings → "ইমেইল ঠিকানা মনে রাখা"**; switching it off deletes the saved addresses immediately.
+- **Clipboard history:** when you open the keyboard's clipboard panel, the App can keep up to twelve recently copied texts so you can paste them again. Each item is kept for **one hour** and then deleted automatically. The App never stores a clip that the source app marked as sensitive (for example a password copied from a password manager), and never stores clips while you are in a password, one-time-code, or "no personalized learning" field. You can clear the panel at any time with its clear button.
+- **Local diagnostics counters:** a few anonymous numbers (event counts, typing latency) shown on the in-app Diagnostics screen. They contain no typed text and never leave the phone.
+- **Dictionary:** the bundled Bengali dictionary (read-only) is copied to the App's private storage for offline conversion.
 
-- **Keyboard preferences:** Your settings (theme, haptic feedback, sound, etc.) are saved in the app's local storage
-- **Learned words:** When you select a word suggestion, the app remembers your preference to improve future suggestions. You can clear learned words from Settings.
-- **Custom conversions:** If you add a custom typing formula, it is stored locally and may sync if you are signed in and use sync.
-- **Clipboard history:** If you open Banglu's clipboard panel, the app may save recent copied text locally so you can paste it again. You can clear this from the keyboard clipboard panel. Clipboard history is not sent to Banglu's backend.
-- **Dictionary data:** The Bengali dictionary (485,000 words) is bundled with the app and stored locally
+## Deleting your data
+
+- **Settings → "শেখা শব্দ মুছুন"** deletes every category of learned data at once — learned words and chosen spellings, custom conversions, next-word pairs, English typing learning, and saved email addresses. The App confirms deletion only after the data has actually been removed.
+- **Settings switches** let you stop learning ("টাইপিং শেখা"), stop the personal dictionary, or stop remembering email addresses (which also deletes the addresses already saved).
+- The **clipboard panel's clear button** deletes clipboard history; items also expire on their own after one hour.
+- **Uninstalling** the App removes all of the above.
+
+## Voice typing
+
+Voice typing is optional and only starts when you tap the microphone. Before the first use the App explains this and asks for the microphone permission. Speech is handled by the Android speech recognition service installed on your phone — typically Google's, or your device maker's. Depending on that provider and your device settings, audio may be processed on the device (when an offline Bengali speech pack is installed) or sent to the provider's servers for transcription; the provider's own privacy policy applies to that processing. Banglu never stores audio and never receives it — the transcribed text is inserted directly into what you are typing.
 
 ## Permissions
 
-The app requests these permissions:
+The App requests only:
 
-- **VIBRATE:** Used for haptic feedback when pressing keys. This permission does not access any personal data.
-- **INTERNET:** Used for account login, dictionary sync, subscription/backend features, and network-dependent voice recognition.
-- **RECORD_AUDIO:** Used only when you tap the microphone for Bengali voice typing. Banglu does not store audio recordings. Voice recognition is handled through the Android speech recognition service available on your device, which may be provided by Google or another system speech provider depending on your device settings. Audio may be sent to that provider for transcription.
+- **VIBRATE:** haptic feedback when pressing keys. Accesses no personal data.
+- **RECORD_AUDIO:** used only while you are actively using voice typing, as described above.
 
-## Data Sharing
+The App does not request INTERNET, ACCESS_NETWORK_STATE, BILLING, contacts, location, storage, or any other permission.
 
-Banglu does not sell user data. Voice typing may send audio to the Android speech recognition provider selected by your device, such as Google, for transcription. Account and sync requests are sent to Banglu's backend only when you sign in or use sync features.
+## Data sharing
 
-## Children's Privacy
+Banglu shares no data with anyone. The one exception is voice typing, where the audio goes to your phone's speech recognition provider as described above.
 
-The app is not directed to children under 13.
+## Children's privacy
 
-## Changes to This Policy
+The App is not directed to children under 13 and collects no personal information from anyone.
 
-If we update this privacy policy, we will post the changes here with an updated date.
+## Future features
+
+If a later version adds optional features that need the network (for example an account or cross-device sync), that version will request the permissions it needs, this policy will be updated first, and those features will stay separate from the keyboard's typing process.
+
+## Changes to this policy
+
+Changes are posted here with an updated date.
 
 ## Contact
 
@@ -53,6 +70,6 @@ If you have questions about this privacy policy, contact us at:
 - Email: isham251087@gmail.com
 - GitHub: https://github.com/Shahabul87
 
-## Open Source
+## Open source
 
-Banglu Keyboard's phonetic engine is built with transparency in mind. Core keyboard conversion is processed on-device. Optional voice, account, subscription, and sync features use network services only when those features are used.
+Banglu Keyboard's phonetic engine is built with transparency in mind: every conversion happens on your device, in a keyboard process that has no network access.

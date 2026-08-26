@@ -41,7 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.DateFormat
 import java.util.Date
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private var Primary = Color(0xFF0A84FF)
 private var Success = Color(0xFF34C759)
@@ -176,7 +178,6 @@ class SettingsActivity : ComponentActivity() {
 fun BangluSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { remoteBangluPrefs(context) }
-    val storage = remember { AndroidStorage(context) }
     val coroutineScope = rememberCoroutineScope()
 
     var autoCapitalize by remember { mutableStateOf(prefs.getBoolean("auto_capitalize", true)) }
@@ -184,6 +185,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
     var suggestions by remember { mutableStateOf(prefs.getBoolean("suggestions", true)) }
     var typingLearning by remember { mutableStateOf(prefs.getBoolean("typing_learning", true)) }
     var personalDictionary by remember { mutableStateOf(prefs.getBoolean("personal_dictionary", true)) }
+    var identityAssist by remember { mutableStateOf(prefs.getBoolean("identity_assist", true)) }
     // Full dictionary by default: predictions, context reranking, and the strong
     // commit gate all need the full tables. Weak devices still auto-fall to lite
     // via the IME's device check (isLowRamDevice / memoryClass < 256).
@@ -327,12 +329,37 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                 }
             }
             item {
-                BrandSwitch("ব্যক্তিগত অভিধান", "নাম, জায়গা ও নিজের শব্দ রাখুন; সাইন ইন করলে sync হতে পারে", personalDictionary) {
+                BrandSwitch("ব্যক্তিগত অভিধান", "নাম, জায়গা ও নিজের শব্দ শুধু এই ফোনেই রাখুন — কোথাও পাঠানো হয় না", personalDictionary) {
                     personalDictionary = it; saveBoolean("personal_dictionary", it)
                 }
             }
             item {
-                BrandActionRow("শেখা শব্দ মুছুন", "আপনার বাছাই করা বানান ও কাস্টম কনভার্সন মুছে দিন") {
+                // S135 (F-004): saved email addresses get their own switch —
+                // turning it off deletes them at once (in the keyboard
+                // process, see eraseLearningInKeyboardProcess).
+                BrandSwitch(
+                    "ইমেইল ঠিকানা মনে রাখা",
+                    "ইমেইল ঘরে লেখা ঠিকানা এই ফোনেই থাকে, পরে এক ট্যাপে বসানোর জন্য; বন্ধ করলে সংরক্ষিত ঠিকানা মুছে যায়",
+                    identityAssist
+                ) { enabled ->
+                    identityAssist = enabled
+                    saveBoolean("identity_assist", enabled)
+                    if (!enabled) {
+                        coroutineScope.launch {
+                            val ok = withContext(Dispatchers.IO) {
+                                eraseLearningInKeyboardProcess(context, BangluPrefsProvider.ERASE_SCOPE_IDENTITY)
+                            }
+                            Toast.makeText(
+                                context,
+                                if (ok) "সংরক্ষিত ইমেইল ঠিকানা মুছে ফেলা হয়েছে" else "ইমেইল ঠিকানা মুছে ফেলা যায়নি — আবার চেষ্টা করুন",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+            }
+            item {
+                BrandActionRow("শেখা শব্দ মুছুন", "শেখা শব্দ, বাছাই, কাস্টম কনভার্সন, পরের-শব্দ ও ইংরেজি শেখা, সংরক্ষিত ইমেইল — সব মুছে দিন") {
                     showClearLearnedDialog = true
                 }
             }
@@ -550,13 +577,21 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                         onClick = {
                             showClearLearnedDialog = false
                             coroutineScope.launch {
-                                // S128 (production audit): ONE authoritative
-                                // erase — persisted keys AND live engine
-                                // memory; the old storage.clearLearnedWords()
-                                // left bigrams, English learning and saved
-                                // emails behind.
-                                com.banglu.engine.SmartEngineAdapter.eraseAllLearning()
-                                Toast.makeText(context, "শেখা সব ডেটা মুছে ফেলা হয়েছে", Toast.LENGTH_SHORT).show()
+                                // S135 (F-001, production audit): this screen
+                                // lives in the :ui process, where the engine
+                                // adapter has no storage — the S128 direct
+                                // call erased nothing and toasted success.
+                                // The erase now runs inside the keyboard
+                                // process and success is shown only when it
+                                // confirms.
+                                val ok = withContext(Dispatchers.IO) {
+                                    eraseLearningInKeyboardProcess(context, BangluPrefsProvider.ERASE_SCOPE_ALL)
+                                }
+                                Toast.makeText(
+                                    context,
+                                    if (ok) "শেখা সব ডেটা মুছে ফেলা হয়েছে" else "মুছে ফেলা যায়নি — আবার চেষ্টা করুন",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                         }
                     ) {

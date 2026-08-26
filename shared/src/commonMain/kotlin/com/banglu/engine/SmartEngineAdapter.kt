@@ -40,6 +40,13 @@ object SmartEngineAdapter {
     private var learningEnabled = true
     @Volatile
     private var personalDictionaryEnabled = true
+    /** S135: dedicated switch for saved-email identity assist (F-004). Email
+     *  addresses are the most identifying thing the keyboard ever retains, so
+     *  they get their own control instead of riding the broad personal
+     *  dictionary default; both must be on for identities to be recorded OR
+     *  surfaced. */
+    @Volatile
+    private var identityAssistEnabled = true
     @Volatile
     private var persistenceScope: CoroutineScope? = null
     @Volatile
@@ -563,7 +570,10 @@ object SmartEngineAdapter {
         englishLearningLoaded = false
         identityAssist.clear()
         identityLoaded = false
-        engine = null
+        // S135 (F-001): this now really runs inside the keyboard process while
+        // keystrokes may be in flight on another thread — drop the engine
+        // under the same monitor getEngine() publishes through.
+        com.banglu.engine.util.runSynchronized(this) { engine = null }
         engineFullyLoaded = false
     }
 
@@ -571,9 +581,10 @@ object SmartEngineAdapter {
      * Runtime settings from Android preferences. The IME calls this whenever
      * settings are reloaded so learning can be disabled without rebuilding.
      */
-    fun configureLearning(enabled: Boolean, personalDictionary: Boolean) {
+    fun configureLearning(enabled: Boolean, personalDictionary: Boolean, identityAssist: Boolean = true) {
         learningEnabled = enabled
         personalDictionaryEnabled = personalDictionary
+        identityAssistEnabled = identityAssist
     }
 
     // ── S96: English typing suite ────────────────────────────────────────
@@ -630,17 +641,23 @@ object SmartEngineAdapter {
         identityLoaded = true
     }
 
+    /** S135 (F-004): identity assist runs only when BOTH the personal
+     *  dictionary and the dedicated identity switch are on. Surfacing is
+     *  gated as strictly as recording — a switched-off user must never see
+     *  an address the keyboard remembered earlier. */
+    fun identityAssistActive(): Boolean = personalDictionaryEnabled && identityAssistEnabled
+
     fun identityDomainSuggestions(token: String, limit: Int = 3): List<String> =
-        identityAssist.domainSuggestions(token, limit)
+        if (identityAssistActive()) identityAssist.domainSuggestions(token, limit) else emptyList()
 
     fun identitySavedFills(limit: Int = 3): List<String> =
-        identityAssist.savedIdentities(limit)
+        if (identityAssistActive()) identityAssist.savedIdentities(limit) else emptyList()
 
     fun identityIsEmailLikeToken(token: String): Boolean =
         identityAssist.isEmailLikeToken(token)
 
     fun recordIdentity(token: String) {
-        if (!personalDictionaryEnabled) return
+        if (!identityAssistActive()) return
         identityAssist.recordIdentity(token)
         val scope = persistenceScope ?: return
         val snapshot = identityAssist.serialize()
@@ -691,6 +708,7 @@ object SmartEngineAdapter {
         }
         learningEnabled = true
         personalDictionaryEnabled = true
+        identityAssistEnabled = true
         persistenceScope = null
         phoneticStore = null
         engineFullyLoaded = false
