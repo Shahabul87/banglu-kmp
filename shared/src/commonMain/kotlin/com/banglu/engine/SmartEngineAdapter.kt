@@ -11,6 +11,7 @@ import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -380,18 +381,10 @@ object SmartEngineAdapter {
 
         val count = getEngine().recordUserBigram(prev, next)
         if (count <= 0) return
-        val s = storage ?: return
-        val scope = persistenceScope ?: return
         // S66: single-lane persistence dispatcher — off the UI thread AND off
         // Dispatchers.Default, so blob re-serialization never competes with
         // the latency-critical conversion pool (see persistenceDispatcher).
-        scope.launch(com.banglu.engine.util.persistenceDispatcher) {
-            try {
-                s.saveUserBigram(prev, next, count)
-            } catch (_: Exception) {
-                // Persistence failure is non-critical
-            }
-        }
+        persist { it.saveUserBigram(prev, next, count) }
     }
 
     /**
@@ -460,29 +453,13 @@ object SmartEngineAdapter {
     }
 
     private fun persistLearnedWord(phonetic: String, bengali: String, frequency: Int) {
-        val s = storage ?: return
-        val scope = persistenceScope ?: return
         // Off the Main-dispatched persistenceScope — see recordNextWordUsage.
-        scope.launch(com.banglu.engine.util.persistenceDispatcher) {
-            try {
-                s.saveLearnedWord(phonetic, bengali, frequency)
-            } catch (_: Exception) {
-                // Persistence failure is non-critical
-            }
-        }
+        persist { it.saveLearnedWord(phonetic, bengali, frequency) }
     }
 
     /** S78: durable half of the primary-tap preference clear. */
     private fun removeLearnedPreference(phonetic: String) {
-        val s = storage ?: return
-        val scope = persistenceScope ?: return
-        scope.launch(com.banglu.engine.util.persistenceDispatcher) {
-            try {
-                s.removeLearnedWord(phonetic)
-            } catch (_: Exception) {
-                // Persistence failure is non-critical
-            }
-        }
+        persist { it.removeLearnedWord(phonetic) }
     }
 
     /**
@@ -560,8 +537,41 @@ object SmartEngineAdapter {
      * identity store, and the loaded engine itself, which is dropped and
      * rebuilt clean on next use). Conversion behavior is untouched.
      */
-    suspend fun eraseAllLearning() {
-        storage?.clearAllLearningData()
+    // S136 (F-001): EVERY persistence write goes through persist(). The
+    // erase bumps eraseGeneration BEFORE clearing memory; a write launched
+    // earlier carries the old generation and is DROPPED when it finally runs,
+    // so a stale snapshot can never resurrect erased data — no matter how the
+    // single lane interleaves suspending writes (the re-audit's exact case).
+    // The mutex serializes in-flight writes against the erase itself.
+    private val persistenceMutex = kotlinx.coroutines.sync.Mutex()
+    @Volatile
+    private var eraseGeneration = 0
+
+    private fun persist(block: suspend (PlatformStorage) -> Unit) {
+        val s = storage ?: return
+        val scope = persistenceScope ?: return
+        val generation = eraseGeneration
+        scope.launch(com.banglu.engine.util.persistenceDispatcher) {
+            persistenceMutex.withLock {
+                if (generation != eraseGeneration) return@withLock
+                try {
+                    block(s)
+                } catch (_: Exception) {
+                    // Persistence failure is non-critical
+                }
+            }
+        }
+    }
+
+    suspend fun eraseAllLearning(): Boolean {
+        // S136 (F-001): ORDER IS THE CONTRACT. Live memory is cleared FIRST,
+        // then the persisted delete is queued on the single persistence lane
+        // — every snapshot write launched before this point (recordIdentity,
+        // English learning, learned words) sits ahead of it on that lane and
+        // is erased by it, and every write launched after it serializes the
+        // already-empty memory. Return value = the platform's durable-delete
+        // confirmation; the caller must not claim success on false.
+        eraseGeneration++
         com.banglu.engine.util.runSynchronized(preferenceLock) {
             customPreferenceMap.clear()
             selectedPreferenceMap.clear()
@@ -570,11 +580,26 @@ object SmartEngineAdapter {
         englishLearningLoaded = false
         identityAssist.clear()
         identityLoaded = false
-        // S135 (F-001): this now really runs inside the keyboard process while
-        // keystrokes may be in flight on another thread — drop the engine
-        // under the same monitor getEngine() publishes through.
+        // S135 (F-001): this runs inside the keyboard process while keystrokes
+        // may be in flight on another thread — drop the engine under the same
+        // monitor getEngine() publishes through.
         com.banglu.engine.util.runSynchronized(this) { engine = null }
         engineFullyLoaded = false
+        val store = storage ?: return true
+        return withContext(com.banglu.engine.util.persistenceDispatcher) {
+            persistenceMutex.withLock { store.clearAllLearningDataDurably() }
+        }
+    }
+
+    /** S136 (F-004): identity-only erase with the same ordering/durability
+     *  contract as [eraseAllLearning]. */
+    suspend fun eraseIdentity(): Boolean {
+        eraseGeneration++
+        identityAssist.clear()
+        val store = storage ?: return true
+        return withContext(com.banglu.engine.util.persistenceDispatcher) {
+            persistenceMutex.withLock { store.clearIdentityUserDataDurably() }
+        }
     }
 
     /**
@@ -647,8 +672,10 @@ object SmartEngineAdapter {
      *  an address the keyboard remembered earlier. */
     fun identityAssistActive(): Boolean = personalDictionaryEnabled && identityAssistEnabled
 
+    /** Domain completion from the built-in list always works (stores
+     *  nothing); saved domains join in only while identity memory is on. */
     fun identityDomainSuggestions(token: String, limit: Int = 3): List<String> =
-        if (identityAssistActive()) identityAssist.domainSuggestions(token, limit) else emptyList()
+        identityAssist.domainSuggestions(token, limit, includeSaved = identityAssistActive())
 
     fun identitySavedFills(limit: Int = 3): List<String> =
         if (identityAssistActive()) identityAssist.savedIdentities(limit) else emptyList()
@@ -659,19 +686,13 @@ object SmartEngineAdapter {
     fun recordIdentity(token: String) {
         if (!identityAssistActive()) return
         identityAssist.recordIdentity(token)
-        val scope = persistenceScope ?: return
         val snapshot = identityAssist.serialize()
-        scope.launch(com.banglu.engine.util.persistenceDispatcher) {
-            storage?.saveIdentityUserData(snapshot)
-        }
+        persist { it.saveIdentityUserData(snapshot) }
     }
 
     fun clearIdentity() {
         identityAssist.clear()
-        val scope = persistenceScope ?: return
-        scope.launch(com.banglu.engine.util.persistenceDispatcher) {
-            storage?.saveIdentityUserData("")
-        }
+        persist { it.saveIdentityUserData("") }
     }
 
     /**
@@ -684,9 +705,7 @@ object SmartEngineAdapter {
         englishTyping.recordCommit(word, prev)
         val scope = persistenceScope ?: return
         val snapshot = englishTyping.serialize()
-        scope.launch(com.banglu.engine.util.persistenceDispatcher) {
-            storage?.saveEnglishUserData(snapshot)
-        }
+        persist { it.saveEnglishUserData(snapshot) }
     }
 
     /**

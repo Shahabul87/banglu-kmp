@@ -38,6 +38,11 @@ class AndroidStorage(context: Context) : PlatformStorage {
         private const val KEY_ENGLISH_USER_DATA = "english_user_data"
         private const val KEY_IDENTITY_USER_DATA = "identity_user_data"
         private const val KEY_DICT_VERSION = "dict_version"
+        /** S136: every key family that holds learned personal data. */
+        private val LEARNING_KEY_PREFIXES = listOf(
+            KEY_LEARNED_WORDS, KEY_CUSTOM_CONVERSIONS, KEY_USER_BIGRAMS,
+            KEY_ENGLISH_USER_DATA, KEY_IDENTITY_USER_DATA
+        )
         private const val SEPARATOR = "::"
         private const val MAX_LEARNED_WORDS = 500
         private const val MAX_CUSTOM_CONVERSIONS = 300
@@ -128,22 +133,33 @@ class AndroidStorage(context: Context) : PlatformStorage {
     // English-typing learning, and saved email identities behind while the
     // UI claimed the data was gone. Keys are removed outright.
     override suspend fun clearAllLearningData() {
-        // S135 (F-001): commit, not apply — the caller reports "deleted" to
-        // the user only after this returns, so the file write must be done,
-        // not queued. Always off the main thread (provider binder thread /
-        // persistence dispatcher).
-        prefs.edit()
-            .remove(scopedKey(KEY_LEARNED_WORDS))
-            .remove(scopedKey(KEY_CUSTOM_CONVERSIONS))
-            .remove(scopedKey(KEY_USER_BIGRAMS))
-            .remove(scopedKey(KEY_ENGLISH_USER_DATA))
-            .remove(scopedKey(KEY_IDENTITY_USER_DATA))
-            .commit()
+        clearAllLearningDataDurably()
     }
 
-    /** S135 (F-004): drop ONLY the saved email identities, durably. */
-    fun clearIdentityUserData() {
-        prefs.edit().remove(scopedKey(KEY_IDENTITY_USER_DATA)).commit()
+    /**
+     * S136 (F-001): EVERY learning key in the file goes — the active user's
+     * scope, other scopes, and any legacy unscoped spelling — and the
+     * SharedPreferences commit() result is the return value, so a failed
+     * disk write can never be reported as a successful deletion. commit()
+     * is deliberate (durable before "deleted" is shown); this is only ever
+     * called off the main thread (provider binder thread / persistence
+     * lane). The dictionary-version key in the same file is untouched.
+     */
+    override suspend fun clearAllLearningDataDurably(): Boolean =
+        removeKeysDurably(LEARNING_KEY_PREFIXES)
+
+    /** S136 (F-004): drop ONLY the saved email identities, every scope. */
+    override suspend fun clearIdentityUserDataDurably(): Boolean =
+        removeKeysDurably(listOf(KEY_IDENTITY_USER_DATA))
+
+    private fun removeKeysDurably(prefixes: List<String>): Boolean {
+        val doomed = prefs.all.keys.filter { key ->
+            prefixes.any { prefix -> key == prefix || key.startsWith("${prefix}_") }
+        }
+        if (doomed.isEmpty()) return true
+        val editor = prefs.edit()
+        doomed.forEach { editor.remove(it) }
+        return editor.commit()
     }
 
     override suspend fun getUserBigrams(): Map<String, Map<String, Int>> {

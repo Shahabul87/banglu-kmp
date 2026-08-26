@@ -18,7 +18,7 @@ the appendix below.
 | Question | Answer |
 |---|---|
 | Does your app collect or share any of the required user data types? | **Yes** — Audio only (voice typing sends speech to the device's speech provider). Nothing else leaves the device. |
-| Is all of the user data collected by your app encrypted in transit? | **Yes** — the app itself makes no network connection (no INTERNET permission). The only data that can leave the device is voice audio, handed to the device's own `SpeechRecognizer` provider; Google's provider uses encrypted transport (and offline packs process on-device). S135 note: the app cannot verify a third-party OEM provider's transport, so if a reviewer asks, state that encryption is the provider's, not Banglu's, and that Banglu never transmits anything itself. |
+| Is all of the user data collected by your app encrypted in transit? | **Yes** — Banglu itself transmits nothing (no INTERNET permission). The only data that can leave the device is voice audio, and it is transmitted by the device's own `SpeechRecognizer` provider, not by Banglu; Google's provider uses encrypted transport and offline packs process on-device. S136: this answer describes Google's provider, the default on every Play-certified phone. Banglu cannot inspect a third-party OEM provider's transport — the privacy policy says exactly that ("the provider's own privacy policy applies"). If Play review asks about non-Google providers, answer with that sentence; do not claim more. |
 | Do you provide a way for users to request that their data is deleted? | **Yes** — no data is stored off-device by Banglu; audio is processed ephemerally by the OS speech provider and never stored by Banglu. On-device learned words are clearable in Settings and removed by uninstall. |
 
 ## Section 2 — Data types (LAUNCH BUILD)
@@ -27,7 +27,7 @@ the appendix below.
 - **Voice or sound recordings** — Collected (processed ephemerally), **shared with the device's speech provider (e.g., Google)** for transcription. Optional (only when the user taps the mic, after the prominent-disclosure screen). Purpose: App functionality. Not stored by Banglu.
 
 ### NOT collected (answer No)
-- Keystrokes / typed text: **never leaves the device**. Learned words, next-word pairs, English learning, saved email addresses (identity assist — on-device only, own settings switch, deleted on switch-off), clipboard history (max 12 items, one-hour expiry, never from password/OTP fields or sensitive-flagged clips), and the dictionary are local-only. None of these are "collected" in Play's sense (they are not transmitted off the device and are not processed by Banglu), so they are not declared.
+- Keystrokes / typed text: **never leaves the device**. Learned words, next-word pairs, English learning, saved email addresses (identity assist — OFF by default, on-device only, email fields only, deleted on switch-off), clipboard history (max 12 items, one-hour expiry pruned on every keyboard open, never from any private field or sensitive-flagged clip), and the dictionary are local-only. None of these are "collected" in Play's sense (they are not transmitted off the device and are not processed by Banglu), so they are not declared.
 - Personal info (email/name), app activity, purchase history: the launch build has no accounts, no billing, and no INTERNET permission — these CANNOT be collected.
 - Location, contacts, photos, files, health, financial info, device IDs, analytics/diagnostics telemetry: none.
 

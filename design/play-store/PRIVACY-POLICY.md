@@ -1,7 +1,7 @@
 # Privacy Policy — Banglu Bengali Keyboard
 
 **Last updated:** August 26, 2026
-**Applies to:** Banglu Bengali Keyboard for Android, version 1.5.82 and later
+**Applies to:** Banglu Bengali Keyboard for Android, version 1.5.83 and later
 
 ## Overview
 
@@ -23,16 +23,16 @@ Everything below stays in the App's private storage on your phone. It is exclude
 - **Custom conversions:** typing formulas you add yourself.
 - **Next-word pairs:** which word you tend to type after another, used for on-device next-word suggestions.
 - **English typing learning:** words you use while typing in English mode, for English suggestions.
-- **Saved email addresses (identity assist):** when you finish typing an email address in an email field, the App can remember up to eight addresses so it can offer them as one-tap fills in other email fields. It never remembers anything typed in password, one-time-code, or "no personalized learning" fields. This is controlled by **Settings → "ইমেইল ঠিকানা মনে রাখা"**; switching it off deletes the saved addresses immediately.
-- **Clipboard history:** when you open the keyboard's clipboard panel, the App can keep up to twelve recently copied texts so you can paste them again. Each item is kept for **one hour** and then deleted automatically. The App never stores a clip that the source app marked as sensitive (for example a password copied from a password manager), and never stores clips while you are in a password, one-time-code, or "no personalized learning" field. You can clear the panel at any time with its clear button.
+- **Saved email addresses (identity assist) — off by default:** only if you turn on **Settings → "ইমেইল ঠিকানা মনে রাখা"**, the App remembers up to eight addresses you finish typing in email fields (never in ordinary text, and never in password, one-time-code, or "no personalized learning" fields) so it can offer them as one-tap fills in other email fields. Switching the setting off deletes the saved addresses immediately. Completing a typed "@gm" to a common provider such as gmail.com uses a built-in list and stores nothing.
+- **Clipboard history:** when you open the keyboard's clipboard panel, the App can keep up to twelve recently copied texts so you can paste them again. Each item is kept for **one hour**; expired items are removed from storage the next time the keyboard opens or the panel is used. The App never stores a clip that the source app marked as sensitive (for example a password copied from a password manager), and never stores clips while you are in a private field — password, one-time code, email, web address, number/phone, or "no personalized learning"; in password and one-time-code fields the panel offers only the text currently on the clipboard as a one-time paste and shows no stored history. You can clear the panel at any time with its clear button.
 - **Local diagnostics counters:** a few anonymous numbers (event counts, typing latency) shown on the in-app Diagnostics screen. They contain no typed text and never leave the phone.
 - **Dictionary:** the bundled Bengali dictionary (read-only) is copied to the App's private storage for offline conversion.
 
 ## Deleting your data
 
-- **Settings → "শেখা শব্দ মুছুন"** deletes every category of learned data at once — learned words and chosen spellings, custom conversions, next-word pairs, English typing learning, and saved email addresses. The App confirms deletion only after the data has actually been removed.
-- **Settings switches** let you stop learning ("টাইপিং শেখা"), stop the personal dictionary, or stop remembering email addresses (which also deletes the addresses already saved).
-- The **clipboard panel's clear button** deletes clipboard history; items also expire on their own after one hour.
+- **Settings → "শেখা শব্দ মুছুন"** deletes every category of learned data at once — learned words and chosen spellings, custom conversions, next-word pairs, English typing learning, and saved email addresses, for every profile ever stored on the phone. The deletion runs inside the keyboard's own process and the App shows "deleted" only after storage has confirmed the write; if that confirmation fails you are told to try again.
+- **Settings switches** let you stop learning ("টাইপিং শেখা"), stop the personal dictionary, or turn saved email addresses off again (which also deletes the addresses already saved).
+- The **clipboard panel's clear button** deletes clipboard history; items also expire on their own after one hour (removed when the keyboard next opens).
 - **Uninstalling** the App removes all of the above.
 
 ## Voice typing

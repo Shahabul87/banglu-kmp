@@ -52,13 +52,15 @@ class IdentityAssist {
      * domains come first, then the common providers; a partial domain
      * filters both (sham@gm -> sham@gmail.com).
      */
-    fun domainSuggestions(token: String, limit: Int = 3): List<String> {
+    /** @param includeSaved false → complete from the built-in list only
+     *  (S136: identity memory switched off). */
+    fun domainSuggestions(token: String, limit: Int = 3, includeSaved: Boolean = true): List<String> {
         if (!isEmailLikeToken(token) || limit <= 0) return emptyList()
         val at = token.lastIndexOf('@')
         val local = token.substring(0, at)
         val typedDomain = token.substring(at + 1).lowercase()
         val out = LinkedHashSet<String>()
-        for (domain in savedDomains + COMMON_DOMAINS) {
+        for (domain in (if (includeSaved) savedDomains.toList() else emptyList()) + COMMON_DOMAINS) {
             if (out.size >= limit) break
             if (domain.startsWith(typedDomain) && domain != typedDomain) {
                 out.add("$local@$domain")

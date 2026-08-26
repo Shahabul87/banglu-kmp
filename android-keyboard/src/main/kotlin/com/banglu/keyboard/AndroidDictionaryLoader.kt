@@ -37,7 +37,17 @@ class AndroidDictionaryLoader(
         // S108: headroom on top of the asset size before starting a copy —
         // filling the disk to the last byte breaks the rest of the phone.
         private const val COPY_SPACE_MARGIN_BYTES = 64L * 1024 * 1024
+
+        /** S136 (F-015): provisioning failure codes (see [provisionFailure]). */
+        const val FAILURE_LOW_SPACE = "low_space"   // "low_space:<needed MB>"
+        const val FAILURE_COPY = "copy_failed"
     }
+
+    @Volatile
+    private var provisionFailure: String? = null
+
+    /** Why the last provisioning attempt left the keyboard seed-only, or null. */
+    fun provisionFailure(): String? = provisionFailure
 
     /**
      * Ensure the database file exists in internal storage and has the correct version.
@@ -68,6 +78,7 @@ class AndroidDictionaryLoader(
                     // the very space the failing device is short of, and got
                     // re-truncated on every cold start. No user data logged.
                     Log.e(TAG, "Not enough free storage for dictionary copy — staying seed-only")
+                    provisionFailure = "$FAILURE_LOW_SPACE:${requiredCopyBytes() / (1024 * 1024)}"
                     return@lazy file
                 }
                 context.assets.open(DB_FILENAME).use { input ->
@@ -90,6 +101,7 @@ class AndroidDictionaryLoader(
                 // storage) leaves the keyboard seed-only FOREVER with zero
                 // trace in release builds. No user data in this log.
                 Log.e(TAG, "Failed to copy database from assets", e)
+                provisionFailure = FAILURE_COPY
                 // S108: never leave a partial multi-MB tmp on a full disk.
                 runCatching { tmpFile.delete() }
             }
@@ -104,18 +116,22 @@ class AndroidDictionaryLoader(
      * Fails open (returns true) if StatFs itself errors — the copy's own
      * catch block then cleans up.
      */
+    private fun assetBytes(): Long = try {
+        context.assets.openFd(DB_FILENAME).use { it.length }
+    } catch (_: Exception) {
+        180L * 1024 * 1024
+    }
+
+    /** Bytes that must be free before a copy is attempted (asset + margin). */
+    fun requiredCopyBytes(): Long = assetBytes() + COPY_SPACE_MARGIN_BYTES
+
     private fun hasSpaceForCopy(): Boolean {
-        val assetBytes = try {
-            context.assets.openFd(DB_FILENAME).use { it.length }
-        } catch (_: Exception) {
-            180L * 1024 * 1024
-        }
         val availableBytes = try {
             android.os.StatFs(context.filesDir.path).availableBytes
         } catch (_: Exception) {
             return true
         }
-        return availableBytes >= assetBytes + COPY_SPACE_MARGIN_BYTES
+        return availableBytes >= requiredCopyBytes()
     }
 
     /**

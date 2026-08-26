@@ -102,23 +102,29 @@ class BangluPrefsProvider : ContentProvider() {
      * success.
      */
     private fun eraseLearning(context: Context, scope: String?): Boolean = try {
+        // S136 (F-001): the adapter erases live memory and then queues the
+        // persisted delete behind every pending write on its persistence
+        // lane; the direct storage delete afterwards covers the case where
+        // no IME service is running in this process (adapter storage null).
+        // Both are commit-checked and BOTH must succeed. Unknown scopes are
+        // refused — never widened to "erase all".
         val storage = AndroidStorage(context.applicationContext)
         when (scope) {
-            ERASE_SCOPE_IDENTITY -> {
-                // Live memory + persisted blob; the IME needs no rebuild for
-                // this — the identity store is not baked into the engine.
-                com.banglu.engine.SmartEngineAdapter.clearIdentity()
-                storage.clearIdentityUserData()
-                true
+            ERASE_SCOPE_IDENTITY -> kotlinx.coroutines.runBlocking {
+                val live = com.banglu.engine.SmartEngineAdapter.eraseIdentity()
+                val direct = storage.clearIdentityUserDataDurably()
+                live && direct
             }
-            else -> {
-                // Persisted keys first (storage may be unattached when the IME
-                // service is not running in this process), then live memory,
-                // then the stamp that makes a running IME rebuild its engine.
-                kotlinx.coroutines.runBlocking { storage.clearAllLearningData() }
-                kotlinx.coroutines.runBlocking { com.banglu.engine.SmartEngineAdapter.eraseAllLearning() }
-                prefs(context).edit().putLong(KEY_LEARNING_ERASED_AT, System.currentTimeMillis()).commit()
+            ERASE_SCOPE_ALL -> kotlinx.coroutines.runBlocking {
+                val live = com.banglu.engine.SmartEngineAdapter.eraseAllLearning()
+                val direct = storage.clearAllLearningDataDurably()
+                // The stamp makes a running IME rebuild its engine clean.
+                val stamped = prefs(context).edit()
+                    .putLong(KEY_LEARNING_ERASED_AT, System.currentTimeMillis())
+                    .commit()
+                live && direct && stamped
             }
+            else -> false
         }
     } catch (_: Throwable) {
         false

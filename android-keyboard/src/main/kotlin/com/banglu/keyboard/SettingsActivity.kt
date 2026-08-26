@@ -105,17 +105,20 @@ private fun buildDiagnosticsSummary(prefs: SharedPreferences): String {
             key.startsWith("diag_ime_") -> "ime"
             key.startsWith("diag_failure_") -> "failure"
             key.startsWith("diag_latency_") -> "latency"
+            key.startsWith("diag_exit_") -> "exit"
             else -> "event"
         }
         val event = key
             .removePrefix("diag_ime_")
             .removePrefix("diag_failure_")
             .removePrefix("diag_latency_")
+            .removePrefix("diag_exit_")
             .removeSuffix("_count")
         val lastKey = when (scope) {
             "ime" -> "diag_ime_last_${event}_at"
             "failure" -> "diag_failure_last_${event}_at"
             "latency" -> "diag_latency_last_${event}_ms"
+            "exit" -> "diag_exit_last_${event}_at"
             else -> ""
         }
         val count = prefs.getInt(key, 0)
@@ -127,7 +130,12 @@ private fun buildDiagnosticsSummary(prefs: SharedPreferences): String {
         } else {
             "never"
         }
-        val type = if (scope == "failure") prefs.getString("diag_failure_last_${event}_type", "").orEmpty() else ""
+        val type = if (scope == "failure") {
+            listOf(
+                prefs.getString("diag_failure_last_${event}_type", "").orEmpty(),
+                prefs.getString("diag_failure_last_${event}_where", "").orEmpty()
+            ).filter { it.isNotBlank() }.joinToString(" @ ")
+        } else ""
         lines += if (scope == "latency") {
             val total = prefs.getLong("diag_latency_${event}_total_ms", 0L)
             val avg = if (count > 0) total / count else 0L
@@ -185,7 +193,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
     var suggestions by remember { mutableStateOf(prefs.getBoolean("suggestions", true)) }
     var typingLearning by remember { mutableStateOf(prefs.getBoolean("typing_learning", true)) }
     var personalDictionary by remember { mutableStateOf(prefs.getBoolean("personal_dictionary", true)) }
-    var identityAssist by remember { mutableStateOf(prefs.getBoolean("identity_assist", true)) }
+    var identityAssist by remember { mutableStateOf(prefs.getBoolean("identity_assist", false)) }
     // Full dictionary by default: predictions, context reranking, and the strong
     // commit gate all need the full tables. Weak devices still auto-fall to lite
     // via the IME's device check (isLowRamDevice / memoryClass < 256).
@@ -339,7 +347,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                 // process, see eraseLearningInKeyboardProcess).
                 BrandSwitch(
                     "ইমেইল ঠিকানা মনে রাখা",
-                    "ইমেইল ঘরে লেখা ঠিকানা এই ফোনেই থাকে, পরে এক ট্যাপে বসানোর জন্য; বন্ধ করলে সংরক্ষিত ঠিকানা মুছে যায়",
+                    "চালু করলে ইমেইল ঘরে লেখা ঠিকানা শুধু এই ফোনেই থাকে, পরে এক ট্যাপে বসানোর জন্য; বন্ধ করলে সংরক্ষিত ঠিকানা মুছে যায়। ডিফল্ট: বন্ধ",
                     identityAssist
                 ) { enabled ->
                     identityAssist = enabled
@@ -366,6 +374,23 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
             item {
                 BrandSwitch("হালকা অভিধান", "কম মেমরি ব্যবহার করে দ্রুত কীবোর্ড চালু রাখুন", liteMode) {
                     liteMode = it; saveBoolean("lite_mode", it)
+                }
+            }
+            item {
+                // S136 (F-015): the dictionary state was invisible — a phone
+                // that could not fit the 176 MB copy typed with the seed
+                // dictionary forever and the user never knew why.
+                val dictionaryStatus = prefs.getString("dictionary_status", null)
+                val statusText = when {
+                    dictionaryStatus == null -> "কীবোর্ড একবার খুললে অবস্থা দেখা যাবে"
+                    dictionaryStatus == "full" -> "সম্পূর্ণ অভিধান চালু আছে"
+                    dictionaryStatus == "lite" -> "হালকা অভিধান চালু আছে"
+                    dictionaryStatus.startsWith("seed_only:low_space") ->
+                        "লোড হয়নি — ফোনে অন্তত ${dictionaryStatus.substringAfterLast(':')} MB জায়গা খালি করুন; কীবোর্ড নিজে থেকে আবার চেষ্টা করবে"
+                    else -> "লোড হয়নি — ফোন রিস্টার্ট করে আবার চেষ্টা করুন"
+                }
+                BrandActionRow("অভিধানের অবস্থা", statusText) {
+                    Toast.makeText(context, statusText, Toast.LENGTH_LONG).show()
                 }
             }
             item {

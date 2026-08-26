@@ -1,4 +1,4 @@
-# Banglu — Play Store Listing (ready to paste, v1.5.33)
+# Banglu — Play Store Listing (ready to paste, v1.5.83 / 2120)
 
 Positioning per market research 2026-07-12: "Avro-compatible but smarter,
 private by default, stable low-surprise typing." All fields respect Play
@@ -68,7 +68,7 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 ```
 (~2,400 chars — well under the 4000 limit)
 
-## Release notes for 1.5.33 (500 chars max)
+## Release notes for 1.5.83 (500 chars max)
 
 ```
 • New comma key beside the space bar
@@ -133,7 +133,7 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 ## Console checklist (in order)
 
 1. Play Console → Create app → "Banglu: Bangla Keyboard", App (not game), Free.
-2. Upload `releases/banglu-1.5.33-2070.aab` to **Closed testing** first.
+2. Upload `releases/banglu-1.5.83-2120.aab` to **Closed testing** first.
    - Personal dev accounts created after Nov 2023: 12+ testers opted in for
      14 continuous days required before production access can be requested.
 3. Store listing: paste texts above (en-US default + bn-BD localization).
@@ -149,3 +149,20 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
    off-laptop BEFORE first upload (app can never be updated without it).
 10. Production: staged rollout 10% → 50% → 100%.
 ```
+
+
+## Release operations (S136, every upload)
+
+1. Build ONLY through `scripts/validate_android_release.sh` (clean tracked
+   tree; pinned dictionary; AAB embedded revision == HEAD; owner-only
+   keystore; `RUN_DEVICE_SMOKE=1` for the exact-AAB device certification).
+2. Record the AAB SHA-256 and revision in `release-notes-<version>.md`.
+3. Play Console → Closed testing first; production only as a **staged
+   rollout (start 10%)**. Rollback = "Halt rollout" + re-release the previous
+   AAB from the release library (previous version code stays available).
+4. Watch **Quality → Android vitals** (crash rate, ANR rate) and the
+   pre-launch report for 48 h at each rollout stage; any new crash/ANR
+   cluster halts the rollout.
+5. Screenshots (`screenshots-current/`) are reshot on the release candidate
+   whenever the keyboard UI changes; the performance/battery claims in the
+   listing are backed by `build/android-release-smoke/device-smoke-report.json`.

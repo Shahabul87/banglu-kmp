@@ -16,14 +16,21 @@ val localProps = Properties().apply {
 android {
     namespace = "com.banglu.keyboard"
     compileSdk = 36
-    dynamicFeatures += setOf(":android_account")
+    // S136 (F-011): the account/billing feature is NOT part of the launch
+    // build — it is hidden, its permissions are stripped, and shipping its
+    // auth/billing bytecode fused install-time gained nothing but review
+    // surface. Opt back in with -PbangluAccount=true when the feature ships.
+    if (project.findProperty("bangluAccount") == "true") {
+        dynamicFeatures += setOf(":android_account")
+    }
 
     defaultConfig {
         applicationId = "com.banglu.keyboard"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2119
-        versionName = "1.5.82"
+        versionCode = 2120
+        versionName = "1.5.83"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -98,6 +105,14 @@ dependencies {
     // Android runtime needed, JUnit4 to match AGP's default unit-test runner.
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.test.junit)
+
+    // S136 (F-006): on-device instrumentation — the multiprocess erase
+    // provider and the accessibility tree are outside the JVM test wall.
+    androidTestImplementation(libs.kotlin.test)
+    androidTestImplementation(libs.kotlin.test.junit)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
 }
 
 val verifyImePrivacyBoundary by tasks.registering {

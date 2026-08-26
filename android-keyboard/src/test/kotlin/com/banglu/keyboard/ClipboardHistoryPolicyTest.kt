@@ -11,11 +11,20 @@ class ClipboardHistoryPolicyTest {
     private val now = 1_700_000_000_000L
 
     @Test
-    fun sensitiveClipOrSensitiveFieldIsNeverRemembered() {
-        assertTrue(ClipboardHistoryPolicy.shouldRemember(sensitiveField = false, clipIsSensitive = false))
-        assertFalse(ClipboardHistoryPolicy.shouldRemember(sensitiveField = true, clipIsSensitive = false))
-        assertFalse(ClipboardHistoryPolicy.shouldRemember(sensitiveField = false, clipIsSensitive = true))
-        assertFalse(ClipboardHistoryPolicy.shouldRemember(sensitiveField = true, clipIsSensitive = true))
+    fun sensitiveClipOrPrivateFieldIsNeverRemembered() {
+        assertTrue(ClipboardHistoryPolicy.shouldRemember(privateField = false, clipIsSensitive = false))
+        assertFalse(ClipboardHistoryPolicy.shouldRemember(privateField = true, clipIsSensitive = false))
+        assertFalse(ClipboardHistoryPolicy.shouldRemember(privateField = false, clipIsSensitive = true))
+        assertFalse(ClipboardHistoryPolicy.shouldRemember(privateField = true, clipIsSensitive = true))
+    }
+
+    @Test
+    fun legacyBlobReencodesDated_soTheLoaderPersistsItOnce() {
+        // S136: the IME writes the dated form back when encode(decode(raw)) != raw.
+        val legacy = java.util.Base64.getEncoder().encodeToString("পুরনো".toByteArray())
+        val decoded = ClipboardHistoryPolicy.decode(legacy, now)
+        assertTrue(ClipboardHistoryPolicy.encode(decoded) != legacy)
+        assertEquals(decoded, ClipboardHistoryPolicy.decode(ClipboardHistoryPolicy.encode(decoded), now))
     }
 
     @Test

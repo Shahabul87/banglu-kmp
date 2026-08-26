@@ -1,0 +1,4 @@
+# S136 (F-009): the ONLY dictionary.sqlite a release may be built from.
+# Regenerate with scripts/pin_dictionary.sh after every compiler rebuild.
+# sha256  bytes  version
+a8a4f65908f299dd3ec4a6a139a219cf19ac63896625dce7926be1ed040c727e  176717824  3.9.6

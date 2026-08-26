@@ -12,9 +12,11 @@ import kotlin.io.encoding.ExperimentalEncodingApi
  * Law, pinned by [ClipboardHistoryPolicyTest]:
  *  - a clip the source app flagged sensitive (`EXTRA_IS_SENSITIVE`) is never
  *    remembered;
- *  - nothing is remembered while the editor is a password / one-time-code /
- *    no-personalized-learning field (the IME's `sensitiveInputMode`) — the
- *    panel still PASTES there, it just learns nothing from the field;
+ *  - nothing is remembered while the editor is any private field — password,
+ *    one-time code, email, URI, number/phone, no-personalized-learning (the
+ *    IME's `privateInputMode`/`sensitiveInputMode`) — the panel still PASTES
+ *    there, it just learns nothing from the field; in password/OTP fields it
+ *    shows only the current clip as a one-shot, never stored history;
  *  - every entry carries the time it was saved and expires after
  *    [RETENTION_MS] (one hour — the retention Gboard documents for unpinned
  *    clips; Banglu has no pinning, so nothing outlives it);
@@ -43,9 +45,10 @@ object ClipboardHistoryPolicy {
 
     data class Entry(val text: String, val savedAtMs: Long)
 
-    /** May this clip be added to history? */
-    fun shouldRemember(sensitiveField: Boolean, clipIsSensitive: Boolean): Boolean =
-        !sensitiveField && !clipIsSensitive
+    /** May this clip be added to history? [privateField] is ANY private
+     *  editor (password, OTP, email, URI, number/phone, no-learning). */
+    fun shouldRemember(privateField: Boolean, clipIsSensitive: Boolean): Boolean =
+        !privateField && !clipIsSensitive
 
     /** Normalizes a candidate clip; null when there is nothing to keep. */
     fun normalize(text: String): String? =

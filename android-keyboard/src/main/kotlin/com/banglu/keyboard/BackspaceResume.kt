@@ -99,11 +99,38 @@ internal object BackspaceResume {
      * from BangluIMEService (S88) so the service and the resume plan share
      * ONE boundary definition.
      */
+    /**
+     * S136 (F-013): platform grapheme segmenter for NON-Bengali clusters
+     * (emoji ZWJ families, flags, keycaps, combining Latin). The IME installs
+     * ICU's character BreakIterator; tests inject a fake. Bengali clusters
+     * never go through it — the rules below are the product's own (per-
+     * conjunct deletion, S88 pins).
+     */
+    @Volatile
+    var nonBengaliClusterBreaker: ((text: String, fromIndex: Int) -> Int)? = null
+
+    private fun isBengaliCodePoint(cp: Int): Boolean = cp in 0x0980..0x09FF
+
     fun previousUserVisibleClusterBoundary(text: String, fromIndex: Int = text.length): Int {
         if (text.isEmpty() || fromIndex <= 0) return 0
 
         var index = fromIndex.coerceAtMost(text.length)
         index = Character.offsetByCodePoints(text, index, -1)
+
+        val breaker = nonBengaliClusterBreaker
+        if (breaker != null) {
+            // Decide by the LAST base-ish code point: a Bengali cluster keeps
+            // the Bengali rules; anything else (emoji, Latin) is ICU's call.
+            var probe = index
+            while (probe > 0 && (text.codePointAt(probe) == 0x200D || text.codePointAt(probe) == 0xFE0F ||
+                    text.codePointAt(probe) in 0x1F3FB..0x1F3FF)) {
+                probe = Character.offsetByCodePoints(text, probe, -1)
+            }
+            if (!isBengaliCodePoint(text.codePointAt(probe))) {
+                val boundary = breaker(text, fromIndex.coerceAtMost(text.length))
+                if (boundary in 0 until fromIndex) return boundary
+            }
+        }
 
         while (index > 0) {
             val cp = text.codePointAt(index)

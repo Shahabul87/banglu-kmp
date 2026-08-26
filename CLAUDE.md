@@ -33,7 +33,19 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-26):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
-- **Android** v1.5.82 (2119), db 3.9.6 — S135 production-readiness round
+- **Android** v1.5.83 (2120), db 3.9.6 — S136 re-audit round (erase is
+  generation-checked + mutex-serialized on the persistence lane and removes
+  every learning key of every scope with commit results propagated;
+  clipboard never learns from ANY private field, one-shot paste in
+  password/OTP fields, active expiry; identity assist DEFAULT OFF and
+  email-fields-only; real BANGLU_STORE_FILE keystore locked + checked;
+  exact-AAB bundletool device smoke with thresholds
+  (scripts/android_device_smoke.py) + androidTest erase-provider test;
+  AGP 8.9.3; account split OUT of the launch AAB (-PbangluAccount=true);
+  dictionary pin android-keyboard/dictionary.sha256; pinned CI actions +
+  wrapper checksum; lifecycle PAUSE/STOP on hide + full teardown; ICU
+  grapheme fallback for emoji backspace; low-storage dictionary notice with
+  auto-retry; durable crash record + ApplicationExitInfo). Before that S135 production-readiness round
   (docs/audits/audit-android-production-readiness-2026-08-26.md verified
   true and fixed: cross-process "clear learned data" via BangluPrefsProvider
   METHOD_ERASE_LEARNING — the :ui process has NO engine storage, erase only

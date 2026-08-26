@@ -271,7 +271,14 @@ class BangluIMEService : InputMethodService(),
     // auto-unshift re-executed the whole key tree. Fields are created once.
     private val kbSuggestionsProvider: () -> List<SmartSuggestion> = { suggestions.toList() }
     private val kbVoiceLevelProvider: () -> Float = { voiceInputLevel.value }
-    private val kbClipboardItemsProvider: () -> List<String> = { clipboardHistory.map { it.text } }
+    /** S136 (F-003): in a password/OTP/no-learning field the panel offers
+     *  ONLY the current system clip as a one-shot paste — stored history is
+     *  neither shown nor grown there. Never persisted. */
+    private var clipboardTransientItem: String? = null
+    private val kbOnNoticeDismiss: () -> Unit = { dismissDictionaryNotice() }
+    private val kbClipboardItemsProvider: () -> List<String> = {
+        if (sensitiveInputMode) listOfNotNull(clipboardTransientItem) else clipboardHistory.map { it.text }
+    }
     private val kbRecentEmojisProvider: () -> List<String> = { recentEmojis.toList() }
     private val kbOnKeyPress: (Char) -> Unit = { onKeyPress(it) }
     private val kbOnLetterTouch: (Char, Char?, Char?, Float) -> Unit =
@@ -354,6 +361,11 @@ class BangluIMEService : InputMethodService(),
     val personalDictionaryEnabled = mutableStateOf(true)
     /** S135 (F-004): dedicated saved-email identity switch (see settings). */
     val identityAssistEnabled = mutableStateOf(true)
+    /** S136 (F-015): user-visible reason the full dictionary is not serving
+     *  (low storage / copy failure); null when nothing is wrong. */
+    val dictionaryNotice = mutableStateOf<String?>(null)
+    private var dictionaryNoticeDismissed = false
+    private var dictionaryRetryAtMs = 0L
     val liteModeEnabled = mutableStateOf(false)
     val themeMode = mutableStateOf("dark")
     val keyboardHeightMode = mutableStateOf("normal")
@@ -423,6 +435,8 @@ class BangluIMEService : InputMethodService(),
 
         /** S98: identity-assist chips (email fills / domain completions). */
         private const val IDENTITY_FILL_SOURCE = "identity_fill"
+        /** S136 (F-015): minimum spacing between automatic dictionary retries. */
+        private const val DICTIONARY_RETRY_INTERVAL_MS = 5L * 60L * 1000L
         private const val MAX_RECENT_EMOJIS = 40
         private val GAP_PUNCTUATION_MARKS = listOf("\u0964", ",", "?", "!", "\u0983", ":")
     }
@@ -447,18 +461,60 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
-    private fun recordFailureEvent(event: String, throwable: Throwable? = null) {
+    private fun recordFailureEvent(event: String, throwable: Throwable? = null, durable: Boolean = false) {
         if (!::prefs.isInitialized) return
         val now = System.currentTimeMillis()
         val countKey = "diag_failure_${event}_count"
-        prefs.edit()
+        val editor = prefs.edit()
             .putLong("diag_failure_last_${event}_at", now)
             .putString("diag_failure_last_${event}_type", throwable?.javaClass?.simpleName.orEmpty())
+            .putString("diag_failure_last_${event}_where", throwable?.let { stackFingerprint(it) }.orEmpty())
             .putInt(countKey, prefs.getInt(countKey, 0) + 1)
-            .apply()
+        // S136 (F-017): an uncaught exception kills the process right after
+        // this call — apply() would be lost; commit() is the only record.
+        if (durable) editor.commit() else editor.apply()
         if (BuildConfig.DEBUG && throwable != null) {
             Log.e(TAG, "failure: $event", throwable)
         }
+    }
+
+    /** S136 (F-017): the first Banglu frame of the stack (class:line) — a
+     *  crash fingerprint that never contains typed text. */
+    private fun stackFingerprint(t: Throwable): String {
+        val frame = t.stackTrace.firstOrNull { it.className.startsWith("com.banglu") } ?: t.stackTrace.firstOrNull()
+        return frame?.let { "${it.className.substringAfterLast('.')}:${it.lineNumber}" }.orEmpty().take(48)
+    }
+
+    /**
+     * S136 (F-017): fold the OS's record of how our keyboard process last
+     * died (crash, native crash, ANR, low memory) into the local Diagnostics
+     * counters. Runs once per process start, off main; scans only exits
+     * newer than the last scan, only for the keyboard process.
+     */
+    private fun recordProcessExitReasons() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !::prefs.isInitialized) return
+        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return
+        val since = prefs.getLong("diag_exit_scanned_at", 0L)
+        val exits = runCatching { activityManager.getHistoricalProcessExitReasons(packageName, 0, 8) }
+            .getOrNull() ?: return
+        var newest = since
+        val editor = prefs.edit()
+        for (exit in exits) {
+            if (exit.timestamp <= since || exit.processName != packageName) continue
+            newest = maxOf(newest, exit.timestamp)
+            val reason = when (exit.reason) {
+                android.app.ApplicationExitInfo.REASON_CRASH -> "crash"
+                android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "crash_native"
+                android.app.ApplicationExitInfo.REASON_ANR -> "anr"
+                android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "low_memory"
+                android.app.ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "excessive_resource"
+                else -> continue
+            }
+            val countKey = "diag_exit_${reason}_count"
+            editor.putInt(countKey, prefs.getInt(countKey, 0) + 1)
+                .putLong("diag_exit_last_${reason}_at", exit.timestamp)
+        }
+        editor.putLong("diag_exit_scanned_at", newest).apply()
     }
 
     private fun recordImeCount(event: String, amount: Int) {
@@ -502,6 +558,7 @@ class BangluIMEService : InputMethodService(),
     private val latencyCounts = HashMap<String, Int>()
     private val latencyTotals = HashMap<String, Long>()
     private val latencyMaxes = HashMap<String, Long>()
+    private val latencyLasts = HashMap<String, Long>()
     private var latencyPendingEvents = 0
 
     private fun recordLatencyEvent(event: String, elapsedMs: Long) {
@@ -510,6 +567,7 @@ class BangluIMEService : InputMethodService(),
             latencyCounts[event] = (latencyCounts[event] ?: 0) + 1
             latencyTotals[event] = (latencyTotals[event] ?: 0L) + elapsedMs
             latencyMaxes[event] = maxOf(latencyMaxes[event] ?: 0L, elapsedMs)
+            latencyLasts[event] = elapsedMs
             latencyPendingEvents++
             shouldFlush = latencyPendingEvents >= 64
         }
@@ -522,14 +580,17 @@ class BangluIMEService : InputMethodService(),
         val counts: Map<String, Int>
         val totals: Map<String, Long>
         val maxes: Map<String, Long>
+        val lasts: Map<String, Long>
         synchronized(latencyCounts) {
             if (latencyPendingEvents == 0) return
             counts = HashMap(latencyCounts)
             totals = HashMap(latencyTotals)
             maxes = HashMap(latencyMaxes)
+            lasts = HashMap(latencyLasts)
             latencyCounts.clear()
             latencyTotals.clear()
             latencyMaxes.clear()
+            latencyLasts.clear()
             latencyPendingEvents = 0
         }
         val editor = prefs.edit()
@@ -540,6 +601,9 @@ class BangluIMEService : InputMethodService(),
             editor.putInt(countKey, prefs.getInt(countKey, 0) + count)
             editor.putLong(totalKey, prefs.getLong(totalKey, 0L) + (totals[event] ?: 0L))
             editor.putLong(maxKey, maxOf(prefs.getLong(maxKey, 0L), maxes[event] ?: 0L))
+            // S136 (F-017): the Diagnostics screen reads this key; it was
+            // never written before (always showed 0ms).
+            lasts[event]?.let { editor.putLong("diag_latency_last_${event}_ms", it) }
         }
         editor.apply()
     }
@@ -548,7 +612,7 @@ class BangluIMEService : InputMethodService(),
         if (previousUncaughtExceptionHandler != null) return
         previousUncaughtExceptionHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            recordFailureEvent("uncaught_${thread.name.take(24)}", throwable)
+            recordFailureEvent("uncaught_${thread.name.take(24)}", throwable, durable = true)
             previousUncaughtExceptionHandler?.uncaughtException(thread, throwable)
         }
     }
@@ -921,7 +985,7 @@ class BangluIMEService : InputMethodService(),
         keyPreviewEnabled.value = prefs.getBoolean("key_preview", true)
         typingLearningEnabled.value = prefs.getBoolean("typing_learning", true)
         personalDictionaryEnabled.value = prefs.getBoolean("personal_dictionary", true)
-        identityAssistEnabled.value = prefs.getBoolean("identity_assist", true)
+        identityAssistEnabled.value = prefs.getBoolean("identity_assist", false)
         // Full dictionary by default (fresh installs get predictions + context
         // reranking + strong gates). shouldUseLiteDictionary() still forces lite
         // on low-RAM devices, and every heavy loader degrades gracefully on OOM.
@@ -948,6 +1012,26 @@ class BangluIMEService : InputMethodService(),
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
 
         prefs = getSharedPreferences("banglu_prefs", Context.MODE_PRIVATE)
+        // S136 (F-013): non-Bengali clusters (emoji ZWJ families, flags,
+        // keycaps) are segmented by the platform's ICU grapheme rules; the
+        // Bengali rules in BackspaceResume are untouched.
+        BackspaceResume.nonBengaliClusterBreaker = { text, from ->
+            val iterator = android.icu.text.BreakIterator.getCharacterInstance()
+            iterator.setText(text)
+            val boundary = iterator.preceding(from)
+            if (boundary == android.icu.text.BreakIterator.DONE) 0 else boundary
+        }
+        serviceScope.launch(Dispatchers.IO) { recordProcessExitReasons() }
+        // S136 (F-004): identity assist is opt-in. A user who never chose
+        // (pref absent — every pre-1.5.83 install) is set to OFF and any
+        // addresses remembered under the old default are deleted, so nothing
+        // is retained without a decision.
+        if (!prefs.contains("identity_assist")) {
+            prefs.edit().putBoolean("identity_assist", false).apply()
+            serviceScope.launch(Dispatchers.IO) {
+                runCatching { AndroidStorage(applicationContext).clearIdentityUserDataDurably() }
+            }
+        }
         // S76: Android 14+ no longer delivers the imminent-kill trim levels
         // (deprecated, not sent since API 34), so onTrimMemory alone can
         // never degrade on modern devices. The reliable signal is the
@@ -1114,7 +1198,9 @@ class BangluIMEService : InputMethodService(),
             // undiagnosable from tester bug reports.
             Log.w(TAG, "attachPhoneticIndexStore: db file unavailable (copy failed or version mismatch)")
             recordImeEvent("dictionary_attach_failed_no_db")
-            return phoneticIndexStore?.isAvailable == true  // keep existing if available
+            val kept = phoneticIndexStore?.isAvailable == true  // keep existing if available
+            if (!kept) publishDictionaryStatus(loader.provisionFailure() ?: AndroidDictionaryLoader.FAILURE_COPY)
+            return kept
         }
 
         // S29: the store constructor opens the db and runs a version probe —
@@ -1133,6 +1219,7 @@ class BangluIMEService : InputMethodService(),
         val oldStore = phoneticIndexStore
         phoneticIndexStore = newStore
         SmartEngineAdapter.setPhoneticIndex(newStore)
+        publishDictionaryStatus(null)
         if (oldStore != null) withContext(Dispatchers.IO) { oldStore.close() }
 
         // Warm-up: pre-fault index pages so the first real keystroke is fast.
@@ -1141,6 +1228,51 @@ class BangluIMEService : InputMethodService(),
         }
 
         return true
+    }
+
+    /**
+     * S136 (F-015): the dictionary state is no longer silent. A failure
+     * shows a dismissable notice in the keyboard, is written to
+     * `dictionary_status` for the Settings screen, and is retried
+     * automatically (bounded) so freeing storage heals the keyboard without
+     * a reinstall.
+     */
+    private fun publishDictionaryStatus(failure: String?) {
+        val status = when {
+            failure == null && shouldUseLiteDictionary() -> "lite"
+            failure == null -> "full"
+            else -> "seed_only:$failure"
+        }
+        if (::prefs.isInitialized) prefs.edit().putString("dictionary_status", status).apply()
+        val message = when {
+            failure == null -> null
+            failure.startsWith(AndroidDictionaryLoader.FAILURE_LOW_SPACE) -> {
+                val neededMb = failure.substringAfter(':', "").toLongOrNull() ?: 0L
+                "অভিধান লোড হয়নি — ফোনে অন্তত $neededMb MB জায়গা খালি করুন; কীবোর্ড নিজে থেকেই আবার চেষ্টা করবে"
+            }
+            else -> "অভিধান কপি করা যায়নি — কীবোর্ড আপাতত ছোট শব্দভাণ্ডারে চলছে; ফোন রিস্টার্ট করে আবার চেষ্টা করুন"
+        }
+        serviceScope.launch {
+            if (message == null) dictionaryNoticeDismissed = false
+            dictionaryNotice.value = if (dictionaryNoticeDismissed) null else message
+        }
+        if (failure != null) dictionaryRetryAtMs = System.currentTimeMillis() + DICTIONARY_RETRY_INTERVAL_MS
+    }
+
+    private fun dismissDictionaryNotice() {
+        dictionaryNoticeDismissed = true
+        dictionaryNotice.value = null
+    }
+
+    /** Retry provisioning when the keyboard closes, at most once per interval. */
+    private fun maybeRetryDictionaryProvisioning() {
+        if (!::prefs.isInitialized) return
+        val status = prefs.getString("dictionary_status", null) ?: return
+        if (!status.startsWith("seed_only")) return
+        val now = System.currentTimeMillis()
+        if (now < dictionaryRetryAtMs) return
+        dictionaryRetryAtMs = now + DICTIONARY_RETRY_INTERVAL_MS
+        reloadUserLearningAsync()
     }
 
     private fun createDictionaryLoader(): AndroidDictionaryLoader {
@@ -1320,7 +1452,9 @@ class BangluIMEService : InputMethodService(),
                         recentEmojisProvider = kbRecentEmojisProvider,
                         numberPadPhone = numberPadPhone.value,
                         voiceEnglishSession = voiceInputState.value != VoiceInputState.IDLE &&
-                            voiceSessionEnglish
+                            voiceSessionEnglish,
+                        noticeText = dictionaryNotice.value,
+                        onNoticeDismiss = kbOnNoticeDismiss
                     )
                 }
             }
@@ -1356,11 +1490,16 @@ class BangluIMEService : InputMethodService(),
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        resumeComposeLifecycle()
         imeSessionVisible = true
         imeTextSessionToken++
         recordImeEvent("start_input_view")
         reloadSettings()
         configureInputSafety(info)
+        // S136 (F-003): expiry is ACTIVE — every keyboard show drops entries
+        // older than an hour from memory and disk, not just the panel open.
+        clipboardTransientItem = null
+        if (clipboardHistoryLoaded) pruneClipboardHistory()
         buffer = ""
         englishWordPrefix = ""   // S99
         suggestions.clear()
@@ -1487,12 +1626,38 @@ class BangluIMEService : InputMethodService(),
     override fun onFinishInputView(finishingInput: Boolean) {
         cleanupImeSession("finish_input_view", cancelVoice = true)
         flushLatencyTelemetry()
+        pauseComposeLifecycle()
+        maybeRetryDictionaryProvisioning()
         super.onFinishInputView(finishingInput)
     }
 
     override fun onWindowHidden() {
         cleanupImeSession("window_hidden", cancelVoice = true)
+        pauseComposeLifecycle()
         super.onWindowHidden()
+    }
+
+    override fun onWindowShown() {
+        super.onWindowShown()
+        resumeComposeLifecycle()
+    }
+
+    // S136 (F-012): the Compose lifecycle now follows the real shown/hidden
+    // state — STARTED/RESUMED only while the keyboard is on screen. Compose
+    // pauses its frame clock below STARTED, so a hidden keyboard recomposes
+    // nothing; every pending state change applies on the next show. Guards
+    // keep the registry monotonic (a PAUSE from CREATED would move UP).
+    private fun pauseComposeLifecycle() {
+        val state = lifecycleRegistry.currentState
+        if (state.isAtLeast(Lifecycle.State.RESUMED)) lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+        if (lifecycleRegistry.currentState.isAtLeast(Lifecycle.State.STARTED)) lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+    }
+
+    private fun resumeComposeLifecycle() {
+        val state = lifecycleRegistry.currentState
+        if (state == Lifecycle.State.DESTROYED || state == Lifecycle.State.INITIALIZED) return
+        if (!state.isAtLeast(Lifecycle.State.STARTED)) lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+        if (!lifecycleRegistry.currentState.isAtLeast(Lifecycle.State.RESUMED)) lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
     }
 
     /** S76: package of the last edited field — the language mode resets on
@@ -1548,8 +1713,18 @@ class BangluIMEService : InputMethodService(),
         phoneticIndexStore?.close()
         phoneticIndexStore = null
         releaseSpeechRecognizer()
+        pauseComposeLifecycle()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        // S136 (F-012): cancel BEFORE resetting the engine singleton so an
+        // in-flight initialize() cannot publish a freshly built full engine
+        // into a dead service's process (it resumes into cancellation at its
+        // next suspension point instead). Then drop the ViewModel store and
+        // the process-wide engine graph — a destroyed service must not pin
+        // a 100MB+ dictionary until the OS kills the process.
+        initialEngineLoadJob?.cancel()
         serviceScope.cancel()
+        store.clear()
+        SmartEngineAdapter.reset()
         strictModePenaltyExecutor.shutdownNow()
         super.onDestroy()
     }
@@ -1791,10 +1966,18 @@ class BangluIMEService : InputMethodService(),
 
     // ── S98: identity assist (emails/usernames — NEVER passwords) ────────
 
-    /** Sensitive fields (password/OTP/no-learning) are excluded absolutely. */
+    /** Sensitive fields (password/OTP/no-learning) are excluded absolutely.
+     *  This gate covers the STATIC part of identity assist — completing a
+     *  typed "@gm" to gmail.com from the built-in domain list, which stores
+     *  nothing. */
     private fun identityAssistAllowed(): Boolean =
-        imeSessionVisible && suggestionsEnabled.value && !sensitiveInputMode &&
-            personalDictionaryEnabled.value && identityAssistEnabled.value
+        imeSessionVisible && suggestionsEnabled.value && !sensitiveInputMode
+
+    /** S136 (F-004): the MEMORY part — remembering addresses and offering
+     *  saved ones — needs the dedicated switch (default OFF) plus the
+     *  personal dictionary. */
+    private fun identityMemoryAllowed(): Boolean =
+        identityAssistAllowed() && personalDictionaryEnabled.value && identityAssistEnabled.value
 
     /** The whitespace-delimited token directly before the cursor. */
     private fun identityTokenBeforeCursor(ic: InputConnection): String {
@@ -1812,7 +1995,7 @@ class BangluIMEService : InputMethodService(),
         val ic = currentInputConnection ?: return false
         val token = identityTokenBeforeCursor(ic)
         val wantsDomains = token.contains('@')
-        val wantsSavedFills = emailInputMode && token.isEmpty()
+        val wantsSavedFills = emailInputMode && token.isEmpty() && identityMemoryAllowed()
         if (!wantsDomains && !wantsSavedFills) return false
         suggestionJob?.cancel()
         suggestionJob = serviceScope.launch {
@@ -1854,7 +2037,9 @@ class BangluIMEService : InputMethodService(),
 
     /** A committed token that may be a complete email — learn it off-lane. */
     private fun recordIdentityAsync(token: String) {
-        if (!identityAssistAllowed()) return
+        // S136 (F-004): remember addresses ONLY from email fields (what the
+        // privacy policy says) and only with the switch on.
+        if (!identityMemoryAllowed() || !emailInputMode) return
         if (!token.contains('@')) return
         serviceScope.launch(engineLane) {
             SmartEngineAdapter.ensureIdentityLoaded()
@@ -3729,7 +3914,13 @@ class BangluIMEService : InputMethodService(),
         }
         ensureClipboardHistoryLoaded()
         pruneClipboardHistory()
-        captureCurrentSystemClipboard()
+        clipboardTransientItem = null
+        if (sensitiveInputMode) {
+            // One-shot paste only (see clipboardTransientItem).
+            clipboardTransientItem = readSystemClipboard()?.takeIf { !it.second }?.first
+        } else {
+            captureCurrentSystemClipboard()
+        }
         keyboardMode.value = KeyboardMode.CLIPBOARD
         resetShiftState()
     }
@@ -3866,10 +4057,11 @@ class BangluIMEService : InputMethodService(),
             return
         }
 
-        // Delete word: find previous word boundary
+        // Delete word: find previous word boundary (S136: any whitespace —
+        // tab, newline, NBSP — not only the ASCII space).
         val before = ic.getTextBeforeCursor(50, 0)?.toString() ?: return
         val trimmed = before.trimEnd()
-        val lastSpace = trimmed.lastIndexOf(' ')
+        val lastSpace = trimmed.indexOfLast { it.isWhitespace() }
         val charsToDelete = if (lastSpace >= 0) before.length - lastSpace else before.length
         if (charsToDelete > 0) {
             ic.deleteSurroundingText(charsToDelete, 0)
@@ -4152,32 +4344,42 @@ class BangluIMEService : InputMethodService(),
         prefs.edit().putString(PREF_RECENT_EMOJIS, recentEmojis.joinToString("|")).apply()
     }
 
-    private fun captureCurrentSystemClipboard() {
-        val manager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
-        val clip = manager.primaryClip ?: return
-        if (clip.itemCount <= 0) return
-        // S135 (F-003): honor the source app's sensitivity marker (password
-        // managers, OTP autofill) and never learn from a sensitive field —
-        // decided BEFORE the clip text is even read.
+    /** The current system clip as (text, flaggedSensitive), or null. */
+    private fun readSystemClipboard(): Pair<String, Boolean>? {
+        val manager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return null
+        val clip = manager.primaryClip ?: return null
+        if (clip.itemCount <= 0) return null
+        // S135 (F-003): the source app's sensitivity marker (password
+        // managers, OTP autofill) is read BEFORE the clip text is touched.
         val clipIsSensitive = clip.description?.extras
             ?.getBoolean(ClipboardHistoryPolicy.EXTRA_IS_SENSITIVE, false) == true
-        if (!ClipboardHistoryPolicy.shouldRemember(sensitiveInputMode, clipIsSensitive)) return
-        val text = clip.getItemAt(0)
-            ?.coerceToText(this)
-            ?.toString()
-            .orEmpty()
+        val text = clip.getItemAt(0)?.coerceToText(this)?.toString().orEmpty()
+        return text to clipIsSensitive
+    }
+
+    /** S136 (F-003): a private field of ANY kind (password, OTP, email, URI,
+     *  number/phone, no-personalized-learning) never feeds history. */
+    private val clipboardFieldIsPrivate: Boolean get() = privateInputMode || sensitiveInputMode
+
+    private fun captureCurrentSystemClipboard() {
+        if (clipboardFieldIsPrivate) return
+        val (text, clipIsSensitive) = readSystemClipboard() ?: return
+        if (!ClipboardHistoryPolicy.shouldRemember(clipboardFieldIsPrivate, clipIsSensitive)) return
         rememberClipboardItem(text)
     }
 
     private fun loadClipboardHistory() {
         if (!::prefs.isInitialized) return
-        val entries = ClipboardHistoryPolicy.decode(
-            prefs.getString(PREF_CLIPBOARD_HISTORY, null),
-            System.currentTimeMillis()
-        )
+        val raw = prefs.getString(PREF_CLIPBOARD_HISTORY, null)
+        val entries = ClipboardHistoryPolicy.decode(raw, System.currentTimeMillis())
         clipboardHistory.clear()
         clipboardHistory.addAll(entries)
         clipboardHistoryLoaded = true
+        // S136 (F-003): pre-S135 items carried no timestamp and were re-dated
+        // "now" on EVERY load — an undated blob could live forever. Write the
+        // dated form back at once so they expire exactly one hour from this
+        // load; this also drops already-expired items from disk.
+        if (ClipboardHistoryPolicy.encode(entries) != raw.orEmpty()) persistClipboardHistory()
     }
 
     private fun ensureClipboardHistoryLoaded() {
@@ -4196,9 +4398,9 @@ class BangluIMEService : InputMethodService(),
 
     private fun rememberClipboardItem(text: String) {
         ensureClipboardHistoryLoaded()
-        // S135 (F-003): a paste INTO a password/OTP/no-learning field still
-        // works; the field just never feeds history.
-        if (!ClipboardHistoryPolicy.shouldRemember(sensitiveInputMode, clipIsSensitive = false)) return
+        // S135/S136 (F-003): a paste INTO a private field still works; the
+        // field just never feeds history.
+        if (!ClipboardHistoryPolicy.shouldRemember(clipboardFieldIsPrivate, clipIsSensitive = false)) return
         val next = ClipboardHistoryPolicy.remember(clipboardHistory.toList(), text, System.currentTimeMillis())
         if (next == clipboardHistory.toList()) return
         clipboardHistory.clear()

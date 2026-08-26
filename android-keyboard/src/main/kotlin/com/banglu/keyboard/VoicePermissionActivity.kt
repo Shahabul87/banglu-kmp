@@ -8,6 +8,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -116,10 +121,14 @@ private fun VoicePermissionScreen(
     onCancel: () -> Unit
 ) {
     val accepted = remember { mutableStateOf(false) }
+    // S136 (F-018): edge-to-edge is mandatory on API 35+/36 — keep the card
+    // inside the safe-drawing insets (cutouts, gesture bar, split screen)
+    // and let the text scroll at large font scales / landscape.
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0x99080D16))
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -130,7 +139,9 @@ private fun VoicePermissionScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text(

@@ -22,27 +22,29 @@ class S135IdentityAssistSwitchTest {
     fun identitySwitchOffBlocksRecordingAndSurfacing() {
         SmartEngineAdapter.initializeSync()
         SmartEngineAdapter.configureLearning(enabled = true, personalDictionary = true, identityAssist = true)
-        SmartEngineAdapter.recordIdentity("rahim@gmail.com")
-        assertEquals(listOf("rahim@gmail.com"), SmartEngineAdapter.identitySavedFills())
+        SmartEngineAdapter.recordIdentity("rahim@example-corp.com")
+        assertEquals(listOf("rahim@example-corp.com"), SmartEngineAdapter.identitySavedFills())
+        assertEquals(listOf("karim@example-corp.com"), SmartEngineAdapter.identityDomainSuggestions("karim@exam"))
 
         SmartEngineAdapter.configureLearning(enabled = true, personalDictionary = true, identityAssist = false)
         assertTrue(SmartEngineAdapter.identitySavedFills().isEmpty(), "off → nothing surfaced")
-        assertTrue(SmartEngineAdapter.identityDomainSuggestions("karim@gm").isEmpty(), "off → no completions")
+        assertTrue(SmartEngineAdapter.identityDomainSuggestions("karim@exam").isEmpty(), "off → saved domain hidden")
+        assertEquals(listOf("karim@gmail.com"), SmartEngineAdapter.identityDomainSuggestions("karim@gm", 1), "built-in list still completes")
         SmartEngineAdapter.recordIdentity("karim@yahoo.com")
 
         SmartEngineAdapter.configureLearning(enabled = true, personalDictionary = true, identityAssist = true)
-        assertEquals(listOf("rahim@gmail.com"), SmartEngineAdapter.identitySavedFills(), "off-window recording dropped")
+        assertEquals(listOf("rahim@example-corp.com"), SmartEngineAdapter.identitySavedFills(), "off-window recording dropped")
     }
 
     @Test
     fun personalDictionaryOffAlsoSilencesIdentityAssist() {
         SmartEngineAdapter.initializeSync()
         SmartEngineAdapter.configureLearning(enabled = true, personalDictionary = true, identityAssist = true)
-        SmartEngineAdapter.recordIdentity("rahim@gmail.com")
+        SmartEngineAdapter.recordIdentity("rahim@example-corp.com")
 
         SmartEngineAdapter.configureLearning(enabled = true, personalDictionary = false, identityAssist = true)
         assertTrue(SmartEngineAdapter.identitySavedFills().isEmpty())
-        assertTrue(SmartEngineAdapter.identityDomainSuggestions("rahim@g").isEmpty())
+        assertTrue(SmartEngineAdapter.identityDomainSuggestions("rahim@exam").isEmpty())
     }
 
     @Test

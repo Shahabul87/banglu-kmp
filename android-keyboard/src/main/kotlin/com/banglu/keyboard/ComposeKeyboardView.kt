@@ -280,6 +280,10 @@ fun BangluKeyboardLayout(
     /** S122: the running dictation is an English session — the voice panel
      *  prompt must say so instead of "বাংলায় বলুন". */
     voiceEnglishSession: Boolean = false,
+    /** S136 (F-015): a one-line dismissable notice above the strip (e.g. the
+     *  dictionary could not be provisioned). Null = nothing shown. */
+    noticeText: String? = null,
+    onNoticeDismiss: () -> Unit = {},
     onKeyPress: (Char) -> Unit,
     /** S99: probabilistic touch targeting — letter presses report position. */
     onLetterTouch: ((Char, Char?, Char?, Float) -> Unit)? = null,
@@ -372,6 +376,10 @@ fun BangluKeyboardLayout(
                 .padding(horizontal = if (isLandscape) 4.dp else KeyboardPadding)
                 .padding(top = if (isLandscape) 1.dp else 3.dp, bottom = bottomSafePadding)
         ) {
+            if (noticeText != null) {
+                KeyboardNoticeRow(text = noticeText, onDismiss = onNoticeDismiss)
+                Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
+            }
             if (voiceInputState != VoiceInputState.IDLE) {
                 VoiceStatusPanel(
                     state = voiceInputState,
@@ -738,6 +746,41 @@ private fun AdaptiveTopStrip(
                 voiceInputState = voiceInputState,
                 onToggleToolbar = onToggleToolbar
             )
+        }
+    }
+}
+
+/** S136 (F-015): dismissable status line — polite live region for TalkBack. */
+@Composable
+private fun KeyboardNoticeRow(text: String, onDismiss: () -> Unit) {
+    val colors = LocalKeyboardColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(colors.suggestionChipBg)
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = text,
+            color = colors.keyText,
+            fontSize = scaledSp(13),
+            lineHeight = scaledSp(17),
+            modifier = Modifier.weight(1f)
+        )
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .semantics {
+                    role = Role.Button
+                    contentDescription = "Dismiss notice"
+                }
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = "\u2715", color = colors.subText, fontSize = scaledSp(15))
         }
     }
 }

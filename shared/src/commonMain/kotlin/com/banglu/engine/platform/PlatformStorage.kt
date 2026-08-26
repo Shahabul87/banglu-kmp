@@ -58,6 +58,24 @@ interface PlatformStorage {
     }
 
     /**
+     * S136 (production re-audit, F-001): the durable form of
+     * [clearAllLearningData] — returns false when the platform could NOT
+     * confirm the delete reached persistent storage. Callers that tell the
+     * user "deleted" must use this and report only on true. Default: the
+     * composed clear, assumed durable.
+     */
+    suspend fun clearAllLearningDataDurably(): Boolean {
+        clearAllLearningData()
+        return true
+    }
+
+    /** S136: durable delete of ONLY the saved identities (see above). */
+    suspend fun clearIdentityUserDataDurably(): Boolean {
+        saveIdentityUserData("")
+        return true
+    }
+
+    /**
      * S96: the English typing suite's learning blob (user word counts +
      * next-word bigrams, EnglishTypingEngine.serialize format). One bounded
      * string; platforms without an EN keyboard surface keep the no-op.
