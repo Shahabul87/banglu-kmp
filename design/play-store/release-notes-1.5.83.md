@@ -21,3 +21,10 @@
 - Round: S136 — second-pass fixes for docs/audits/audit-android-production-readiness-2026-08-26.md
 - Toolchain: AGP 8.9.3 (API 36 supported; suppression removed), Gradle 8.11.1 with wrapper checksum; the account/billing split is no longer in the launch AAB (`-PbangluAccount=true` to include)
 - Gates: unit/lint walls, `connectedDebugAndroidTest` (multiprocess erase provider), `validate_android_release.sh` with `RUN_DEVICE_SMOKE=1` (bundletool splits from the exact AAB, typing + accessibility + memory/jank/ANR thresholds)
+
+## Recorded at release (2026-08-26)
+- Built from commit `b922b2d6c5d43ed405282015c7513cb6e05f26f2` (tag `v1.5.83`); the validator verified the AAB's embedded revision equals HEAD
+- `banglu-1.5.83-2120.aab` SHA-256 `3b832246cad1bca494001f4cfb7b3996725d0e87cb80299fb20063eb53a0f3a2` (66,352,780 bytes; no account split); copies in `releases/` and `~/Downloads/`
+- Device certification (SM-S901W, Android 16, exact release splits via bundletool): `device-smoke-1.5.83.json` — activation 232 ms, 50/51 clickable nodes, typing + delete/retype probes pass, 155 MB PSS, no ANR (jank not enforced: 11-frame sample)
+- Instrumented: `connectedDebugAndroidTest` 4/4 — multiprocess erase provider (all/identity/unknown scope) and assistive key activation (ACTION_CLICK on key nodes types আমি)
+- Unit walls: shared jvmTest 674, shared Android 417, android debug/release 132 each; lint 0 errors on AGP 8.9.3

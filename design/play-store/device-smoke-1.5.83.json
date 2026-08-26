@@ -1,0 +1,69 @@
+{
+  "package": "com.banglu.keyboard",
+  "aab": "android-keyboard-release.aab",
+  "checks": {
+    "installed_version": {
+      "ok": true,
+      "detail": "installed 1.5.83, expected 1.5.83"
+    },
+    "editor_found": {
+      "ok": true,
+      "detail": "try-it editor located in the app"
+    },
+    "keyboard_activation": {
+      "ok": true,
+      "detail": "232 ms (max 2500)"
+    },
+    "accessibility_clickable_keys": {
+      "ok": true,
+      "detail": "50 clickable of 51 labelled nodes (min 40)"
+    },
+    "key_a_present": {
+      "ok": true,
+      "detail": "key 'a' in the accessibility tree"
+    },
+    "key_m_present": {
+      "ok": true,
+      "detail": "key 'm' in the accessibility tree"
+    },
+    "key_i_present": {
+      "ok": true,
+      "detail": "key 'i' in the accessibility tree"
+    },
+    "typing_probe": {
+      "ok": true,
+      "detail": "editor shows 'আমি' (expected 'আমি')"
+    },
+    "delete_and_retype": {
+      "ok": true,
+      "detail": "after backspace x4 and retype: 'আমি'"
+    },
+    "memory_pss": {
+      "ok": true,
+      "detail": "155.0 MB (max 320.0)"
+    },
+    "jank": {
+      "ok": true,
+      "detail": "90.91% janky of only 11 frames — below 40, not enforced"
+    },
+    "no_anr": {
+      "ok": true,
+      "detail": "no ANR for the keyboard process in logcat during the probe"
+    }
+  },
+  "measurements": {
+    "keyboard_activation_ms": 232,
+    "keyboard_nodes": 51,
+    "keyboard_clickable_nodes": 50,
+    "total_pss_mb": 154.9638671875,
+    "frames_rendered": 11,
+    "janky_frames_pct": 90.91
+  },
+  "device": {
+    "model": "SM-S901W",
+    "android": "16",
+    "sdk": "36"
+  },
+  "result": "certified",
+  "failed_checks": []
+}
