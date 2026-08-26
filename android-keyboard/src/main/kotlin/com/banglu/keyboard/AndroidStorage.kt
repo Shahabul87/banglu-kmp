@@ -221,6 +221,13 @@ class AndroidStorage(context: Context) : PlatformStorage {
     // S98: identity-assist blob (saved emails + domains) — bounded by
     // IdentityAssist before serialization, on-device only.
     override suspend fun saveIdentityUserData(data: String) {
+        // S135: an empty blob means "no identities" — store it as NO key, so
+        // an async clear landing after clearIdentityUserData() cannot leave a
+        // stale empty entry behind (observed on device).
+        if (data.isBlank()) {
+            prefs.edit().remove(scopedKey(KEY_IDENTITY_USER_DATA)).apply()
+            return
+        }
         prefs.edit()
             .putString(scopedKey(KEY_IDENTITY_USER_DATA), data)
             .apply()
