@@ -228,7 +228,10 @@ class S136KeyAccessibilityActivationInstrumentedTest {
 
     private fun editorTextRaw(): String {
         Thread.sleep(500)
-        return editor()?.text?.toString().orEmpty()
+        val node = editor() ?: return ""
+        // An empty field reports its HINT as text — that is "empty".
+        if (node.isShowingHintText) return ""
+        return node.text?.toString().orEmpty()
     }
 
     private fun clickKey(labelPrefix: String) {

@@ -32,9 +32,10 @@ IME_ID = f"{PACKAGE}/.BangluIMEService"
 PROBE_KEYS = ["a", "m", "i"]
 PROBE_EXPECTED = "আমি"
 MIN_CLICKABLE_KEYS = 40
-MAX_TOTAL_PSS_MB = 320.0       # full 176MB dictionary served through sqlite mmap
-MAX_JANKY_FRAMES_PCT = 30.0    # gfxinfo over the probe session; Compose keyboard on a mid device
-MIN_FRAMES_FOR_JANK = 40       # below this the percentage is noise (cold-window frames)
+MAX_HEAP_PSS_MB = 260.0        # Dalvik + native heap PSS (the 176MB dictionary file pages are clean/reclaimable)
+MAX_TOTAL_PSS_MB = 420.0       # informative ceiling incl. mapped dictionary pages
+MAX_FRAME_P95_MS = 32.0        # per-frame render time (intended vsync -> completed), two 60Hz frames
+MIN_FRAMES_FOR_TIMING = 20     # the keyboard redraws only on state change; below this the sample is inconclusive
 MAX_ACTIVATION_MS = 2500       # tap editor -> mInputShown=true
 
 
@@ -183,19 +184,59 @@ def editor_text():
     return ""
 
 
-def meminfo_total_pss_mb():
+def meminfo_mb():
+    """(total PSS MB, heap PSS MB = Dalvik + native) from dumpsys meminfo."""
     out = adb("shell", "dumpsys", "meminfo", PACKAGE)
-    m = re.search(r"TOTAL PSS:\s+(\d+)", out) or re.search(r"TOTAL\s+(\d+)", out)
-    return int(m.group(1)) / 1024.0 if m else None
+    total = re.search(r"TOTAL PSS:\s+(\d+)", out) or re.search(r"TOTAL\s+(\d+)", out)
+    heap = 0
+    for label in ("Dalvik Heap", "Native Heap"):
+        m = re.search(label + r"\s+(\d+)", out)
+        if m:
+            heap += int(m.group(1))
+    return (int(total.group(1)) / 1024.0 if total else None), heap / 1024.0
 
 
-def gfx_janky_pct():
-    out = adb("shell", "dumpsys", "gfxinfo", PACKAGE)
-    total = re.search(r"Total frames rendered:\s+(\d+)", out)
-    janky = re.search(r"Janky frames:\s+(\d+)\s+\(([\d.]+)%\)", out)
-    if not total or not janky:
-        return None, None
-    return int(total.group(1)), float(janky.group(2))
+def frame_timings_ms():
+    """Per-frame render durations (intended vsync -> frame completed) for
+    the keyboard process from `gfxinfo framestats`, excluding flagged
+    (first-draw / resize) frames."""
+    out = adb("shell", "dumpsys", "gfxinfo", PACKAGE, "framestats")
+    durations = []
+    block = False
+    header = None
+    for line in out.splitlines():
+        line = line.strip()
+        if line == "---PROFILEDATA---":
+            block = not block
+            header = None
+            continue
+        if not block:
+            continue
+        cols = [c for c in line.split(",") if c != ""]
+        if header is None:
+            header = cols
+            continue
+        if len(cols) < len(header):
+            continue
+        try:
+            row = dict(zip(header, cols))
+            if int(row.get("Flags", "0")) != 0:
+                continue
+            start = int(row["IntendedVsync"])
+            done = int(row["FrameCompleted"])
+        except (KeyError, ValueError):
+            continue
+        if done > start:
+            durations.append((done - start) / 1e6)
+    return durations
+
+
+def percentile(values, pct):
+    if not values:
+        return None
+    s = sorted(values)
+    k = max(0, min(len(s) - 1, int(round(pct / 100.0 * (len(s) - 1)))))
+    return s[k]
 
 
 def anr_seen(since_marker_cleared):
@@ -341,17 +382,24 @@ def main():
             time.sleep(0.1)
         time.sleep(1.0)
 
-    pss = meminfo_total_pss_mb()
+    pss, heap = meminfo_mb()
     report["measurements"]["total_pss_mb"] = pss
-    check("memory_pss", pss is not None and pss <= MAX_TOTAL_PSS_MB, f"{pss and round(pss, 1)} MB (max {MAX_TOTAL_PSS_MB})")
-    frames, janky = gfx_janky_pct()
-    report["measurements"]["frames_rendered"] = frames
-    report["measurements"]["janky_frames_pct"] = janky
-    if janky is None or frames < MIN_FRAMES_FOR_JANK:
+    report["measurements"]["heap_pss_mb"] = heap
+    check("memory_heap", heap <= MAX_HEAP_PSS_MB, f"Dalvik+native heap {round(heap, 1)} MB (max {MAX_HEAP_PSS_MB})")
+    check("memory_total_pss", pss is not None and pss <= MAX_TOTAL_PSS_MB,
+          f"total PSS {pss and round(pss, 1)} MB incl. mapped dictionary pages (max {MAX_TOTAL_PSS_MB})")
+    timings = frame_timings_ms()
+    p50, p95, worst = percentile(timings, 50), percentile(timings, 95), (max(timings) if timings else None)
+    report["measurements"]["frames_sampled"] = len(timings)
+    report["measurements"]["frame_ms_p50"] = p50
+    report["measurements"]["frame_ms_p95"] = p95
+    report["measurements"]["frame_ms_max"] = worst
+    if len(timings) < MIN_FRAMES_FOR_TIMING:
         # S138 (F-014): an unmeasured threshold is INCONCLUSIVE, never a pass.
-        check("jank", False, f"inconclusive — {frames} frames sampled (need {MIN_FRAMES_FOR_JANK}); janky={janky}%")
+        check("frame_timing", False, f"inconclusive — {len(timings)} frames sampled (need {MIN_FRAMES_FOR_TIMING})")
     else:
-        check("jank", janky <= MAX_JANKY_FRAMES_PCT, f"{janky}% janky of {frames} frames (max {MAX_JANKY_FRAMES_PCT}%)")
+        check("frame_timing", p95 <= MAX_FRAME_P95_MS,
+              f"p50 {round(p50, 1)} ms, p95 {round(p95, 1)} ms, max {round(worst, 1)} ms over {len(timings)} frames (p95 max {MAX_FRAME_P95_MS})")
     check("no_anr", not anr_seen(True), "no ANR for the keyboard process in logcat during the probe")
 
     adb("shell", "input", "keyevent", "BACK", check=False)
