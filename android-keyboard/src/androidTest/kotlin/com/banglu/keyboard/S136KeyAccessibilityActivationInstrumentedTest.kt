@@ -260,14 +260,20 @@ class S136KeyAccessibilityActivationInstrumentedTest {
     }
 
     private fun openClipboardPanel() {
-        val direct = keyNodes().firstOrNull { it.contentDescription.toString() == "Clipboard" }
-        if (direct != null) {
-            clickViaAncestor(direct); Thread.sleep(800); return
+        // The strip alternates between the action bar (idle) and the
+        // suggestion strip; nodes go stale between recompositions, so every
+        // attempt re-queries the tree.
+        repeat(5) {
+            val fresh = keyNodes()
+            val direct = fresh.firstOrNull { it.contentDescription.toString() == "Clipboard" }
+            if (direct != null && clickViaAncestor(direct)) {
+                Thread.sleep(800); return
+            }
+            val tools = fresh.firstOrNull { it.contentDescription.toString() == "More tools" }
+            if (tools != null) clickViaAncestor(tools)
+            Thread.sleep(700)
         }
-        clickKey("More tools")
-        val viaTools = waitFor(4_000) { keyNodes().firstOrNull { it.contentDescription.toString() == "Clipboard" } }
-        clickViaAncestor(viaTools)
-        Thread.sleep(800)
+        fail("could not open the clipboard panel: ${keyNodes().map { it.contentDescription }}")
     }
 
     private fun editorTextRaw(): String {
