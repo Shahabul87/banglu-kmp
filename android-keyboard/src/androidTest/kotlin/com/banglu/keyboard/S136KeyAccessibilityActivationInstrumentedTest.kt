@@ -235,13 +235,15 @@ class S136KeyAccessibilityActivationInstrumentedTest {
         // keyboard, real SharedPreferences, real ClipboardManager.
         val prefs = context.getSharedPreferences("banglu_prefs", android.content.Context.MODE_PRIVATE)
         prefs.edit().putBoolean(PrefsMigrations.CLIPBOARD_ENABLED_KEY, true).commit()
-        // The Bengali backspace above left the keyboard RESUMING 'ক্ষ' (S88),
-        // so the suggestion strip hides the action bar: delete the rest of
-        // the word to return the strip to idle.
-        clickKey("Backspace")
-        clickKey("Backspace")
+        // The Bengali backspace above left the keyboard RESUMING the word
+        // (S88), so the suggestion strip hides the action bar. A hide/show
+        // cycle is the real-world reset: onStartInputView clears the buffer
+        // and the suggestions, and the action bar returns.
         setEditorText("")
-        Thread.sleep(600)
+        shell("input keyevent BACK")
+        Thread.sleep(800)
+        showKeyboardWithARealTap(waitFor { editor() })
+        waitFor(6_000) { keyNodes().firstOrNull { it.contentDescription.toString() == "Clipboard" || it.contentDescription.toString() == "More tools" } }
         val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
         val copied = "ক্লিপবোর্ড টেস্ট ${System.currentTimeMillis() % 1000}"
         clipboard.setPrimaryClip(android.content.ClipData.newPlainText("banglu-test", copied))
