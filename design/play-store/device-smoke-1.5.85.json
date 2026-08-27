@@ -1,0 +1,82 @@
+{
+  "package": "com.banglu.keyboard",
+  "artifact": {
+    "aab": "android-keyboard-release.aab",
+    "aab_sha256": "4e20f11b1ba88f999b59f10eb2f768f7cd7d86d6512486faf1874c6db071adc1",
+    "revision": "3709aed78ed313d284eecfc7ebc4817d2b35eb67",
+    "signing_cert_sha256": "8fa2de6dd2216414954f581cbe1247255e7f74c8da4742c2f7d3d8df43b11a17",
+    "expected_version": "1.5.85"
+  },
+  "checks": {
+    "installed_version": {
+      "ok": true,
+      "detail": "installed 1.5.85, expected 1.5.85"
+    },
+    "editor_found": {
+      "ok": true,
+      "detail": "try-it editor located in the app"
+    },
+    "keyboard_activation": {
+      "ok": true,
+      "detail": "191 ms (max 2500)"
+    },
+    "accessibility_clickable_keys": {
+      "ok": true,
+      "detail": "50 clickable of 51 labelled nodes (min 40)"
+    },
+    "key_a_present": {
+      "ok": true,
+      "detail": "key 'a' in the accessibility tree"
+    },
+    "key_m_present": {
+      "ok": true,
+      "detail": "key 'm' in the accessibility tree"
+    },
+    "key_i_present": {
+      "ok": true,
+      "detail": "key 'i' in the accessibility tree"
+    },
+    "typing_probe": {
+      "ok": true,
+      "detail": "editor shows 'আমি' (expected 'আমি')"
+    },
+    "delete_and_retype": {
+      "ok": true,
+      "detail": "after backspace x4 and retype: 'আমি'"
+    },
+    "memory_heap": {
+      "ok": true,
+      "detail": "Dalvik+native heap 284.9 MB (max 320.0)"
+    },
+    "memory_total_pss": {
+      "ok": true,
+      "detail": "total PSS 329.4 MB incl. mapped dictionary pages (max 420.0)"
+    },
+    "frame_timing": {
+      "ok": true,
+      "detail": "p50 5.1 ms, p95 33.9 ms, max 35.5 ms over 52 frames (p95 max 48.0)"
+    },
+    "no_anr": {
+      "ok": true,
+      "detail": "no ANR for the keyboard process in logcat during the probe"
+    }
+  },
+  "measurements": {
+    "keyboard_activation_ms": 191,
+    "keyboard_nodes": 51,
+    "keyboard_clickable_nodes": 50,
+    "total_pss_mb": 329.369140625,
+    "heap_pss_mb": 284.86328125,
+    "frames_sampled": 52,
+    "frame_ms_p50": 5.075475,
+    "frame_ms_p95": 33.855659,
+    "frame_ms_max": 35.519142
+  },
+  "device": {
+    "model": "SM-S901W",
+    "android": "16",
+    "sdk": "36"
+  },
+  "result": "certified",
+  "failed_checks": []
+}
