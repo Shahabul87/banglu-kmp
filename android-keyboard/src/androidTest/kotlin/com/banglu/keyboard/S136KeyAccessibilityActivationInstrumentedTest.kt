@@ -11,6 +11,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -37,6 +38,11 @@ class S136KeyAccessibilityActivationInstrumentedTest {
         }
         // shellRead waits for the command to finish; closing the stream early
         // (plain executeShellCommand) let `ime set` die before it applied.
+        // S139: StrictMode violations recorded by the debug build (main-thread
+        // disk I/O on the keystroke/attach path) FAIL this test — clear the
+        // counters first so only this run counts.
+        val diag = context.getSharedPreferences("banglu_prefs", android.content.Context.MODE_PRIVATE)
+        diag.edit().also { e -> diag.all.keys.filter { it.startsWith("diag_failure_strict_") }.forEach { e.remove(it) } }.commit()
         shellRead("ime enable $packageName/.BangluIMEService")
         shellRead("ime set $packageName/.BangluIMEService")
         waitFor(8_000) {
@@ -224,6 +230,44 @@ class S136KeyAccessibilityActivationInstrumentedTest {
         setEditorText("ক্ষমা")
         clickKey("Backspace")
         assertEquals("ক্ষ", editorTextRaw(), "Bengali rules unchanged: 'মা' is one cluster")
+
+        // S139 (F-003): the enable → open panel → paste workflow on the real
+        // keyboard, real SharedPreferences, real ClipboardManager.
+        val prefs = context.getSharedPreferences("banglu_prefs", android.content.Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(PrefsMigrations.CLIPBOARD_ENABLED_KEY, true).commit()
+        setEditorText("")
+        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val copied = "ক্লিপবোর্ড টেস্ট ${System.currentTimeMillis() % 1000}"
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("banglu-test", copied))
+        Thread.sleep(600)
+        openClipboardPanel()
+        val item = waitFor(6_000) { allNodes(imeRoots().ifEmpty { roots() }).firstOrNull { it.text?.toString() == copied } }
+        assertTrue(clickViaAncestor(item), "clipboard item accepted the click")
+        Thread.sleep(800)
+        assertEquals(copied, editorTextRaw(), "the copied text was pasted from the panel")
+        assertTrue(
+            prefs.getString(PrefsMigrations.CLIPBOARD_ENTRIES_KEY, "").orEmpty().isNotEmpty(),
+            "with history ON the entry persisted under the entries key"
+        )
+        // Switch off: the stored history must be gone (durable), the panel
+        // must show only the current clip.
+        prefs.edit().putBoolean(PrefsMigrations.CLIPBOARD_ENABLED_KEY, false).commit()
+        Thread.sleep(800)
+        assertNull(prefs.getString(PrefsMigrations.CLIPBOARD_ENTRIES_KEY, null), "history purged on switch-off")
+
+        val strict = prefs.all.keys.filter { it.startsWith("diag_failure_strict_") }
+        assertEquals(emptyList(), strict, "no StrictMode violation on the keystroke/attach path")
+    }
+
+    private fun openClipboardPanel() {
+        val direct = keyNodes().firstOrNull { it.contentDescription.toString() == "Clipboard" }
+        if (direct != null) {
+            clickViaAncestor(direct); Thread.sleep(800); return
+        }
+        clickKey("More tools")
+        val viaTools = waitFor(4_000) { keyNodes().firstOrNull { it.contentDescription.toString() == "Clipboard" } }
+        clickViaAncestor(viaTools)
+        Thread.sleep(800)
     }
 
     private fun editorTextRaw(): String {

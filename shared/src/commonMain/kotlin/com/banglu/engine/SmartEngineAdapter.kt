@@ -96,9 +96,10 @@ object SmartEngineAdapter {
             // Light path (no dictionary loader — tests, learned-words-only
             // refresh): cheap, runs in place on the current engine.
             val eng = getEngine()
+            val generation = eraseGeneration
             eng.initialize(storage, null)
             eng.setUserBigrams(storage.getUserBigrams())
-            applyPreferenceMaps(buildPreferenceMaps(eng, storage))
+            publishPreferenceMaps(buildPreferenceMaps(eng, storage), generation)
             eng.clearCache()
             // No loader means nothing further will load — the engine is as
             // complete as it gets, so learning is sound (S34 gate).
@@ -123,6 +124,7 @@ object SmartEngineAdapter {
         phoneticStore?.let { serving.setPhoneticIndex(it) }
 
         val store = phoneticStore
+        val generation = eraseGeneration
         val built = withContext(Dispatchers.Default) {
             val fresh = SmartEngine()
             fresh.initializeSync()
@@ -140,7 +142,7 @@ object SmartEngineAdapter {
         // events recorded during the build window were persisted to storage and
         // reappear on the next initialize; the in-session map entries are
         // rebuilt here from the storage snapshot.
-        applyPreferenceMaps(built.second)
+        publishPreferenceMaps(built.second, generation)
         com.banglu.engine.util.runSynchronized(this) { engine = built.first }
         engineFullyLoaded = true
         built.first.clearCache()
@@ -195,6 +197,16 @@ object SmartEngineAdapter {
             customPreferenceMap.putAll(maps.first)
             selectedPreferenceMap.clear()
             selectedPreferenceMap.putAll(maps.second)
+        }
+    }
+
+    /** S139 (F-001): maps built from a storage snapshot are published under
+     *  learningLock and ONLY if no erase happened since the snapshot was
+     *  read — otherwise they are stale learned data and are dropped (the
+     *  erase already left memory empty; the IME's rebuild follows). */
+    private fun publishPreferenceMaps(maps: Pair<Map<String, String>, Map<String, String>>, generation: Int) {
+        mutateLearning {
+            if (generation == eraseGeneration) applyPreferenceMaps(maps)
         }
     }
 
@@ -524,14 +536,23 @@ object SmartEngineAdapter {
      * Reset all learned words and reinitialize the engine.
      */
     suspend fun resetLearning() {
-        storage?.clearLearnedWords()
-        storage?.clearUserBigrams()
-        com.banglu.engine.util.runSynchronized(preferenceLock) {
-            customPreferenceMap.clear()
-            selectedPreferenceMap.clear()
+        // S139 (F-001): same ordering contract as eraseAllLearning.
+        mutateLearning {
+            eraseGeneration++
+            com.banglu.engine.util.runSynchronized(preferenceLock) {
+                customPreferenceMap.clear()
+                selectedPreferenceMap.clear()
+            }
+            com.banglu.engine.util.runSynchronized(this) { engine = null }
+            engineFullyLoaded = false
         }
-        engine = null
-        engineFullyLoaded = false
+        val store = storage ?: return
+        withContext(com.banglu.engine.util.persistenceDispatcher) {
+            persistenceMutex.withLock {
+                store.clearLearnedWords()
+                store.clearUserBigrams()
+            }
+        }
     }
 
     /**
@@ -650,8 +671,13 @@ object SmartEngineAdapter {
         // exact hazard the doc comment warns about), and a failed load was
         // never retried. Callers all arrive on the single engine lane, so the
         // check-then-load pair cannot double-run.
-        storage?.loadEnglishUserData()?.let { englishTyping.load(it) }
-        englishLearningLoaded = true
+        val generation = eraseGeneration
+        val data = storage?.loadEnglishUserData()
+        mutateLearning {
+            // S139: a load that straddled an erase is stale — leave memory empty.
+            if (generation == eraseGeneration) data?.let { englishTyping.load(it) }
+            englishLearningLoaded = true
+        }
     }
 
     fun englishCompletions(prefix: String, limit: Int = 3): List<String> =
@@ -683,8 +709,12 @@ object SmartEngineAdapter {
     suspend fun ensureIdentityLoaded() {
         if (identityLoaded) return
         // S108: same flip-after-load ordering as ensureEnglishLearningLoaded.
-        storage?.loadIdentityUserData()?.let { identityAssist.load(it) }
-        identityLoaded = true
+        val generation = eraseGeneration
+        val data = storage?.loadIdentityUserData()
+        mutateLearning {
+            if (generation == eraseGeneration) data?.let { identityAssist.load(it) }
+            identityLoaded = true
+        }
     }
 
     /** S135 (F-004): identity assist runs only when BOTH the personal

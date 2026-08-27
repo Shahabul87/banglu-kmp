@@ -41,6 +41,8 @@ class AndroidDictionaryLoader(
         /** S136 (F-015): provisioning failure codes (see [provisionFailure]). */
         const val FAILURE_LOW_SPACE = "low_space"   // "low_space:<needed MB>"
         const val FAILURE_COPY = "copy_failed"
+        /** S139: the file exists but the store cannot serve it (version/corrupt). */
+        const val FAILURE_STORE = "store_unavailable"
     }
 
     @Volatile

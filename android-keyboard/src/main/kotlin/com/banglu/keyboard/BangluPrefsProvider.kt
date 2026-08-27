@@ -47,7 +47,13 @@ class BangluPrefsProvider : ContentProvider() {
             context.getSharedPreferences("banglu_prefs", Context.MODE_PRIVATE)
     }
 
-    override fun onCreate(): Boolean = true
+    override fun onCreate(): Boolean {
+        // S139: the provider is often the first code in the keyboard process
+        // (settings opened before the keyboard) — migrate before any client
+        // reads a typed value.
+        context?.let { PrefsMigrations.migrate(prefs(it)) }
+        return true
+    }
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
         val context = context ?: return null

@@ -84,7 +84,7 @@ echo "== Build and test =="
 # S128 (production audit): the validator passed while lintRelease failed —
 # a false-green release gate. Android lint and the Android unit suites
 # (debug AND release variants) are now mandatory gate members.
-"$ROOT_DIR/gradlew" -p "$ROOT_DIR" \
+"$ROOT_DIR/gradlew" -p "$ROOT_DIR" ${BANGLU_ACCOUNT:+-PbangluAccount=true} \
   :android-keyboard:verifyImePrivacyBoundary \
   :shared:allTests \
   :android-keyboard:lintRelease \
@@ -126,6 +126,12 @@ unset BANGLU_KEYTOOL_PASS
 [[ "$artifact_cert" == "$keystore_cert" ]] ||
   fail "artifact certificate $artifact_cert != configured keystore certificate $keystore_cert"
 echo "signing_cert_sha256=$artifact_cert (artifact == configured keystore)"
+# S139 (F-007): the AAB signer is checked directly too (the APK and the AAB are
+# signed by separate tasks).
+aab_cert="$(keytool -printcert -jarfile "$AAB" 2>/dev/null | grep -m1 'SHA256:' | awk '{print $2}' | tr -d ':' | tr 'A-F' 'a-f')"
+[[ -n "$aab_cert" ]] || fail "could not read the AAB signer certificate (keytool -printcert -jarfile)"
+[[ "$aab_cert" == "$keystore_cert" ]] || fail "AAB signer certificate $aab_cert != configured keystore certificate $keystore_cert"
+echo "aab_signer_sha256=$aab_cert (AAB == configured keystore)"
 echo
 
 echo "== Dynamic feature checks =="

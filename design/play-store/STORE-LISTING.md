@@ -1,4 +1,4 @@
-# Banglu — Play Store Listing (ready to paste, v1.5.85 / 2120)
+# Banglu — Play Store Listing (ready to paste, v1.5.86 / 2123)
 
 Positioning per market research 2026-07-12: "Avro-compatible but smarter,
 private by default, stable low-surprise typing." All fields respect Play
@@ -45,8 +45,8 @@ PRIVATE BY DEFAULT
 • Voice typing is optional and clearly disclosed before first use
 
 FAST ON EVERY PHONE
-• Instant key response, engineered for budget phones — including 2GB devices
-• Automatic lite mode on low-memory phones keeps typing smooth
+• A lighter dictionary mode switches on automatically on low-memory phones
+• Key presses never wait on the dictionary — conversion runs off the typing thread
 • Nothing runs while the keyboard is hidden — its lifecycle pauses off screen
 
 MADE FOR BANGLA
@@ -68,17 +68,15 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 ```
 (~2,400 chars — well under the 4000 limit)
 
-## Release notes for 1.5.85 (500 chars max)
+## Release notes for 1.5.86 (500 chars max)
 
 ```
-• New comma key beside the space bar
-• Fixed the empty gap below the keyboard on some phones
-• Space bar now responds instantly, even when typing fast
-• Much faster keyboard startup, smoother on low-memory phones
-• Better chat spellings: somocca → সমস্যা, pacci → পাচ্ছি
-• Fixed rare cases where a word typed right after opening the keyboard was remembered wrongly
+• Voice typing rebuilt: no dropped speech after pauses, no repeated sentences, automatic commas and দাঁড়ি
+• Clipboard history is now opt-in (off by default); private fields get a one-tap paste of the current clip only
+• Saved email addresses are off by default; "Clear learned data" now really deletes everything
+• Every key works with TalkBack and Switch Access
 ```
-(~390 chars)
+(~330 chars)
 
 ---
 
@@ -133,7 +131,7 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 ## Console checklist (in order)
 
 1. Play Console → Create app → "Banglu: Bangla Keyboard", App (not game), Free.
-2. Upload `releases/banglu-1.5.85-2122.aab` to **Closed testing** first.
+2. Upload `releases/banglu-1.5.86-2123.aab` to **Closed testing** first.
    - Personal dev accounts created after Nov 2023: 12+ testers opted in for
      14 continuous days required before production access can be requested.
 3. Store listing: paste texts above (en-US default + bn-BD localization).

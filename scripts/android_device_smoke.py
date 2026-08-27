@@ -194,11 +194,14 @@ def meminfo_mb():
     out = adb("shell", "dumpsys", "meminfo", PACKAGE)
     total = re.search(r"TOTAL PSS:\s+(\d+)", out) or re.search(r"TOTAL\s+(\d+)", out)
     heap = 0
+    rows = 0
     for label in ("Dalvik Heap", "Native Heap"):
         m = re.search(label + r"\s+(\d+)", out)
         if m:
             heap += int(m.group(1))
-    return (int(total.group(1)) / 1024.0 if total else None), heap / 1024.0
+            rows += 1
+    # S139 (F-014): a missing row must not read as "0 MB used".
+    return (int(total.group(1)) / 1024.0 if total else None), (heap / 1024.0 if rows == 2 else None)
 
 
 def frame_timings_ms():
@@ -390,7 +393,8 @@ def main():
     pss, heap = meminfo_mb()
     report["measurements"]["total_pss_mb"] = pss
     report["measurements"]["heap_pss_mb"] = heap
-    check("memory_heap", heap <= MAX_HEAP_PSS_MB, f"Dalvik+native heap {round(heap, 1)} MB (max {MAX_HEAP_PSS_MB})")
+    check("memory_heap", heap is not None and heap <= MAX_HEAP_PSS_MB,
+          f"Dalvik+native heap {heap and round(heap, 1)} MB (max {MAX_HEAP_PSS_MB})" if heap is not None else "inconclusive — heap rows missing from meminfo")
     check("memory_total_pss", pss is not None and pss <= MAX_TOTAL_PSS_MB,
           f"total PSS {pss and round(pss, 1)} MB incl. mapped dictionary pages (max {MAX_TOTAL_PSS_MB})")
     timings = frame_timings_ms()

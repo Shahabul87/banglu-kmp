@@ -454,7 +454,8 @@ class BangluIMEService : InputMethodService(),
         private const val PREF_LAST_LOW_MEMORY_EXIT_TS = "last_low_memory_exit_ts"
         private const val PREF_VOICE_OFFLINE_PREFERRED = "voice_offline_preferred"
         private const val PREF_RECENT_EMOJIS = "recent_emojis"
-        private const val PREF_CLIPBOARD_HISTORY = "clipboard_history"
+        /** S139: separate from the Boolean switch key — see PrefsMigrations. */
+        private const val PREF_CLIPBOARD_HISTORY = PrefsMigrations.CLIPBOARD_ENTRIES_KEY
         private const val AUTOCORRECT_UNDO_SOURCE = "autocorrect_undo"
 
         /** S96: strip chips produced by the English typing suite. */
@@ -1016,11 +1017,14 @@ class BangluIMEService : InputMethodService(),
         typingLearningEnabled.value = prefs.getBoolean("typing_learning", true)
         personalDictionaryEnabled.value = prefs.getBoolean("personal_dictionary", true)
         identityAssistEnabled.value = prefs.getBoolean("identity_assist", false)
-        clipboardHistoryEnabled.value = prefs.getBoolean("clipboard_history", false)
+        clipboardHistoryEnabled.value = prefs.getBoolean(PrefsMigrations.CLIPBOARD_ENABLED_KEY, false)
         if (!clipboardHistoryEnabled.value) {
-            // Switched off (or never on): nothing may remain on disk or in memory.
+            // Switched off (or never on): nothing may remain on disk or in
+            // memory — durable (commit), and recorded if the write fails.
             if (clipboardHistory.isNotEmpty()) clipboardHistory.clear()
-            if (prefs.contains(PREF_CLIPBOARD_HISTORY)) prefs.edit().remove(PREF_CLIPBOARD_HISTORY).apply()
+            if (prefs.contains(PREF_CLIPBOARD_HISTORY) && !prefs.edit().remove(PREF_CLIPBOARD_HISTORY).commit()) {
+                recordFailureEvent("clipboard_history_purge_failed")
+            }
         }
         // Full dictionary by default (fresh installs get predictions + context
         // reranking + strong gates). shouldUseLiteDictionary() still forces lite
@@ -1048,6 +1052,8 @@ class BangluIMEService : InputMethodService(),
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
 
         prefs = getSharedPreferences("banglu_prefs", Context.MODE_PRIVATE)
+        // S139: MUST precede every typed read of the clipboard keys.
+        PrefsMigrations.migrate(prefs)
         // S136 (F-013): non-Bengali clusters (emoji ZWJ families, flags,
         // keycaps) are segmented by the platform's ICU grapheme rules; the
         // Bengali rules in BackspaceResume are untouched.
@@ -1070,6 +1076,16 @@ class BangluIMEService : InputMethodService(),
                 val purged = runCatching { AndroidStorage(applicationContext).clearIdentityUserDataDurably() }
                     .getOrDefault(false)
                 if (purged) prefs.edit().putBoolean("identity_assist", false).apply()
+            }
+        } else if (!prefs.getBoolean("identity_assist", false)) {
+            // S139 (F-004): INVARIANT "identity off ⇒ no saved addresses" is
+            // re-established at every start — covers a switch-off whose
+            // purge failed, and "reset all settings".
+            serviceScope.launch(Dispatchers.IO) {
+                runCatching {
+                    val storage = AndroidStorage(applicationContext)
+                    if (!storage.loadIdentityUserData().isNullOrBlank()) storage.clearIdentityUserDataDurably()
+                }
             }
         }
         // S76: Android 14+ no longer delivers the imminent-kill trim levels
@@ -1246,12 +1262,22 @@ class BangluIMEService : InputMethodService(),
         // S29: the store constructor opens the db and runs a version probe —
         // real disk I/O that was landing on the main thread (StrictMode
         // DiskReadViolation x4 at cold start). Construct on IO.
-        val newStore = withContext(Dispatchers.IO) { SqlitePhoneticIndexStore(dbFile) }
+        val newStore = withContext(Dispatchers.IO) {
+            SqlitePhoneticIndexStore(dbFile).also { store ->
+                // S139: the extended-data probe is a lazy SQLite query; the
+                // first caller used to be the main thread (StrictMode
+                // DiskReadViolation in the instrumentation log). Warm it here.
+                if (store.isAvailable) store.hasExtendedData()
+            }
+        }
         if (!newStore.isAvailable) {
             withContext(Dispatchers.IO) { newStore.close() }
             val kept = phoneticIndexStore?.isAvailable == true
             Log.w(TAG, "attachPhoneticIndexStore: new store failed (keepingExisting=$kept)")
             recordImeEvent(if (kept) "dictionary_attach_failed_kept_old" else "dictionary_attach_failed_none")
+            // S139 (F-015): a file that exists but cannot serve (wrong
+            // version after a failed refresh, corrupt) must not be silent.
+            if (!kept) publishDictionaryStatus(loader.provisionFailure() ?: AndroidDictionaryLoader.FAILURE_STORE)
             return kept
         }
 
@@ -1758,9 +1784,13 @@ class BangluIMEService : InputMethodService(),
         val serviceJob = serviceScope.coroutineContext[Job]
         serviceScope.cancel()
         if (serviceJob != null) {
-            kotlinx.coroutines.runBlocking {
+            val joined = kotlinx.coroutines.runBlocking {
                 kotlinx.coroutines.withTimeoutOrNull(TEARDOWN_JOIN_TIMEOUT_MS) { serviceJob.join() }
             }
+            // S139 (F-012): a job still running past the bound is recorded —
+            // the store is closed regardless (queries after close fail soft),
+            // but the event is visible in Diagnostics instead of silent.
+            if (joined == null) recordFailureEvent("teardown_join_timeout", durable = true)
         }
         // Engine v3: close the sqlite connection only — do NOT setPhoneticIndex(null)
         // (null-detach leaves corpus lookups empty; see SmartEngine.setPhoneticIndex KDoc).

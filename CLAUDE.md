@@ -33,7 +33,11 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-26):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
-- **Android** v1.5.85 (2122), db 3.9.6 — S138 re-audit follow-up (clipboard
+- **Android** v1.5.86 (2123), db 3.9.6 — S139: 1.5.85 had a clipboard
+  preference key collision (Boolean switch + String payload on one key →
+  ClassCastException on upgrade); keys split + PrefsMigrations; identity
+  erase-before-pref invariant; lock-checked publication; store preload;
+  AAB-signer check. Before that S138 re-audit follow-up (clipboard
   opt-in + private-field gating, learningLock, teardown join, cert-match
   validator, inconclusive-jank failure, extended instrumented tests). Before
   that S137 voice round (traced on

@@ -194,7 +194,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
     var typingLearning by remember { mutableStateOf(prefs.getBoolean("typing_learning", true)) }
     var personalDictionary by remember { mutableStateOf(prefs.getBoolean("personal_dictionary", true)) }
     var identityAssist by remember { mutableStateOf(prefs.getBoolean("identity_assist", false)) }
-    var clipboardHistory by remember { mutableStateOf(prefs.getBoolean("clipboard_history", false)) }
+    var clipboardHistory by remember { mutableStateOf(prefs.getBoolean(PrefsMigrations.CLIPBOARD_ENABLED_KEY, false)) }
     // Full dictionary by default: predictions, context reranking, and the strong
     // commit gate all need the full tables. Weak devices still auto-fall to lite
     // via the IME's device check (isLowRamDevice / memoryClass < 256).
@@ -351,12 +351,20 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                     "চালু করলে ইমেইল ঘরে লেখা ঠিকানা শুধু এই ফোনেই থাকে, পরে এক ট্যাপে বসানোর জন্য; বন্ধ করলে সংরক্ষিত ঠিকানা মুছে যায়। ডিফল্ট: বন্ধ",
                     identityAssist
                 ) { enabled ->
-                    identityAssist = enabled
-                    saveBoolean("identity_assist", enabled)
-                    if (!enabled) {
+                    if (enabled) {
+                        identityAssist = true
+                        saveBoolean("identity_assist", true)
+                    } else {
+                        // S139 (F-004): erase FIRST; the preference flips only
+                        // after the keyboard process confirmed the durable
+                        // delete. On failure the switch stays on and says so.
                         coroutineScope.launch {
                             val ok = withContext(Dispatchers.IO) {
                                 eraseLearningInKeyboardProcess(context, BangluPrefsProvider.ERASE_SCOPE_IDENTITY)
+                            }
+                            if (ok) {
+                                identityAssist = false
+                                saveBoolean("identity_assist", false)
                             }
                             Toast.makeText(
                                 context,
@@ -375,7 +383,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                     clipboardHistory
                 ) { enabled ->
                     clipboardHistory = enabled
-                    saveBoolean("clipboard_history", enabled)
+                    saveBoolean(PrefsMigrations.CLIPBOARD_ENABLED_KEY, enabled)
                 }
             }
             item {
@@ -557,6 +565,16 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                             voiceTypingEnabled = true; voiceOfflinePreferred = false
                             keyFeedbackMode = "both"; keyPreview = true
                             numberRow = true; themeMode = "dark"; defaultMode = "banglu"; keyboardHeight = "normal"; keyboardFontSize = "large"
+                            // S139 (F-004): defaults are OFF for identity memory
+                            // and clipboard history — the saved addresses go
+                            // with the settings, in the keyboard process.
+                            identityAssist = false; clipboardHistory = false
+                            coroutineScope.launch {
+                                val ok = withContext(Dispatchers.IO) {
+                                    eraseLearningInKeyboardProcess(context, BangluPrefsProvider.ERASE_SCOPE_IDENTITY)
+                                }
+                                if (!ok) Toast.makeText(context, "সংরক্ষিত ইমেইল ঠিকানা মুছে ফেলা যায়নি — আবার চেষ্টা করুন", Toast.LENGTH_SHORT).show()
+                            }
                         }
                         .padding(14.dp),
                     contentAlignment = Alignment.Center
