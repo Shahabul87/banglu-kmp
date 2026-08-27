@@ -1019,11 +1019,18 @@ class BangluIMEService : InputMethodService(),
         identityAssistEnabled.value = prefs.getBoolean("identity_assist", false)
         clipboardHistoryEnabled.value = prefs.getBoolean(PrefsMigrations.CLIPBOARD_ENABLED_KEY, false)
         if (!clipboardHistoryEnabled.value) {
-            // Switched off (or never on): nothing may remain on disk or in
-            // memory — durable (commit), and recorded if the write fails.
+            // Switched off (or never on): nothing may remain in memory (now)
+            // or on disk — the durable commit runs OFF the main thread
+            // (reloadSettings is the preference listener, on Main; a commit
+            // here was a StrictMode DiskWriteViolation) and is recorded if
+            // it fails.
             if (clipboardHistory.isNotEmpty()) clipboardHistory.clear()
-            if (prefs.contains(PREF_CLIPBOARD_HISTORY) && !prefs.edit().remove(PREF_CLIPBOARD_HISTORY).commit()) {
-                recordFailureEvent("clipboard_history_purge_failed")
+            if (prefs.contains(PREF_CLIPBOARD_HISTORY)) {
+                serviceScope.launch(Dispatchers.IO) {
+                    if (!prefs.edit().remove(PREF_CLIPBOARD_HISTORY).commit()) {
+                        recordFailureEvent("clipboard_history_purge_failed")
+                    }
+                }
             }
         }
         // Full dictionary by default (fresh installs get predictions + context
