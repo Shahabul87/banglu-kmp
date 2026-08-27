@@ -1,4 +1,4 @@
-# Banglu — Play Store Listing (ready to paste, v1.5.83 / 2120)
+# Banglu — Play Store Listing (ready to paste, v1.5.85 / 2120)
 
 Positioning per market research 2026-07-12: "Avro-compatible but smarter,
 private by default, stable low-surprise typing." All fields respect Play
@@ -47,7 +47,7 @@ PRIVATE BY DEFAULT
 FAST ON EVERY PHONE
 • Instant key response, engineered for budget phones — including 2GB devices
 • Automatic lite mode on low-memory phones keeps typing smooth
-• Tiny battery footprint — designed to do nothing while the keyboard is hidden
+• Nothing runs while the keyboard is hidden — its lifecycle pauses off screen
 
 MADE FOR BANGLA
 • Bengali punctuation done right: dari (।) on double space, tight commas, Bangla digits ০-৯
@@ -68,7 +68,7 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 ```
 (~2,400 chars — well under the 4000 limit)
 
-## Release notes for 1.5.83 (500 chars max)
+## Release notes for 1.5.85 (500 chars max)
 
 ```
 • New comma key beside the space bar
@@ -115,7 +115,7 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 
 সব ফোনে দ্রুত
 • বাজেট ফোনেও তাৎক্ষণিক সাড়া — ২ জিবি র‍্যামেও মসৃণ
-• কীবোর্ড লুকানো থাকলে কোনো কাজ করে না — ব্যাটারিবান্ধব নকশা
+• কীবোর্ড লুকানো থাকলে কিছুই চলে না — পর্দার বাইরে গেলে থেমে যায়
 
 বাংলার জন্য তৈরি
 • ডাবল স্পেসে দাঁড়ি (।), বাংলা সংখ্যা ০-৯, স্পেসবারের পাশে কমা
@@ -133,7 +133,7 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 ## Console checklist (in order)
 
 1. Play Console → Create app → "Banglu: Bangla Keyboard", App (not game), Free.
-2. Upload `releases/banglu-1.5.83-2120.aab` to **Closed testing** first.
+2. Upload `releases/banglu-1.5.85-2122.aab` to **Closed testing** first.
    - Personal dev accounts created after Nov 2023: 12+ testers opted in for
      14 continuous days required before production access can be requested.
 3. Store listing: paste texts above (en-US default + bn-BD localization).
@@ -145,8 +145,13 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 6. Data safety: answers in design/play-store/DATA-SAFETY-FORM.md
 7. Content rating questionnaire: Utility → no shared UGC, no ads → "Everyone".
 8. App access: all functionality available without login/special access.
-9. BACK UP android-keyboard/banglu-release.jks + local.properties passwords
-   off-laptop BEFORE first upload (app can never be updated without it).
+9. BACK UP THE RELEASE KEYSTORE — the one `BANGLU_STORE_FILE` in
+   local.properties points at (currently `~/banglu-release.keystore`; the
+   repo file android-keyboard/banglu-release.jks is NOT the release key) —
+   plus the local.properties passwords, encrypted and off-laptop, BEFORE the
+   first upload. `scripts/validate_android_release.sh` proves the artifact
+   is signed by that keystore (`signing_cert_sha256=`); keep that fingerprint
+   with the backup and confirm it against Play Console → App integrity.
 10. Production: staged rollout 10% → 50% → 100%.
 ```
 
@@ -164,5 +169,6 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
    pre-launch report for 48 h at each rollout stage; any new crash/ANR
    cluster halts the rollout.
 5. Screenshots (`screenshots-current/`) are reshot on the release candidate
-   whenever the keyboard UI changes; the performance/battery claims in the
-   listing are backed by `build/android-release-smoke/device-smoke-report.json`.
+   whenever the keyboard UI changes. The listing makes NO battery claim (no
+   measurement exists); activation latency, memory and ANR figures come from
+   `design/play-store/device-smoke-<version>.json`.

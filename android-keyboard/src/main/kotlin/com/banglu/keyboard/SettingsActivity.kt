@@ -194,6 +194,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
     var typingLearning by remember { mutableStateOf(prefs.getBoolean("typing_learning", true)) }
     var personalDictionary by remember { mutableStateOf(prefs.getBoolean("personal_dictionary", true)) }
     var identityAssist by remember { mutableStateOf(prefs.getBoolean("identity_assist", false)) }
+    var clipboardHistory by remember { mutableStateOf(prefs.getBoolean("clipboard_history", false)) }
     // Full dictionary by default: predictions, context reranking, and the strong
     // commit gate all need the full tables. Weak devices still auto-fall to lite
     // via the IME's device check (isLowRamDevice / memoryClass < 256).
@@ -364,6 +365,17 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                             ).show()
                         }
                     }
+                }
+            }
+            item {
+                // S138 (F-003): clipboard history is opt-in; off wipes it.
+                BrandSwitch(
+                    "ক্লিপবোর্ড ইতিহাস",
+                    "চালু করলে কপি করা লেখা এই ফোনেই এক ঘণ্টা রাখা হয় (সর্বোচ্চ ১২টি) — ব্যক্তিগত ঘর থেকে কখনো নয়; বন্ধ করলে সব মুছে যায়। ডিফল্ট: বন্ধ",
+                    clipboardHistory
+                ) { enabled ->
+                    clipboardHistory = enabled
+                    saveBoolean("clipboard_history", enabled)
                 }
             }
             item {

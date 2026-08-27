@@ -33,7 +33,10 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-26):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
-- **Android** v1.5.84 (2121), db 3.9.6 — S137 voice round (traced on
+- **Android** v1.5.85 (2122), db 3.9.6 — S138 re-audit follow-up (clipboard
+  opt-in + private-field gating, learningLock, teardown join, cert-match
+  validator, inconclusive-jank failure, extended instrumented tests). Before
+  that S137 voice round (traced on
   device: Google's 2026 speech service ends paused sessions with EMPTY
   finals, restarts its hypothesis after its own endpoint, and degrades
   later utterances inside one session → one session per utterance (idle

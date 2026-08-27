@@ -27,7 +27,7 @@ the appendix below.
 - **Voice or sound recordings** — Collected (processed ephemerally), **shared with the device's speech provider (e.g., Google)** for transcription. Optional (only when the user taps the mic, after the prominent-disclosure screen). Purpose: App functionality. Not stored by Banglu.
 
 ### NOT collected (answer No)
-- Keystrokes / typed text: **never leaves the device**. Learned words, next-word pairs, English learning, saved email addresses (identity assist — OFF by default, on-device only, email fields only, deleted on switch-off), clipboard history (max 12 items, one-hour expiry pruned on every keyboard open, never from any private field or sensitive-flagged clip), and the dictionary are local-only. None of these are "collected" in Play's sense (they are not transmitted off the device and are not processed by Banglu), so they are not declared.
+- Keystrokes / typed text: **never leaves the device**. Learned words, next-word pairs, English learning, saved email addresses (identity assist — OFF by default, on-device only, email fields only, deleted on switch-off), clipboard history (OPT-IN, off by default; max 12 items, one-hour expiry pruned on every keyboard open, never stored or shown in any private field, never a sensitive-flagged clip), and the dictionary are local-only. None of these are "collected" in Play's sense (they are not transmitted off the device and are not processed by Banglu), so they are not declared.
 - Personal info (email/name), app activity, purchase history: the launch build has no accounts, no billing, and no INTERNET permission — these CANNOT be collected.
 - Location, contacts, photos, files, health, financial info, device IDs, analytics/diagnostics telemetry: none.
 

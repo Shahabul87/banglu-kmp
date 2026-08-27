@@ -67,6 +67,14 @@ if [[ -n "$head_tag" ]]; then
 else
   echo "head_tag=<none yet> — tag v$VERSION_NAME after this gate passes"
 fi
+# S138 (F-002): the version's tag may exist ONLY at the build commit — a second
+# 1.5.x build from a different commit would otherwise share the version.
+existing_tag_commit="$(git -C "$ROOT_DIR" rev-list -n 1 "v$VERSION_NAME" 2>/dev/null || true)"
+if [[ -n "$existing_tag_commit" && "$existing_tag_commit" != "$HEAD_REVISION" ]]; then
+  [[ "${ALLOW_RETAG:-0}" == "1" ]] ||
+    fail "tag v$VERSION_NAME already exists at ${existing_tag_commit:0:7} (HEAD is ${HEAD_REVISION:0:7}) — bump versionName/versionCode (ALLOW_RETAG=1 only to move an UNRELEASED tag)"
+  echo "existing_tag=v$VERSION_NAME at ${existing_tag_commit:0:7} — ALLOW_RETAG=1, will be moved"
+fi
 
 # S136 (F-009): only the pinned dictionary may be packaged.
 "$ROOT_DIR/scripts/verify_dictionary_pin.sh" "$ROOT_DIR/android-keyboard/src/main/assets/dictionary.sqlite"
@@ -102,7 +110,22 @@ embedded_revision="$(unzip -p "$AAB" base/root/META-INF/version-control-info.tex
 echo "aab_embedded_revision=${embedded_revision:-<missing>}"
 [[ "$embedded_revision" == "$HEAD_REVISION" ]] ||
   fail "AAB embeds revision '${embedded_revision:-<missing>}' but HEAD is '$HEAD_REVISION'"
-echo "release_aab_sha256=$(shasum -a 256 "$AAB" | cut -d' ' -f1)"
+aab_sha256="$(shasum -a 256 "$AAB" | cut -d' ' -f1)"
+echo "release_aab_sha256=$aab_sha256"
+# S138 (F-019): the artifact must be signed by the certificate in the
+# configured keystore — the repo copy android-keyboard/banglu-release.jks is
+# NOT the release key (the re-audit caught the backup instructions pointing
+# at it). Passwords travel via the environment, never argv or logs.
+BUILD_TOOLS_DIR="$(ls -d "${ANDROID_HOME:-$HOME/Library/Android/sdk}"/build-tools/*/ 2>/dev/null | sort -V | tail -1)"
+[[ -x "$BUILD_TOOLS_DIR/apksigner" ]] || fail "apksigner not found under build-tools — cannot verify the signing certificate"
+artifact_cert="$("$BUILD_TOOLS_DIR/apksigner" verify --print-certs "$APK" | grep -m1 'SHA-256 digest' | awk '{print $NF}' | tr 'A-F' 'a-f')"
+export BANGLU_KEYTOOL_PASS="$(grep -E '^BANGLU_STORE_PASSWORD=' "$LOCAL_PROPS" | head -1 | cut -d= -f2-)"
+keystore_cert="$(keytool -list -v -keystore "$store_file" -alias banglu -storepass:env BANGLU_KEYTOOL_PASS 2>/dev/null | grep -m1 'SHA256:' | awk '{print $2}' | tr -d ':' | tr 'A-F' 'a-f')"
+unset BANGLU_KEYTOOL_PASS
+[[ -n "$artifact_cert" && -n "$keystore_cert" ]] || fail "could not read the signing certificate from the artifact/keystore"
+[[ "$artifact_cert" == "$keystore_cert" ]] ||
+  fail "artifact certificate $artifact_cert != configured keystore certificate $keystore_cert"
+echo "signing_cert_sha256=$artifact_cert (artifact == configured keystore)"
 echo
 
 echo "== Dynamic feature checks =="
@@ -183,6 +206,7 @@ if [[ "${RUN_DEVICE_SMOKE:-0}" == "1" ]]; then
   python3 "$ROOT_DIR/scripts/android_device_smoke.py" \
     --aab "$AAB" --bundletool "$BUNDLETOOL_JAR" --keystore "$store_file" \
     --local-properties "$LOCAL_PROPS" --expect-version "$VERSION_NAME" \
+    --aab-sha256 "$aab_sha256" --revision "$HEAD_REVISION" --cert-sha256 "$artifact_cert" \
     --out "$ROOT_DIR/build/android-release-smoke" ${DEVICE_SMOKE_CLEAN_INSTALL:+--clean-install}
 else
   echo "skipped; set RUN_DEVICE_SMOKE=1 to install and collect a real-device IME report"

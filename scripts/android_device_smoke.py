@@ -231,11 +231,24 @@ def main():
     ap.add_argument("--expect-version", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--skip-install", action="store_true", help="device already has the build under test")
+    ap.add_argument("--aab-sha256", default="", help="recorded in the report (provenance)")
+    ap.add_argument("--revision", default="", help="git revision the AAB embeds (provenance)")
+    ap.add_argument("--cert-sha256", default="", help="signing certificate SHA-256 (provenance)")
     ap.add_argument("--clean-install", action="store_true",
                     help="uninstall first (a release-signed build cannot update a debug-signed one)")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
-    report = {"package": PACKAGE, "aab": os.path.basename(a.aab), "checks": {}, "measurements": {}}
+    report = {
+        "package": PACKAGE,
+        "artifact": {
+            "aab": os.path.basename(a.aab),
+            "aab_sha256": a.aab_sha256,
+            "revision": a.revision,
+            "signing_cert_sha256": a.cert_sha256,
+            "expected_version": a.expect_version,
+        },
+        "checks": {}, "measurements": {},
+    }
     failures = []
 
     def check(name, ok, detail):
@@ -316,6 +329,17 @@ def main():
         text2 = editor_text()
         check("delete_and_retype", text2.strip() == PROBE_EXPECTED,
               f"after backspace x{len(PROBE_EXPECTED) + 1} and retype: '{text2.strip()}'")
+        # Frame sample: a burst of key presses (each animates) so gfxinfo has
+        # a real population to judge — fewer than MIN_FRAMES_FOR_JANK frames
+        # makes the jank check INCONCLUSIVE, which fails certification.
+        burst = [n for n in keyboard_nodes() if len(n.get("content-desc", "")) == 1 and n.get("content-desc", "").isalpha()]
+        for n in burst[:26]:
+            tap(n)
+            time.sleep(0.12)
+        for _ in range(min(26, len(burst))):
+            tap(backspace)
+            time.sleep(0.1)
+        time.sleep(1.0)
 
     pss = meminfo_total_pss_mb()
     report["measurements"]["total_pss_mb"] = pss
@@ -323,10 +347,9 @@ def main():
     frames, janky = gfx_janky_pct()
     report["measurements"]["frames_rendered"] = frames
     report["measurements"]["janky_frames_pct"] = janky
-    if janky is None:
-        check("jank", True, "gfxinfo unavailable — not enforced")
-    elif frames < MIN_FRAMES_FOR_JANK:
-        check("jank", True, f"{janky}% janky of only {frames} frames — below {MIN_FRAMES_FOR_JANK}, not enforced")
+    if janky is None or frames < MIN_FRAMES_FOR_JANK:
+        # S138 (F-014): an unmeasured threshold is INCONCLUSIVE, never a pass.
+        check("jank", False, f"inconclusive — {frames} frames sampled (need {MIN_FRAMES_FOR_JANK}); janky={janky}%")
     else:
         check("jank", janky <= MAX_JANKY_FRAMES_PCT, f"{janky}% janky of {frames} frames (max {MAX_JANKY_FRAMES_PCT}%)")
     check("no_anr", not anr_seen(True), "no ANR for the keyboard process in logcat during the probe")

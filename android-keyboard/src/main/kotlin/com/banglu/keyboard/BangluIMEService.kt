@@ -292,7 +292,11 @@ class BangluIMEService : InputMethodService(),
     private var clipboardTransientItem: String? = null
     private val kbOnNoticeDismiss: () -> Unit = { dismissDictionaryNotice() }
     private val kbClipboardItemsProvider: () -> List<String> = {
-        if (sensitiveInputMode) listOfNotNull(clipboardTransientItem) else clipboardHistory.map { it.text }
+        // S138 (F-003): stored history is shown ONLY in ordinary text fields
+        // with history switched on; every private field (password, OTP,
+        // email, URI, number/phone, no-learning) sees just the one-shot clip.
+        if (clipboardFieldIsPrivate || !clipboardHistoryEnabled.value) listOfNotNull(clipboardTransientItem)
+        else clipboardHistory.map { it.text }
     }
     private val kbRecentEmojisProvider: () -> List<String> = { recentEmojis.toList() }
     private val kbOnKeyPress: (Char) -> Unit = { onKeyPress(it) }
@@ -376,6 +380,9 @@ class BangluIMEService : InputMethodService(),
     val personalDictionaryEnabled = mutableStateOf(true)
     /** S135 (F-004): dedicated saved-email identity switch (see settings). */
     val identityAssistEnabled = mutableStateOf(true)
+    /** S138 (F-003): clipboard HISTORY is opt-in. Off (default) → the panel
+     *  offers only the current system clip as a one-shot; nothing persists. */
+    val clipboardHistoryEnabled = mutableStateOf(false)
     /** S136 (F-015): user-visible reason the full dictionary is not serving
      *  (low storage / copy failure); null when nothing is wrong. */
     val dictionaryNotice = mutableStateOf<String?>(null)
@@ -456,6 +463,8 @@ class BangluIMEService : InputMethodService(),
 
         /** S98: identity-assist chips (email fills / domain completions). */
         private const val IDENTITY_FILL_SOURCE = "identity_fill"
+        /** S138 (F-012): how long onDestroy waits for cancelled jobs to unwind. */
+        private const val TEARDOWN_JOIN_TIMEOUT_MS = 300L
         /** S136 (F-015): minimum spacing between automatic dictionary retries. */
         private const val DICTIONARY_RETRY_INTERVAL_MS = 5L * 60L * 1000L
         private const val MAX_RECENT_EMOJIS = 40
@@ -1007,6 +1016,12 @@ class BangluIMEService : InputMethodService(),
         typingLearningEnabled.value = prefs.getBoolean("typing_learning", true)
         personalDictionaryEnabled.value = prefs.getBoolean("personal_dictionary", true)
         identityAssistEnabled.value = prefs.getBoolean("identity_assist", false)
+        clipboardHistoryEnabled.value = prefs.getBoolean("clipboard_history", false)
+        if (!clipboardHistoryEnabled.value) {
+            // Switched off (or never on): nothing may remain on disk or in memory.
+            if (clipboardHistory.isNotEmpty()) clipboardHistory.clear()
+            if (prefs.contains(PREF_CLIPBOARD_HISTORY)) prefs.edit().remove(PREF_CLIPBOARD_HISTORY).apply()
+        }
         // Full dictionary by default (fresh installs get predictions + context
         // reranking + strong gates). shouldUseLiteDictionary() still forces lite
         // on low-RAM devices, and every heavy loader degrades gracefully on OOM.
@@ -1048,9 +1063,13 @@ class BangluIMEService : InputMethodService(),
         // addresses remembered under the old default are deleted, so nothing
         // is retained without a decision.
         if (!prefs.contains("identity_assist")) {
-            prefs.edit().putBoolean("identity_assist", false).apply()
             serviceScope.launch(Dispatchers.IO) {
-                runCatching { AndroidStorage(applicationContext).clearIdentityUserDataDurably() }
+                // S138: the preference is written only AFTER the purge is
+                // durable — a failed purge leaves it absent, so the next
+                // start retries instead of silently keeping old addresses.
+                val purged = runCatching { AndroidStorage(applicationContext).clearIdentityUserDataDurably() }
+                    .getOrDefault(false)
+                if (purged) prefs.edit().putBoolean("identity_assist", false).apply()
             }
         }
         // S76: Android 14+ no longer delivers the imminent-kill trim levels
@@ -1728,22 +1747,25 @@ class BangluIMEService : InputMethodService(),
         previousUncaughtExceptionHandler?.let { Thread.setDefaultUncaughtExceptionHandler(it) }
         previousUncaughtExceptionHandler = null
         SmartEngineAdapter.configurePersistenceScope(null)
-        // Engine v3: close the sqlite connection only — do NOT setPhoneticIndex(null)
-        // (null-detach leaves corpus lookups empty; see SmartEngine.setPhoneticIndex KDoc).
-        // Queries after close fail soft to empty lists, which is safe during teardown.
-        phoneticIndexStore?.close()
-        phoneticIndexStore = null
         releaseSpeechRecognizer()
         pauseComposeLifecycle()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-        // S136 (F-012): cancel BEFORE resetting the engine singleton so an
-        // in-flight initialize() cannot publish a freshly built full engine
-        // into a dead service's process (it resumes into cancellation at its
-        // next suspension point instead). Then drop the ViewModel store and
-        // the process-wide engine graph — a destroyed service must not pin
-        // a 100MB+ dictionary until the OS kills the process.
+        // S136/S138 (F-012): cancel every job FIRST and wait (bounded) for
+        // them to unwind, THEN close the sqlite store and drop the engine —
+        // an in-flight initialize() or lookup must never run against a
+        // closed store or publish a full engine into a dead service.
         initialEngineLoadJob?.cancel()
+        val serviceJob = serviceScope.coroutineContext[Job]
         serviceScope.cancel()
+        if (serviceJob != null) {
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withTimeoutOrNull(TEARDOWN_JOIN_TIMEOUT_MS) { serviceJob.join() }
+            }
+        }
+        // Engine v3: close the sqlite connection only — do NOT setPhoneticIndex(null)
+        // (null-detach leaves corpus lookups empty; see SmartEngine.setPhoneticIndex KDoc).
+        phoneticIndexStore?.close()
+        phoneticIndexStore = null
         store.clear()
         SmartEngineAdapter.reset()
         strictModePenaltyExecutor.shutdownNow()
@@ -4214,13 +4236,15 @@ class BangluIMEService : InputMethodService(),
         if (keyboardMode.value == KeyboardMode.BANGLU || keyboardMode.value == KeyboardMode.ENGLISH) {
             letterModeBeforeSymbols = keyboardMode.value
         }
-        ensureClipboardHistoryLoaded()
-        pruneClipboardHistory()
         clipboardTransientItem = null
-        if (sensitiveInputMode) {
-            // One-shot paste only (see clipboardTransientItem).
+        if (clipboardFieldIsPrivate || !clipboardHistoryEnabled.value) {
+            // S138: private field or history off — stored history is neither
+            // loaded nor shown; only the current clip, one-shot, never a
+            // clip the source app flagged sensitive.
             clipboardTransientItem = readSystemClipboard()?.takeIf { !it.second }?.first
         } else {
+            ensureClipboardHistoryLoaded()
+            pruneClipboardHistory()
             captureCurrentSystemClipboard()
         }
         keyboardMode.value = KeyboardMode.CLIPBOARD
@@ -4699,6 +4723,7 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun rememberClipboardItem(text: String) {
+        if (!clipboardHistoryEnabled.value) return
         ensureClipboardHistoryLoaded()
         // S135/S136 (F-003): a paste INTO a private field still works; the
         // field just never feeds history.

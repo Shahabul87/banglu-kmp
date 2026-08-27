@@ -379,12 +379,13 @@ object SmartEngineAdapter {
         val next = nextBengali.trim()
         if (prev.isEmpty() || next.isEmpty() || prev == next) return
 
-        val count = getEngine().recordUserBigram(prev, next)
-        if (count <= 0) return
-        // S66: single-lane persistence dispatcher — off the UI thread AND off
-        // Dispatchers.Default, so blob re-serialization never competes with
-        // the latency-critical conversion pool (see persistenceDispatcher).
-        persist { it.saveUserBigram(prev, next, count) }
+        mutateLearning {
+            val count = getEngine().recordUserBigram(prev, next)
+            // S66: single-lane persistence dispatcher — off the UI thread AND
+            // off Dispatchers.Default, so blob re-serialization never competes
+            // with the latency-critical conversion pool.
+            if (count > 0) persist { it.saveUserBigram(prev, next, count) }
+        }
     }
 
     /**
@@ -410,22 +411,24 @@ object SmartEngineAdapter {
         // as a preference poisoned the key globally on the device (the S26
         // equal-to-primary skip compared against the CONTEXT-FREE primary and
         // misread contextual promotions as deliberate divergence).
-        if (explicitChoice) {
-            rememberPreferredConversion(phonetic, bengali, baseFrequency = 94)
-        }
-        if (learnAsWord) {
-            val key = phonetic.normalizedPhonetic()
-            val cleanBengali = bengali.trim()
-            if (key.isEmpty() || cleanBengali.isBlank()) return
-            // OOV learning is implicit typing learning that mutates the personal
-            // dictionary, so it respects BOTH runtime settings — matching
-            // rememberPreferredConversion (learningEnabled) and
-            // addCustomConversion (personalDictionaryEnabled).
-            if (!learningEnabled || !personalDictionaryEnabled) return
-            getEngine().addWord(key, cleanBengali, 94)
-            // REQUIRED after addWord: commit-gated cache entries must re-evaluate.
-            getEngine().clearCache()
-            persistLearnedWord(key, cleanBengali, 94)
+        mutateLearning {
+            if (explicitChoice) {
+                rememberPreferredConversion(phonetic, bengali, baseFrequency = 94)
+            }
+            if (learnAsWord) {
+                val key = phonetic.normalizedPhonetic()
+                val cleanBengali = bengali.trim()
+                if (key.isEmpty() || cleanBengali.isBlank()) return@mutateLearning
+                // OOV learning is implicit typing learning that mutates the
+                // personal dictionary, so it respects BOTH runtime settings —
+                // matching rememberPreferredConversion (learningEnabled) and
+                // addCustomConversion (personalDictionaryEnabled).
+                if (!learningEnabled || !personalDictionaryEnabled) return@mutateLearning
+                getEngine().addWord(key, cleanBengali, 94)
+                // REQUIRED after addWord: commit-gated cache entries must re-evaluate.
+                getEngine().clearCache()
+                persistLearnedWord(key, cleanBengali, 94)
+            }
         }
     }
 
@@ -440,12 +443,14 @@ object SmartEngineAdapter {
         if (key.isEmpty() || cleanBengali.isBlank()) return
         if (!personalDictionaryEnabled) return
 
-        com.banglu.engine.util.runSynchronized(preferenceLock) {
-            customPreferenceMap[key] = cleanBengali
+        mutateLearning {
+            com.banglu.engine.util.runSynchronized(preferenceLock) {
+                customPreferenceMap[key] = cleanBengali
+            }
+            getEngine().addWord(key, cleanBengali, CUSTOM_CONVERSION_FREQUENCY)
+            getEngine().clearCache()
+            persistLearnedWord(key, cleanBengali, CUSTOM_CONVERSION_FREQUENCY)
         }
-        getEngine().addWord(key, cleanBengali, CUSTOM_CONVERSION_FREQUENCY)
-        getEngine().clearCache()
-        persistLearnedWord(key, cleanBengali, CUSTOM_CONVERSION_FREQUENCY)
     }
 
     fun configurePersistenceScope(scope: CoroutineScope?) {
@@ -547,6 +552,18 @@ object SmartEngineAdapter {
     @Volatile
     private var eraseGeneration = 0
 
+    /** S138 (F-001): ONE lock serializes every learning mutation (memory
+     *  update + snapshot + persist launch) against the erase's generation
+     *  bump + memory clear. A mutation therefore either fully precedes the
+     *  erase (its write carries the old generation and is dropped) or fully
+     *  follows it (it mutates already-empty memory and persists legitimately).
+     *  Always the OUTER lock — never taken while holding the adapter monitor
+     *  or preferenceLock. */
+    private val learningLock = Any()
+
+    private fun <T> mutateLearning(block: () -> T): T =
+        com.banglu.engine.util.runSynchronized(learningLock, block)
+
     private fun persist(block: suspend (PlatformStorage) -> Unit) {
         val s = storage ?: return
         val scope = persistenceScope ?: return
@@ -571,20 +588,22 @@ object SmartEngineAdapter {
         // is erased by it, and every write launched after it serializes the
         // already-empty memory. Return value = the platform's durable-delete
         // confirmation; the caller must not claim success on false.
-        eraseGeneration++
-        com.banglu.engine.util.runSynchronized(preferenceLock) {
-            customPreferenceMap.clear()
-            selectedPreferenceMap.clear()
+        mutateLearning {
+            eraseGeneration++
+            com.banglu.engine.util.runSynchronized(preferenceLock) {
+                customPreferenceMap.clear()
+                selectedPreferenceMap.clear()
+            }
+            englishTyping.clearLearning()
+            englishLearningLoaded = false
+            identityAssist.clear()
+            identityLoaded = false
+            // S135 (F-001): this runs inside the keyboard process while
+            // keystrokes may be in flight on another thread — drop the engine
+            // under the same monitor getEngine() publishes through.
+            com.banglu.engine.util.runSynchronized(this) { engine = null }
+            engineFullyLoaded = false
         }
-        englishTyping.clearLearning()
-        englishLearningLoaded = false
-        identityAssist.clear()
-        identityLoaded = false
-        // S135 (F-001): this runs inside the keyboard process while keystrokes
-        // may be in flight on another thread — drop the engine under the same
-        // monitor getEngine() publishes through.
-        com.banglu.engine.util.runSynchronized(this) { engine = null }
-        engineFullyLoaded = false
         val store = storage ?: return true
         return withContext(com.banglu.engine.util.persistenceDispatcher) {
             persistenceMutex.withLock { store.clearAllLearningDataDurably() }
@@ -594,8 +613,10 @@ object SmartEngineAdapter {
     /** S136 (F-004): identity-only erase with the same ordering/durability
      *  contract as [eraseAllLearning]. */
     suspend fun eraseIdentity(): Boolean {
-        eraseGeneration++
-        identityAssist.clear()
+        mutateLearning {
+            eraseGeneration++
+            identityAssist.clear()
+        }
         val store = storage ?: return true
         return withContext(com.banglu.engine.util.persistenceDispatcher) {
             persistenceMutex.withLock { store.clearIdentityUserDataDurably() }
@@ -685,14 +706,18 @@ object SmartEngineAdapter {
 
     fun recordIdentity(token: String) {
         if (!identityAssistActive()) return
-        identityAssist.recordIdentity(token)
-        val snapshot = identityAssist.serialize()
-        persist { it.saveIdentityUserData(snapshot) }
+        mutateLearning {
+            identityAssist.recordIdentity(token)
+            val snapshot = identityAssist.serialize()
+            persist { it.saveIdentityUserData(snapshot) }
+        }
     }
 
     fun clearIdentity() {
-        identityAssist.clear()
-        persist { it.saveIdentityUserData("") }
+        mutateLearning {
+            identityAssist.clear()
+            persist { it.saveIdentityUserData("") }
+        }
     }
 
     /**
@@ -702,10 +727,11 @@ object SmartEngineAdapter {
      */
     fun recordEnglishCommit(word: String, prev: String?) {
         if (!learningEnabled) return
-        englishTyping.recordCommit(word, prev)
-        val scope = persistenceScope ?: return
-        val snapshot = englishTyping.serialize()
-        persist { it.saveEnglishUserData(snapshot) }
+        mutateLearning {
+            englishTyping.recordCommit(word, prev)
+            val snapshot = englishTyping.serialize()
+            persist { it.saveEnglishUserData(snapshot) }
+        }
     }
 
     /**

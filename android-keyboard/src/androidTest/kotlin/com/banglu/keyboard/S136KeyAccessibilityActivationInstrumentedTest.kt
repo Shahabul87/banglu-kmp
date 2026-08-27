@@ -196,5 +196,62 @@ class S136KeyAccessibilityActivationInstrumentedTest {
         Thread.sleep(1_500)
         val typed = waitFor { editor()?.text?.toString()?.trim()?.takeIf { it.isNotEmpty() } }
         assertEquals("আমি", typed, "assistive clicks a,m,i must compose আমি")
+
+        // S138 (F-005): every key FAMILY executes, not just letters.
+        clickKey("Spacebar")
+        assertEquals("আমি ", editorTextRaw(), "Space via ACTION_CLICK")
+        clickKey("Number ১")
+        assertEquals("আমি ১", editorTextRaw(), "number row via ACTION_CLICK")
+        clickKey("Backspace")
+        clickKey("Backspace")
+        assertEquals("আমি", editorTextRaw(), "Backspace via ACTION_CLICK (x2)")
+        // Long-press alternative exposed as a custom accessibility action.
+        val altKey = keyNodes().firstOrNull { n -> n.actionList.any { it.label?.startsWith("Insert") == true } }
+            ?: fail("no key exposes an 'Insert …' custom action")
+        val alt = altKey.actionList.first { it.label?.startsWith("Insert") == true }
+        assertTrue(altKey.performAction(alt.id), "custom action '${alt.label}' accepted")
+        Thread.sleep(600)
+        assertTrue(editorTextRaw().length > "আমি".length, "custom action inserted the alternative")
+
+        // S138 (F-013): real InputConnection deletion of non-Bengali clusters
+        // through the platform grapheme rules (ICU on device).
+        setEditorText("hi \uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67") // hi 👨‍👩‍👧
+        clickKey("Backspace")
+        assertEquals("hi ", editorTextRaw(), "one Backspace removes the whole emoji family")
+        setEditorText("\uD83C\uDDE7\uD83C\uDDE9") // 🇧🇩
+        clickKey("Backspace")
+        assertEquals("", editorTextRaw(), "one Backspace removes the whole flag")
+        setEditorText("ক্ষমা")
+        clickKey("Backspace")
+        assertEquals("ক্ষ", editorTextRaw(), "Bengali rules unchanged: 'মা' is one cluster")
+    }
+
+    private fun editorTextRaw(): String {
+        Thread.sleep(500)
+        return editor()?.text?.toString().orEmpty()
+    }
+
+    private fun clickKey(labelPrefix: String) {
+        val key = keyNodes().firstOrNull { it.contentDescription.toString().startsWith(labelPrefix) }
+            ?: fail("key '$labelPrefix' not in the IME accessibility tree")
+        assertTrue(key.performAction(AccessibilityNodeInfo.ACTION_CLICK), "ACTION_CLICK on '$labelPrefix' accepted")
+        Thread.sleep(450)
+    }
+
+    private fun setEditorText(text: String) {
+        val node = editor() ?: fail("editor lost")
+        node.performAction(
+            AccessibilityNodeInfo.ACTION_SET_TEXT,
+            android.os.Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) }
+        )
+        Thread.sleep(300)
+        (editor() ?: node).performAction(
+            AccessibilityNodeInfo.ACTION_SET_SELECTION,
+            android.os.Bundle().apply {
+                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, text.length)
+                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, text.length)
+            }
+        )
+        Thread.sleep(400)
     }
 }
