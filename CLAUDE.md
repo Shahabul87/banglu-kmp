@@ -33,7 +33,10 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-26):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
-- **Android** v1.5.86 (2123), db 3.9.6 — S139: 1.5.85 had a clipboard
+- **Android** v1.5.87 (2124), db 3.9.6 — S140: engine publication is
+  generation-checked + atomic under learningLock (an erase during the
+  dictionary load can no longer resurface deleted words); identity
+  migration never overwrites a decision. Before that S139: 1.5.85 had a clipboard
   preference key collision (Boolean switch + String payload on one key →
   ClassCastException on upgrade); keys split + PrefsMigrations; identity
   erase-before-pref invariant; lock-checked publication; store preload;

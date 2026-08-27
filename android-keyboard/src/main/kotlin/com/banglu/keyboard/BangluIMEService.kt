@@ -1082,7 +1082,12 @@ class BangluIMEService : InputMethodService(),
                 // start retries instead of silently keeping old addresses.
                 val purged = runCatching { AndroidStorage(applicationContext).clearIdentityUserDataDurably() }
                     .getOrDefault(false)
-                if (purged) prefs.edit().putBoolean("identity_assist", false).apply()
+                // S140: write the DEFAULT only if the user has not decided
+                // meanwhile (they may have switched it on in Settings during
+                // this purge) — a decision is never overwritten.
+                if (purged && !prefs.contains("identity_assist")) {
+                    prefs.edit().putBoolean("identity_assist", false).apply()
+                }
             }
         } else if (!prefs.getBoolean("identity_assist", false)) {
             // S139 (F-004): INVARIANT "identity off ⇒ no saved addresses" is

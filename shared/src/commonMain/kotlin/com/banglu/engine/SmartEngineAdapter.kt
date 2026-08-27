@@ -99,11 +99,25 @@ object SmartEngineAdapter {
             val generation = eraseGeneration
             eng.initialize(storage, null)
             eng.setUserBigrams(storage.getUserBigrams())
-            publishPreferenceMaps(buildPreferenceMaps(eng, storage), generation)
-            eng.clearCache()
-            // No loader means nothing further will load — the engine is as
-            // complete as it gets, so learning is sound (S34 gate).
-            engineFullyLoaded = true
+            val maps = buildPreferenceMaps(eng, storage)
+            // S140 (F-001): the in-place engine was fed learned words read
+            // BEFORE any erase that may have landed meanwhile — publish only
+            // if no erase happened, else drop it (the next getEngine() builds
+            // a clean seed engine; the IME's post-erase rebuild follows).
+            val published = mutateLearning {
+                if (generation != eraseGeneration) {
+                    com.banglu.engine.util.runSynchronized(this) { engine = null }
+                    engineFullyLoaded = false
+                    false
+                } else {
+                    applyPreferenceMaps(maps)
+                    // No loader means nothing further will load — the engine
+                    // is as complete as it gets, so learning is sound (S34).
+                    engineFullyLoaded = true
+                    true
+                }
+            }
+            if (published) eng.clearCache()
             return
         }
 
@@ -142,10 +156,22 @@ object SmartEngineAdapter {
         // events recorded during the build window were persisted to storage and
         // reappear on the next initialize; the in-session map entries are
         // rebuilt here from the storage snapshot.
-        publishPreferenceMaps(built.second, generation)
-        com.banglu.engine.util.runSynchronized(this) { engine = built.first }
-        engineFullyLoaded = true
-        built.first.clearCache()
+        // S140 (F-001): engine, maps and the loaded flag are published
+        // ATOMICALLY under learningLock and only if no erase happened since
+        // the storage snapshot this build was fed from. A stale build is
+        // discarded — the erase already emptied memory, and the IME's
+        // clean rebuild follows — so deleted words can never resurface.
+        val published = mutateLearning {
+            if (generation != eraseGeneration) {
+                false
+            } else {
+                applyPreferenceMaps(built.second)
+                com.banglu.engine.util.runSynchronized(this) { engine = built.first }
+                engineFullyLoaded = true
+                true
+            }
+        }
+        if (published) built.first.clearCache()
     }
 
     private suspend fun buildPreferenceMaps(
