@@ -21,3 +21,9 @@
   2. Google starts a fresh hypothesis after its own endpoint (and sometimes mid-session) → the word-count strip ate new segments; now `VoiceCarryPolicy.reconcile` detects resets (fuzzy overlap, previous-hypothesis comparison, new-beginning signal) and the IME seals the previous live region (mark only, never re-committing text).
   3. Later utterances inside one session degrade (late lumps, empty hypotheses) → one session per utterance: idle stop 1.5 s after speech, 250 ms settle (no-delay restarts produced ERROR_SERVER_DISCONNECTED), deferred comma/দাঁড়ি stamping, retry budget reset per healthy session, silence cap 6.
 - Pin flipped with decision note: S121 "same-length zero-overlap owes nothing" → reset (VoiceCarryPolicyTest).
+
+## Recorded at release (2026-08-26)
+- Built from commit `7f607a36ef8a4f002466da9f721ce0d977ec0b22` (tag `v1.5.84`); embedded revision verified by the validator
+- `banglu-1.5.84-2121.aab` SHA-256 `b817c3f8e81bd565b808c85908f625b64086ebbd05cb37168c6631c9e942109e` (66,358,380 bytes); copies in `releases/` and `~/Downloads/`
+- Gates: shared jvmTest 674, shared Android 417, android debug/release 144 each, lint 0 errors, connectedDebugAndroidTest 4/4, exact-AAB device smoke certified (`device-smoke-1.5.84.json`, SM-S901W)
+- Voice: user-confirmed stable on the final debug build ("now it seems stable"); final trace 16 sessions / 105 hypotheses / 0 dropped / 0 duplicated
