@@ -235,7 +235,13 @@ class S136KeyAccessibilityActivationInstrumentedTest {
         // keyboard, real SharedPreferences, real ClipboardManager.
         val prefs = context.getSharedPreferences("banglu_prefs", android.content.Context.MODE_PRIVATE)
         prefs.edit().putBoolean(PrefsMigrations.CLIPBOARD_ENABLED_KEY, true).commit()
+        // The Bengali backspace above left the keyboard RESUMING 'ক্ষ' (S88),
+        // so the suggestion strip hides the action bar: delete the rest of
+        // the word to return the strip to idle.
+        clickKey("Backspace")
+        clickKey("Backspace")
         setEditorText("")
+        Thread.sleep(600)
         val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
         val copied = "ক্লিপবোর্ড টেস্ট ${System.currentTimeMillis() % 1000}"
         clipboard.setPrimaryClip(android.content.ClipData.newPlainText("banglu-test", copied))
