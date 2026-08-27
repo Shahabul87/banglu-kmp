@@ -492,6 +492,9 @@ compiler version string AND REQUIRED_DB_VERSION together.
 - Design specs & implementation plans: docs/superpowers/specs/ and
   docs/superpowers/plans/ (the editor and macOS IME were built plan-driven
   with per-task adversarial review — the plans double as architecture docs).
+- Engine architecture reference (block diagrams of the 7-layer pipeline,
+  hot path, learning/erase, voice model, dictionary build):
+  docs/architecture/engine-architecture.md.
 - Engine research method & corpus harness: docs/engine-*-study-*.md.
 - Store submission pack: design/play-store/ (listing, privacy, data safety,
   screenshots). Privacy policy live at
