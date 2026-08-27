@@ -212,6 +212,21 @@ class BangluIMEService : InputMethodService(),
      *  of-speech, a partial, or a result). The silence cap on a session that
      *  heard nothing shows MIC_SILENT instead of stopping "gracefully". */
     private var voiceHeardSpeechThisSession = false
+    /** S137: the pause commit ended this session on purpose (stopListening)
+     *  — its terminal callback (empty results / NO_MATCH) is a clean end,
+     *  not a failure: restart fresh, count nothing. */
+    private var voiceSessionClosedAfterPause = false
+    private var voiceIdleStopJob: Job? = null
+    private var voiceLastSpeechBeganAt = 0L
+    /** S137: onBeginningOfSpeech seen since the last non-empty hypothesis. */
+    private var voiceSpeechRestartedSinceHypothesis = false
+    /** S137 deferred punctuation: the last committed segment ends with a
+     *  plain space and still owes its mark — a দাঁড়ি once the pause reaches
+     *  VOICE_DARI_PAUSE_MS, a comma if speech resumes after VOICE_COMMA_PAUSE_MS,
+     *  nothing on a user stop (S42). */
+    private var voicePunctuationPending = false
+    private var voicePunctuationJob: Job? = null
+    private var voicePunctuationEpoch = 0
     /** S55 (F-ANDROID-006): fires if startListening() gets no
      *  RecognitionListener callback at all within the timeout — the
      *  recognizer is dead, not slow. Disarmed by every callback. */
@@ -404,12 +419,18 @@ class BangluIMEService : InputMethodService(),
         private const val VOICE_COMMA_PAUSE_MS = 1_400L
         private const val VOICE_DARI_PAUSE_MS = 2_800L
         private const val VOICE_FINAL_PUNCTUATION_PAUSE_MS = 3_200L
+        /** S137: a session is ended this long after speech stops if no new
+         *  speech has begun — BEFORE the recognizer's own ~2.8s endpoint,
+         *  after which it degrades (late lumps, empty hypotheses). */
+        private const val VOICE_IDLE_SESSION_END_MS = 1_500L
         private const val VOICE_DELETE_SOURCE = "voice_delete"
         private const val PUNCTUATION_SOURCE = "gap_punctuation"
         private const val PREF_VOICE_DISCLOSURE_ACCEPTED = "voice_disclosure_accepted"
 
         /** Consecutive no-speech listen cycles before dictation auto-stops. */
-        private const val VOICE_MAX_FRUITLESS_RESTARTS = 3
+        // S137: with one session per utterance a silent session is ~5s, so
+        // six of them ≈ 30s of tolerated silence before a graceful stop.
+        private const val VOICE_MAX_FRUITLESS_RESTARTS = 6
 
         /** S55 (review follow-up): consecutive ERROR_CLIENT/ERROR_RECOGNIZER_BUSY
          *  restarts before giving up with BUSY_GIVEUP instead of looping. */
@@ -1754,6 +1775,7 @@ class BangluIMEService : InputMethodService(),
             voicePartialCommitJob = null
             voiceTokenRefineJob?.cancel()
             voiceTokenRefineJob = null
+            cancelVoiceIdleAndPunctuationJobs()
         }
     }
 
@@ -2644,6 +2666,9 @@ class BangluIMEService : InputMethodService(),
         voiceBusyRestarts = 0
         voiceWedgeRestarts = 0
         voiceHeardSpeechThisSession = false
+        voiceSessionClosedAfterPause = false
+        voiceLastSpeechBeganAt = 0L
+        cancelVoiceIdleAndPunctuationJobs()
         voiceTokenRefineJob?.cancel()
         voiceTokenRefineJob = null
         voicePartialGeneration++
@@ -2659,7 +2684,7 @@ class BangluIMEService : InputMethodService(),
         // the new session re-heard the same speech and stamped it AGAIN
         // ("ভালোবাসো | ভালোবাসো তুমি | ভালোবাসো তুমি | …" once per error
         // cycle). The carry now survives error restarts under PROBATION
-        // (see stripAutoCommittedVoicePrefix): overlap strips, divergence
+        // (see VoiceCarryPolicy.reconcile): overlap strips, divergence
         // kills the carry — S56's genuinely-new-speech case still wins.
         // Clean restarts (after a final result) and fresh onVoiceInput()
         // sessions still reset the carry at their own sites.
@@ -2705,6 +2730,7 @@ class BangluIMEService : InputMethodService(),
 
         try {
             log("onVoiceInput: startListening $voiceSessionLanguage offline=$voicePreferOfflineForSession")
+            voiceSessionClosedAfterPause = false
             voiceInputState.value = VoiceInputState.PROCESSING
             voiceInputLevel.value = 0f
             armVoiceWatchdog()
@@ -2821,10 +2847,22 @@ class BangluIMEService : InputMethodService(),
                 if (isStale()) return
                 pokeVoiceWatchdog()
                 log("voice: beginning")
+                voiceLastSpeechBeganAt = System.currentTimeMillis()
+                voiceSpeechRestartedSinceHypothesis = true
+                voiceIdleStopJob?.cancel()
+                voiceIdleStopJob = null
+                voicePunctuationEpoch++
+                resolveDeferredVoicePunctuationOnSpeech()
                 voiceHeardSpeechThisSession = true
                 voiceFruitlessRestarts = 0
                 voiceBusyRestarts = 0
                 voiceWedgeRestarts = 0
+                // S137: one dictation is now MANY sessions — the S69 network
+                // ladder's "once per dictation" budget killed dictation after
+                // two transient start failures an hour apart. A session that
+                // hears speech proves the path healthy: reset the budget.
+                voiceNetworkRetryUsed = false
+                voiceOfflineRetryUsed = false
                 voicePartialCommitJob?.cancel()
                 commitVoicePartialForMeasuredPause()
                 voiceInputState.value = VoiceInputState.LISTENING
@@ -2853,113 +2891,12 @@ class BangluIMEService : InputMethodService(),
                 voiceInputState.value = if (voiceStopRequested) VoiceInputState.STOPPED else VoiceInputState.PROCESSING
                 voiceInputLevel.value = 0f
                 scheduleVoicePartialCommitAfterPause()
+                scheduleVoiceIdleSessionEnd()
             }
 
             override fun onError(error: Int) {
                 if (isStale()) return
-                voiceAwaitingTerminal = false
-                disarmVoiceWatchdog()
-                log("voice: error=$error")
-                voicePartialCommitJob?.cancel()
-                voiceInputLevel.value = 0f
-                if (voiceCancelRequested) {
-                    // stopVoiceInput(cancel=true) already fully reset the UI
-                    // state and text synchronously; a late error callback for
-                    // an already-canceled session must not override it.
-                    log("voice: error=$error after cancel, ignoring")
-                    return
-                }
-                if (voiceStopRequested) {
-                    voiceDictationActive = false
-                    voiceInputState.value = VoiceInputState.STOPPED
-                    finishVoiceComposingText()
-                    showVoiceDeleteAction()
-                    return
-                }
-                if (!voiceDictationActive) {
-                    // Stray callback after the session already finished on its
-                    // own (e.g. a late error racing a just-completed onResults)
-                    // — nothing to restart or report, the UI already moved on.
-                    log("voice: error=$error after session already ended, ignoring")
-                    return
-                }
-
-                // S55 (F-ANDROID-006): every branch below now comes from
-                // VoiceSessionPolicy's pure decision table (unit-pinned in
-                // VoiceSessionPolicyTest) instead of the old isNetworkAvailable()
-                // gamble — never leaves a listening chip that cannot deliver.
-                val action = VoiceSessionPolicy.onError(
-                    error = error,
-                    networkRetryUsed = voiceNetworkRetryUsed,
-                    offlineRetryUsed = voiceOfflineRetryUsed,
-                    offlineForcedBySession = voiceOfflineForcedBySession,
-                    fruitlessRestarts = voiceFruitlessRestarts,
-                    maxFruitlessRestarts = VOICE_MAX_FRUITLESS_RESTARTS,
-                    busyRestarts = voiceBusyRestarts,
-                    maxBusyRestarts = VOICE_MAX_BUSY_RESTARTS,
-                    heardSpeechThisSession = voiceHeardSpeechThisSession
-                )
-                when (action) {
-                    VoiceSessionPolicy.VoiceAction.RetryOffline -> {
-                        voiceOfflineRetryUsed = true
-                        voicePreferOfflineForSession = true
-                        voiceOfflineForcedBySession = true
-                        log("voice: network-class error=$error, retrying once with offline preference")
-                        commitLiveVoicePartialBeforeRestart(error)
-                        restartVoiceRecognitionSoon(afterError = true)
-                    }
-                    VoiceSessionPolicy.VoiceAction.RetryOnline -> {
-                        // S69: the ladder's own offline retry hit a missing
-                        // bn-BD pack — walk back to the online recognizer.
-                        voicePreferOfflineForSession = false
-                        voiceOfflineForcedBySession = false
-                        log("voice: offline pack missing after forced-offline retry (error=$error), returning to online")
-                        commitLiveVoicePartialBeforeRestart(error)
-                        restartVoiceRecognitionSoon(afterError = true)
-                    }
-                    VoiceSessionPolicy.VoiceAction.RestartSameMode -> {
-                        if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                            voiceFruitlessRestarts++
-                        } else if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
-                            voiceBusyRestarts++
-                        } else if (VoiceSessionPolicy.isNetworkClassError(error)) {
-                            // S69: this restart consumed the one plain
-                            // network retry; the next network error goes to
-                            // the offline ladder step.
-                            voiceNetworkRetryUsed = true
-                            log("voice: network-class error=$error, plain online retry first")
-                        }
-                        commitLiveVoicePartialBeforeRestart(error)
-                        restartVoiceRecognitionSoon(afterError = true)
-                    }
-                    VoiceSessionPolicy.VoiceAction.GracefulStop -> {
-                        log("voice: graceful stop after error=$error")
-                        voiceFruitlessRestarts = 0
-                        voiceDictationActive = false
-                        voiceInputState.value = VoiceInputState.STOPPED
-                        finishVoiceComposingText()
-                    }
-                    is VoiceSessionPolicy.VoiceAction.ShowMessage -> {
-                        if (action.state == VoiceInputState.BUSY_GIVEUP) {
-                            log("voice: busy-retry cap ($VOICE_MAX_BUSY_RESTARTS) exceeded, giving up")
-                        }
-                        voiceBusyRestarts = 0
-                        voiceDictationActive = false
-                        voiceInputState.value = action.state
-                        // S69: mid-session permission loss gets the SAME
-                        // remediation as the pre-flight gate — launch the
-                        // permission flow instead of a chip that just fades.
-                        if (action.state == VoiceInputState.PERMISSION_REQUIRED) {
-                            startActivity(
-                                Intent(this@BangluIMEService, VoicePermissionActivity::class.java)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        }
-                        // S106: terminal give-up messages are sticky — they
-                        // stay until the user acts (S69's 6s chip window was
-                        // still short enough to miss).
-                    }
-                }
+                handleVoiceRecognizerError(error)
             }
 
             override fun onResults(results: Bundle?) {
@@ -2967,6 +2904,8 @@ class BangluIMEService : InputMethodService(),
                 voiceAwaitingTerminal = false
                 disarmVoiceWatchdog()
                 voicePartialCommitJob?.cancel()
+                voiceIdleStopJob?.cancel()
+                voiceIdleStopJob = null
                 // S73 (production audit): a delayed Latin-token partial refine
                 // could land AFTER the final commit and re-append the old
                 // partial — the results path never invalidated it (stop,
@@ -2993,15 +2932,52 @@ class BangluIMEService : InputMethodService(),
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
 
-                val best = chooseVoiceResult(phrases)?.let { stripAutoCommittedVoicePrefix(it) }
+                if (BuildConfig.DEBUG) log("voice: raw results n=${phrases.size} first='${phrases.firstOrNull().orEmpty()}'")
+                val best = chooseVoiceResult(phrases)?.let { chosen ->
+                    val reconciled = voiceCarry.reconcile(chosen)
+                    if (reconciled.recognizerReset) closeLiveVoiceSegmentForRecognizerReset()
+                    reconciled.owed
+                }
+                if (voiceSessionClosedAfterPause) {
+                    if (best == null || best.isEmpty()) {
+                        restartAfterDeliberateSessionEnd("results")
+                        return
+                    }
+                    if (!voiceStopRequested && voiceDictationActive) {
+                        // The idle stop ended the session with the utterance
+                        // still live: commit its final with a plain space and
+                        // let the pause decide the mark (S137 deferred
+                        // punctuation), then a fresh session.
+                        voiceSessionClosedAfterPause = false
+                        voiceHeardSpeechThisSession = true
+                        log("voice: idle-stop final='$best' — screen text sealed, punctuation deferred")
+                        // The screen already holds the incrementally committed
+                        // partials; a final that still owes words is appended
+                        // through the same live-diff as a partial, then sealed.
+                        commitVoiceLivePartialIncrementally(best)
+                        sealLiveVoiceRegion(" ")
+                        armDeferredVoicePunctuation()
+                        voiceInputLevel.value = 0f
+                        suggestions.clear()
+                        voiceCarry.closeTranscript()
+                        finishVoiceComposingText()
+                        restartVoiceRecognitionSoon()
+                        return
+                    }
+                    voiceSessionClosedAfterPause = false
+                }
                 if (best == null) {
-                    log("voice: empty results")
-                    // S76 (audit): this terminal path left voiceDictationActive
-                    // true — an ended session that still claimed to be running.
-                    voiceDictationActive = false
-                    finishVoiceComposingText()
-                    voiceInputState.value = VoiceInputState.ERROR
-                    releaseSpeechRecognizer()
+                    // S137 (field trace): Google's speech service ends a
+                    // session after ~5s of silence with an EMPTY result list
+                    // whenever the last segment was already delivered through
+                    // partials — that is the NORMAL end of a paused dictation,
+                    // not a failure. The old code turned it into the ERROR
+                    // chip and killed the session ("if I pause it cannot pick
+                    // voice"). It now walks the same no-speech ladder as
+                    // ERROR_NO_MATCH: restart while the user is dictating,
+                    // graceful stop after the silence cap.
+                    log("voice: empty results — treated as no-speech (session ended on silence)")
+                    handleVoiceRecognizerError(SpeechRecognizer.ERROR_NO_MATCH)
                     return
                 }
 
@@ -3043,12 +3019,31 @@ class BangluIMEService : InputMethodService(),
             override fun onPartialResults(partialResults: Bundle?) {
                 if (isStale()) return
                 pokeVoiceWatchdog()
-                val partial = partialResults
+                val rawPartial = partialResults
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull()
                     ?.trim()
-                    ?.let { stripAutoCommittedVoicePrefix(it) }
                     .orEmpty()
+                // S137: an EMPTY hypothesis while text is live = the recognizer
+                // dropped its transcript and is starting over (trace 17:04:01:
+                // 'বারবার' → '' → 'এটা …'); treat the next hypothesis like one
+                // after a new beginning-of-speech.
+                if (rawPartial.isEmpty() && voiceLiveCommittedPartial.isNotEmpty()) {
+                    voiceSpeechRestartedSinceHypothesis = true
+                }
+                val reconciled = if (rawPartial.isEmpty()) null else {
+                    voiceCarry.reconcile(rawPartial, speechRestarted = voiceSpeechRestartedSinceHypothesis)
+                        .also { voiceSpeechRestartedSinceHypothesis = false }
+                }
+                val partial = reconciled?.owed.orEmpty()
+                if (BuildConfig.DEBUG) log("voice: raw partial='$rawPartial' -> owed='$partial' reset=${reconciled?.recognizerReset == true}")
+                // S137: the recognizer started a FRESH hypothesis (its own
+                // endpoint after a pause). Whatever the previous hypothesis
+                // left on screen is final now — close it before the new
+                // segment is rendered, or the new words would be diffed
+                // against the old sentence and appended again on every
+                // revision (the growing-repeat screenshot).
+                if (reconciled?.recognizerReset == true) closeLiveVoiceSegmentForRecognizerReset()
                 if (partial.isNotEmpty()) {
                     voiceHeardSpeechThisSession = true
                     log("voice: partial='$partial'")
@@ -3064,8 +3059,179 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
-    private fun stripAutoCommittedVoicePrefix(text: String): String =
-        voiceCarry.strip(text)
+    /** S137: the recognizer-error ladder, shared by onError and the
+     *  empty-results end of a paused session (see onResults). */
+    private fun handleVoiceRecognizerError(error: Int) {
+        voiceAwaitingTerminal = false
+        voiceIdleStopJob?.cancel()
+        voiceIdleStopJob = null
+        disarmVoiceWatchdog()
+        log("voice: error=$error")
+        voicePartialCommitJob?.cancel()
+        voiceInputLevel.value = 0f
+        if (voiceCancelRequested) {
+            // stopVoiceInput(cancel=true) already fully reset the UI
+            // state and text synchronously; a late error callback for
+            // an already-canceled session must not override it.
+            log("voice: error=$error after cancel, ignoring")
+            return
+        }
+        if (voiceStopRequested) {
+            voiceDictationActive = false
+            voiceInputState.value = VoiceInputState.STOPPED
+            finishVoiceComposingText()
+            showVoiceDeleteAction()
+            return
+        }
+        if (!voiceDictationActive) {
+            // Stray callback after the session already finished on its
+            // own (e.g. a late error racing a just-completed onResults)
+            // — nothing to restart or report, the UI already moved on.
+            log("voice: error=$error after session already ended, ignoring")
+            return
+        }
+        if (voiceSessionClosedAfterPause &&
+            (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ||
+                error == SpeechRecognizer.ERROR_CLIENT)
+        ) {
+            restartAfterDeliberateSessionEnd("error=$error")
+            return
+        }
+
+        // S55 (F-ANDROID-006): every branch below now comes from
+        // VoiceSessionPolicy's pure decision table (unit-pinned in
+        // VoiceSessionPolicyTest) instead of the old isNetworkAvailable()
+        // gamble — never leaves a listening chip that cannot deliver.
+        val action = VoiceSessionPolicy.onError(
+            error = error,
+            networkRetryUsed = voiceNetworkRetryUsed,
+            offlineRetryUsed = voiceOfflineRetryUsed,
+            offlineForcedBySession = voiceOfflineForcedBySession,
+            fruitlessRestarts = voiceFruitlessRestarts,
+            maxFruitlessRestarts = VOICE_MAX_FRUITLESS_RESTARTS,
+            busyRestarts = voiceBusyRestarts,
+            maxBusyRestarts = VOICE_MAX_BUSY_RESTARTS,
+            heardSpeechThisSession = voiceHeardSpeechThisSession
+        )
+        when (action) {
+            VoiceSessionPolicy.VoiceAction.RetryOffline -> {
+                voiceOfflineRetryUsed = true
+                voicePreferOfflineForSession = true
+                voiceOfflineForcedBySession = true
+                log("voice: network-class error=$error, retrying once with offline preference")
+                commitLiveVoicePartialBeforeRestart(error)
+                restartVoiceRecognitionSoon(afterError = true)
+            }
+            VoiceSessionPolicy.VoiceAction.RetryOnline -> {
+                // S69: the ladder's own offline retry hit a missing
+                // bn-BD pack — walk back to the online recognizer.
+                voicePreferOfflineForSession = false
+                voiceOfflineForcedBySession = false
+                log("voice: offline pack missing after forced-offline retry (error=$error), returning to online")
+                commitLiveVoicePartialBeforeRestart(error)
+                restartVoiceRecognitionSoon(afterError = true)
+            }
+            VoiceSessionPolicy.VoiceAction.RestartSameMode -> {
+                if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                    voiceFruitlessRestarts++
+                } else if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+                    voiceBusyRestarts++
+                } else if (VoiceSessionPolicy.isNetworkClassError(error)) {
+                    // S69: this restart consumed the one plain
+                    // network retry; the next network error goes to
+                    // the offline ladder step.
+                    voiceNetworkRetryUsed = true
+                    log("voice: network-class error=$error, plain online retry first")
+                }
+                commitLiveVoicePartialBeforeRestart(error)
+                restartVoiceRecognitionSoon(afterError = true)
+            }
+            VoiceSessionPolicy.VoiceAction.GracefulStop -> {
+                log("voice: graceful stop after error=$error")
+                voiceFruitlessRestarts = 0
+                voiceDictationActive = false
+                voiceInputState.value = VoiceInputState.STOPPED
+                finishVoiceComposingText()
+            }
+            is VoiceSessionPolicy.VoiceAction.ShowMessage -> {
+                if (action.state == VoiceInputState.BUSY_GIVEUP) {
+                    log("voice: busy-retry cap ($VOICE_MAX_BUSY_RESTARTS) exceeded, giving up")
+                }
+                voiceBusyRestarts = 0
+                voiceDictationActive = false
+                voiceInputState.value = action.state
+                // S69: mid-session permission loss gets the SAME
+                // remediation as the pre-flight gate — launch the
+                // permission flow instead of a chip that just fades.
+                if (action.state == VoiceInputState.PERMISSION_REQUIRED) {
+                    startActivity(
+                        Intent(this@BangluIMEService, VoicePermissionActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+                // S106: terminal give-up messages are sticky — they
+                // stay until the user acts (S69's 6s chip window was
+                // still short enough to miss).
+            }
+        }
+    }
+
+    /**
+     * S137: the recognizer finalized the previous utterance on its own and
+     * started a fresh hypothesis. Close what that utterance left on screen
+     * as a committed segment — punctuated by the measured pause like the
+     * pause-timer commit would have — WITHOUT extending the carry (the carry
+     * was just reset; the old hypothesis is history). Also cancels the
+     * pending pause commit so it cannot fire on a snapshot that no longer
+     * matches (the 2.8s-vs-3.2s race that left the old sentence live).
+     */
+    private fun closeLiveVoiceSegmentForRecognizerReset() {
+        voicePartialCommitJob?.cancel()
+        voicePartialCommitJob = null
+        if (voiceLiveCommittedPartial.isEmpty() && voiceCurrentPartial.isEmpty()) {
+            deleteVoiceLivePartial()
+            return
+        }
+        val pauseMs = if (voiceLastSpeechEndedAt > 0L) {
+            (System.currentTimeMillis() - voiceLastSpeechEndedAt).coerceAtLeast(0L)
+        } else 0L
+        val mark = when {
+            pauseMs >= VOICE_DARI_PAUSE_MS -> if (voiceSessionEnglish) "." else "\u0964"
+            pauseMs >= VOICE_COMMA_PAUSE_MS -> ","
+            else -> " "
+        }
+        log("voice: recognizer reset — sealing live segment mark='$mark' pauseMs=$pauseMs live='$voiceLiveCommittedPartial'")
+        sealLiveVoiceRegion(mark)
+        suggestions.clear()
+    }
+
+    /**
+     * S137: close the live region WITHOUT re-committing any text. Every
+     * partial was already committed incrementally, so the only work is a
+     * trailing space plus the mark. Re-running the final through
+     * commitVoiceFinalText re-appended the hypothesis whenever the live
+     * region had diverged from it (trace 17:04:01 — Google swapped 'বারবার'
+     * for 'এটা…' mid-session and the screen held both; the old seal then
+     * wrote 'এটা বোঝা যাচ্ছে না' a second time).
+     */
+    private fun sealLiveVoiceRegion(mark: String) {
+        voicePartialGeneration++
+        voiceTokenRefineJob?.cancel()
+        voiceTokenRefineJob = null
+        val ic = currentInputConnection
+        if (ic != null && voiceLiveCommittedPartial.isNotEmpty()) {
+            moveVoiceCursorToInsertionPoint(ic)
+            val before = ic.getTextBeforeCursor(1, 0)?.toString().orEmpty()
+            if (before.isNotEmpty() && !before.last().isWhitespace()) commitVoiceTextAtInsertion(" ")
+            if (mark != " ") stampDeferredVoicePunctuation(mark)
+        }
+        voiceCommittedText += voiceLiveCommittedPartial
+        voiceCurrentPartial = ""
+        voiceLiveCommittedPartial = ""
+        voiceLiveCommitLength = 0
+        voiceLastLivePartialUpdateAt = 0L
+        voiceHasLiveComposing = false
+    }
 
     /** S55: shared by every VoiceSessionPolicy retry/restart action — a
      *  partial already visible on screen must not vanish just because the
@@ -3081,6 +3247,7 @@ class BangluIMEService : InputMethodService(),
 
     private fun stopVoiceInput(cancel: Boolean) {
         disarmVoiceWatchdog()
+        cancelVoiceIdleAndPunctuationJobs()
         voiceTokenRefineJob?.cancel()
         voiceTokenRefineJob = null
         voiceRestartJob?.cancel()
@@ -3162,8 +3329,140 @@ class BangluIMEService : InputMethodService(),
                 voiceCarry.append(snapshot)
                 commitVoiceFinalText(snapshot, "\u0964")
                 suggestions.clear()
+                endVoiceSessionAfterPause()
             }
         }
+    }
+
+    /**
+     * S137 (field trace, Google speech service 2026-07): ONE SESSION PER
+     * UTTERANCE. Inside a long session the recognizer streams the first
+     * utterance instantly, then degrades for every later one — the third
+     * came 3.7s late as a lump, the fourth (4.6s of speech) produced no
+     * hypothesis at all, others flapped 3→0→3 words. That is the field
+     * report "sometimes it picks, sometimes not, I have to speak loud". So
+     * when the 3.2s pause commit fires with no new speech under way, the
+     * session is ended deliberately; its terminal callback restarts a
+     * fresh recognizer, and every utterance gets first-utterance service.
+     */
+    private fun endVoiceSessionAfterPause() {
+        val recognizer = speechRecognizer ?: return
+        if (!voiceDictationActive || voiceStopRequested || voiceCancelRequested) return
+        voiceSessionClosedAfterPause = true
+        voiceAwaitingTerminal = true
+        log("voice: pause commit — ending this session for a fresh one")
+        try {
+            recognizer.stopListening()
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "stopListening after pause commit failed", e)
+            voiceSessionClosedAfterPause = false
+        }
+    }
+
+    /** S137: the deliberately ended session reported its end — restart
+     *  clean (no carry, no fruitless/busy counting). */
+    private fun restartAfterDeliberateSessionEnd(source: String) {
+        voiceSessionClosedAfterPause = false
+        log("voice: session ended by pause commit ($source) — fresh session")
+        // S137: Google answers stopListening() with an EMPTY final — the
+        // text on screen IS the final. Seal it (trailing space only; it is
+        // already committed) and let the pause decide its mark, or the
+        // sentence would end with no দাঁড়ি at all.
+        if (voiceLiveCommittedPartial.isNotEmpty() || voiceCurrentPartial.isNotEmpty()) {
+            sealLiveVoiceRegion(" ")
+            armDeferredVoicePunctuation()
+        }
+        voiceCarry.closeTranscript()
+        voiceCurrentPartial = ""
+        deleteVoiceLivePartial()
+        finishVoiceComposingText()
+        restartVoiceRecognitionSoon()
+    }
+
+    /**
+     * S137: end the session [VOICE_IDLE_SESSION_END_MS] after speech stops
+     * if no new speech has begun — before the recognizer's own endpoint,
+     * so the next utterance gets a fresh session (see
+     * [endVoiceSessionAfterPause] for the field evidence).
+     */
+    private fun scheduleVoiceIdleSessionEnd() {
+        voiceIdleStopJob?.cancel()
+        val endedAt = voiceLastSpeechEndedAt
+        voiceIdleStopJob = serviceScope.launch {
+            delay(VOICE_IDLE_SESSION_END_MS)
+            if (
+                imeSessionVisible && voiceDictationActive &&
+                !voiceStopRequested && !voiceCancelRequested &&
+                voiceLastSpeechEndedAt == endedAt &&
+                voiceLastSpeechBeganAt <= endedAt &&
+                !voiceSessionClosedAfterPause
+            ) {
+                log("voice: idle ${VOICE_IDLE_SESSION_END_MS}ms after speech — ending session early")
+                endVoiceSessionAfterPause()
+            }
+        }
+    }
+
+    private fun cancelVoiceIdleAndPunctuationJobs() {
+        voiceIdleStopJob?.cancel()
+        voiceIdleStopJob = null
+        voicePunctuationJob?.cancel()
+        voicePunctuationJob = null
+        voicePunctuationPending = false
+    }
+
+    /** S137 deferred punctuation: the segment was committed with a trailing
+     *  space; a দাঁড়ি lands once the pause reaches VOICE_DARI_PAUSE_MS with
+     *  no new speech (a comma is decided at the next onBeginningOfSpeech). */
+    private fun armDeferredVoicePunctuation() {
+        voicePunctuationJob?.cancel()
+        voicePunctuationPending = true
+        val epoch = voicePunctuationEpoch
+        val elapsed = (System.currentTimeMillis() - voiceLastSpeechEndedAt).coerceAtLeast(0L)
+        voicePunctuationJob = serviceScope.launch {
+            delay((VOICE_DARI_PAUSE_MS - elapsed).coerceAtLeast(0L))
+            if (voicePunctuationPending && voicePunctuationEpoch == epoch &&
+                imeSessionVisible && voiceDictationActive && !voiceStopRequested && !voiceCancelRequested
+            ) {
+                voicePunctuationPending = false
+                stampDeferredVoicePunctuation(if (voiceSessionEnglish) "." else "\u0964")
+            }
+        }
+    }
+
+    /** New speech began: the pause length is known — comma or দাঁড়ি. */
+    private fun resolveDeferredVoicePunctuationOnSpeech() {
+        if (!voicePunctuationPending) return
+        voicePunctuationPending = false
+        voicePunctuationJob?.cancel()
+        voicePunctuationJob = null
+        val pauseMs = (System.currentTimeMillis() - voiceLastSpeechEndedAt).coerceAtLeast(0L)
+        val mark = when {
+            pauseMs >= VOICE_DARI_PAUSE_MS -> if (voiceSessionEnglish) "." else "\u0964"
+            pauseMs >= VOICE_COMMA_PAUSE_MS -> ","
+            else -> return
+        }
+        stampDeferredVoicePunctuation(mark)
+    }
+
+    /** Replace the trailing space of the last committed segment with
+     *  "[mark] " — equality-guarded so a sent/edited field is never touched. */
+    private fun stampDeferredVoicePunctuation(mark: String) {
+        val ic = currentInputConnection ?: return
+        moveVoiceCursorToInsertionPoint(ic)
+        val before = ic.getTextBeforeCursor(2, 0)?.toString().orEmpty()
+        if (!before.endsWith(" ")) return
+        val prev = before.dropLast(1).lastOrNull() ?: return
+        if (prev.isWhitespace() || prev in "\u0964\u0965.?!,") return
+        log("voice: deferred punctuation '$mark'")
+        ic.beginBatchEdit()
+        ic.deleteSurroundingText(1, 0)
+        ic.commitText("$mark ", 1)
+        ic.endBatchEdit()
+        voiceInsertionCursor = voiceInsertionCursor?.plus(mark.length)
+        expectVoiceSelection(voiceInsertionCursor)
+        currentVoiceSessionCommitLength += mark.length
+        lastVoiceCommitLength = currentVoiceSessionCommitLength
     }
 
     private fun commitVoicePartialForMeasuredPause() {
@@ -3714,6 +4013,9 @@ class BangluIMEService : InputMethodService(),
             // reuse instances anymore, so every restart gets the full settle
             // window, not just error restarts.
             releaseSpeechRecognizer()
+            // S137: the settle window is NOT optional — a restart with no
+            // delay after destroy() made Google's service answer the new
+            // session with ERROR_SERVER_DISCONNECTED (trace 17:03:30, x3).
             delay(if (afterError) VOICE_ERROR_RESTART_DELAY_MS else VOICE_RESTART_DELAY_MS)
             if (
                 imeSessionVisible &&

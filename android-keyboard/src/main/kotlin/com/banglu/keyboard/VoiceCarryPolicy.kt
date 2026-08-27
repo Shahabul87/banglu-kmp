@@ -55,7 +55,12 @@ class VoiceCarryPolicy {
         sessionCommitted = ""
         restartCarry = ""
         probation = false
+        lastHypothesis = emptyList()
     }
+
+    /** S137: the previous non-empty raw hypothesis of this transcript —
+     *  a recognizer restart shows up here even when nothing was committed. */
+    private var lastHypothesis: List<String> = emptyList()
 
     /** A commit of [segment] from the CURRENT session's transcript (pause
      *  commit, error-restart commit, or S107 re-anchor closure). Extends the
@@ -78,70 +83,97 @@ class VoiceCarryPolicy {
         probation = restartCarry.isNotEmpty()
     }
 
+    /** Result of reconciling one recognizer hypothesis against the carry. */
+    data class Reconciled(val owed: String, val recognizerReset: Boolean)
+
+    /** Old contract kept for existing callers/tests: just the owed text. */
+    fun strip(text: String): String = reconcile(text).owed
+
     /**
-     * Strip everything already committed out of a recognizer hypothesis.
-     * Returns the text still owed to the editor ("" when the hypothesis is
-     * entirely covered by prior commits).
+     * S137 (field trace, Google speech service 2026-07): reconcile a
+     * hypothesis with everything committed so far in this transcript.
+     *
+     * The recognizer does NOT keep one cumulative hypothesis per session —
+     * after ~3s of silence it finalizes the utterance internally and starts
+     * a FRESH hypothesis while the session stays open. The old law stripped
+     * the first N committed words from every hypothesis blindly and ate the
+     * whole start of each new segment ("not picking up after a pause").
+     *
+     * Law (fuzzy word matching throughout, [VoiceWordMatch]):
+     *  - hypothesis fully covered by the committed words → nothing owed
+     *    (stale / shorter interim);
+     *  - committed words are a prefix of the hypothesis → only the tail is
+     *    owed (cumulative continuation, S121);
+     *  - NO common prefix → recognizer RESET: the carry closes, the whole
+     *    hypothesis is owed, and [Reconciled.recognizerReset] tells the
+     *    caller to close its previous live segment first;
+     *  - divergence after a partial prefix: a hypothesis at most half as
+     *    long as the committed text (or any probationary post-error carry)
+     *    is a fresh segment → RESET; otherwise it is a mid-transcript
+     *    revision (S121) → only words beyond the committed count are owed.
      */
-    fun strip(text: String): String {
-        var clean = text.trim()
-        if (clean.isEmpty()) return clean
-
-        // 1. Cross-restart overlap (probationary). S133: WORD-based with
-        //    fuzzy equality — the re-heard utterance comes back with revised
-        //    spellings ("অনেক" → "অ১নেক"), and the old exact startsWith test
-        //    died on one changed character, re-appending the whole committed
-        //    transcript once per error restart (field report round three of
-        //    this bug). A probationary carry the hypothesis does not overlap
-        //    is still genuinely new speech (the S56 contract) — the carry
-        //    dies immediately so it can never mis-strip a later sentence
-        //    starting with the same words.
-        if (restartCarry.isNotEmpty()) {
-            val carryWords = restartCarry.split(whitespace)
-            val hypWords = clean.split(whitespace)
-            var matched = 0
-            while (matched < carryWords.size && matched < hypWords.size &&
-                VoiceWordMatch.similar(carryWords[matched], hypWords[matched])
-            ) {
-                matched++
-            }
-            clean = when {
-                // Fully covered (equal or a late, shorter re-hear): stale —
-                // re-appending it would duplicate committed text. An exact-
-                // length match confirms the overlap and ends probation.
-                matched == hypWords.size -> {
-                    if (matched == carryWords.size) probation = false
-                    ""
-                }
-                // Carry fully covered with words to spare: the overlap is
-                // confirmed; only the extra words are owed.
-                matched == carryWords.size -> {
-                    probation = false
-                    hypWords.drop(matched).joinToString(" ")
-                }
-                else -> {
-                    if (probation) {
-                        probation = false
-                        restartCarry = ""
-                    }
-                    clean
-                }
-            }
-            if (clean.isEmpty()) return ""
+    /**
+     * @param speechRestarted the recognizer reported a new onBeginningOfSpeech
+     *   since the previous hypothesis — with it, a hypothesis that shares no
+     *   first word with the previous one is a restart at ANY length (field
+     *   trace 17:00:02: 'কোথায়' → new utterance 'হ্যালো', both one word).
+     */
+    fun reconcile(text: String, speechRestarted: Boolean = false): Reconciled {
+        val clean = text.trim()
+        if (clean.isEmpty()) return Reconciled("", false)
+        val hypWordsRaw = clean.split(whitespace)
+        // S137: restart detection against the PREVIOUS hypothesis, committed
+        // or not (field trace 16:56:18 — Google finalized the utterance at
+        // its end-of-speech and began a new one 0.6s later with nothing
+        // committed). A new hypothesis that shares no first word with the
+        // previous one AND is shorter is the recognizer starting over — a
+        // same-length rewrite of the first word is a revision, not a reset.
+        val previous = lastHypothesis
+        lastHypothesis = hypWordsRaw
+        if (previous.isNotEmpty() &&
+            (hypWordsRaw.size < previous.size || speechRestarted) &&
+            !VoiceWordMatch.similar(previous[0], hypWordsRaw[0])
+        ) {
+            closeTranscript()
+            lastHypothesis = hypWordsRaw
+            return Reconciled(clean, true)
         }
+        val carryWords = listOf(restartCarry, sessionCommitted)
+            .filter { it.isNotEmpty() }
+            .joinToString(" ")
+            .split(whitespace)
+            .filter { it.isNotEmpty() }
+        if (carryWords.isEmpty()) return Reconciled(clean, false)
 
-        // 2. Within-session strip — WORD COUNT, not text (S121): the session
-        //    transcript is cumulative, so the first N words are the already-
-        //    committed audio in whatever spelling the recognizer currently
-        //    prefers. A hypothesis no longer than the committed count owes
-        //    nothing (stale or pure revision of committed words).
-        val committedWords = wordCount(sessionCommitted)
-        if (committedWords == 0) return clean
-        val words = clean.split(whitespace)
-        return if (words.size > committedWords) {
-            words.drop(committedWords).joinToString(" ")
-        } else {
-            ""
+        val hypWords = clean.split(whitespace)
+        var matched = 0
+        while (matched < carryWords.size && matched < hypWords.size &&
+            VoiceWordMatch.similar(carryWords[matched], hypWords[matched])
+        ) {
+            matched++
+        }
+        return when {
+            matched == hypWords.size -> {
+                if (matched == carryWords.size) probation = false
+                Reconciled("", false)
+            }
+            matched == carryWords.size -> {
+                probation = false
+                Reconciled(hypWords.drop(matched).joinToString(" "), false)
+            }
+            matched == 0 || probation || hypWords.size * 2 <= carryWords.size -> {
+                closeTranscript()
+                lastHypothesis = hypWordsRaw
+                Reconciled(clean, true)
+            }
+            else -> {
+                // Revision inside a long transcript: committed words stay as
+                // committed; only genuinely new words are owed.
+                Reconciled(
+                    if (hypWords.size > carryWords.size) hypWords.drop(carryWords.size).joinToString(" ") else "",
+                    false
+                )
+            }
         }
     }
 }

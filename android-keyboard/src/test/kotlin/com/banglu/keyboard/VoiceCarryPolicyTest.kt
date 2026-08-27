@@ -93,16 +93,21 @@ class VoiceCarryPolicyTest {
     }
 
     @Test
-    fun sameLengthRevisionOwesNothing() {
-        // S121 semantics change (was: mismatch passed through in full): a
-        // hypothesis no longer than the committed word count is a pure
-        // revision of already-committed words — committed text stays as
-        // committed ("data preservation beats transcript fidelity"), so
-        // nothing is owed. Decision note: re-appending here was mechanism 3.
+    fun zeroOverlapHypothesisIsARecognizerReset() {
+        // DECISION (S137, 2026-08-26): this pin is flipped. S121 treated a
+        // same-length hypothesis with NO overlap as a pure revision and owed
+        // nothing. The field trace on the Google speech service (2026-07)
+        // proved that shape is the recognizer starting a FRESH hypothesis
+        // after a pause — S121's rule dropped every new segment ("not
+        // picking up after I pause"). Mechanism 3 (re-append after a one-
+        // character respelling) is prevented by fuzzy word matching, not by
+        // this rule, so zero overlap now means RESET: owe the hypothesis in
+        // full and close the carry.
         val c = VoiceCarryPolicy()
         c.append("আমি ভালো")
-        assertEquals("", c.strip("অন্য কথা"))
-        assertEquals("আছি", c.strip("আমি ভালো আছি"))
+        val r = c.reconcile("অন্য কথা")
+        assertEquals(true, r.recognizerReset)
+        assertEquals("অন্য কথা", r.owed)
     }
 
     @Test
