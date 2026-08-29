@@ -133,7 +133,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private fun lookupEnglishMemo(key: String): String? {
         val store = phoneticIndex ?: return null
         englishLexiconMemo[key]?.let { return it.ifEmpty { null } }
-        val result = store.lookupEnglish(key)
+        // S142: the curated loanword spelling (door -> ডোর, table -> টেবিল) is
+        // the product's rendering of an English word; the CMU row is the
+        // fallback. ONE door for every consumer (intent list, honesty flip,
+        // 4x rule, junk rescue, chips) — no drift between them.
+        val result = curatedLoanwords[key] ?: store.lookupEnglish(key)
         englishLexiconMemo[key] = result ?: ""
         return result
     }
@@ -307,7 +311,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         private const val ENGLISH_HONESTY_OWNERSHIP_FLOOR = 0.75
         /** S142: corpus band above which a Bengali reading is an everyday word
          *  that keeps its key even against an English pronunciation. */
-        private const val EVERYDAY_WORD_BAND = 80
+        private const val EVERYDAY_WORD_BAND = 75
+        /** S143: shapes Bangla romanization never produces. */
+        private val ENGLISH_SHAPE = Regex("x|q|w[^aeiou]|tion$|sion$|ment$|ness$|ough|ight")
         private val ENGLISH_DERIVATION_SUFFIXES = listOf("ers", "er", "ing", "tion", "ment", "ness", "ful", "ist", "ly")
 
         private val MOBILE_SHORTHAND_OVERRIDES: Map<String, String> = mapOf(
@@ -1142,11 +1148,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         tryEnglishHonestyFlip(key, raw)?.let { return it }
         // S142: English-word law — needs only the lexicon store, lite mode too.
         applyEnglishPronunciationLaw(key, raw)?.let { return it }
+        // S143: misspelled English words — same store, same modes.
+        applyEnglishSpellingRescue(key, raw)?.let { return it }
+        // S143: an English rendering the pipeline already reached (want ->
+        // ওয়ান্ট via recovery) is final — the junk/typo passes below would
+        // "repair" it into a Bengali neighbour (অন্ত).
+        if (isEnglishRendering(key, raw)) return raw
         if (!validator.isLoaded()) return raw
         // General 4x-margin rule for weakly-attested squatters (needs the
         // frequency validator); getSuggestions always offers the loanword as
         // a chip either way.
-        if (EnglishDetector.isEnglish(key) && raw.confidence < 1.0) {
+        if (EnglishDetector.isEnglish(key) && raw.confidence < 0.99) {
             lookupEnglishMemo(key)?.let { en ->
                 if (en != raw.bengali &&
                     validator.getFrequency(en) > maxOf(validator.getFrequency(raw.bengali), 6) * 4
@@ -1182,8 +1194,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // onset class disagrees with what the user typed may ride the strip
         // but never the commit — the deterministic transliteration becomes
         // primary. Same-onset rescues (obisasso -> অবিশ্বাস্য) are untouched.
+        // S143: an English rendering romanizes differently from its English
+        // spelling by nature (want -> ওয়ান্ট reads "oyant", community ->
+        // কমিউনিটি reads "komiuniti"); the onset floor is for Bengali
+        // substitutions and stands down for it.
         if (raw.confidence < 0.9 && ' ' !in raw.bengali &&
-            !halfReadsTypedKey(key, raw.bengali)
+            !halfReadsTypedKey(key, raw.bengali) && !isEnglishRendering(key, raw)
         ) {
             val literal = convertByPatterns(key)
             if (literal.bengali.isNotEmpty() && literal.bengali != raw.bengali) {
@@ -1206,12 +1222,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // that can't reach this check would show junk while Space, running
         // this same wrapper, commits the loanword (F-ANDROID-001/002).
         tryJunkLexiconRescue(key, raw)?.let { return it }
-        val corrected = tryStoreTypoCorrection(key) ?: return raw
-        if (corrected.bengali == raw.bengali) return raw
-        return corrected.copy(
-            alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.7))) +
-                raw.alternatives.filter { it.bengali != corrected.bengali }.take(2)
-        )
+        val corrected = tryStoreTypoCorrection(key)?.takeIf { it.bengali != raw.bengali }?.let { c ->
+            c.copy(
+                alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.7))) +
+                    raw.alternatives.filter { it.bengali != c.bengali }.take(2)
+            )
+        }
+        // S143, late door: the Bengali typo layer just abandoned the typed
+        // reading (seperate -> সিরাতে); the nearest English word now
+        // competes on how closely each reads the key.
+        applyEnglishSpellingRescue(key, corrected ?: raw)?.let { return it }
+        return corrected ?: raw
     }
 
     /**
@@ -1251,11 +1272,58 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
     }
 
-    /** S142: a key that IS an English word — the curated detector list, or a
-     *  regular English derivation (test+er, print+er, meet+ing) whose stem
-     *  the lexicon knows. */
+    /** S142: "is this a correct English word?" — the curated english_lexicon
+     *  (39K CMU words) is the oracle for keys of 4+ letters, plus the
+     *  detector list and regular derivations (test+er, print+er, meet+ing)
+     *  whose stem the lexicon knows. Kept deliberately simple (user, 2026-08-29). */
     private fun isEnglishWordKey(key: String): Boolean {
-        if (EnglishDetector.isKnownEnglishWord(key)) return true
+        if (isMeantAsEnglish(key)) return true
+        if (key.length >= 4 && lookupEnglishMemo(key) != null) return true
+        return isEnglishDerivation(key)
+    }
+
+    /** S143: a word a typist almost certainly meant as English — the detector
+     *  list or the 10K common-word oracle. */
+    private fun isMeantAsEnglish(key: String): Boolean =
+        EnglishDetector.isKnownEnglishWord(key) || EnglishDetector.isCommonEnglishWord(key)
+
+    /**
+     * S143: how the product renders an English word — the curated seed, else
+     * the dictionary's own confident loanword spelling (product ->
+     * প্রোডাক্ট, not CMU's প্রডেক্ট), else the lexicon row.
+     */
+    /** S143: is [raw] the English rendering of [key] (exact or one slip away)? */
+    private fun isEnglishRendering(key: String, raw: ConversionResult): Boolean {
+        if (raw.source == ResolutionSource.ENGLISH_LEXICON) return true
+        val folded = ReverseTransliterator.foldNukta(raw.bengali)
+        lookupEnglishMemo(key)?.let { if (ReverseTransliterator.foldNukta(it) == folded) return true }
+        if (key.length < 5 || inEnglishRescue) return false
+        val nearest = nearestEnglishWords(key, 1).firstOrNull() ?: return false
+        val rendering = renderEnglishWord(nearest) ?: return false
+        return ReverseTransliterator.foldNukta(rendering) == folded
+    }
+
+    private var inEnglishRescue = false
+    private fun renderEnglishWord(word: String): String? {
+        curatedLoanwords[word]?.let { return it }
+        // The engine's own answer for the correct spelling (number -> নম্বর via
+        // the store, product -> প্রোডাক্ট via the dictionary) — so a slip lands
+        // exactly where the correct word lands. Re-entrancy guarded.
+        if (!inEnglishRescue) {
+            inEnglishRescue = true
+            try {
+                val own = convertWord(word)
+                if (own.source == ResolutionSource.ENGLISH_LEXICON ||
+                    (own.source == ResolutionSource.DICTIONARY && own.confidence >= 0.9)
+                ) return own.bengali
+            } finally {
+                inEnglishRescue = false
+            }
+        }
+        return lookupEnglishMemo(word)
+    }
+
+    private fun isEnglishDerivation(key: String): Boolean {
         for (suffix in ENGLISH_DERIVATION_SUFFIXES) {
             if (key.length <= suffix.length + 2 || !key.endsWith(suffix)) continue
             val stem = key.dropLast(suffix.length)
@@ -1264,14 +1332,31 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         return false
     }
 
+    /** S143: plain Levenshtein distance for short roman keys. */
+    private fun editDistance(a: String, b: String): Int {
+        if (a == b) return 0
+        var prev = IntArray(b.length + 1) { it }
+        var cur = IntArray(b.length + 1)
+        for (i in 1..a.length) {
+            cur[0] = i
+            for (j in 1..b.length) {
+                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+                cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+            }
+            val t = prev; prev = cur; cur = t
+        }
+        return prev[b.length]
+    }
+
     /**
      * S142 English-word law (user, 2026-08-29: "if the user types an exact
      * English word, return its Bangla pronunciation, and the English word in
      * the suggestions"). The lexicon rendering (curated seed first) becomes
      * the commit when the pipeline read the key as a DIFFERENT Bengali word
      * that is not an everyday one: tester -> টেস্টার (টেস্টের@70 rides the
-     * strip), phone -> ফোন (ফোনে@78), call -> কল. Everyday Bengali words
-     * keep their key — name -> নামে@89 (invariant 6), dine -> দিনে@84 — with
+     * strip), call -> কল (কলে@72), gate -> গেট. Everyday Bengali words keep
+     * their key — name -> নামে@89 (invariant 6), phone -> ফোনে@78 (the S81
+     * pin), abba -> আব্বা@76, bade -> বাদে@78 — with
      * the pronunciation as a chip. The rendering must be attested real text
      * unless it is a curated seed. Shared by the
      * commit wrapper and the composing preview so WYSIWYG holds.
@@ -1279,6 +1364,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     private fun applyEnglishPronunciationLaw(key: String, raw: ConversionResult): ConversionResult? {
         if (raw.confidence >= 0.99 || ' ' in raw.bengali) return null
         if (key.length < 4 || !isEnglishWordKey(key)) return null
+        if (isMidWordPrefix(key)) return null
+        // A key the CMU lexicon merely CONTAINS (it carries proper names:
+        // rahim, sumon) whose reading the pipeline kept verbatim is what the
+        // user typed — only a detector word, a derivation or an English shape
+        // may respell it (tester, window).
+        if (!isMeantAsEnglish(key) && !looksEnglish(key) &&
+            curatedLoanwords[key] == null &&
+            ReverseTransliterator.foldNukta(raw.bengali) == ReverseTransliterator.foldNukta(typedReading(key)) &&
+            !isEnglishDerivation(key)
+        ) {
+            return null
+        }
         val curated = curatedLoanwords[key]
         val en = curated ?: lookupEnglishMemo(key) ?: return null
         if (ReverseTransliterator.foldNukta(en) == ReverseTransliterator.foldNukta(raw.bengali)) return null
@@ -1289,7 +1386,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // junk rendering (এনজেন@1) never replaces an attested reading. An
         // English spelling is not a transliteration, so phonetic ownership
         // of the roman key is the wrong test here (ফোন reverses to "phon").
-        if (curated == null && !isOracleRealText(en)) return null
+        if (curated == null && !isMeantAsEnglish(key) && !isOracleRealText(en)) return null
         return ConversionResult(
             bengali = en,
             confidence = 0.93,
@@ -1298,6 +1395,120 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.8))) +
                     raw.alternatives.take(2)
                 ).distinctBy { it.bengali }.filter { it.bengali != en }
+        )
+    }
+
+    /**
+     * S143: the typist is still inside a Bengali word — the key is a strict
+     * prefix of an everyday store word (bang, bangl -> বাংলা@89). The English
+     * laws stand down for such keys in BOTH the preview and the commit, so
+     * বাংলা never flashes ব্যাঙ on the way and Space commits what was shown.
+     */
+    private fun isMidWordPrefix(key: String): Boolean {
+        val store = phoneticIndex ?: return false
+        if (key.length < 3) return true
+        val exactOwners = storeLookup(key).mapTo(HashSet()) { it.bengali }
+        return store.lookupPrefix(key, 4).any {
+            it.priority == PhoneticIndexHit.PRIORITY_CANONICAL && it.frequency >= EVERYDAY_WORD_BAND &&
+                it.bengali !in exactOwners
+        }
+    }
+
+    /** S143: an English-shaped key — the detector's verdict, or letters and
+     *  endings Bangla romanization never uses (x, q, w before a consonant,
+     *  -tion/-sion/-ment/-ness, -ough/-ight). */
+    private fun looksEnglish(key: String): Boolean =
+        EnglishDetector.isEnglish(key) || ENGLISH_SHAPE.containsMatchIn(key)
+
+    /**
+     * S143: the English words within one slip of [key] — the Bengali typo
+     * layer's edit-1 search pointed at the english_lexicon (suggention ->
+     * suggestion, recieve -> receive, compter -> computer), plus one
+     * doubled-letter collapse before the search (tommorow -> tomorow ->
+     * tomorrow). Best first; every hit is a real lexicon key.
+     */
+    private val nearestEnglishMemo = com.banglu.engine.util.LruCache<String, List<String>>(256)
+    private fun nearestEnglishWords(key: String, limit: Int): List<String> {
+        val store = phoneticIndex ?: return emptyList()
+        if (key.length < 5 || !key.all { it in 'a'..'z' }) return emptyList()
+        nearestEnglishMemo[key]?.let { return it.take(limit) }
+        val keys = store.englishKeys()
+        if (keys.isEmpty()) return emptyList()
+        val found = HashMap<String, Double>()
+        fun consider(variant: String, editWeight: Double) {
+            if (variant == key || variant.length < 3 || variant !in keys) return
+            val rendering = lookupEnglishMemo(variant) ?: return
+            // A typist almost never misses the first letter (adress ->
+            // address, not dress); among equal edits the word whose Bangla
+            // rendering is attested more often wins (docter -> doctor, not
+            // docker).
+            val evidence = maxOf(validator.getFrequency(rendering), phoneticIndex?.let { st -> if (st.containsWord(ReverseTransliterator.foldNukta(rendering))) 1 else 0 } ?: 0)
+            val weight = editWeight * (if (variant[0] == key[0]) 1.0 else 0.5) * (1.0 + kotlin.math.ln(1.0 + evidence))
+            val prev = found[variant]
+            if (prev == null || weight > prev) found[variant] = weight
+        }
+        forEachEditOneVariant(key) { v, w, _ -> consider(v, w) }
+        for (i in 1 until key.length) {
+            if (key[i] != key[i - 1]) continue
+            val base = key.removeRange(i, i + 1)
+            consider(base, 0.9)
+            forEachEditOneVariant(base) { v, w, _ -> consider(v, w * 0.8) }
+        }
+        val ranked = found.entries.sortedWith(compareByDescending<Map.Entry<String, Double>> { it.value }.thenBy { it.key })
+            .map { it.key }.take(3)
+        nearestEnglishMemo[key] = ranked
+        return ranked.take(limit)
+    }
+
+    /**
+     * S143 (user, 2026-08-29: "type suggention and see what the engine
+     * returns" — সুজ্ঞেন্তিওন): the general half of the English-word law.
+     * When nothing confidently owns the key and it is English-shaped — or its
+     * Bangla reading is not clean orthography — the nearest English word's
+     * pronunciation is the commit, the corrected spelling rides the strip.
+     * Bangla OOV names (rafsan, shahabul: clean reading, not English-shaped)
+     * never enter here; S141 keeps them typed-faithful.
+     */
+    private fun applyEnglishSpellingRescue(key: String, raw: ConversionResult): ConversionResult? {
+        if (inEnglishRescue) return null
+        // A misspelling echoed as Latin (copyirght) is the worst outcome — the
+        // passthrough never outranks a one-slip English word.
+        val echoedLatin = raw.source == ResolutionSource.ENGLISH_PASSTHROUGH
+        if ((raw.confidence >= 0.9 && !echoedLatin) || ' ' in raw.bengali) return null
+        if (key.length < 5 || !key.all { it in 'a'..'z' }) return null
+        if (lookupEnglishMemo(key) != null) return null   // exact English words: S142
+        if (isMidWordPrefix(key)) return null
+        val literal = typedReading(key)
+        val englishShaped = looksEnglish(key) || !readsAsCleanBengali(literal)
+        // Not English-shaped and the typed reading is clean: S141 keeps it
+        // typed-faithful — UNLESS the pipeline itself already abandoned that
+        // reading for a fuzzy Bengali word (seperate -> সিরাতে, engin ->
+        // এনিয়ন); then the nearest English word competes on evidence.
+        val literalKept = !echoedLatin && ReverseTransliterator.foldNukta(raw.bengali) == ReverseTransliterator.foldNukta(literal)
+        val corrected = nearestEnglishWords(key, 1).firstOrNull() ?: return null
+        if (!englishShaped && literalKept) {
+            // Nothing owns the key and the reading is clean: typed-faithful
+            // (S141) — unless the slip is one letter from a COMMON English
+            // word starting the same way (commnuity -> community); a Bangla
+            // name that close to an everyday English word is vanishingly rare.
+            val atFloor = raw.confidence <= 0.65
+            if (!atFloor || !EnglishDetector.isCommonEnglishWord(corrected) || corrected[0] != key[0]) return null
+        }
+        val en = renderEnglishWord(corrected) ?: return null
+        if (ReverseTransliterator.foldNukta(en) == ReverseTransliterator.foldNukta(raw.bengali)) return null
+        if (!englishShaped && !literalKept) {
+            // The English word is one slip from the key by construction; the
+            // Bengali repair wins only if it reads the key at least as
+            // closely (amaer -> আমায়ের "amayer" = 1 edit, keeps; seperate ->
+            // সিরাতে "sirate" = 3 edits, English wins).
+            val bengaliReverse = ReverseTransliterator.reverseWord(raw.bengali).lowercase()
+            if (bengaliReverse.isNotEmpty() && editDistance(key, bengaliReverse) <= 1) return null
+        }
+        return ConversionResult(
+            bengali = en,
+            confidence = 0.90,
+            source = ResolutionSource.ENGLISH_LEXICON,
+            alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.6)))
         )
     }
 
@@ -1668,7 +1879,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Space commits ইউজার (user/size class — WYSIWYG break the tester
         // reads as the keyboard swapping their word). Identical conditions:
         // validator loaded, detector hit, sub-1.0 confidence, 4x frequency.
-        if (validator.isLoaded() && EnglishDetector.isEnglish(key) && raw.confidence < 1.0) {
+        if (validator.isLoaded() && EnglishDetector.isEnglish(key) && raw.confidence < 0.99) {
             lookupEnglishMemo(key)?.let { en ->
                 if (en != raw.bengali &&
                     validator.getFrequency(en) > maxOf(validator.getFrequency(raw.bengali), 6) * 4
@@ -1686,8 +1897,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // copy (the S83 drift lesson): the preview must not show রোল while
         // Space commits রিয়েল.
         tryEnglishHonestyFlip(key, raw)?.let { return it.copy(alternatives = emptyList()) }
-        // S142 mirror — the same shared law as the commit wrapper.
+        // S142/S143 mirrors — the same shared laws as the commit wrapper.
         applyEnglishPronunciationLaw(key, raw)?.let { return it.copy(alternatives = emptyList()) }
+        applyEnglishSpellingRescue(key, raw)?.let { return it.copy(alternatives = emptyList()) }
+        if (isEnglishRendering(key, raw)) return raw
         return tryJunkLexiconRescue(key, raw) ?: raw
     }
 
@@ -2237,6 +2450,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             )
         }
 
+        // S143: for a rescued misspelling the corrected English spellings are
+        // the "possible English words" the user asked for (suggention ->
+        // suggestion); for an unowned English-shaped key they are offered too.
+        if (key.length >= 5 && lookupEnglishMemo(key) == null &&
+            (primary.source == ResolutionSource.ENGLISH_LEXICON || looksEnglish(key))
+        ) {
+            for (word in nearestEnglishWords(key, 2)) {
+                if (seen.add(word)) {
+                    suggestions.add(SmartSuggestion(word, 0.86, "english_correction", key, "tier0_english"))
+                }
+            }
+        }
+
         // S87: raw-transliteration floor — nothing real owns this key, so the
         // strip must offer edit-1 real words as tap-to-fix chips instead of
         // stranding the user with garbage only (thogieco -> থগিএছ alone).
@@ -2540,6 +2766,41 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
+        // S142: when the English-word law put the pronunciation in the editor,
+        // the Bengali reading it displaced (tester -> টেস্টের, call -> কলে) is
+        // the second reading of the key — same guaranteed slot as the pair.
+        if (primary.source == ResolutionSource.ENGLISH_LEXICON && limit >= 2) {
+            primary.alternatives.firstOrNull()
+                ?.takeIf { alt -> alt.bengali.isNotEmpty() && alt.bengali.none { it in 'a'..'z' || it in 'A'..'Z' } }
+                ?.let { alt ->
+                    val altIndex = ordered.indexOfFirst { it.bengali == alt.bengali }
+                    val maxAltIndex = limit - 1
+                    if (altIndex in (maxAltIndex + 1) until ordered.size) {
+                        val promoted = ordered.removeAt(altIndex)
+                        ordered.add(minOf(maxAltIndex, ordered.size), promoted)
+                    } else if (altIndex == -1) {
+                        ordered.add(
+                            minOf(maxAltIndex, ordered.size),
+                            SmartSuggestion(alt.bengali, alt.confidence, "alternative", key, "tier0")
+                        )
+                    }
+                }
+        }
+        // S142: "the English word in the suggestions" — for an English-word
+        // key the typed spelling holds a visible slot (it scores below the
+        // dictionary fillers by design; the user asked for it by name).
+        if (limit >= 2) {
+            val idx = if (isEnglishWordKey(key)) {
+                ordered.indexOfFirst { it.source == "english_passthrough" && it.bengali.lowercase() == key }
+            } else {
+                ordered.indexOfFirst { it.source == "english_correction" }   // S143
+            }
+            if (idx >= limit) {
+                val chip = ordered.removeAt(idx)
+                ordered.add(minOf(limit - 1, ordered.size), chip)
+            }
+        }
+
         return ordered.take(limit)
     }
 
@@ -2565,7 +2826,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         exactDictionaryWords: Set<String>
     ): Int {
         if (suggestion.bengali == primary) return 0
-        if (suggestion.source == "english_passthrough") return 0
+        if (suggestion.source == "english_passthrough" || suggestion.source == "english_correction") return 0
         // S52: Tier S acronym chips are a small, hand-vetted whitelist —
         // never eligible for the band-2 hard-drop (they'd otherwise depend
         // on happening to be a validator word or sharing the primary's
@@ -2723,6 +2984,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // not read as — the fit gates would reject exactly what they offer.
         if (suggestion.source == "roman_prefix") return true
         if (suggestion.source == "english_passthrough") return suggestion.bengali.lowercase() == key
+        if (suggestion.source == "english_correction") return true
         if (Regex("[A-Za-z]").containsMatchIn(suggestion.bengali)) return false
         // S80 (tester screenshot: পাদ়লে on the strip): nukta composes only
         // ড়/ঢ়/য় — any other base carrying U+09BC is not Bengali orthography.

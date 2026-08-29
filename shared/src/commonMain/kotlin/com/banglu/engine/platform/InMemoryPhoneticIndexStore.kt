@@ -46,6 +46,7 @@ class InMemoryPhoneticIndexStore(
     }
 
     override fun lookupEnglish(key: String): String? = english[key]
+    override fun englishKeys(): Set<String> = english.keys
 
     override fun containsWord(bengali: String): Boolean = bengali in dictionaryWords
 

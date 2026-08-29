@@ -53,20 +53,44 @@ cost, and privacy-promise reasons; see memory + git history).
 - **S142 English-word law (2026-08-29, user: "an exact English word returns
   its Bangla pronunciation, the English word in the suggestions — one
   behaviour, not some words yes and others no"):** `applyEnglishPronunciationLaw`
-  (shared by commit wrapper and composing preview): for a key that IS an
-  English word (`isEnglishWordKey` — the detector list or a regular
-  derivation test+er/print+er whose stem the lexicon knows) the curated-seed
-  or lexicon rendering is the commit when the pipeline read the key as a
-  different Bengali word BELOW the everyday band (`EVERYDAY_WORD_BAND` = 80:
-  tester → টেস্টার over টেস্টের@70, phone → ফোন over ফোনে@78, call → কল);
-  everyday words keep the key with the pronunciation as a chip (name → নামে@89,
-  invariant 6). The rendering must be attested (reality oracle) unless
-  curated. Curated loanword seeds (`curatedLoanwords`, EnglishDirectData)
-  now outrank CMU renderings in the S131 honesty flip (engine → ইঞ্জিন, not
-  এনজেন); সাজেশন/টেস্টার seeded. English chip for every English-word key.
-  S81's phone → ফোনে pin re-pinned under this decision. Test:
+  (shared by commit wrapper and composing preview), kept deliberately
+  simple: "is this a correct English word?" = the english_lexicon knows the
+  4+-letter key (or the detector list / a test+er derivation); then the
+  curated-seed-or-lexicon rendering is the commit whenever the pipeline read
+  the key as a different Bengali word BELOW the everyday band
+  (`EVERYDAY_WORD_BAND` = 75: tester → টেস্টার over টেস্টের@70, call → কল,
+  gate → গেট, window/color/date …); everyday words keep the key with the
+  pronunciation as a chip (name → নামে@89 invariant 6, phone → ফোনে@78 the
+  S81 pin, abba → আব্বা@76, bade → বাদে@78). The rendering must be attested
+  unless curated. `lookupEnglishMemo` is curated-first (EnglishDirectData:
+  door → ডোর, table → টেবিল, milk → মিল্ক, engine → ইঞ্জিন, সাজেশন, টেস্টার)
+  so every consumer (intent list, S131 flip, 4x rule, chips) agrees; the 4x
+  rule no longer overrides DIRECT_WORD_OVERRIDES. English chip for every
+  English-word key; the displaced Bengali reading keeps a strip slot. Test:
   S142EnglishWordLawJvmTest.
-- **Android** v1.5.89 (2126), db 3.9.6 — S140: engine publication is
+- **S143 English spelling rescue (2026-08-29, user: "type suggention and see
+  what the engine returns" → সুজ্ঞেন্তিওন; "test with thousands of common
+  English words"):** the general half of the English law.
+  `applyEnglishSpellingRescue` (commit + preview, plus a late door after the
+  Bengali typo layer): when nothing confidently owns the key, the nearest
+  English word one slip away (`nearestEnglishWords`: edit-1 + doubled-letter
+  collapse over the store's in-memory `englishKeys()` index, first letter
+  preferred, attested rendering preferred) is rendered through the engine's
+  OWN answer for the correct spelling (`renderEnglishWord`: curated seed →
+  dictionary → lexicon) and its corrected spelling rides the strip
+  (`english_correction`). Fires for English-shaped keys (`looksEnglish`),
+  unclean readings, floor keys one slip from a COMMON English word
+  (`CommonEnglishWords`, google-10000, 3+ letters — `EnglishDetector.
+  isCommonEnglishWord`, deliberately NOT part of `isEnglish`/passthrough),
+  and keys the Bengali typo layer already abandoned (distance rule: the
+  Bengali repair keeps only if it reads the key within one edit). English
+  renderings are final (`isEnglishRendering`: exempt from the S113 onset
+  floor and the junk/typo passes — want → ওয়ান্ট, not অন্ত). Study
+  `S143EnglishCorpusStudyJvm` → docs/engine-english-study-2026-08-29.md:
+  8400 common words, 98.4% English-or-correct (137 residue, nearly all the
+  dictionary's better loanword spellings), 94% of one-slip misspellings
+  rescued. Test: S143EnglishSpellingJvmTest.
+- **Android** v1.5.90 (2127), db 3.9.6 — S140: engine publication is
   generation-checked + atomic under learningLock (an erase during the
   dictionary load can no longer resurface deleted words); identity
   migration never overwrites a decision. Before that S139: 1.5.85 had a clipboard

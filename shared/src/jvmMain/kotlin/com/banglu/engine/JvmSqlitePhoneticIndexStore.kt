@@ -111,6 +111,17 @@ class JvmSqlitePhoneticIndexStore(private val dbFile: File) : PhoneticIndexStore
         }
     }
 
+    private val englishKeySet: Set<String> by lazy {
+        safeQuery(emptySet<String>()) { c ->
+            HashSet<String>(65536).also { keys ->
+                c.createStatement().use { st ->
+                    st.executeQuery("SELECT key FROM english_lexicon").use { rs -> while (rs.next()) keys.add(rs.getString(1)) }
+                }
+            }
+        }
+    }
+    override fun englishKeys(): Set<String> = englishKeySet
+
     override fun lookupEnglish(key: String): String? = safeQuery(null) { c ->
         c.prepareStatement("SELECT bengali FROM english_lexicon WHERE key = ? LIMIT 1")
             .use { st ->

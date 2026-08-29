@@ -98,6 +98,21 @@ class SqlitePhoneticIndexStore(
         )
     }
 
+    /** S143: loaded once per store (~39K short keys, ~1 MB); fail-soft empty. */
+    private val englishKeySet: Set<String> by lazy {
+        try {
+            HashSet<String>(65536).also { keys ->
+                db?.rawQuery("SELECT key FROM english_lexicon", null)?.use { c ->
+                    while (c.moveToNext()) keys.add(c.getString(0))
+                }
+            }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.e(TAG, "english keys failed", e)
+            emptySet()
+        }
+    }
+    override fun englishKeys(): Set<String> = englishKeySet
+
     override fun lookupEnglish(key: String): String? = try {
         db?.rawQuery("SELECT bengali FROM english_lexicon WHERE key = ? LIMIT 1", arrayOf(key))
             ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }

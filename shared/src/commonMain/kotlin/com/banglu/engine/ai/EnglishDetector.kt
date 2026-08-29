@@ -183,6 +183,13 @@ object EnglishDetector {
 
     fun isKnownEnglishWord(word: String): Boolean = word.lowercase() in ENGLISH_WORDS
 
+    /** S143: one of the 10K most common English words — the "did the typist
+     *  mean English?" oracle for the pronunciation laws. Deliberately NOT part
+     *  of [isEnglish]: that verdict also drives raw English passthrough, and a
+     *  common word with no lexicon rendering (government) must still be
+     *  transliterated (গভর্নমেন্ট), never echoed as Latin. */
+    fun isCommonEnglishWord(word: String): Boolean = word.lowercase() in CommonEnglishWords.SET
+
     fun isStrongEnglishPattern(word: String): Boolean =
         ENGLISH_PATTERNS.any { it.containsMatchIn(word) }
 

@@ -471,6 +471,12 @@ object EnglishDirectData {
             // fine but উত্তর-class collisions aside) — curated spellings.
             e("সাজেশন", aliasesFor("suggestion"), 70, WordCategory.FOREIGN),
             e("টেস্টার", aliasesFor("tester"), 60, WordCategory.FOREIGN),
+            e("ডোর", aliasesFor("door"), 70, WordCategory.FOREIGN),
+            e("মিল্ক", aliasesFor("milk"), 70, WordCategory.FOREIGN),
+            e("মেল", aliasesFor("male"), 60, WordCategory.FOREIGN),
+            e("টেল", aliasesFor("tale"), 55, WordCategory.FOREIGN),
+            e("রিসিভ", aliasesFor("receive"), 60, WordCategory.FOREIGN),
+            e("অ্যাড্রেস", aliasesFor("address"), 66, WordCategory.FOREIGN),
             e("ব্রেক", aliasesFor("brake"), 76, WordCategory.FOREIGN),
             e("ক্লাচ", aliasesFor("clutch"), 76, WordCategory.FOREIGN),
             e("গিয়ার", aliasesFor("gear"), 76, WordCategory.FOREIGN),

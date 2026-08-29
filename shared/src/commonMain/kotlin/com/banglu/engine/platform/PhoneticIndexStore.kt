@@ -43,6 +43,11 @@ interface PhoneticIndexStore {
     /** Bengali rendering for an English word key, or null. */
     fun lookupEnglish(key: String): String?
 
+    /** S143: every roman key the english_lexicon knows — the in-memory index
+     *  the English spelling rescue searches (one slip = ~26·n variants; the
+     *  store is never asked per variant). Empty when unsupported. */
+    fun englishKeys(): Set<String> = emptySet()
+
     /** True if [bengali] is a word in the compiled dictionary (words table). */
     fun containsWord(bengali: String): Boolean
 

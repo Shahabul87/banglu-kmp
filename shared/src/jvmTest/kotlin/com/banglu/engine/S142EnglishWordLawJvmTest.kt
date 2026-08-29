@@ -25,10 +25,10 @@ class S142EnglishWordLawJvmTest {
         val s = strip("tester")
         assertTrue(fold("টেস্টের") in s, "the Bengali reading stays one tap away: $s")
         assertTrue("tester" in s, "the English word rides the strip: $s")
-        // Same law, same shape: phone -> ফোন (ফোনে@78 stays a chip), call -> কল.
-        assertEquals(fold("ফোন"), fold(engine.convertWord("phone").bengali))
-        assertTrue(fold("ফোনে") in strip("phone"), strip("phone").toString())
+        // Same law, same shape: call -> কল (কলে@72), gate -> গেট (গেটে@71).
         assertEquals(fold("কল"), fold(engine.convertWord("call").bengali))
+        assertEquals(fold("গেট"), fold(engine.convertWord("gate").bengali))
+        assertTrue("gate" in strip("gate"), strip("gate").toString())
         // The vetted S24 list keeps working through the same door.
         assertEquals(fold("টাইম"), fold(engine.convertWord("time").bengali))
         assertEquals(fold("প্রিন্টার"), fold(engine.convertWord("printer").bengali))
@@ -40,6 +40,16 @@ class S142EnglishWordLawJvmTest {
         assertEquals(fold("নামে"), fold(engine.convertWord("name").bengali))
         assertTrue(fold("নেম") in strip("name"), strip("name").toString())
         assertEquals(fold("দিনে"), fold(engine.convertWord("dine").bengali))
+        // The band, not a word list: phone -> ফোনে@78 (S81), abba -> আব্বা@76,
+        // bade -> বাদে@78, more -> মরে@81, are -> আরে@86, mane -> মানে.
+        for ((key, expected) in listOf("phone" to "ফোনে", "abba" to "আব্বা", "bade" to "বাদে", "more" to "মরে", "are" to "আরে", "mane" to "মানে")) {
+            assertEquals(fold(expected), fold(engine.convertWord(key).bengali), key)
+        }
+        assertTrue(fold("ফোন") in strip("phone"), strip("phone").toString())
+        // Common English words the CMU lexicon renders crudely have curated spellings.
+        for ((key, expected) in listOf("door" to "ডোর", "table" to "টেবিল", "milk" to "মিল্ক", "window" to "উইন্ডো", "color" to "কালার")) {
+            assertEquals(fold(expected), fold(engine.convertWord(key).bengali), key)
+        }
     }
 
     @Test
@@ -53,7 +63,7 @@ class S142EnglishWordLawJvmTest {
 
     @Test
     fun theComposingPreviewAgreesWithTheCommit() {
-        for (key in listOf("tester", "phone", "engine", "suggestion", "name", "call", "time")) {
+        for (key in listOf("tester", "phone", "engine", "suggestion", "name", "call", "time", "gate", "door", "abba")) {
             assertEquals(
                 fold(engine.convertWord(key).bengali),
                 fold(engine.convertForComposing(key).bengali),
