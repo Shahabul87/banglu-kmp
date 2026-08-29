@@ -91,6 +91,15 @@ public final class BackgroundEngine: BangluEngine {
         queue.async { [self] in impl?.recordPick(raw: raw, bangla: bangla) }
     }
 
+    public func predictNext(prev2: String, prev1: String, limit: Int) -> [String] {
+        guard ready else { return [] }
+        return queue.sync { impl?.predictNext(prev2: prev2, prev1: prev1, limit: limit) ?? [] }
+    }
+
+    public func recordNextWord(prev: String, next: String) {
+        queue.async { [self] in impl?.recordNextWord(prev: prev, next: next) }
+    }
+
     public func applyLearnedWords(json: String) {
         queue.async { [self] in impl?.applyLearnedWords(json: json) }
     }

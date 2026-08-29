@@ -92,6 +92,7 @@ fun FrameWindowScope.EditorScreen(startInTutorial: Boolean = false) {
     var fieldValue by remember { mutableStateOf(TextFieldValue()) }
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     var highlight by remember { mutableStateOf(0) }        // popup keyboard highlight
+    var predictionTick by remember { mutableStateOf(0L) }  // S141: predictions landed
     var restoredBanner by remember { mutableStateOf(false) }
     var gettingStartedSeen by remember { mutableStateOf(drafts.loadPrefs().gettingStartedSeen) }
     // Committed-word fix popup (spec §4): range + candidates, opened by click.
@@ -267,6 +268,18 @@ fun FrameWindowScope.EditorScreen(startInTutorial: Boolean = false) {
         if (raw == state.formingRaw) syncFromState()
     }
 
+    // S141: next-word predictions after a space commit (invariant #1: off the
+    // UI thread); stale results are dropped by EditorState.setPredictions.
+    LaunchedEffect(state.predictionRequest) {
+        val request = state.predictionRequest
+        if (state.predictionAnchor < 0) return@LaunchedEffect
+        val (prev2, prev1) = state.contextBeforeCursor()
+        if (prev1 == null) return@LaunchedEffect
+        val list = withContext(Dispatchers.Default) { engine.predict(prev2, prev1, 5) }
+        state.setPredictions(request, list)
+        predictionTick++
+    }
+
     // Autosave: 2s after the last change (spec §5).
     LaunchedEffect(fieldValue.text) {
         kotlinx.coroutines.delay(2000)
@@ -413,10 +426,17 @@ fun FrameWindowScope.EditorScreen(startInTutorial: Boolean = false) {
                     )
                 }
 
-                // Candidate popup — forming word (primary) or committed-word fix.
-                val popupCands = if (state.popupVisible) state.candidates else fixCandidates
+                // Candidate popup — forming word (primary), next-word predictions
+                // after a commit (S141), or committed-word fix.
+                @Suppress("UNUSED_EXPRESSION") predictionTick
+                val predicting = !state.popupVisible && state.predictionVisible
+                val popupCands = when {
+                    state.popupVisible -> state.candidates
+                    predicting -> state.predictions
+                    else -> fixCandidates
+                }
                 val anchorOffset = when {
-                    state.popupVisible -> state.cursor
+                    state.popupVisible || predicting -> state.cursor
                     fixRange != null -> fixRange!!.first
                     else -> -1
                 }
@@ -424,10 +444,14 @@ fun FrameWindowScope.EditorScreen(startInTutorial: Boolean = false) {
                     layout?.let { l ->
                         val rect = l.getCursorRect(anchorOffset.coerceAtMost(l.layoutInput.text.length))
                         Popup(offset = IntOffset(rect.left.toInt() + 64, rect.bottom.toInt() + 96)) {
-                            CandidateList(popupCands, highlight) { i ->
-                                if (state.popupVisible) { state.pickCandidate(i); syncFromState() }
-                                else fixRange?.let { r ->
-                                    state.replaceCommitted(r, popupCands[i]); closeFix(); syncFromState()
+                            CandidateList(popupCands, if (predicting) -1 else highlight,
+                                numbered = !predicting, header = if (predicting) "পরবর্তী" else null) { i ->
+                                when {
+                                    state.popupVisible -> { state.pickCandidate(i); syncFromState() }
+                                    predicting -> { state.pickPrediction(i); syncFromState() }
+                                    else -> fixRange?.let { r ->
+                                        state.replaceCommitted(r, popupCands[i]); closeFix(); syncFromState()
+                                    }
                                 }
                             }
                         }
@@ -498,7 +522,11 @@ private fun handleKeys(
     if (e.type != KeyEventType.KeyDown) return false
     val formingPopup = state.popupVisible
     val fixPopup = fixRange != null && fixCandidates.isNotEmpty()
-    if (!formingPopup && !fixPopup) return false
+    // S141: the prediction popup is click-only — Escape closes it, every other
+    // key (Enter = newline, digits = digits) keeps its editing meaning.
+    if (!formingPopup && !fixPopup) {
+        return if (state.predictionVisible && e.key == Key.Escape) { onDismiss(); true } else false
+    }
     val size = if (formingPopup) state.candidates.size else fixCandidates.size
     return when (e.key) {
         Key.DirectionDown -> { setHighlight((highlight + 1) % size); true }
@@ -510,12 +538,22 @@ private fun handleKeys(
 }
 
 @Composable
-private fun CandidateList(cands: List<String>, highlight: Int, onPick: (Int) -> Unit) {
+private fun CandidateList(
+    cands: List<String>,
+    highlight: Int,
+    numbered: Boolean = true,
+    header: String? = null,
+    onPick: (Int) -> Unit,
+) {
     Surface(
         color = FieldBg, shape = RoundedCornerShape(10.dp), shadowElevation = 8.dp,
         modifier = Modifier.border(1.dp, CardBorder, RoundedCornerShape(10.dp)),
     ) {
         Column(Modifier.padding(6.dp)) {
+            if (header != null) {
+                Text(header, color = Muted, fontSize = 11.sp, fontFamily = BengaliFontFamily,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp))
+            }
             cands.take(6).forEachIndexed { i, c ->
                 Row(
                     Modifier
@@ -527,8 +565,10 @@ private fun CandidateList(cands: List<String>, highlight: Int, onPick: (Int) -> 
                         .clickable { onPick(i) }
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                 ) {
-                    Text(toBengaliDigits(i + 1), color = Muted, fontSize = 12.sp,
-                        modifier = Modifier.padding(end = 10.dp))
+                    if (numbered) {
+                        Text(toBengaliDigits(i + 1), color = Muted, fontSize = 12.sp,
+                            modifier = Modifier.padding(end = 10.dp))
+                    }
                     Text(c, color = SkySoft, fontSize = 16.sp, fontFamily = BengaliFontFamily)
                 }
             }

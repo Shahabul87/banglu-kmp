@@ -2,10 +2,20 @@ import Cocoa
 import InputMethodKit
 import BangluCore
 
-protocol CandidateUI {
-    func show(candidates: [String], highlight: Int, client: IMKTextInput)
+protocol CandidateUI: AnyObject {
+    /// `numbered`: digit hints (forming candidates, digits pick); false for
+    /// the S141 prediction bar, which is click-only.
+    func show(candidates: [String], highlight: Int, numbered: Bool, client: IMKTextInput)
     func hide()
     var isVisible: Bool { get }
+    /// S141: a row was clicked (index into the shown list).
+    var onPick: ((Int) -> Void)? { get set }
+}
+
+extension CandidateUI {
+    func show(candidates: [String], highlight: Int, client: IMKTextInput) {
+        show(candidates: candidates, highlight: highlight, numbered: true, client: client)
+    }
 }
 
 /// Editor-style dark candidate card, caret-anchored via the client's
@@ -14,6 +24,7 @@ final class PanelCandidateUI: CandidateUI {
     private let panel: NSPanel
     private let stack = NSStackView()
     private(set) var isVisible = false
+    var onPick: ((Int) -> Void)?
 
     init() {
         panel = NSPanel(contentRect: .zero,
@@ -45,15 +56,25 @@ final class PanelCandidateUI: CandidateUI {
         panel.contentView = container
     }
 
-    func show(candidates: [String], highlight: Int, client: IMKTextInput) {
+    func show(candidates: [String], highlight: Int, numbered: Bool, client: IMKTextInput) {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let bengaliDigits = ["১", "২", "৩", "৪", "৫", "৬"]
+        if !numbered {
+            let header = NSTextField(labelWithString: "পরবর্তী")
+            header.font = NSFont.systemFont(ofSize: 11)
+            header.textColor = .secondaryLabelColor
+            stack.addArrangedSubview(header)
+        }
         for (i, cand) in candidates.prefix(6).enumerated() {
-            let row = NSTextField(labelWithString: "\(bengaliDigits[i])  \(cand)")
+            let row = NSTextField(labelWithString: numbered ? "\(bengaliDigits[i])  \(cand)" : cand)
             row.font = NSFont.systemFont(ofSize: 15)
             row.textColor = (i == highlight) ? .selectedMenuItemTextColor : .labelColor
             row.drawsBackground = i == highlight
             row.backgroundColor = (i == highlight) ? .selectedContentBackgroundColor : .clear
+            row.tag = i
+            // The panel never activates, so a click reaches us without the
+            // host losing focus — the prediction bar's only pick gesture.
+            row.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(rowClicked(_:))))
             stack.addArrangedSubview(row)
         }
         panel.setContentSize(stack.fittingSize)
@@ -70,6 +91,11 @@ final class PanelCandidateUI: CandidateUI {
     func hide() {
         panel.orderOut(nil)
         isVisible = false
+    }
+
+    @objc private func rowClicked(_ g: NSClickGestureRecognizer) {
+        guard let row = g.view as? NSTextField else { return }
+        onPick?(row.tag)
     }
 }
 

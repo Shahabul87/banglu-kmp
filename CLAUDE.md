@@ -31,9 +31,26 @@ Future revenue = optional premium (AI rewrite via the :ui process, power-user
 packs). NO cloud API on the keystroke path — decided 2026-07-03 (latency,
 cost, and privacy-promise reasons; see memory + git history).
 
-**Current status (2026-08-26):** ONE ENGINE, SIX SURFACES (Windows IME
+**Current status (2026-08-29):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
-- **Android** v1.5.87 (2124), db 3.9.6 — S140: engine publication is
+- **S141 typed-faithful round (2026-08-29, user law: "the engine must not
+  ignore what I typed — at least show it in the suggestions"):** a clean-
+  reading OOV literal keeps the commit (banglu → বাংলু, not বাংলা/বাংরু);
+  substitution repairs only for unclean readings (`readsAsCleanBengali`);
+  Layer-6 recovery and fuzzy suffix stems are spelling normalisers only
+  (`spellingSkeleton`); habit aliases cannot smuggle a vowel swap; the typed
+  reading holds the last strip slot in the fuzzy band (`typed_literal`);
+  open-syllable vowel twins sit at strip[1] (kri → ক্রি/কৃ, ku → কু/কূ);
+  roman-prefix completions for leaf keys (banglish → বাংলাদেশ,
+  `roman_prefix`). Next-word prediction bar on EVERY surface: desktop
+  editor (`EditorState.predictions`, click-only), macOS IME
+  (`.updatePredictions`, clickable panel rows), extension (`type:"next"`),
+  bangluweb dashboard editor; the slim JSON now carries a pruned n-gram
+  model (`bi`/`tri`/`uni`, SlimExporter) and the JS facade exports
+  `nextWordPredictions2(prev2, prev1, limit)` + `recordNextWord`.
+  Pin decisions recorded in parity-fixtures.json notes (3 P1 root-
+  decomposition rows re-pinned). Test: S141TypedFaithfulJvmTest.
+- **Android** v1.5.88 (2125), db 3.9.6 — S140: engine publication is
   generation-checked + atomic under learningLock (an erase during the
   dictionary load can no longer resurface deleted words); identity
   migration never overwrites a decision. Before that S139: 1.5.85 had a clipboard

@@ -362,15 +362,17 @@
   },
   {
     "input": "cheleguloo",
-    "expected": "চেলেছিলুম",
+    "expected": "ছেলেগুলো",
     "category": "root-decomposition",
-    "priority": "P1"
+    "priority": "P1",
+    "note": "S141 (2026-08-29, user decision: the engine must not ignore what was typed): the old expectation was a Layer-6 recovery artefact of the retired web engine; recovery is now a spelling normaliser, so the typed reading (or its real-word split) wins."
   },
   {
     "input": "chelegulee",
-    "expected": "চেলেছিলি",
+    "expected": "ছেলে গুলি",
     "category": "root-decomposition",
-    "priority": "P1"
+    "priority": "P1",
+    "note": "S141 (2026-08-29, user decision: the engine must not ignore what was typed): the old expectation was a Layer-6 recovery artefact of the retired web engine; recovery is now a spelling normaliser, so the typed reading (or its real-word split) wins."
   },
   {
     "input": "bariwala",
@@ -428,9 +430,10 @@
   },
   {
     "input": "chelelen",
-    "expected": "চেলেছিলেন",
+    "expected": "চলিলেন",
     "category": "root-decomposition",
-    "priority": "P1"
+    "priority": "P1",
+    "note": "S141 (2026-08-29, user decision: the engine must not ignore what was typed): the old expectation was a Layer-6 recovery artefact of the retired web engine; recovery is now a spelling normaliser, so the typed reading (or its real-word split) wins."
   },
   {
     "input": "ghorlen",

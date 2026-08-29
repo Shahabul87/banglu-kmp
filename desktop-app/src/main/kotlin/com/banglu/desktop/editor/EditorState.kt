@@ -33,6 +33,20 @@ class EditorState(
     var popupDismissed: Boolean = false
         private set
 
+    /** S141: next-word predictions offered right after a space commit —
+     *  click-only (digits keep typing digits, Enter keeps its newline), the
+     *  Windows IME contract. Valid only while the cursor still sits where
+     *  they were requested. */
+    var predictions: List<String> = emptyList()
+        private set
+    var predictionAnchor: Int = -1
+        private set
+    /** Bumps on every prediction request — the UI keys the async fetch on it. */
+    var predictionRequest: Long = 0L
+        private set
+    val predictionVisible: Boolean
+        get() = !forming && !popupDismissed && predictions.isNotEmpty() && predictionAnchor == commitPos
+
     /** Bumps whenever the forming word changes — the UI keys refine jobs on it. */
     var generation: Long = 0L
         private set
@@ -49,8 +63,9 @@ class EditorState(
     /** UI feeds every text-field change here; classifies the edit by diffing. */
     fun applyEdit(newText: String, newCursor: Int) {
         val old = display
+        if (newText == old && newCursor == cursor) return
+        clearPredictions()                            // any edit moves on; a commit re-requests
         when {
-            newText == old && newCursor == cursor -> return
             newText == old -> {                       // pure cursor move
                 commitForming()
                 commitPos = newCursor.coerceIn(0, committed.length)
@@ -83,6 +98,7 @@ class EditorState(
                 if (forming) {
                     commitFormingInternal()
                     insertCommitted(" ")
+                    requestPredictions()
                 } else if (commitPos >= 1 && committed[commitPos - 1] == ' ' &&
                     (commitPos < 2 || committed[commitPos - 2] !in " ।\n")
                 ) {
@@ -209,6 +225,45 @@ class EditorState(
         popupDismissed = true
     }
 
+    private fun clearPredictions() {
+        predictions = emptyList()
+        predictionAnchor = -1
+    }
+
+    private fun requestPredictions() {
+        predictions = emptyList()
+        predictionAnchor = commitPos
+        predictionRequest++
+    }
+
+    /** (prev2, prev1): the Bengali words ending at the cursor — the prediction context. */
+    fun contextBeforeCursor(): Pair<String?, String?> {
+        val words = committed.substring(0, commitPos)
+            .split(PREDICTION_BOUNDARY)
+            .filter { w -> w.isNotEmpty() && w.any { it.isBengali() } }
+        val prev1 = words.lastOrNull()
+        val prev2 = if (words.size >= 2) words[words.size - 2] else null
+        return prev2 to prev1
+    }
+
+    /** Async predictions landing; stale results (request moved on, cursor
+     *  moved, a word forming) are dropped — the same generation law as [refine]. */
+    fun setPredictions(request: Long, list: List<String>) {
+        if (request != predictionRequest || forming || commitPos != predictionAnchor) return
+        predictions = list.distinct().take(5)
+    }
+
+    /** Commits [predictions][index] + a space and re-predicts (chaining). */
+    fun pickPrediction(index: Int) {
+        if (!predictionVisible) return
+        val word = predictions.getOrNull(index) ?: return
+        val (_, prev1) = contextBeforeCursor()
+        pushUndo()
+        insertCommitted("$word ")
+        if (prev1 != null) engine.usedNext(prev1, word)
+        requestPredictions()
+    }
+
     /** Async engine result landing; stale results (raw moved on) are dropped. */
     fun refine(raw: String, bangla: String, suggested: List<String>) {
         if (raw != formingRaw) return
@@ -218,6 +273,7 @@ class EditorState(
 
     /** Open-file / draft-restore entry point. */
     fun setAll(text: String, cursorAt: Int = text.length) {
+        clearPredictions()
         committed = text
         commitPos = cursorAt.coerceIn(0, text.length)
         formingRaw = ""
@@ -234,6 +290,7 @@ class EditorState(
     }
 
     private fun restore(s: Snapshot) {
+        clearPredictions()
         committed = s.committed
         commitPos = s.commitPos
         formingRaw = s.formingRaw
@@ -289,6 +346,8 @@ class EditorState(
         generation++
     }
 }
+
+private val PREDICTION_BOUNDARY = Regex("[\\s।,!?;:\"'()\\-]+")
 
 internal fun bengaliDigit(c: Char): String =
     if (c in '0'..'9') ('০' + (c - '0')).toString() else c.toString()

@@ -48,6 +48,20 @@
     } catch { clearTimeout(fallback); resolve({ primary: word, chips: [] }); }
   });
 
+  // S141: next-word predictions for the two Bengali words before the caret.
+  const askNext = (prev2, prev1) => new Promise((resolve) => {
+    const fallback = setTimeout(() => resolve([]), 600);
+    try {
+      chrome.runtime.sendMessage({ type: "next", prev2, prev1 }, (r) => {
+        clearTimeout(fallback);
+        resolve(r && !chrome.runtime.lastError && Array.isArray(r.chips) ? r.chips : []);
+      });
+    } catch { clearTimeout(fallback); resolve([]); }
+  });
+  const tellUsed = (prev, next) => {
+    try { chrome.runtime.sendMessage({ type: "used", prev, next }, () => void chrome.runtime.lastError); } catch {}
+  };
+
   // Pre-warm the worker the moment an editable gets focus, so the full
   // dictionary is live before the first word finishes.
   document.addEventListener("focusin", (e) => {
@@ -69,21 +83,32 @@
         background:rgba(14,165,233,.16);color:#bae6fd;padding:4px 12px;
         font-size:14px;cursor:pointer;white-space:nowrap}
       button:hover{background:rgba(14,165,233,.35)}
-      .off{color:#64748b;font-size:11px;align-self:center;padding:0 4px}`;
+      .off{color:#64748b;font-size:11px;align-self:center;padding:0 4px}
+      .next{color:#64748b;font-size:11px;align-self:center;padding:0 4px;white-space:nowrap}
+      button.pred{border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.14);color:#bfdbfe}
+      button.pred:hover{background:rgba(59,130,246,.32)}`;
     const bar = document.createElement("div");
     bar.className = "bar";
     root.append(style, bar);
     document.documentElement.appendChild(host);
     return {
-      show(rect, chips, onPick) {
+      show(rect, chips, onPick, predictions = false) {
         if (!chips.length) return this.hide();
-        bar.replaceChildren(...chips.map((c) => {
+        const items = chips.map((c) => {
           const b = document.createElement("button");
           b.textContent = c;
+          if (predictions) b.className = "pred";
           // mousedown so the field never loses focus
           b.addEventListener("mousedown", (e) => { e.preventDefault(); onPick(c); });
           return b;
-        }));
+        });
+        if (predictions) {
+          const label = document.createElement("span");
+          label.className = "next";
+          label.textContent = "পরবর্তী →";
+          items.unshift(label);
+        }
+        bar.replaceChildren(...items);
         const r = rect;
         host.style.left = Math.max(8, r.left) + "px";
         host.style.top = Math.min(window.innerHeight - 54, r.bottom + 6) + "px";
@@ -137,6 +162,52 @@
     strip.hide();
   };
 
+  // S141: the two Bengali words before the caret (prev2, prev1) — the
+  // prediction context — or null when the caret is not right after a word.
+  const bengaliBefore = (el) => {
+    let text = null;
+    if (isValueEditable(el)) {
+      text = el.value.slice(0, el.selectionStart ?? 0);
+    } else {
+      const sel = window.getSelection();
+      if (!sel || !sel.isCollapsed || sel.rangeCount === 0) return null;
+      const r = sel.getRangeAt(0);
+      if (r.startContainer.nodeType !== Node.TEXT_NODE) return null;
+      text = r.startContainer.textContent.slice(0, r.startOffset);
+    }
+    if (text === null || !/[\u0980-\u09FF][\u0980-\u09FF\u200C\u200D]* $/.test(text)) return null;
+    const words = text.trim().split(/[\s।,!?;:"'()\-]+/).filter((w) => /[\u0980-\u09FF]/.test(w));
+    if (!words.length) return null;
+    return { prev1: words[words.length - 1], prev2: words[words.length - 2] ?? "" };
+  };
+
+  // Insert a prediction (word + space) at the caret, then chain the next bar.
+  const insertPrediction = (el, word) => {
+    if (isValueEditable(el)) {
+      const pos = el.selectionStart ?? el.value.length;
+      nativeSet(el, el.value.slice(0, pos) + word + " " + el.value.slice(pos));
+      el.setSelectionRange(pos + word.length + 1, pos + word.length + 1);
+    } else {
+      document.execCommand("insertText", false, word + " ");
+    }
+  };
+
+  const showPredictions = (el) => {
+    const ctx = bengaliBefore(el);
+    if (!ctx) return strip.hide();
+    askNext(ctx.prev2, ctx.prev1).then((chips) => {
+      // stale guard: the caret must still sit right after the same word
+      const now = bengaliBefore(el);
+      if (!now || now.prev1 !== ctx.prev1 || document.activeElement !== el && !el.contains(document.activeElement)) return;
+      const w = { kind: isValueEditable(el) ? "value" : "ce", el };
+      strip.show(anchorRect(w), chips, (chip) => {
+        insertPrediction(el, chip);
+        tellUsed(ctx.prev1, chip);
+        showPredictions(el);
+      }, true);
+    });
+  };
+
   // strip anchor: caret rect for CE (fields are huge), element rect otherwise
   const anchorRect = (w) => {
     if (w.kind === "ce") {
@@ -173,7 +244,7 @@
     const w = wordBefore(el);
     if (!w) return;
     e.preventDefault();
-    ask(w.word).then(({ primary }) => commit(w, primary + " "));
+    ask(w.word).then(({ primary }) => { commit(w, primary + " "); showPredictions(el); });
   }, true);
 
   document.addEventListener("input", (e) => {
@@ -190,6 +261,7 @@
         // recompute at click time — CE ranges go stale across edits
         const fresh = wordBefore(now.el) ?? now;
         commit(fresh, chip + " ");
+        showPredictions(now.el);
       });
     });
   }, true);

@@ -457,5 +457,48 @@ do {
     check("BackgroundEngine.staleSlimHasNotice", bg.bootFailureNotice != nil, "no notice")
 }
 
+// S141: next-word predictions after a commit (click-only bar).
+do {
+    let e = FakeEngine(); e.table["ami"] = ("আমি", [])
+    e.nextWords["আমি"] = ["তোমাকে", "জানি"]
+    let c = Composer(engine: e)
+    let commit = typeInto(c, "ami ")
+    check("Composer.predictions.offeredAfterSpace", commit.contains(.updatePredictions(["তোমাকে", "জানি"])), "got \(commit)")
+    check("Composer.predictions.predicting", c.predicting)
+    // Digits keep typing digits, Return keeps its meaning.
+    let digit = c.handle(.digit("1"))
+    check("Composer.predictions.digitTypesDigit", digit.contains(.commit("১")) && !digit.contains(.commit("তোমাকে")), "got \(digit)")
+    check("Composer.predictions.digitDropsBar", digit.contains(.updatePredictions([])) && !c.predicting, "got \(digit)")
+}
+do {
+    let e = FakeEngine(); e.table["ami"] = ("আমি", [])
+    e.nextWords["আমি"] = ["তোমাকে"]; e.nextWords["তোমাকে"] = ["ভালোবাসি"]
+    let c = Composer(engine: e)
+    c.onNextWord = { prev, next in e.recordNextWord(prev: prev, next: next) }
+    _ = typeInto(c, "ami ")
+    let picked = c.pickPrediction(0)
+    check("Composer.predictions.pickReleasesSpaceThenCommits", picked.contains(.commit(" ")) && picked.contains(.commit("তোমাকে")), "got \(picked)")
+    check("Composer.predictions.pickChains", picked.contains(.updatePredictions(["ভালোবাসি"])), "got \(picked)")
+    check("Composer.predictions.pickTeaches", e.nextPairs.first.map { $0.prev == "আমি" && $0.next == "তোমাকে" } == true)
+    let letter = c.handle(.letter("k"))
+    check("Composer.predictions.letterReleasesHeldSpaceAndDrops", letter.contains(.commit(" ")) && letter.contains(.updatePredictions([])), "got \(letter)")
+    check("Composer.predictions.letterForms", letter.contains(.setMarked("<k>")), "got \(letter)")
+}
+do {
+    let e = FakeEngine(); e.table["ami"] = ("আমি", []); e.nextWords["আমি"] = ["জানি"]
+    let c = Composer(engine: e)
+    _ = typeInto(c, "ami ")
+    let ret = c.handle(.returnKey)
+    check("Composer.predictions.returnPassesThroughAndDrops", ret.contains(.passThrough) && ret.contains(.updatePredictions([])), "got \(ret)")
+    check("Composer.predictions.returnKeepsNoHeldSpace", !ret.contains(.commit(" ")), "got \(ret)")
+}
+// Real engine: the collocation the corpus knows.
+do {
+    let preds = engine.predictNext(prev2: "", prev1: "বৈশাখী", limit: 5)
+    check("EngineJS.predictNext.boishakhiMela", preds.contains("মেলা"), "got \(preds)")
+    let two = engine.predictNext(prev2: "আমি", prev1: "তোমাকে", limit: 5)
+    check("EngineJS.predictNext.twoWordContextAnswers", !two.isEmpty, "got \(two)")
+}
+
 print("\(checkCount) checks: \(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILURE(S)")")
 exit(failures == 0 ? 0 : 1)

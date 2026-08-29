@@ -6,6 +6,11 @@ public protocol BangluEngine {
     func convert(_ raw: String) -> String
     func suggestions(_ raw: String, limit: Int) -> [String]
     func recordPick(raw: String, bangla: String)
+    /// S141: next-word predictions after the (prev2, prev1) Bengali context —
+    /// the Android/Windows prediction bar. `prev2` may be empty.
+    func predictNext(prev2: String, prev1: String, limit: Int) -> [String]
+    /// S141: a prediction was committed after `prev` (session personalisation).
+    func recordNextWord(prev: String, next: String)
 }
 
 public enum EngineJSError: Error { case loadFailed(String) }
@@ -82,6 +87,18 @@ public final class EngineJS: BangluEngine {
 
     public func recordPick(raw: String, bangla: String) {
         engine.invokeMethod("recordPick", withArguments: [raw, bangla])
+    }
+
+    public func predictNext(prev2: String, prev1: String, limit: Int) -> [String] {
+        // Older bundles predate the export — an empty bar, never a crash.
+        guard engine.hasProperty("nextWordPredictions2") else { return [] }
+        let v = engine.invokeMethod("nextWordPredictions2", withArguments: [prev2, prev1, limit])
+        return (v?.toArray() as? [String]) ?? []
+    }
+
+    public func recordNextWord(prev: String, next: String) {
+        guard engine.hasProperty("recordNextWord") else { return }
+        engine.invokeMethod("recordNextWord", withArguments: [prev, next])
     }
 
     public func applyLearnedWords(json: String) {

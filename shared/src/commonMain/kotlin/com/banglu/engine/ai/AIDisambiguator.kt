@@ -44,6 +44,7 @@ class AIDisambiguator {
             "য" to "য়", "য়" to "য",
             "ি" to "ী", "ী" to "ি",
             "ু" to "ূ", "ূ" to "ু",
+            "ৃ" to "্রি", "্রি" to "ৃ",   // S141: ri-class twin (kri -> কৃ / ক্রি)
             "ই" to "ঈ", "ঈ" to "ই",
             "উ" to "ঊ", "ঊ" to "উ",
             "ে" to "ৈ", "ৈ" to "ে",

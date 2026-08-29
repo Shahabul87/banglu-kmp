@@ -23,7 +23,7 @@ plugins {
  * both Windows Installer and the in-app updater, so BUMP IT on every shippable
  * change (same discipline as android-keyboard's versionCode/versionName).
  */
-val bangluTyperVersion = "1.0.6"
+val bangluTyperVersion = "1.0.7"
 
 /**
  * THE edition switch. `-PbangluStore=true` builds the Microsoft Store variant.

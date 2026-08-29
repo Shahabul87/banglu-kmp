@@ -16,6 +16,12 @@ interface EngineFacade {
     fun suggest(raw: String, limit: Int = 6): List<String>
     fun reverse(bangla: String): String
     fun selected(raw: String, bangla: String, explicit: Boolean)
+    /** S141: next-word predictions after the (prev2, prev1) Bengali context —
+     *  the same on-device n-gram mechanism as the Android keyboard and the
+     *  Windows IME. Full pipeline — Dispatchers.Default only. */
+    fun predict(prev2: String?, prev1: String, limit: Int = 5): List<String> = emptyList()
+    /** S141: a prediction pick was committed after [prev]; feeds personal bigrams. */
+    fun usedNext(prev: String, next: String) {}
 }
 
 object RealEngineFacade : EngineFacade {
@@ -38,4 +44,10 @@ object RealEngineFacade : EngineFacade {
         synchronized(engineLock) {
             SmartEngineAdapter.onWordSelected(raw, bangla, learnAsWord = false, explicitChoice = explicit)
         }
+    override fun predict(prev2: String?, prev1: String, limit: Int): List<String> =
+        synchronized(engineLock) {
+            SmartEngineAdapter.getNextWordPredictions(prev2, prev1, limit).map { it.bengali }
+        }
+    override fun usedNext(prev: String, next: String) =
+        synchronized(engineLock) { SmartEngineAdapter.recordNextWordUsage(prev, next) }
 }

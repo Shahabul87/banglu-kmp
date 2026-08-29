@@ -41,5 +41,27 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     } : { primary: "", chips: [], full: dictReady });
     return; // sync — NEVER blocks on the dictionary
   }
+  // S141: next-word predictions after a commit — the same on-device n-gram
+  // bar Android/Windows show. prev2 may be empty; older bundles (no
+  // nextWordPredictions2) fall back to the one-word form.
+  if (msg?.type === "next" && typeof msg.prev1 === "string") {
+    const prev1 = msg.prev1.trim();
+    const prev2 = typeof msg.prev2 === "string" ? msg.prev2.trim() : "";
+    let chips = [];
+    try {
+      chips = prev1
+        ? Array.from(engine.nextWordPredictions2
+            ? engine.nextWordPredictions2(prev2, prev1, 5)
+            : engine.nextWordPredictions(prev1, 5))
+        : [];
+    } catch { chips = []; }
+    sendResponse({ chips });
+    return; // sync
+  }
+  if (msg?.type === "used" && typeof msg.prev === "string" && typeof msg.next === "string") {
+    try { engine.recordNextWord?.(msg.prev, msg.next); } catch {}
+    sendResponse({ ok: true });
+    return; // sync
+  }
   sendResponse({ error: "unknown" });
 });

@@ -27,6 +27,7 @@ import com.banglu.engine.rules.NatvaVidhan
 import com.banglu.engine.rules.ShatvaVidhan
 import com.banglu.engine.rules.StatisticalDefaults
 import com.banglu.engine.types.Alternative
+import com.banglu.engine.types.BigramModelData
 import com.banglu.engine.types.ConversionResult
 import com.banglu.engine.types.LookupResult
 import com.banglu.engine.types.PredictedWord
@@ -387,6 +388,27 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
          *  real-word oracle is loaded. The curated generators stay exempt:
          *  candidate_lattice (দরযা-class spelling disambiguation, own gates)
          *  and ambiguous_variant (ত/ট-swap UX) are deliberate offerings. */
+        private val SKELETON_FOLD: Map<Char, Char> = mapOf(
+            'ী' to 'ি', 'ূ' to 'ু', 'ঈ' to 'ি', 'ঊ' to 'ু',
+            'ট' to 'ত', 'ঠ' to 'থ', 'ড' to 'দ', 'ঢ' to 'ধ',
+            'ণ' to 'ন', 'ষ' to 'শ', 'স' to 'শ', 'য' to 'জ', 'ৎ' to 'ত',
+            // r/y are typed for both the plain and the nukta letter
+            // (duniajora -> দুনিয়াজোড়া): same skeleton class.
+            '\u09DC' to 'র', '\u09DD' to 'র', '\u09DF' to 'জ',
+            'আ' to 'া', 'এ' to 'ে', 'ই' to 'ি', 'উ' to 'ু'
+        )
+        private val VOWEL_SIGN_THEN_E = Regex("[\u09BE-\u09C4\u09C7\u09C8\u09CB\u09CC][\u098F\u0990]")
+        /** S141: a consonant followed by one or more virama+consonant joins. */
+        private val VIRAMA_CLUSTER = Regex("[\u0995-\u09B9\u09DC-\u09DF](?:\u09CD[\u0995-\u09B9\u09DC-\u09DF])+")
+
+        /** S141: letters typed with the same roman key, in offering order (see letterTwins). */
+        private val LETTER_TWIN_CLASSES = listOf(
+            "শষস", "সশষ", "তট", "থঠ", "দড", "ধঢ", "নণ", "জয", "চছ", "র\u09DC", "ইঈ", "উঊ"
+        )
+        /** S141: vowel-sign pairs that form open-syllable twins (see isOpenSyllableTwin). */
+        private val SYLLABLE_TWIN_SIGNS = listOf("ু" to "ূ", "ি" to "ী", "ৃ" to "্রি")
+        private const val BENGALI_VOWEL_SIGNS = "\u09BE\u09BF\u09C0\u09C1\u09C2\u09C3\u09C7\u09C8\u09CB\u09CC"
+
         private val COLD_START_GENERATED_SOURCES = setOf(
             "pattern",
             "pattern_alternative",
@@ -619,6 +641,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     /** Test seam: load validator words directly (production uses initialize(loader)). */
+    /** S141: the slim tier's n-gram model (JS surfaces) — same loader path
+     *  the full sqlite tier takes. */
+    internal fun loadBigramModel(data: BigramModelData) {
+        bigramModel.loadFromData(data)
+        viterbiDecoder = ViterbiDecoder(bigramModel)
+    }
+
     internal fun loadValidatorWords(words: List<String>) {
         validator.loadWords(words)
         clearCache()
@@ -1233,7 +1262,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         )
     }
 
-    private fun convertWordRaw(input: String): ConversionResult {
+    internal fun convertWordRaw(input: String): ConversionResult {
         val trimmed = input.trim()
         val key = trimmed.lowercase()
         if (key.isEmpty()) return ConversionResult("", 0.0, ResolutionSource.RULE)
@@ -1409,6 +1438,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         // Layer 6: Bengali dictionary recovery (if 480K loaded and result not valid)
         // Gate: only fire on longer inputs (>= 6 chars) where pattern engine output is less trustworthy.
+        var recoveryChip: String? = null
         // F3: approved compositions (real root + productive suffix, e.g. farser →
         // ফার্স+ের) are legitimate inflections absent from the 480K list — never
         // "recover" them to a different corpus word (farser must not become ফার্স্টের).
@@ -1416,20 +1446,34 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             result.bengali.length >= 3 && !isApprovedComposition(result.bengali)
         ) {
             applyBengaliRecovery(result)?.let { recovered ->
-                // S22 arbitration: recovery may land on a word that covers
-                // only part of the typed key (valolagchena -> ভাললাগে drops
-                // four keystrokes). A well-covering recovery wins; a poorly-
-                // covering one yields to a glued two-word split when one
-                // exists (ভালো লাগছেনা).
-                val covered = com.banglu.engine.util.ReverseTransliterator
-                    .reverseWord(recovered.bengali).length >= key.length
-                if (!covered) {
-                    tryCompoundSplit(key)?.let { split ->
-                        cacheResult(cacheKey, split); return split
+                // S141 (field report: bangluke -> বাংলাকে, banglur -> বাংটুর):
+                // recovery is a SPELLING normaliser, not a word chooser. A
+                // clean-reading literal may only be recovered to a word with
+                // the same spelling skeleton (nilpori -> নীলপরি: ি/ী, ু/ূ,
+                // ন/ণ, শ/ষ/স, nukta — the letters a typist cannot be
+                // expected to distinguish). A recovery that changes a
+                // vowel's quality or swaps a consonant is a different word:
+                // it rides the strip as a chip, the literal keeps the commit.
+                if (readsAsCleanBengali(result.bengali) &&
+                    spellingSkeleton(recovered.bengali) != spellingSkeleton(result.bengali)
+                ) {
+                    recoveryChip = recovered.bengali
+                } else {
+                    // S22 arbitration: recovery may land on a word that covers
+                    // only part of the typed key (valolagchena -> ভাললাগে drops
+                    // four keystrokes). A well-covering recovery wins; a poorly-
+                    // covering one yields to a glued two-word split when one
+                    // exists (ভালো লাগছেনা).
+                    val covered = com.banglu.engine.util.ReverseTransliterator
+                        .reverseWord(recovered.bengali).length >= key.length
+                    if (!covered) {
+                        tryCompoundSplit(key)?.let { split ->
+                            cacheResult(cacheKey, split); return split
+                        }
                     }
+                    val gated = applyCommitGate(key, recovered)
+                    cacheResult(cacheKey, gated); return gated
                 }
-                val gated = applyCommitGate(key, recovered)
-                cacheResult(cacheKey, gated); return gated
             }
         }
 
@@ -1480,6 +1524,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         result = applyCandidateLatticeRanking(key, result)
         result = applyCommitGate(key, result)
+        recoveryChip?.let { chip ->
+            if (chip != result.bengali) {
+                result = result.copy(
+                    alternatives = listOf(Alternative(chip, 0.80)) +
+                        result.alternatives.filter { it.bengali != chip }
+                )
+            }
+        }
 
         cacheResult(cacheKey, result)
         return result
@@ -1907,6 +1959,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 suggestions.add(SmartSuggestion(alt.bengali, alt.confidence, "ambiguous_variant", key, "tier0_ambiguous"))
             }
         }
+        // S141 (user: "sh should offer তালব্য শ AND মূর্ধন্য ষ, it only gives শ"):
+        // a letter key's strip IS the letter-class offering — every twin of
+        // the primary letter, in class order, right after it (S80 precedent).
+        for (twin in letterTwins(key, primary.bengali)) {
+            if (seen.add(twin)) {
+                suggestions.add(SmartSuggestion(twin, 0.97, "letter_twin", key, "tier0_ambiguous"))
+            }
+        }
 
         // Include alternatives from convertWord (user's literal + swap variants)
         for (alt in primary.alternatives) {
@@ -1982,6 +2042,33 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                             )
                         )
                     }
+                }
+            }
+        }
+
+        // S141 (user: "type banglish — bangladesh must at least be in the
+        // suggestions"): when nothing confidently owns the typed key, the
+        // words that own its longest roman PREFIX are what the user is most
+        // likely reaching for (banglish -> bangl* -> বাংলাদেশ, বাংলা). Read
+        // from the store, never generated; the fuzzy band (< 0.9) only, so a
+        // confident word never grows a tail of unrelated completions.
+        if (key.length >= 5) {
+            phoneticIndex?.let { store ->
+                // Only when the typed key is a LEAF (nothing continues it) or
+                // nothing confidently owns it — a key with its own
+                // continuations (bangla -> বাংলাদেশ) already has them.
+                if (primary.confidence >= 0.9 && store.lookupPrefix(key, 1).isNotEmpty()) return@let
+                var prefixLen = key.length - 1
+                var added = 0
+                while (prefixLen >= 4 && added == 0) {
+                    for (hit in store.lookupPrefix(key.substring(0, prefixLen), 6)) {
+                        if (hit.tier != PhoneticIndexHit.TIER_A) continue
+                        val word = ReverseTransliterator.foldVowelSigns(hit.bengali)
+                        if (!seen.add(word)) continue
+                        suggestions.add(SmartSuggestion(word, 0.70, "roman_prefix", key, "tier1_continuation"))
+                        if (++added >= 3) break
+                    }
+                    prefixLen--
                 }
             }
         }
@@ -2244,7 +2331,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val ordered = banded
             .filterNot { (s, band, _) ->
                 band == 2 && hasBandZeroBeyondPrimary &&
-                    !hasStripBandTwoPhoneticFit(key, s.bengali, primary.bengali)
+                    !hasStripBandTwoPhoneticFit(key, s.bengali, primary.bengali) &&
+                    !isOpenSyllableTwin(key, s.bengali, primary.bengali) &&
+                    !isLetterTwin(key, s.bengali, primary.bengali)
             }
             .sortedWith(
                 compareBy<Triple<SmartSuggestion, Int, Double>> { it.second }
@@ -2263,6 +2352,36 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             if (primaryIndex > maxPrimaryIndex) {
                 val promoted = ordered.removeAt(primaryIndex)
                 ordered.add(maxPrimaryIndex, promoted)
+            }
+        }
+
+        // S141: the open-syllable twin (ku -> কূ, kri -> কৃ) holds the slot
+        // right after the primary — it is the second half of the offering,
+        // and the strips of most surfaces show only three or four chips.
+        if (primary.bengali.isNotEmpty() && limit >= 2) {
+            val primaryIndex = ordered.indexOfFirst { it.bengali == primary.bengali }
+            val twinIndex = ordered.indexOfFirst { isOpenSyllableTwin(key, it.bengali, primary.bengali) }
+            if (primaryIndex >= 0 && twinIndex > primaryIndex + 1) {
+                val twin = ordered.removeAt(twinIndex)
+                ordered.add(primaryIndex + 1, twin)
+            }
+        }
+
+        // S141: letter twins follow the primary in class order (sh -> শ ষ স).
+        run {
+            val twins = letterTwins(key, primary.bengali)
+            if (twins.isNotEmpty() && limit >= 2) {
+                val primaryIndex = ordered.indexOfFirst { it.bengali == primary.bengali }
+                if (primaryIndex >= 0) {
+                    var slot = primaryIndex + 1
+                    for (twin in twins) {
+                        val idx = ordered.indexOfFirst { it.bengali == twin }
+                        if (idx < 0 || idx == slot) { if (idx == slot) slot++; continue }
+                        val chip = ordered.removeAt(idx)
+                        ordered.add(minOf(slot, ordered.size), chip)
+                        slot++
+                    }
+                }
             }
         }
 
@@ -2305,6 +2424,42 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 )
             }
         }
+        // S141 literal law (field report, generalised by the user: "the engine
+        // must not ignore what I typed — at least show it in the
+        // suggestions"): whenever the commit-path primary is NOT the
+        // deterministic reading of the typed key (typo repair, fuzzy or
+        // recovery layers replaced it) and that reading is clean Bengali,
+        // the reading holds the LAST visible slot — reachable in one tap,
+        // never displacing the real-word offerings above it.
+        // Applies in the fuzzy band only (< 0.9, the S113 definition): a
+        // confident owner of the key (valobashi -> ভালোবাসি, kmon -> কেমন)
+        // read the key by the product's own aliases, it did not ignore it.
+        if (limit >= 2 && key.length >= 3 && primary.confidence < 0.9 && key.all { it in 'a'..'z' }) {
+            val literal = typedReading(key)
+            val literalFolded = ReverseTransliterator.foldNukta(literal)
+            if (literal.isNotEmpty() && literalFolded != ReverseTransliterator.foldNukta(primary.bengali) &&
+                readsAsCleanBengali(literal) &&
+                ordered.take(limit).none { ReverseTransliterator.foldNukta(it.bengali) == literalFolded }
+            ) {
+                ordered.removeAll { ReverseTransliterator.foldNukta(it.bengali) == literalFolded }
+                val slot = minOf(limit - 1, ordered.size)
+                ordered.add(slot, SmartSuggestion(literal, 0.60, "typed_literal", key, "tier2_literal"))
+            }
+        }
+
+        // S141: the roman-prefix completion (banglish -> বাংলাদেশ) is the one
+        // chip the user asked for by name — it holds a visible slot, just
+        // above the typed-literal slot when both are present.
+        run {
+            val idx = ordered.indexOfFirst { it.source == "roman_prefix" }
+            if (idx >= limit) {
+                val chip = ordered.removeAt(idx)
+                val lastIsLiteral = ordered.getOrNull(limit - 1)?.source == "typed_literal"
+                val slot = (if (lastIsLiteral) limit - 2 else limit - 1).coerceIn(1, ordered.size)
+                ordered.add(slot, chip)
+            }
+        }
+
         return ordered.take(limit)
     }
 
@@ -2481,6 +2636,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // generic phonetic-fit gates below would reject exactly the cases
         // they exist for (the typed key differs from the word's phonetic).
         if (suggestion.source == "typo_rescue") return true
+        // S141: the open-syllable twin / letter twin is an offering, not recovery output.
+        if (isOpenSyllableTwin(key, suggestion.bengali, primary)) return true
+        if (isLetterTwin(key, suggestion.bengali, primary)) return true
+        // S141: roman-prefix completions are store words the typed key does
+        // not read as — the fit gates would reject exactly what they offer.
+        if (suggestion.source == "roman_prefix") return true
         if (suggestion.source == "english_passthrough") return suggestion.bengali.lowercase() == key
         if (Regex("[A-Za-z]").containsMatchIn(suggestion.bengali)) return false
         // S80 (tester screenshot: পাদ়লে on the strip): nukta composes only
@@ -2577,6 +2738,49 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * word, or seed/learned dictionary entry; multi-word strings (negation's
      * spaced alternative "পারবো নে") check every part.
      */
+    /**
+     * S141 (field report: "kri should give ক্রি and কৃ, ku should give কু
+     * and কূ — one in the editor, the other in the strip"): for an OPEN
+     * SYLLABLE key — at most three roman letters whose primary is one
+     * consonant cluster closed by a single final vowel sign — the twin that
+     * differs only in that vowel sign (length twins ু/ূ and ি/ী, the
+     * ri-class ৃ/্রি) is a deliberate offering, exactly like the S80
+     * t -> ত/ট chips: the user is choosing a spelling, not being rescued.
+     * Such a twin is exempt from the real-word oracle (কৃ is a syllable,
+     * not a word) and holds the slot right after the primary. Closed
+     * syllables (kul -> কুল/কূল) and longer keys keep the ordinary gates —
+     * their twins must be real text to ride the strip.
+     */
+    /**
+     * S141: for a LETTER key (≤ 3 roman letters whose primary is one Bengali
+     * letter) the other letters of the same typed class — শ/ষ/স for "sh",
+     * ত/ট for "t", জ/য for "j", চ/ছ for "ch" — are the deliberate offering:
+     * the user is picking a letter, not a word. They bypass the real-word
+     * oracle (single letters are not words) and hold the slots after the
+     * primary in class order.
+     */
+    private fun letterTwins(key: String, primary: String): List<String> {
+        if (key.length > 3 || primary.length != 1) return emptyList()
+        val cls = LETTER_TWIN_CLASSES.firstOrNull { primary[0] in it } ?: return emptyList()
+        return cls.filter { it != primary[0] }.map { it.toString() }
+    }
+
+    private fun isLetterTwin(key: String, candidate: String, primary: String): Boolean =
+        candidate.length == 1 && candidate in letterTwins(key, primary)
+
+    private fun isOpenSyllableTwin(key: String, candidate: String, primary: String): Boolean {
+        if (key.length > 3 || candidate == primary || primary.isEmpty()) return false
+        for ((a, b) in SYLLABLE_TWIN_SIGNS) {
+            for ((from, to) in arrayOf(a to b, b to a)) {
+                if (!primary.endsWith(from)) continue
+                val stem = primary.dropLast(from.length)
+                if (stem.isEmpty() || stem.any { it in BENGALI_VOWEL_SIGNS }) continue
+                if (candidate == stem + to) return true
+            }
+        }
+        return false
+    }
+
     private fun isOracleRealText(bengali: String): Boolean {
         return bengali.split(' ').all { part ->
             part.isEmpty() ||
@@ -3629,6 +3833,59 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * legitimate splits get rejected (jeteparbona's যেতে reverses as
      * "zete" — caught by the S22 compound pin).
      */
+    /**
+     * S141: true when every virama-joined consonant cluster in [bengali] is a
+     * conjunct the rule table itself can produce — the string reads as
+     * pronounceable Bengali even if no dictionary knows it. Clusters the
+     * table does not list count as unclean, which only ever re-admits the
+     * pre-S141 correction behaviour.
+     */
+    /**
+     * S141: the reading of a roman key the user actually SEES while typing —
+     * the same sub-millisecond rule transliteration the instant preview and
+     * the commit-gate floor use (CLEAN_TRANSLITERATION). This, not the older
+     * pattern engine, is "what the user typed".
+     */
+    internal fun typedReading(key: String): String =
+        com.banglu.engine.rules.CleanTransliterator.transliterate(key)
+
+    internal fun readsAsCleanBengali(bengali: String): Boolean {
+        if (bengali.isEmpty()) return false
+        if (hasSuspiciousGeneratedConjunct(bengali)) return false
+        // An independent এ/ঐ directly after a vowel sign is not Bengali
+        // orthography (গিএ must be গিয়ে) — the S87 voicing-typo shape
+        // (thogieco -> থগিএছ) reads unclean and stays repairable.
+        if (VOWEL_SIGN_THEN_E.containsMatchIn(bengali)) return false
+        for (match in VIRAMA_CLUSTER.findAll(bengali)) {
+            if (match.value !in legalConjunctForms) return false
+        }
+        return true
+    }
+
+    /**
+     * S141: the spelling skeleton of a Bengali string — nukta folded and every
+     * letter class a typist cannot be expected to distinguish collapsed to one
+     * representative (long/short vowels, dental/retroflex, ন/ণ, শ/ষ/স, জ/য).
+     * Two strings with equal skeletons are spellings of the SAME word.
+     */
+    internal fun spellingSkeleton(bengali: String): String {
+        val folded = ReverseTransliterator.foldNukta(bengali)
+            // The glide the orthography inserts between vowels (dunia ->
+            // দুনিয়া) and the inherent-vowel ো the rules suppress between
+            // consonants (jora -> জরা / জোড়া) are spellings of the same
+            // typed key, not different words.
+            .replace("\u09DF\u09BE", "\u09BE")
+            .replace("\u09DF\u09C7", "\u09C7")
+            .replace("\u09CB", "")
+        val sb = StringBuilder(folded.length)
+        for (ch in folded) sb.append(SKELETON_FOLD[ch] ?: ch)
+        return sb.toString()
+    }
+
+    private val legalConjunctForms: Set<String> by lazy {
+        com.banglu.engine.rules.ConjunctTable.TABLE.mapTo(HashSet()) { it.bengali }
+    }
+
     private fun romanOnsetClass(c: Char): Char = when (c) {
         'a', 'e', 'i', 'o', 'u' -> 'V'
         'j', 'z' -> 'J'
@@ -3653,23 +3910,32 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * shared by the commit-path typo correction and the strip's tap-to-fix
      * rescue so the two can never drift apart.
      */
-    private inline fun forEachEditOneVariant(key: String, action: (variant: String, weight: Double) -> Unit) {
+    /**
+     * Enumerates every edit-distance-1 roman variant of [key]. [substitution]
+     * is true for the replace-one-letter shape (banglu -> bangla / bangru) —
+     * the one edit that turns a typed word into a DIFFERENT word rather than
+     * repairing a slip of the finger (see S141 in tryStoreTypoCorrection).
+     */
+    private inline fun forEachEditOneVariant(
+        key: String,
+        action: (variant: String, weight: Double, substitution: Boolean) -> Unit
+    ) {
         val n = key.length
         for (i in 0 until n) {
             // deletion (doubled-letter deletions are the most trusted edit)
-            action(key.removeRange(i, i + 1), if (i > 0 && key[i] == key[i - 1]) 1.0 else 0.9)
+            action(key.removeRange(i, i + 1), if (i > 0 && key[i] == key[i - 1]) 1.0 else 0.9, false)
             // transposition
             if (i < n - 1 && key[i] != key[i + 1]) {
                 val t = key.toCharArray().also { val c = it[i]; it[i] = it[i + 1]; it[i + 1] = c }
-                action(t.concatToString(), 1.0)
+                action(t.concatToString(), 1.0, false)
             }
             // substitution
             for (ch in 'a'..'z') if (ch != key[i]) {
-                action(key.substring(0, i) + ch + key.substring(i + 1), 0.7)
+                action(key.substring(0, i) + ch + key.substring(i + 1), 0.7, true)
             }
         }
         for (i in 0..n) for (ch in 'a'..'z') {
-            action(key.substring(0, i) + ch + key.substring(i), if (ch in "aeiou") 0.95 else 0.75)
+            action(key.substring(0, i) + ch + key.substring(i), if (ch in "aeiou") 0.95 else 0.75, false)
         }
     }
 
@@ -3688,7 +3954,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (phoneticIndex == null || key.length < 4 || !key.all { it in 'a'..'z' }) return emptyList()
         data class Cand(val bengali: String, val tierA: Boolean, val score: Double)
         val best = HashMap<String, Cand>()
-        forEachEditOneVariant(key) { variant, weight ->
+        forEachEditOneVariant(key) { variant, weight, _ ->
             for (hit in storeLookup(variant).take(2)) {
                 val tierA = hit.tier == PhoneticIndexHit.TIER_A
                 if (!tierA && (!validator.isValid(hit.bengali) || hit.frequency < 8)) continue
@@ -3712,9 +3978,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         data class Cand(val word: String, val weight: Double, val freq: Int)
         var best: Cand? = null
+        val literalReadsClean = readsAsCleanBengali(typedReading(key))
         fun consider(variantKey: String, editWeight: Double) {
             val top = storeLookup(variantKey).firstOrNull() ?: return
             if (top.tier != PhoneticIndexHit.TIER_A) return
+            // S141: a HABIT alias absorbs spelling deviations by design
+            // (banglte -> বাংলোতে): reaching one by a deletion is a vowel
+            // substitution in disguise. A clean-reading literal may only be
+            // repaired by a word that CANONICALLY owns the edited key.
+            if (literalReadsClean && top.priority == PhoneticIndexHit.PRIORITY_HABIT) return
             if (!validator.isValid(top.bengali)) return
             val freq = maxOf(top.frequency, validator.getFrequency(top.bengali))
             // Corrections replace what the user typed — only corpus-evidenced
@@ -3726,7 +3998,19 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         val n = key.length
-        forEachEditOneVariant(key) { variant, weight -> consider(variant, weight) }
+        // S141 (field report: banglu -> বাংলা; with vowels alone shielded it
+        // became বাংরু): an out-of-vocabulary word whose deterministic reading
+        // is clean Bengali — every consonant cluster a real conjunct — is a
+        // word the user MEANT (a name, a brand, a new coinage), and no
+        // one-letter replacement may swap it for a corpus neighbour on the
+        // commit path; the neighbour stays reachable as an S87 rescue chip.
+        // Replacements still repair a reading with an impossible cluster
+        // (bhslo -> ভ্স্লো -> ভালো), and deletions, transpositions and
+        // insertions — the finger-slip shapes every S22 pin relies on — are
+        // untouched (kmon, amdaer, bangaldesh, bujjtecina).
+        forEachEditOneVariant(key) { variant, weight, substitution ->
+            if (!substitution || !literalReadsClean) consider(variant, weight)
+        }
 
         best?.let {
             return ConversionResult(
@@ -3754,6 +4038,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     if (v.length < 3) continue
                     val r = convertWord(v)
                     if (r.confidence < 0.92) continue
+                    // S141: same law as pass 1 — a clean literal is never
+                    // repaired through a habit alias of the edited key.
+                    if (literalReadsClean && storeLookup(v).any {
+                            it.priority == PhoneticIndexHit.PRIORITY_HABIT && it.bengali == r.bengali
+                        }
+                    ) continue
                     // Plain words need corpus evidence (bariwala must not
                     // become junk-tail বাড়িআলা); negation compounds are
                     // already evidence-gated by their own layer.
@@ -4387,7 +4677,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * 3. Single consonants with context-aware rules
      * 4. Vowels (independent at start, dependent after consonants)
      */
-    private fun convertByPatterns(rawKey: String): ConversionResult {
+    internal fun convertByPatterns(rawKey: String): ConversionResult {
         val key = rawKey.lowercase()
         tryLowercaseV2ControlRule(key)?.let { return it }
 
@@ -5267,7 +5557,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "শ" to listOf("ষ"), "ষ" to listOf("শ"),
             "জ" to listOf("য"), "য" to listOf("জ"),
             "চ" to listOf("ছ"), "ছ" to listOf("চ"),
-            "ই" to listOf("য়", "ৈ"), "য়" to listOf("ই", "ৈ"), "ৈ" to listOf("ই", "য়")
+            "ই" to listOf("য়", "ৈ"), "য়" to listOf("ই", "ৈ"), "ৈ" to listOf("ই", "য়"),
+            // S141: the ri-class twin — a typed "ri" after a consonant is
+            // read both as ৃ and as ্রি (kri -> কৃ / ক্রি, pri -> পৃ / প্রি);
+            // the store itself owns the class inconsistently (mri -> মৃ
+            // only, tri -> ত্রি only), so the twin is generated, not curated.
+            "ৃ" to listOf("্রি"), "্রি" to listOf("ৃ")
         )
         val directCandidates = mutableListOf<String>()
         fun addDirectCandidate(candidate: String, from: String) {
@@ -6662,6 +6957,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                             }
                             val combined = bengaliStem + suffix.bengali
                             val isExact = best.matchedPhonetic.isEmpty() || best.matchedPhonetic == candidate
+                            // S141 (banglute -> বাংলোতে): a stem matched only
+                            // FUZZILY may not change the typed stem's spelling
+                            // skeleton when that stem reads as clean Bengali —
+                            // the same law Layer 6 recovery follows.
+                            if (!isExact) {
+                                val literalStem = typedReading(stem)
+                                if (readsAsCleanBengali(literalStem) &&
+                                    spellingSkeleton(bengaliStem) != spellingSkeleton(literalStem)
+                                ) {
+                                    continue
+                                }
+                            }
                             val isValid = validator.isLoaded() && validator.isValid(combined)
                             // S1/D3: aliased stem keys can resolve to a word that
                             // already carries the trailing য় the suffix re-appends

@@ -3,9 +3,11 @@
 package com.banglu.engine
 
 import com.banglu.engine.platform.InMemoryPhoneticIndexStore
+import com.banglu.engine.types.BigramModelData
 import com.banglu.engine.platform.PhoneticIndexHit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * S45: the web/extension facade. Same SmartEngine that ships in the Android
@@ -63,6 +65,31 @@ object BangluWebEngine {
             val freqMap = HashMap<String, Int>(slim.words.size * 2)
             for (i in slim.words.indices) freqMap[slim.words[i]] = slim.freqs[i]
             engine.loadValidatorFrequencies(freqMap)
+        }
+        // S141: the prediction bar's n-gram model (pruned in the exporter).
+        if (slim.bi.isNotEmpty()) {
+            val bigrams = HashMap<String, Int>(slim.bi.size * 2)
+            for (row in slim.bi) if (row.size == 3) {
+                bigrams[row[0].content + "\t" + row[1].content] = row[2].content.toIntOrNull() ?: continue
+            }
+            val trigrams = HashMap<String, Int>(slim.tri.size * 2)
+            for (row in slim.tri) if (row.size == 4) {
+                trigrams[row[0].content + "\t" + row[1].content + "\t" + row[2].content] =
+                    row[3].content.toIntOrNull() ?: continue
+            }
+            val unigrams = HashMap<String, Int>(slim.uni.size * 2)
+            for (row in slim.uni) if (row.size == 2) {
+                unigrams[row[0].content] = row[1].content.toIntOrNull() ?: continue
+            }
+            engine.loadBigramModel(
+                BigramModelData(
+                    unigrams = unigrams,
+                    bigrams = bigrams,
+                    totalUnigrams = unigrams.values.sum(),
+                    totalBigrams = bigrams.values.sum(),
+                    trigrams = trigrams
+                )
+            )
         }
     }
 
@@ -151,6 +178,23 @@ object BangluWebEngine {
         engine.getNextWordPredictions(prevBengali.trim(), limit).map { it.bengali }.toTypedArray()
 
     /**
+     * S141: two-word next-word prediction — exact (prev2, prev1) trigram
+     * followers lead, bigram/user predictions fill the remainder (the
+     * SmartEngineAdapter overload Android and the Windows IME already use).
+     * [prev2Bengali] may be empty when only one word precedes the caret.
+     */
+    fun nextWordPredictions2(prev2Bengali: String, prevBengali: String, limit: Int): Array<String> {
+        val prev1 = prevBengali.trim()
+        if (prev1.isEmpty() || limit <= 0) return emptyArray()
+        val prev2 = prev2Bengali.trim()
+        val tri = if (prev2.isNotEmpty()) engine.getTrigramNextWordPredictions(prev2, prev1, limit) else emptyList()
+        if (tri.size >= limit) return tri.take(limit).map { it.bengali }.toTypedArray()
+        val seen = tri.mapTo(mutableSetOf()) { it.bengali }
+        val rest = engine.getNextWordPredictions(prev1, limit).filter { it.bengali !in seen }
+        return (tri + rest).take(limit).map { it.bengali }.toTypedArray()
+    }
+
+    /**
      * S54: add an explicit user dictionary entry (e.g. from a "teach a
      * word" UI), at the same frequency
      * (`SmartEngineAdapter.CUSTOM_CONVERSION_FREQUENCY` = 120) the adapter
@@ -192,6 +236,19 @@ object BangluWebEngine {
         if (applied) engine.clearCache()
     }
 
+    /**
+     * S141: one committed (previous, next) Bengali pair — personal next-word
+     * prediction for this session (the JS surfaces carry no bigram store;
+     * the editor-shared learned.json holds words only).
+     */
+    fun recordNextWord(prevBengali: String, nextBengali: String) {
+        initSeed()
+        val prev = prevBengali.trim()
+        val next = nextBengali.trim()
+        if (prev.isEmpty() || next.isEmpty() || prev == next) return
+        engine.recordUserBigram(prev, next)
+    }
+
     /** S51: one explicit candidate pick (same frequency the adapter uses). */
     fun recordPick(raw: String, bangla: String) {
         initSeed()
@@ -225,5 +282,10 @@ internal data class SlimDictionary(
     val words: List<String>,
     /** S119: corpus frequency per words[i] — powers the validator on slim
      *  surfaces (glue layers and evidence guards are frequency-gated). */
-    val freqs: List<Int> = emptyList()
+    val freqs: List<Int> = emptyList(),
+    /** S141: pruned n-gram model — [prev, next, count] / [w1, w2, w3, count] /
+     *  [word, count]. Absent in pre-S141 files (the version gate regenerates). */
+    val bi: List<List<JsonPrimitive>> = emptyList(),
+    val tri: List<List<JsonPrimitive>> = emptyList(),
+    val uni: List<List<JsonPrimitive>> = emptyList()
 )

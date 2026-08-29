@@ -5,6 +5,9 @@ public enum ComposerAction: Equatable {
     case commit(String)
     case passThrough
     case updateCandidates([String])
+    /// S141: next-word predictions to show after a commit (empty = hide).
+    /// Click-only — digits keep typing digits, Return keeps its meaning.
+    case updatePredictions([String])
 }
 
 public enum ComposerKey: Equatable {
@@ -37,8 +40,18 @@ public final class Composer {
     private var pendingSpace = false
     private var dariJustCommitted = false
 
+    /// S141: predictions offered after the last commit, and the two-word
+    /// ledger they were computed from (reset whenever the phrase breaks).
+    public private(set) var predictions: [String] = []
+    private var prev1 = ""
+    private var prev2 = ""
+    public var predicting: Bool { !forming && !predictions.isEmpty }
+    private static let predictionLimit = 5
+
     /// Task 5 wires learning: called on every candidate pick.
     public var onPick: ((_ raw: String, _ bangla: String, _ wasPrimary: Bool) -> Void)?
+    /// S141: a prediction chip was committed after `prev`.
+    public var onNextWord: ((_ prev: String, _ next: String) -> Void)?
 
     private static let tightPunctuation: Set<String> = [",", "।", "?", "!"]
 
@@ -53,25 +66,28 @@ public final class Composer {
     public func handle(_ key: ComposerKey) -> [ComposerAction] {
         switch key {
         case .letter(let c):
-            var out = releasePendingSpace()
+            var out = releasePendingSpace() + dropPredictions()
             formingRaw.append(c)
             refresh(&out)
             return out
 
         case .space:
             if forming {
+                let word = formingBangla
                 let out = commitForming()
                 pendingSpace = true
-                return out
+                return out + offerPredictions(after: word)
             }
+            let dropped = dropPredictions()
             if pendingSpace {
                 pendingSpace = false
-                if dariJustCommitted { dariJustCommitted = false; return [.commit(" ")] }
+                if dariJustCommitted { dariJustCommitted = false; return dropped + [.commit(" ")] }
                 dariJustCommitted = true
-                return [.commit("। ")]
+                resetLedger()
+                return dropped + [.commit("। ")]
             }
             dariJustCommitted = false
-            return [.commit(" ")]
+            return dropped + [.commit(" ")]
 
         case .backspace:
             if forming {
@@ -80,37 +96,41 @@ public final class Composer {
                 refresh(&out)
                 return out
             }
+            let dropped = dropPredictions()
+            resetLedger()   // the words before the caret are no longer known
             if pendingSpace {
                 // The user saw themselves type a space; make it real, then
                 // let the host's own backspace delete it.
                 pendingSpace = false
-                return [.commit(" "), .passThrough]
+                return dropped + [.commit(" "), .passThrough]
             }
-            return [.passThrough]
+            return dropped + [.passThrough]
 
         case .digit(let d):
             if forming, !candidates.isEmpty, let n = d.wholeNumberValue,
                (1...6).contains(n), n - 1 < candidates.count {
                 return pick(n - 1)
             }
-            var out = forming ? commitForming() : releasePendingSpace()
+            var out = forming ? commitForming() : releasePendingSpace() + dropPredictions()
             out.append(.commit(banglaDigits ? bengaliDigit(d) : String(d)))
             return out
 
         case .escape:
-            guard forming else { return [.passThrough] }
+            guard forming else { return dropPredictions() + [.passThrough] }
             let raw = formingRaw
             clearForming()
             return [.setMarked(""), .commit(raw), .updateCandidates([])]
 
         case .returnKey, .tab:
-            var out = forming ? commitForming() : []
+            var out = forming ? commitForming() : dropPredictions()
             pendingSpace = false
+            resetLedger()
             out.append(.passThrough)
             return out
 
         case .punctuation(let p):
-            var out: [ComposerAction] = forming ? commitForming() : []
+            var out: [ComposerAction] = forming ? commitForming() : dropPredictions()
+            resetLedger()
             let mapped = (p == ".") ? "।" : p
             if pendingSpace {
                 pendingSpace = false
@@ -130,8 +150,10 @@ public final class Composer {
 
     public func focusLost() -> [ComposerAction] {
         pendingSpace = false
-        guard forming else { return [] }
-        return commitForming()
+        resetLedger()
+        let dropped = dropPredictions()
+        guard forming else { return dropped }
+        return dropped + commitForming()
     }
 
     public func pick(_ index: Int) -> [ComposerAction] {
@@ -142,7 +164,20 @@ public final class Composer {
         formingBangla = choice
         let out = commitForming()
         pendingSpace = true
-        return out
+        return out + offerPredictions(after: choice)
+    }
+
+    /// S141: commits `predictions[index]` after the held space, holds a new
+    /// space, and re-predicts (chaining) — the Windows IME contract.
+    public func pickPrediction(_ index: Int) -> [ComposerAction] {
+        guard predicting, index >= 0, index < predictions.count else { return [] }
+        let word = predictions[index]
+        var out = releasePendingSpace()
+        out.append(.commit(word))
+        pendingSpace = true
+        dariJustCommitted = false
+        if !prev1.isEmpty { onNextWord?(prev1, word) }
+        return out + offerPredictions(after: word)
     }
 
     // MARK: - internals
@@ -183,6 +218,26 @@ public final class Composer {
         formingBangla = ""
         candidates = []
         highlight = 0
+    }
+
+    /// Shifts the ledger past `word` and asks the engine what tends to follow.
+    /// Always emits — an empty list hides a panel a previous offer opened.
+    private func offerPredictions(after word: String) -> [ComposerAction] {
+        prev2 = prev1
+        prev1 = word
+        predictions = word.isEmpty ? [] : engine.predictNext(prev2: prev2, prev1: word, limit: Composer.predictionLimit)
+        return [.updatePredictions(predictions)]
+    }
+
+    private func dropPredictions() -> [ComposerAction] {
+        guard !predictions.isEmpty else { return [] }
+        predictions = []
+        return [.updatePredictions([])]
+    }
+
+    private func resetLedger() {
+        prev1 = ""
+        prev2 = ""
     }
 }
 

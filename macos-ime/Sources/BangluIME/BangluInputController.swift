@@ -32,7 +32,19 @@ class BangluInputController: IMKInputController {
             AppState.store.recordPick(raw: raw, bangla: bangla)
             engine.recordPick(raw: raw, bangla: bangla)
         }
+        c.onNextWord = { prev, next in
+            guard AppState.store.learningEnabled else { return }
+            engine.recordNextWord(prev: prev, next: next)
+        }
         composer = c
+        // S141: a clicked panel row picks — a forming candidate, or a
+        // prediction chip after a commit (its only pick gesture).
+        candidateUI.onPick = { [weak self] index in
+            guard let self, let composer = self.composer,
+                  let client = self.client() else { return }
+            let actions = composer.forming ? composer.pick(index) : composer.pickPrediction(index)
+            self.apply(actions, to: client)
+        }
     }
 
     override func deactivateServer(_ sender: Any!) {
@@ -153,6 +165,9 @@ class BangluInputController: IMKInputController {
                 if list.isEmpty { candidateUI.hide() }
                 else { candidateUI.show(candidates: list, highlight: composer?.highlight ?? 0,
                                         client: client) }
+            case .updatePredictions(let list):
+                if list.isEmpty { candidateUI.hide() }
+                else { candidateUI.show(candidates: list, highlight: -1, numbered: false, client: client) }
             case .passThrough:
                 handled = false
             }

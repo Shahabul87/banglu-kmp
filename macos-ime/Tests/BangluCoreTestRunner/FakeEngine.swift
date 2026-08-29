@@ -15,4 +15,11 @@ final class FakeEngine: BangluEngine {
         return Array(([t.primary] + t.alts).prefix(limit))
     }
     func recordPick(raw: String, bangla: String) { picks.append((raw, bangla)) }
+    // S141
+    var nextWords: [String: [String]] = [:]
+    var nextPairs: [(prev: String, next: String)] = []
+    func predictNext(prev2: String, prev1: String, limit: Int) -> [String] {
+        Array((nextWords[prev1] ?? []).prefix(limit))
+    }
+    func recordNextWord(prev: String, next: String) { nextPairs.append((prev, next)) }
 }
