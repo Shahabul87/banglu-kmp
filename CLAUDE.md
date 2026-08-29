@@ -101,8 +101,8 @@ cost, and privacy-promise reasons; see memory + git history).
   ~90 everyday Bengali phrases on the বাক্য tab (BanglaPhrases.kt), 330+
   three-script search keywords (EmojiKeywords.kt)) — pre-launch; Play upload
   is the pending user action (`releases/banglu-1.5.39-2076.aab`).
-- **Desktop editor (বাংলু এডিটর)** v1.1.0 — SHIPPED PUBLICLY (S48–S50):
-  installers for macOS/Windows/Linux on the GitHub release `desktop-v1.1.0`,
+- **Desktop editor (বাংলু এডিটর)** v1.3.3 — SHIPPED PUBLICLY (S48–S50):
+  installers for macOS/Windows/Linux on the GitHub release `desktop-v1.3.3`,
   download page live at https://www.craftsai.org/products/banglu.
 - **Browser extension** (S47) — Chrome/Firefox zips built
   (`browser-extension/banglu-*.zip`), store uploads pending (user).
@@ -457,7 +457,7 @@ compiler version string AND REQUIRED_DB_VERSION together.
 - Extension: `./browser-extension/build.sh` after any engine change
 
 ### Distribution surfaces (where users get Banglu)
-- Desktop installers: GitHub release `desktop-v1.1.0` on Shahabul87/banglu-kmp
+- Desktop installers: GitHub release `desktop-v1.3.3` on Shahabul87/banglu-kmp
   (.msi/.dmg/.deb, permanent CDN URLs). The 150MB dictionary asset for CI
   lives on the release tagged `dictionary`.
 - Public download page: https://www.craftsai.org/products/banglu — source is
