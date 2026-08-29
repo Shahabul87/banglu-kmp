@@ -28,3 +28,10 @@
   rescued (docs/engine-english-study-2026-08-29.md). Regression: `S143EnglishSpellingJvmTest`.
 - Supersedes 1.5.89 (2126) and 1.5.88 (2125), neither uploaded to Play.
 
+
+## Recorded at release (2026-08-29)
+- Built from commit `24181e3` (tag `v1.5.90`); embedded revision verified; AAB signer `8fa2de6dd2216414954f581cbe1247255e7f74c8da4742c2f7d3d8df43b11a17` == configured keystore
+- `banglu-1.5.90-2127.aab` SHA-256 `7470ce5fe5c9aa9ef6714642e1040f8bb25b136d72ab0091ff62dd6014dacaf2` (66,415,678 bytes); copies in `releases/` and `~/Downloads/`
+- Gates: shared jvmTest + testDebugUnitTest + windows-ime:test green (S142/S143 pins + the 10K-word study), shared JS green, desktop-app:test green, macOS runner 105/105, `scripts/validate_android_release.sh` clean
+- NOT run: exact-AAB device smoke / connectedDebugAndroidTest (dev phone locked) — run `RUN_DEVICE_SMOKE=1 scripts/validate_android_release.sh` before promoting to production
+- Supersedes 1.5.89 (2126) and 1.5.88 (2125), neither uploaded; 1.5.85 (2122) must not be promoted
