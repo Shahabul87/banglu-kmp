@@ -467,6 +467,10 @@ object EnglishDirectData {
             e("ফেরি", aliasesFor("ferry"), 76, WordCategory.FOREIGN),
             e("রকেট", aliasesFor("rocket"), 76, WordCategory.FOREIGN),
             e("ইঞ্জিন", aliasesFor("engine"), 76, WordCategory.FOREIGN),
+            // S142: the CMU lexicon renders these crudely (সজেসচন, টেস্টার is
+            // fine but উত্তর-class collisions aside) — curated spellings.
+            e("সাজেশন", aliasesFor("suggestion"), 70, WordCategory.FOREIGN),
+            e("টেস্টার", aliasesFor("tester"), 60, WordCategory.FOREIGN),
             e("ব্রেক", aliasesFor("brake"), 76, WordCategory.FOREIGN),
             e("ক্লাচ", aliasesFor("clutch"), 76, WordCategory.FOREIGN),
             e("গিয়ার", aliasesFor("gear"), 76, WordCategory.FOREIGN),

@@ -305,6 +305,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
          * (রোল vs "real", রোড vs "read"). 0.75 splits with margin.
          */
         private const val ENGLISH_HONESTY_OWNERSHIP_FLOOR = 0.75
+        /** S142: corpus band above which a Bengali reading is an everyday word
+         *  that keeps its key even against an English pronunciation. */
+        private const val EVERYDAY_WORD_BAND = 80
+        private val ENGLISH_DERIVATION_SUFFIXES = listOf("ers", "er", "ing", "tion", "ment", "ness", "ful", "ist", "ly")
 
         private val MOBILE_SHORTHAND_OVERRIDES: Map<String, String> = mapOf(
             "amr" to "আমার",
@@ -1136,6 +1140,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // S131: English-word honesty — deliberately BEFORE the validator gate
         // (it needs only the lexicon store, so lite mode is protected too).
         tryEnglishHonestyFlip(key, raw)?.let { return it }
+        // S142: English-word law — needs only the lexicon store, lite mode too.
+        applyEnglishPronunciationLaw(key, raw)?.let { return it }
         if (!validator.isLoaded()) return raw
         // General 4x-margin rule for weakly-attested squatters (needs the
         // frequency validator); getSuggestions always offers the loanword as
@@ -1229,11 +1235,81 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * (college: কলেজ@0.998 vs the lexicon's কলিজ@0.22, no flip), on top of
      * the >= 0.99 curated-confidence exemption.
      */
+    /**
+     * S142: curated loanword seeds (EnglishDirectData), roman alias -> Bengali.
+     * A curated seed is the product's own decision about how an English word
+     * is written in Bangla (engine -> ইঞ্জিন); no CMU rendering outranks it.
+     */
+    private val curatedLoanwords: Map<String, String> by lazy {
+        HashMap<String, String>(4096).also { map ->
+            for (entry in com.banglu.engine.dictionary.EnglishDirectData.ENTRIES) {
+                for (alias in entry.phonetics) {
+                    val k = alias.lowercase()
+                    if (k !in map) map[k] = entry.bengali   // common code: no putIfAbsent on JS
+                }
+            }
+        }
+    }
+
+    /** S142: a key that IS an English word — the curated detector list, or a
+     *  regular English derivation (test+er, print+er, meet+ing) whose stem
+     *  the lexicon knows. */
+    private fun isEnglishWordKey(key: String): Boolean {
+        if (EnglishDetector.isKnownEnglishWord(key)) return true
+        for (suffix in ENGLISH_DERIVATION_SUFFIXES) {
+            if (key.length <= suffix.length + 2 || !key.endsWith(suffix)) continue
+            val stem = key.dropLast(suffix.length)
+            if (lookupEnglishMemo(stem) != null || lookupEnglishMemo(stem + "e") != null) return true
+        }
+        return false
+    }
+
+    /**
+     * S142 English-word law (user, 2026-08-29: "if the user types an exact
+     * English word, return its Bangla pronunciation, and the English word in
+     * the suggestions"). The lexicon rendering (curated seed first) becomes
+     * the commit when the pipeline read the key as a DIFFERENT Bengali word
+     * that is not an everyday one: tester -> টেস্টার (টেস্টের@70 rides the
+     * strip), phone -> ফোন (ফোনে@78), call -> কল. Everyday Bengali words
+     * keep their key — name -> নামে@89 (invariant 6), dine -> দিনে@84 — with
+     * the pronunciation as a chip. The rendering must be attested real text
+     * unless it is a curated seed. Shared by the
+     * commit wrapper and the composing preview so WYSIWYG holds.
+     */
+    private fun applyEnglishPronunciationLaw(key: String, raw: ConversionResult): ConversionResult? {
+        if (raw.confidence >= 0.99 || ' ' in raw.bengali) return null
+        if (key.length < 4 || !isEnglishWordKey(key)) return null
+        val curated = curatedLoanwords[key]
+        val en = curated ?: lookupEnglishMemo(key) ?: return null
+        if (ReverseTransliterator.foldNukta(en) == ReverseTransliterator.foldNukta(raw.bengali)) return null
+        if (curated != null && curated == raw.bengali) return null
+        val evidence = maxOf(validator.getFrequency(raw.bengali), storeFrequencyOf(key, raw.bengali))
+        if (evidence >= EVERYDAY_WORD_BAND) return null
+        // The rendering must be real text (the S87 reality oracle) — a CMU
+        // junk rendering (এনজেন@1) never replaces an attested reading. An
+        // English spelling is not a transliteration, so phonetic ownership
+        // of the roman key is the wrong test here (ফোন reverses to "phon").
+        if (curated == null && !isOracleRealText(en)) return null
+        return ConversionResult(
+            bengali = en,
+            confidence = 0.93,
+            source = ResolutionSource.ENGLISH_LEXICON,
+            alternatives = (
+                listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.8))) +
+                    raw.alternatives.take(2)
+                ).distinctBy { it.bengali }.filter { it.bengali != en }
+        )
+    }
+
     private fun tryEnglishHonestyFlip(key: String, raw: ConversionResult): ConversionResult? {
         if (raw.confidence >= 0.99) return null
         if (' ' in raw.bengali) return null
         val en = lookupEnglishMemo(key) ?: return null
         if (en == raw.bengali) return null
+        // S142: a curated loanword seed that owns this exact key is the
+        // product's decision (engine -> ইঞ্জিন); the CMU rendering never
+        // outranks it.
+        if (curatedLoanwords[key] == raw.bengali) return null
         // The compiler's HABIT alias rows are CURATED chat spellings whose
         // phonetic fidelity is deliberately loose (issa→ইচ্ছা, S27 class) —
         // and CMU carries proper nouns ("issa"→ইসা) that must never outrank
@@ -1610,6 +1686,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // copy (the S83 drift lesson): the preview must not show রোল while
         // Space commits রিয়েল.
         tryEnglishHonestyFlip(key, raw)?.let { return it.copy(alternatives = emptyList()) }
+        // S142 mirror — the same shared law as the commit wrapper.
+        applyEnglishPronunciationLaw(key, raw)?.let { return it.copy(alternatives = emptyList()) }
         return tryJunkLexiconRescue(key, raw) ?: raw
     }
 
@@ -2122,8 +2200,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
         // S24: the loanword rendering is always one tap away for English keys
         // (time -> টাইম chip even while টিমে holds the primary).
-        if (EnglishDetector.isEnglish(key)) {
-            lookupEnglishMemo(key)?.let { en ->
+        // S142: derivations (tester) qualify too, and the curated seed
+        // spelling is the rendering offered.
+        if (EnglishDetector.isEnglish(key) || isEnglishWordKey(key)) {
+            (curatedLoanwords[key] ?: lookupEnglishMemo(key))?.let { en ->
                 if (seen.add(en)) {
                     suggestions.add(
                         SmartSuggestion(en, 0.9, "english_lexicon", key, "tier0_english")
@@ -2142,7 +2222,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // ENGLISH_LEXICON primary also carries the raw literal as a plain
         // "alternative", which the Latin-character strip filter later kills —
         // counting it here left pattern/because with no english chip at all.
-        if ((EnglishDetector.isEnglish(key) || primaryResolvedEnglish) &&
+        if ((EnglishDetector.isEnglish(key) || primaryResolvedEnglish || isEnglishWordKey(key)) &&
             primary.bengali.lowercase() != key &&
             suggestions.none { it.source == "english_passthrough" && it.bengali.lowercase() == key }
         ) {

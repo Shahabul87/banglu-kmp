@@ -58,10 +58,13 @@ class S81PhFClassJvmTest {
     fun phSpellingsKeepWorking() {
         assertEquals("ফুল", engine.convertWord("ful").bengali)
         assertEquals("ফেলা", engine.convertWord("fela").bengali)
-        // Long-shipped Avro convention: "phone" is the exact canonical
-        // romanization of ফোনে (locative) — the store owns it, S81 must not
-        // flip it (verified identical on db 3.8.9 and 3.8.10).
-        assertEquals("ফোনে", engine.convertWord("phone").bengali)
+        // S81 pinned "phone" -> ফোনে (the store's canonical locative). S142
+        // (user decision 2026-08-29, "an exact English word returns its Bangla
+        // pronunciation; the English word rides the strip") re-pins it: ফোন
+        // is the commit, ফোনে@78 stays one tap away. The ph -> ফ class this
+        // test guards is unchanged either way.
+        assertEquals("ফোন", engine.convertWord("phone").bengali)
+        assertTrue(engine.getSuggestions("phone", 6).any { it.bengali == "ফোনে" })
         assertEquals("ফোন", engine.convertWord("phon").bengali)
     }
 }

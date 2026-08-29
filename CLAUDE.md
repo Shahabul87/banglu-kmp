@@ -50,7 +50,23 @@ cost, and privacy-promise reasons; see memory + git history).
   `nextWordPredictions2(prev2, prev1, limit)` + `recordNextWord`.
   Pin decisions recorded in parity-fixtures.json notes (3 P1 root-
   decomposition rows re-pinned). Test: S141TypedFaithfulJvmTest.
-- **Android** v1.5.88 (2125), db 3.9.6 — S140: engine publication is
+- **S142 English-word law (2026-08-29, user: "an exact English word returns
+  its Bangla pronunciation, the English word in the suggestions — one
+  behaviour, not some words yes and others no"):** `applyEnglishPronunciationLaw`
+  (shared by commit wrapper and composing preview): for a key that IS an
+  English word (`isEnglishWordKey` — the detector list or a regular
+  derivation test+er/print+er whose stem the lexicon knows) the curated-seed
+  or lexicon rendering is the commit when the pipeline read the key as a
+  different Bengali word BELOW the everyday band (`EVERYDAY_WORD_BAND` = 80:
+  tester → টেস্টার over টেস্টের@70, phone → ফোন over ফোনে@78, call → কল);
+  everyday words keep the key with the pronunciation as a chip (name → নামে@89,
+  invariant 6). The rendering must be attested (reality oracle) unless
+  curated. Curated loanword seeds (`curatedLoanwords`, EnglishDirectData)
+  now outrank CMU renderings in the S131 honesty flip (engine → ইঞ্জিন, not
+  এনজেন); সাজেশন/টেস্টার seeded. English chip for every English-word key.
+  S81's phone → ফোনে pin re-pinned under this decision. Test:
+  S142EnglishWordLawJvmTest.
+- **Android** v1.5.89 (2126), db 3.9.6 — S140: engine publication is
   generation-checked + atomic under learningLock (an erase during the
   dictionary load can no longer resurface deleted words); identity
   migration never overwrites a decision. Before that S139: 1.5.85 had a clipboard
