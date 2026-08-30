@@ -51,40 +51,42 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private var TutorialPrimary = Color(0xFF0A84FF)
-private var TutorialSuccess = Color(0xFF34C759)
-private var TutorialCoral = Color(0xFFFF7A59)
-private var TutorialGreen = Color(0xFF34C759)
-private var TutorialBlack = Color(0xFFF6F7FB)
-private var TutorialDark = Color(0xFFEFF3F8)
-private var TutorialCard = Color(0xFFFFFFFF)
-private var TutorialBorder = Color(0xFFE4E8F0)
-private var TutorialMuted = Color(0xFF6B7280)
-private var TutorialText = Color(0xFF111827)
+private var TutorialPrimary = Color(0xFFE9B84A)
+private var TutorialSuccess = Color(0xFF3FA372)
+private var TutorialCoral = Color(0xFFD9633F)
+private var TutorialGreen = Color(0xFF3FA372)
+private var TutorialBlack = Color(0xFF0F0E1A)
+private var TutorialDark = Color(0xFF1A1930)
+private var TutorialCard = Color(0xFF22213A)
+private var TutorialBorder = Color(0x26FFFFFF)
+private var TutorialMuted = Color(0xFFA9A4BC)
+private var TutorialText = Color(0xFFF4EEE3)
 
 private fun applyTutorialPalette(dark: Boolean) {
     if (dark) {
-        TutorialPrimary = Color(0xFF64D2FF)
-        TutorialSuccess = Color(0xFF30D158)
-        TutorialCoral = Color(0xFFFF7A59)
-        TutorialGreen = Color(0xFF30D158)
-        TutorialBlack = Color(0xFF080D16)
-        TutorialDark = Color(0xFF111827)
-        TutorialCard = Color(0xFF182235)
-        TutorialBorder = Color(0xFF27364F)
-        TutorialMuted = Color(0xFFA8B3C7)
-        TutorialText = Color(0xFFF8FAFC)
+        // S147: one committed mock look (banglu-android-mocks.html palette)
+        TutorialPrimary = Color(0xFFE9B84A)
+        TutorialSuccess = Color(0xFF3FA372)
+        TutorialCoral = Color(0xFFD9633F)
+        TutorialGreen = Color(0xFF3FA372)
+        TutorialBlack = Color(0xFF0F0E1A)
+        TutorialDark = Color(0xFF1A1930)
+        TutorialCard = Color(0xFF22213A)
+        TutorialBorder = Color(0x26FFFFFF)
+        TutorialMuted = Color(0xFFA9A4BC)
+        TutorialText = Color(0xFFF4EEE3)
     } else {
-        TutorialPrimary = Color(0xFF0A84FF)
-        TutorialSuccess = Color(0xFF34C759)
-        TutorialCoral = Color(0xFFFF7A59)
-        TutorialGreen = Color(0xFF34C759)
-        TutorialBlack = Color(0xFFF6F7FB)
-        TutorialDark = Color(0xFFEFF3F8)
-        TutorialCard = Color(0xFFFFFFFF)
-        TutorialBorder = Color(0xFFE4E8F0)
-        TutorialMuted = Color(0xFF6B7280)
-        TutorialText = Color(0xFF111827)
+        // S147: one committed mock look (banglu-android-mocks.html palette)
+        TutorialPrimary = Color(0xFFE9B84A)
+        TutorialSuccess = Color(0xFF3FA372)
+        TutorialCoral = Color(0xFFD9633F)
+        TutorialGreen = Color(0xFF3FA372)
+        TutorialBlack = Color(0xFF0F0E1A)
+        TutorialDark = Color(0xFF1A1930)
+        TutorialCard = Color(0xFF22213A)
+        TutorialBorder = Color(0x26FFFFFF)
+        TutorialMuted = Color(0xFFA9A4BC)
+        TutorialText = Color(0xFFF4EEE3)
     }
 }
 
@@ -93,20 +95,15 @@ class TutorialActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         @Suppress("DEPRECATION")
-        window.statusBarColor = android.graphics.Color.rgb(248, 250, 255)
+        window.statusBarColor = android.graphics.Color.rgb(15, 14, 26)
         @Suppress("DEPRECATION")
-        window.navigationBarColor = android.graphics.Color.rgb(246, 247, 251)
+        window.navigationBarColor = android.graphics.Color.rgb(26, 25, 48)
         @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility =
-            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0
+        window.decorView.systemUiVisibility = 0
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.insetsController?.setSystemBarsAppearance(
-                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
-                    android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
-                    android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
-            )
+            val mask = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            window.insetsController?.setSystemBarsAppearance(0, mask)
         }
         setBangluContent { BangluTutorialScreen(onBack = { finish() }) }
     }
@@ -356,20 +353,15 @@ private fun BangluTutorialScreen(onBack: () -> Unit) {
     SideEffect {
         val activity = context as? Activity ?: return@SideEffect
         @Suppress("DEPRECATION")
-        activity.window.statusBarColor = if (darkTheme) android.graphics.Color.rgb(8, 13, 22) else android.graphics.Color.rgb(248, 250, 255)
+        activity.window.statusBarColor = android.graphics.Color.rgb(15, 14, 26)
         @Suppress("DEPRECATION")
-        activity.window.navigationBarColor = if (darkTheme) android.graphics.Color.rgb(8, 13, 22) else android.graphics.Color.rgb(246, 247, 251)
+        activity.window.navigationBarColor = android.graphics.Color.rgb(26, 25, 48)
         @Suppress("DEPRECATION")
-        activity.window.decorView.systemUiVisibility = if (darkTheme) {
-            0
-        } else {
-            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0
-        }
+        activity.window.decorView.systemUiVisibility = 0
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val mask = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
                 android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
-            activity.window.insetsController?.setSystemBarsAppearance(if (darkTheme) 0 else mask, mask)
+            activity.window.insetsController?.setSystemBarsAppearance(0, mask)
         }
     }
     Box(
@@ -377,8 +369,7 @@ private fun BangluTutorialScreen(onBack: () -> Unit) {
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    if (darkTheme) listOf(Color(0xFF080D16), TutorialBlack, TutorialDark)
-                    else listOf(Color(0xFFF8FAFF), TutorialBlack, TutorialDark)
+                    listOf(TutorialBlack, TutorialBlack, TutorialDark)
                 )
             )
     ) {
@@ -429,11 +420,15 @@ private fun TutorialHeader(onBack: () -> Unit) {
             Text("←", color = TutorialPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(modifier = Modifier.width(14.dp))
-        Image(
-            painter = painterResource(id = R.drawable.banglu_logo),
-            contentDescription = "Banglu logo",
-            modifier = Modifier.size(52.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(TutorialCoral),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("বা", color = Color.White, fontSize = 22.sp)
+        }
         Spacer(modifier = Modifier.width(12.dp))
         Column {
             Text("Banglu Guide", color = TutorialPrimary, fontSize = 30.sp, fontWeight = FontWeight.Black)
@@ -521,9 +516,9 @@ private fun TutorialStepCard(step: TutorialStep) {
 
 @Composable
 private fun ExampleRow(input: String, output: String) {
-    val darkTheme = TutorialBlack == Color(0xFF080D16)
-    val rowBackground = if (darkTheme) Color(0xFF101A2A) else Color(0xFFF3F7FF)
-    val rowBorder = if (darkTheme) TutorialPrimary.copy(alpha = 0.26f) else TutorialPrimary.copy(alpha = 0.14f)
+    // S147: one committed mock look — example rows sit on card-2 plum.
+    val rowBackground = Color(0xFF2B2A46)
+    val rowBorder = TutorialPrimary.copy(alpha = 0.26f)
     Row(
         modifier = Modifier
             .fillMaxWidth()

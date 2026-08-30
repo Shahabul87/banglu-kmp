@@ -31,8 +31,25 @@ Future revenue = optional premium (AI rewrite via the :ui process, power-user
 packs). NO cloud API on the keystroke path — decided 2026-07-03 (latency,
 cost, and privacy-promise reasons; see memory + git history).
 
-**Current status (2026-08-29):** ONE ENGINE, SIX SURFACES (Windows IME
+**Current status (2026-08-30):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S147 Android app-UI redesign (2026-08-30, user: "completely redesign like
+  this mock … full app UI based on the mock theme, same to same"):** the whole
+  :ui process (MainActivity home + onboarding, Settings, Tutorial) committed
+  to the approved mock look (scratchpad banglu-android-mocks.html): dark plum
+  #0F0E1A/#22213A, terracotta CTA #D9633F, mustard highlight #E9B84A, moss
+  #3FA372. Home = brand row + state pill, two-line hero, state-aware
+  three-step stepper (one CTA for the step you're on; S55 hint only after a
+  failed attempt), white try-field + roman chips, keycap power cards (hot cap
+  = the letter the engine decided), bottom nav হোম/শিখুন/সেটিংস/মতামত
+  (bangluweb.com/feedback). First run = 4 slides (স্বাগতম welcome → বৈশিষ্ট্য features →
+  কনফিউজিং-শব্দ explorer → setup stepper), animated transitions. The showcase list
+  lives in shared `ShowcaseWords` and EVERY advertised (variant, word) pair —
+  cards, chips, onboarding lines — is pinned by S147ShowcaseWordsJvmTest on
+  the real dictionary. Engine: shassoto/shasstho/sasstho → স্বাস্থ্য seed
+  aliases. Fonts bundled in res/font: Tiro Bangla (display serif, the mock's
+  --bn), JetBrains Mono (romans), Noto Sans Bengali Reg/Bold (app-wide default
+  via BangluComposeHost typography). Android 1.5.92 (2129).
 - **S141 typed-faithful round (2026-08-29, user law: "the engine must not
   ignore what I typed — at least show it in the suggestions"):** a clean-
   reading OOV literal keeps the commit (banglu → বাংলু, not বাংলা/বাংরু);

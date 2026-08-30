@@ -45,43 +45,45 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private var Primary = Color(0xFF0A84FF)
-private var Success = Color(0xFF34C759)
-private var Secondary = Color(0xFF8E8E93)
-private var Coral = Color(0xFFFF3B30)
-private var WarmBlack = Color(0xFFF6F7FB)
-private var WarmDark = Color(0xFFEFF3F8)
-private var WarmCard = Color(0xFFFFFFFF)
-private var WarmCardBorder = Color(0xFFE4E8F0)
-private var TextMuted = Color(0xFF6B7280)
-private var TextLight = Color(0xFF111827)
-private var PrimaryTrack = Color(0xFFD9EBFF)
+private var Primary = Color(0xFFD9633F)
+private var Success = Color(0xFF3FA372)
+private var Secondary = Color(0xFFA9A4BC)
+private var Coral = Color(0xFFD9633F)
+private var WarmBlack = Color(0xFF0F0E1A)
+private var WarmDark = Color(0xFF1A1930)
+private var WarmCard = Color(0xFF22213A)
+private var WarmCardBorder = Color(0x26FFFFFF)
+private var TextMuted = Color(0xFFA9A4BC)
+private var TextLight = Color(0xFFF4EEE3)
+private var PrimaryTrack = Color(0x40D9633F)
 
 private fun applySettingsPalette(dark: Boolean) {
     if (dark) {
-        Primary = Color(0xFF64D2FF)
-        Success = Color(0xFF30D158)
-        Secondary = Color(0xFF98989D)
-        Coral = Color(0xFFFF453A)
-        WarmBlack = Color(0xFF080D16)
-        WarmDark = Color(0xFF111827)
-        WarmCard = Color(0xFF182235)
-        WarmCardBorder = Color(0xFF27364F)
-        TextMuted = Color(0xFFA8B3C7)
-        TextLight = Color(0xFFF8FAFC)
-        PrimaryTrack = Color(0xFF123B5E)
+        // S147: one committed mock look (banglu-android-mocks.html palette)
+        Primary = Color(0xFFD9633F)
+        Success = Color(0xFF3FA372)
+        Secondary = Color(0xFFA9A4BC)
+        Coral = Color(0xFFD9633F)
+        WarmBlack = Color(0xFF0F0E1A)
+        WarmDark = Color(0xFF1A1930)
+        WarmCard = Color(0xFF22213A)
+        WarmCardBorder = Color(0x26FFFFFF)
+        TextMuted = Color(0xFFA9A4BC)
+        TextLight = Color(0xFFF4EEE3)
+        PrimaryTrack = Color(0x40D9633F)
     } else {
-        Primary = Color(0xFF0A84FF)
-        Success = Color(0xFF34C759)
-        Secondary = Color(0xFF8E8E93)
-        Coral = Color(0xFFFF3B30)
-        WarmBlack = Color(0xFFF6F7FB)
-        WarmDark = Color(0xFFEFF3F8)
-        WarmCard = Color(0xFFFFFFFF)
-        WarmCardBorder = Color(0xFFE4E8F0)
-        TextMuted = Color(0xFF6B7280)
-        TextLight = Color(0xFF111827)
-        PrimaryTrack = Color(0xFFD9EBFF)
+        // S147: one committed mock look (banglu-android-mocks.html palette)
+        Primary = Color(0xFFD9633F)
+        Success = Color(0xFF3FA372)
+        Secondary = Color(0xFFA9A4BC)
+        Coral = Color(0xFFD9633F)
+        WarmBlack = Color(0xFF0F0E1A)
+        WarmDark = Color(0xFF1A1930)
+        WarmCard = Color(0xFF22213A)
+        WarmCardBorder = Color(0x26FFFFFF)
+        TextMuted = Color(0xFFA9A4BC)
+        TextLight = Color(0xFFF4EEE3)
+        PrimaryTrack = Color(0x40D9633F)
     }
 }
 
@@ -163,20 +165,15 @@ class SettingsActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         @Suppress("DEPRECATION")
-        window.statusBarColor = android.graphics.Color.rgb(248, 250, 255)
+        window.statusBarColor = android.graphics.Color.rgb(15, 14, 26)
         @Suppress("DEPRECATION")
-        window.navigationBarColor = android.graphics.Color.rgb(246, 247, 251)
+        window.navigationBarColor = android.graphics.Color.rgb(26, 25, 48)
         @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility =
-            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0
+        window.decorView.systemUiVisibility = 0
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.insetsController?.setSystemBarsAppearance(
-                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
-                    android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
-                    android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
-            )
+            val mask = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            window.insetsController?.setSystemBarsAppearance(0, mask)
         }
         setBangluContent { BangluSettingsScreen(onBack = { finish() }) }
     }
@@ -232,20 +229,15 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
     SideEffect {
         val activity = context as? Activity ?: return@SideEffect
         @Suppress("DEPRECATION")
-        activity.window.statusBarColor = if (darkTheme) android.graphics.Color.rgb(8, 13, 22) else android.graphics.Color.rgb(248, 250, 255)
+        activity.window.statusBarColor = android.graphics.Color.rgb(15, 14, 26)
         @Suppress("DEPRECATION")
-        activity.window.navigationBarColor = if (darkTheme) android.graphics.Color.rgb(8, 13, 22) else android.graphics.Color.rgb(246, 247, 251)
+        activity.window.navigationBarColor = android.graphics.Color.rgb(26, 25, 48)
         @Suppress("DEPRECATION")
-        activity.window.decorView.systemUiVisibility = if (darkTheme) {
-            0
-        } else {
-            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0
-        }
+        activity.window.decorView.systemUiVisibility = 0
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val mask = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
                 android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
-            activity.window.insetsController?.setSystemBarsAppearance(if (darkTheme) 0 else mask, mask)
+            activity.window.insetsController?.setSystemBarsAppearance(0, mask)
         }
     }
 
@@ -254,8 +246,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    if (darkTheme) listOf(Color(0xFF080D16), WarmBlack, WarmDark)
-                    else listOf(Color(0xFFF8FAFF), WarmBlack, WarmDark)
+                    listOf(WarmBlack, WarmBlack, WarmDark)
                 )
             )
     ) {
@@ -286,11 +277,15 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                         Text("←", color = Primary, fontSize = 20.sp)
                     }
                     Spacer(modifier = Modifier.width(16.dp))
-                    Image(
-                        painter = painterResource(id = R.drawable.banglu_logo),
-                        contentDescription = "Banglu logo",
-                        modifier = Modifier.size(52.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Primary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("বা", color = Color.White, fontSize = 22.sp)
+                    }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text("সেটিংস", color = Primary, fontSize = 30.sp, fontWeight = FontWeight.Bold)

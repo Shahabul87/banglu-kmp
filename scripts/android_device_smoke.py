@@ -132,7 +132,7 @@ def tap(node):
     adb("shell", "input", "tap", str(c[0]), str(c[1]))
 
 
-ONBOARDING_DISMISS_LABELS = ("Skip", "শুরু করুন", "শুরু করি")
+ONBOARDING_DISMISS_LABELS = ("Skip", "এড়িয়ে যান", "শুরু করুন", "শুরু করি")
 
 
 def dismiss_onboarding():

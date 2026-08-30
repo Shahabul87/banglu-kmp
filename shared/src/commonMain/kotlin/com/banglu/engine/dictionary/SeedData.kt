@@ -385,7 +385,7 @@ object SeedData {
     )
 
     private fun chunk1(): List<SmartDictionaryEntry> = listOf(
-            e("স্বাস্থ্য", listOf("swastho", "shastho", "sastho", "swasthou", "shasthou", "sasthou", "shasthyo", "swasthya", "sasthyo", "swasthyaa", "shasthyou", "sasthyou", "shasthho", "sasthho", "shasthhou", "sasthhou", "shostho"), 80, WordCategory.TATSAMA),
+            e("স্বাস্থ্য", listOf("swastho", "shastho", "sastho", "swasthou", "shasthou", "sasthou", "shasthyo", "swasthya", "sasthyo", "swasthyaa", "shasthyou", "sasthyou", "shasthho", "sasthho", "shasthhou", "sasthhou", "shostho", "shassoto", "shasstho", "sasstho"), 80, WordCategory.TATSAMA),
             e("বস্তু", listOf("bostu", "bstu", "bostuu", "bstuu", "bostoo", "bstoo", "vastu", "vastuu", "bhastu", "vastoo", "bhastoo"), 50, WordCategory.TATSAMA),
             e("ব্যস্ত", listOf("byosto", "byasto", "byostou", "byastou", "vyasta", "vyastaa", "bhyasta"), 50, WordCategory.TATSAMA),
             e("পুস্তক", listOf("pustok", "puustok"), 38, WordCategory.TATSAMA),
