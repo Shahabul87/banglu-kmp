@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
  * spellings (does the English word resolve to an English rendering or to an
  * everyday Bengali word, and is the English spelling on the strip?) and one
  * deterministic slip per word (does the rescue land on the same rendering?).
- * Writes docs/engine-english-study-<date>.md; the floors below are the pins.
+ * Opt-in (BANGLU_ENGLISH_STUDY=1); writes docs/engine-english-study-<date>.md.
  */
 class S143EnglishCorpusStudyJvm {
     private val engine get() = ConjunctSolutionRoundJvmTest.engine
@@ -28,6 +28,13 @@ class S143EnglishCorpusStudyJvm {
 
     @Test
     fun commonEnglishWordsStudy() {
+        // ~35K engine calls (commit + strip + slip per word): a 10+ minute
+        // study, not a wall. Opt in like the S24 eval harness (EVAL_WORDS):
+        //   BANGLU_ENGLISH_STUDY=1 ./gradlew :shared:jvmTest --tests '*S143EnglishCorpusStudy*'
+        if (System.getenv("BANGLU_ENGLISH_STUDY") != "1") {
+            println("S143 study skipped (set BANGLU_ENGLISH_STUDY=1 to run)")
+            return
+        }
         val words = javaClass.getResourceAsStream("/studies/google-10000-english.txt")!!.bufferedReader()
             .readLines().map { it.trim().lowercase() }.filter { it.length >= 4 && it.all { c -> c in 'a'..'z' } }.distinct()
         var english = 0; var everydayBengali = 0; var unknownToLexicon = 0; var dictionaryLoanword = 0
