@@ -218,14 +218,15 @@ fun BangluHomeScreen() {
                 Reveal(visible, 120) {
                 Text(
                     buildAnnotatedString {
-                        append("ইংরেজিতে লিখুন,\n")
-                        withStyle(SpanStyle(color = MockMustard)) { append("বাংলা") }
-                        append(" পান।")
+                        append("শুধু ছোট হাতের ইংরেজি দিয়ে\n")
+                        withStyle(SpanStyle(color = MockMustard)) { append("সব বাংলা শব্দ") }
+                        append(" লিখুন")
                     },
                     color = MockInk,
-                    fontSize = 34.sp,
-                    lineHeight = 41.sp,
-                    fontFamily = BanglaSerif,
+                    fontSize = 32.sp,
+                    lineHeight = 43.sp,
+                    fontFamily = BanglaSans,
+                    fontWeight = FontWeight.Black,
                     modifier = Modifier.padding(horizontal = 4.dp)
                 )
                 }
