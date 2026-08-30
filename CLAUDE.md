@@ -90,7 +90,25 @@ cost, and privacy-promise reasons; see memory + git history).
   8400 common words, 98.4% English-or-correct (137 residue, nearly all the
   dictionary's better loanword spellings), 94% of one-slip misspellings
   rescued. Test: S143EnglishSpellingJvmTest.
-- **Android** v1.5.90 (2127), db 3.9.6 — S140: engine publication is
+- **S144 keystroke sqlite budget (2026-08-30, Windows field report: "deleting
+  words is not smooth, space lags"):** measured on the sqlite-backed JVM
+  store — a keystroke issued 130–550 phonetic_index point queries, up to
+  ~2,000 extended-dictionary queries and ~100 Bengali→phonetic reverse
+  queries (every edit variant the typo/lattice layers probe; the 128-entry
+  memo thrashed so backspaces re-queried everything). Invisible on a warm
+  Mac page cache, 50–500 ms per key on an antivirus-hooked Windows disk.
+  Fix at the store boundary: `JvmSqlitePhoneticIndexStore` builds three
+  Bloom negative indexes (phonetic_index keys, extended phonetics, extended
+  Bengali — `util/BloomFilter`) on a daemon thread with its own read
+  connection (~0.6 s, boot not delayed; until ready, sqlite as before, no
+  false negatives), memoizes the reverse lookup, short-circuits lexicon
+  misses through the in-memory key set; `MAX_STORE_MEMO` 128 → 2048;
+  `isMidWordPrefix` memoized. Result: 18 unknown-word keystrokes = 101
+  sqlite queries (was 2,129 with the bloom off, thousands more before).
+  Pins: `S144KeystrokeSqliteBudgetJvmTest` (≤ 40 queries/keystroke on the
+  real db), `S144BloomFilterTest`. Android's own store is untouched (its
+  conversions are async); Windows 1.0.10 / desktop 1.3.6 / Android 1.5.91.
+- **Android** v1.5.91 (2128), db 3.9.6 — S140: engine publication is
   generation-checked + atomic under learningLock (an erase during the
   dictionary load can no longer resurface deleted words); identity
   migration never overwrites a decision. Before that S139: 1.5.85 had a clipboard

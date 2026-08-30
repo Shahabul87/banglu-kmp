@@ -182,7 +182,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     companion object {
         const val MAX_CACHE = 2000
-        private const val MAX_STORE_MEMO = 128
+        /** S144: 128 thrashed under the typo layer's edit variants (a backspace
+         *  re-queried 130–440 keys); 2048 keeps a whole word's worth of probes. */
+        private const val MAX_STORE_MEMO = 2048
         private const val MAX_SUGGESTION_CANDIDATES = 40
 
         /**
@@ -1404,14 +1406,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * laws stand down for such keys in BOTH the preview and the commit, so
      * বাংলা never flashes ব্যাঙ on the way and Space commits what was shown.
      */
+    private val midWordMemo = com.banglu.engine.util.LruCache<String, Boolean>(512)
     private fun isMidWordPrefix(key: String): Boolean {
         val store = phoneticIndex ?: return false
         if (key.length < 3) return true
+        midWordMemo[key]?.let { return it }   // S144: one prefix query per unique key, never per keystroke
         val exactOwners = storeLookup(key).mapTo(HashSet()) { it.bengali }
-        return store.lookupPrefix(key, 4).any {
+        val result = store.lookupPrefix(key, 4).any {
             it.priority == PhoneticIndexHit.PRIORITY_CANONICAL && it.frequency >= EVERYDAY_WORD_BAND &&
                 it.bengali !in exactOwners
         }
+        midWordMemo[key] = result
+        return result
     }
 
     /** S143: an English-shaped key — the detector's verdict, or letters and
