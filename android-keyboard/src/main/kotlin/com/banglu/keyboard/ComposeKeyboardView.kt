@@ -1573,11 +1573,16 @@ private fun BangluSuggestionRow(
                             // on the blue chip failed the very users it exists
                             // for. 11sp near-white; the hint only renders on
                             // the highlighted first chip, so white is safe.
+                            // Tight to the Bengali above it (tester follow-up:
+                            // "do not make so much gap") — the two lines are one
+                            // reading, not a list.
                             Text(
                                 text = displayPhoneticHint(suggestion.phonetic),
                                 color = Color.White.copy(alpha = 0.88f),
                                 fontSize = scaledSp(11),
-                                maxLines = 1
+                                lineHeight = scaledSp(11),
+                                maxLines = 1,
+                                modifier = Modifier.offset(y = (-3).dp)
                             )
                         }
                     }
