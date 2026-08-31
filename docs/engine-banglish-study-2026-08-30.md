@@ -230,3 +230,22 @@ treat single-word "misses" in class 1/5 as disagreements, not defects.
     - covid: 1
 
 - mean convertWord time over 159168 pair-words: 3.16 ms
+
+---
+
+# Post-S150 delta (same harness, same caps, engine at v1.5.93 / aca0209)
+
+| corpus | word-exact | gold in top-6 | sentence-exact |
+|---|---:|---:|---:|
+| BanglaTLit (chat) | 66.7% → **70.0%** (+3.3) | 75.4% → **77.1%** (+1.7) | 15.1% → **19.0%** (+3.9) |
+| Vashantor-standard | 91.2% → 91.2% (+40 words) | 96.9% → 96.9% | 56.9% → 57.1% |
+| Vashantor-dialect | 70.9% → 69.8% (−1.1) | 82.5% → 81.4% | 11.9% → 11.0% |
+
+The chat-register fixes land where they were aimed: +2,117 word pairs and
++348 exact sentences on BanglaTLit, with the dental/retroflex bucket
+collapsing 644 → 225 (the টা clitic). The small dialect regression is the
+same flip seen from the other side — dialectal gold uses তা where standard
+chat means টা — and dialect remains explicitly out of scope. Remaining
+backlog (unchanged): ো-final/ি-ী scoring folds, kothai→কথাই root-
+decomposition ranking, and the context homographs that belong to the
+trigram lane.
