@@ -45,6 +45,7 @@ class AIDisambiguator {
             "ি" to "ী", "ী" to "ি",
             "ু" to "ূ", "ূ" to "ু",
             "ৃ" to "্রি", "্রি" to "ৃ",   // S141: ri-class twin (kri -> কৃ / ক্রি)
+            "ই" to "য়", "য়" to "ই",     // S151: the hoi/hoy homograph class (হই / হয়, যাই / যায়)
             "ই" to "ঈ", "ঈ" to "ই",
             "উ" to "ঊ", "ঊ" to "উ",
             "ে" to "ৈ", "ৈ" to "ে",

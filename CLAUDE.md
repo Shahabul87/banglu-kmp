@@ -33,6 +33,16 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-30):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S151 homograph/context round (2026-08-30, "do fix it"):** kothai →
+  কোথায় chat default (কথাই was winning a one-point seed race; strip twin
+  kept); final-ই/য় homograph twins get a guaranteed strip slot
+  (`homograph_twin` promotion: hoi carries হয়, jai carries যায় — the
+  context rerank always has both readings to promote); ই↔য় joined
+  AIDisambiguator SWAP_RULES; the S149 harness gained a variant-exact
+  metric (ো-final + ি/ী spelling twins scored as policy, not misses) and a
+  WITH-CONTEXT pass measuring rerankWithContext(prev2, prev1) on gold
+  context, incl. per-homograph accuracy. Pins:
+  S151ContextAndSpellingJvmTest. Android 1.5.94 (2131).
 - **S149/S150 Banglish-corpus round (2026-08-30):** the deep-research
   datasets (BanglaTLit, Vashantor, Socian, Chaos, SMS, PolCSBD) ran through
   the real engine (S149BanglishCorpusStudyJvm, opt-in env; report

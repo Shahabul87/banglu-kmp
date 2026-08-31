@@ -367,6 +367,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "vlo" to "ভালো",
             "aktu" to "একটু",
             "kno" to "কেন",
+            // S151: kothai lost a one-point seed race (কথাই@61 over
+            // কোথায়@60 on the same alias) — in chat "tumi kothai?" the
+            // intent is কোথায় overwhelmingly; কথাই keeps its strip slot.
+            "kothai" to "কোথায়",
             "tnx" to "থ্যাংকস",
             "thnx" to "থ্যাংকস",
             "use" to "ইউজ",
@@ -2767,6 +2771,33 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 )
             }
         }
+        // S151 (Banglish-corpus study, homograph lane): the final ই/য়
+        // homograph pair — hoi is হই AND হয়, jai is যাই AND যায়; the corpora
+        // write both intents with either key. When the primary's final-vowel
+        // twin is a real high-frequency word, it holds a visible slot so the
+        // context rerank (and the user's finger) always has both readings.
+        if (limit >= 2 && validator.isLoaded()) {
+            val twin = when {
+                primary.bengali.endsWith("ই") -> primary.bengali.dropLast(1) + "য়"
+                primary.bengali.endsWith("য়") -> primary.bengali.dropLast(1) + "ই"
+                else -> null
+            }
+            if (twin != null && validator.getFrequency(twin) >= 40) {
+                val twinFolded = ReverseTransliterator.foldNukta(twin)
+                val idx = ordered.indexOfFirst { ReverseTransliterator.foldNukta(it.bengali) == twinFolded }
+                val maxIdx = limit - 1
+                if (idx in (maxIdx + 1) until ordered.size) {
+                    val promoted = ordered.removeAt(idx)
+                    ordered.add(minOf(maxIdx, ordered.size), promoted)
+                } else if (idx == -1) {
+                    ordered.add(
+                        minOf(maxIdx, ordered.size),
+                        SmartSuggestion(twin, 0.9, "homograph_twin", key, "tier0")
+                    )
+                }
+            }
+        }
+
         // S141 literal law (field report, generalised by the user: "the engine
         // must not ignore what I typed — at least show it in the
         // suggestions"): whenever the commit-path primary is NOT the

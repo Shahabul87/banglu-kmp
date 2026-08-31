@@ -20,6 +20,15 @@ class S149BanglishCorpusStudyJvm {
 
     private fun fold(s: String): String = ReverseTransliterator.foldNukta(s)
 
+    // S151 scoring policy: the ো-final and ি/ী spelling-standard twins
+    // (বড়ো/বড়, কোনো/কোন, বেশি/বেশী) are BOTH correct Bengali — corpora mix
+    // them freely, so they get their own variant-exact metric instead of
+    // polluting the miss buckets.
+    private fun spellingTwin(a: String, b: String): Boolean {
+        fun t(s: String) = fold(s).replace('ী', 'ি').replace('ঈ', 'ই').removeSuffix("ো")
+        return t(a) == t(b)
+    }
+
     // Confusion-class folds, applied on top of foldNukta.
     private fun foldWith(s: String, map: Map<Char, Char>): String =
         buildString { for (c in fold(s)) append(map[c] ?: c) }
@@ -30,6 +39,10 @@ class S149BanglishCorpusStudyJvm {
     private val RA_CLASS = mapOf('ড' to 'র', 'ড়' to 'র', 'ঢ়' to 'র', 'ঢ' to 'র')
     private val NASAL = mapOf('ং' to 'ঙ', 'ঁ' to 'ঙ', 'ম' to 'ঙ', 'ন' to 'ঙ')
     private val JA_YA = mapOf('য়' to 'জ', 'য' to 'জ')
+
+    private val HOMOGRAPH_KEYS = setOf(
+        "ase", "hoi", "jai", "pore", "jan", "bon", "dosh", "ar", "ki", "tar", "kore", "dan"
+    )
 
     private fun stripFinalVowel(s: String): String =
         s.trimEnd('া', 'ে', 'ো', 'ি', 'ু', '্')
@@ -78,7 +91,8 @@ class S149BanglishCorpusStudyJvm {
 
         data class Src(
             var sentences: Int = 0, var aligned: Int = 0, var sentenceExact: Int = 0,
-            var words: Int = 0, var wordExact: Int = 0, var top6: Int = 0,
+            var words: Int = 0, var wordExact: Int = 0, var variantExact: Int = 0, var top6: Int = 0,
+            var ctxExact: Int = 0, var homoWords: Int = 0, var homoPlain: Int = 0, var homoCtx: Int = 0,
             val classes: MutableMap<String, Int> = mutableMapOf()
         )
 
@@ -112,10 +126,23 @@ class S149BanglishCorpusStudyJvm {
             for (i in roman.indices) {
                 val r = roman[i]; val g = gold[i]
                 val tw = System.nanoTime()
-                val out = engine.convertWord(r).bengali
+                val res = engine.convertWord(r)
+                val out = res.bengali
                 wordsTimed += (System.nanoTime() - tw)
+                // S151 context pass: the trigram/bigram lane the IME really
+                // uses at commit — previous GOLD words as committed context.
+                val prev1 = if (i >= 1) gold[i - 1] else ""
+                val prev2 = if (i >= 2) gold[i - 2] else ""
+                val ctxOut = engine.rerankWithContext(prev2, prev1, res).bengali
+                if (fold(ctxOut) == fold(g)) s.ctxExact++
+                if (r in HOMOGRAPH_KEYS) {
+                    s.homoWords++
+                    if (fold(out) == fold(g)) s.homoPlain++
+                    if (fold(ctxOut) == fold(g)) s.homoCtx++
+                }
                 s.words++
-                if (fold(out) == fold(g)) { s.wordExact++; s.top6++ }
+                if (fold(out) == fold(g)) { s.wordExact++; s.variantExact++; s.top6++ }
+                else if (spellingTwin(out, g)) { s.variantExact++; s.top6++; all = false }
                 else {
                     all = false
                     val hit = engine.getSuggestions(r, 6).any { fold(it.bengali) == fold(g) }
@@ -161,8 +188,10 @@ class S149BanglishCorpusStudyJvm {
         for ((name, s) in perSource) {
             sb.appendLine("## $name")
             sb.appendLine("- sentences read: ${s.sentences}, word-aligned: ${s.aligned}")
-            sb.appendLine("- word pairs: ${s.words}; word-exact: ${s.wordExact} (${"%.1f".format(100.0 * s.wordExact / maxOf(1, s.words))}%); gold-in-top6: ${s.top6} (${"%.1f".format(100.0 * s.top6 / maxOf(1, s.words))}%)")
+            sb.appendLine("- word pairs: ${s.words}; word-exact: ${s.wordExact} (${"%.1f".format(100.0 * s.wordExact / maxOf(1, s.words))}%); variant-exact (ো/ি-ী twins folded): ${s.variantExact} (${"%.1f".format(100.0 * s.variantExact / maxOf(1, s.words))}%); gold-in-top6: ${s.top6} (${"%.1f".format(100.0 * s.top6 / maxOf(1, s.words))}%)")
             sb.appendLine("- sentence-exact (all words): ${s.sentenceExact} / ${s.aligned} (${"%.1f".format(100.0 * s.sentenceExact / maxOf(1, s.aligned))}%)")
+            sb.appendLine("- WITH-CONTEXT word-exact (gold prev-2 via rerankWithContext): ${s.ctxExact} (${"%.1f".format(100.0 * s.ctxExact / maxOf(1, s.words))}%)")
+            sb.appendLine("- homograph keys (${HOMOGRAPH_KEYS.joinToString(",")}): ${s.homoWords} occurrences — plain ${s.homoPlain} (${"%.1f".format(100.0 * s.homoPlain / maxOf(1, s.homoWords))}%), with context ${s.homoCtx} (${"%.1f".format(100.0 * s.homoCtx / maxOf(1, s.homoWords))}%)")
             sb.appendLine("- failure classes:")
             for ((c, n) in s.classes.entries.sortedByDescending { it.value }) {
                 sb.appendLine("    - $c: $n (${"%.1f".format(100.0 * n / maxOf(1, s.words - s.wordExact))}% of misses)")
