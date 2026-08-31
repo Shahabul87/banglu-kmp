@@ -351,6 +351,27 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             "hmmm" to "হুম",
             "hmmmm" to "হুম",
             "hmn" to "হুম",
+            // S150 (Banglish-corpus study, docs/engine-banglish-study-2026-08-30.md):
+            // the chat-register defaults the corpora vote for overwhelmingly.
+            // Standalone "ta" is the clitic টা (479× vs তা in BanglaTLit; তা
+            // stays one tap away on the strip); the a→এ deictics read
+            // এটা/এইটা/এই in chat (আটা/আই remain strip twins); the vowel-less
+            // shorthands join the kmon class (the two-letter tech
+            // initialisms move to ACRONYM_OVERRIDES Tier P instead — that
+            // layer runs first and owns the acronym architecture).
+            "ta" to "টা",
+            "ata" to "এটা",
+            "aita" to "এইটা",
+            "ai" to "এই",
+            "onk" to "অনেক",
+            "vlo" to "ভালো",
+            "aktu" to "একটু",
+            "kno" to "কেন",
+            "tnx" to "থ্যাংকস",
+            "thnx" to "থ্যাংকস",
+            "use" to "ইউজ",
+            "nice" to "নাইস",
+            "new" to "নিউ",
             // S46: kmon previously relied on the validator-backed recovery
             // layer — absent in Android lite mode and the slim web tier, where
             // it degraded to ক্মন. Top-frequency chat token; enumerate it.
@@ -1121,7 +1142,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      */
     fun convertWord(input: String): ConversionResult {
         val raw = convertWordRaw(input)
-        if (inTypoCorrection || inCompoundSplit || inNegationCompound || inEmphaticOCompound) return raw
+        if (inTypoCorrection || inCompoundSplit || inNegationCompound || inEmphaticOCompound || inEmphaticICompound) return raw
         val key = input.trim().lowercase()
         if (key.length < 4 || !key.all { it in 'a'..'z' }) return raw
         // S24/S26: English-intent arbitration. When an English key collides
@@ -1630,6 +1651,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             cacheResult(cacheKey, result); return result
         }
 
+        // S150: attached emphatic ই (khubi = খুবই) — see the layer's kdoc.
+        tryEmphaticICompound(key)?.let { result ->
+            cacheResult(cacheKey, result); return result
+        }
+
         tryProductiveVerbSuffixConversion(key)?.let { result ->
             // Composed root+suffix string — may be an invented form; gate it.
             val gated = applyCompositionCommitGate(key, result)
@@ -1876,7 +1902,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      */
     fun convertForComposing(input: String): ConversionResult {
         val raw = convertForComposingCore(input)
-        if (inTypoCorrection || inCompoundSplit || inNegationCompound || inEmphaticOCompound) return raw
+        if (inTypoCorrection || inCompoundSplit || inNegationCompound || inEmphaticOCompound || inEmphaticICompound) return raw
         val key = input.trim().lowercase()
         if (key.length < 4 || !key.all { it in 'a'..'z' }) return raw
         // S67 mirror of convertWord's S24 4x-margin arbitration: an English
@@ -1956,6 +1982,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // preview must show the same form (ashiko previews আশিকও, not the
         // fuzzy-stolen আশিক that space would then "fix").
         tryEmphaticOCompound(key)?.let { result ->
+            return result.copy(alternatives = emptyList())
+        }
+
+        // S150: the emphatic-ই composition previews what space will commit.
+        tryEmphaticICompound(key)?.let { result ->
             return result.copy(alternatives = emptyList())
         }
 
@@ -4773,6 +4804,76 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     private var inEmphaticOCompound = false
+
+    /**
+     * S150 (Banglish-corpus study): attached emphatic ই — khubi = খুবই,
+     * ekdomi = একদমই. The exact sibling of the S56 attached-ও layer above,
+     * with one difference: the whole-word guard is evidence-COMPETITIVE —
+     * the junk-tolerant validator often "knows" the plain-ই misreading
+     * (খুবি) that this layer exists to displace, so a whole-key owner only
+     * defers the composition when it carries at least the composed word's
+     * own frequency. Real owners (কোথায় on kothai) clear that bar easily.
+     */
+    private fun tryEmphaticICompound(key: String): ConversionResult? {
+        if (inNegationCompound || inEmphaticOCompound || inEmphaticICompound || inCompoundSplit) return null
+        if (key.length < 5 || !key.endsWith("i") || key.endsWith("ii")) return null
+        // Diphthong guard: when a VOWEL precedes the final i, the i is
+        // almost always part of the word's own reading (kothai = কোথায়,
+        // bhalobasai, hoi/jai class) — never an emphatic particle. The
+        // particle attaches to consonant-final stems: khub-i, ekdom-i.
+        if (key[key.length - 2] in "aeiou") return null
+        if (!validator.isLoaded()) return null
+        // Whole-word precedence, S56-shaped but junk-aware: any TIER_A or
+        // evidence-carrying (≥25, the S105 bar) store row owns the key —
+        // the trailing i is the word's own vowel (শান্তি, ঘড়ি, ভাবি). A
+        // seed/dictionary word on the exact key is equally absolute. Only
+        // junk-band squatters (খুবি) fall through to the composition.
+        if (storeLookup(key).any { it.tier == PhoneticIndexHit.TIER_A || it.frequency >= 25 }) {
+            return null
+        }
+        if (dictionary.lookup(key).isNotEmpty()) return null
+        val stemKey = key.dropLast(1)
+        val foldedStemKey = normalizeIndexQuery(stemKey)
+        if (phoneticIndex != null && storeLookup(key).isEmpty() &&
+            storeLookup(stemKey).isEmpty() &&
+            foldedStemKey != stemKey && storeLookup(foldedStemKey).isNotEmpty()
+        ) {
+            return null
+        }
+        inEmphaticICompound = true
+        val prefix = try {
+            convertWord(stemKey)
+        } finally {
+            inEmphaticICompound = false
+        }
+        if (prefix.confidence < 0.9) return null
+        val stem = prefix.bengali
+        if (stem.isEmpty()) return null
+        val stemTierA = storeLookup(stemKey).any {
+            it.tier == PhoneticIndexHit.TIER_A && it.bengali == stem
+        }
+        val stemAttested = stemTierA || (validator.isValid(stem) &&
+            (!validator.hasFrequencyData() || validator.getFrequency(stem) > 0))
+        if (!stemAttested) return null
+        val emphatic = stem + "ই"
+        val attested = validator.isValid(emphatic) || phoneticIndex?.containsWord(
+            com.banglu.engine.util.ReverseTransliterator.foldNukta(emphatic)
+        ) == true
+        if (!attested) return null
+        // Deferral: a TIER_A owner is absolute (শান্তি on shanti, কোথায় on
+        // kothai, ঘড়ি on ghori — the trailing i IS the word's own vowel).
+        // A junk-band validator-only owner (খুবি) defers only with real
+        // store evidence — the same ≥25 bar as the S105 composition gates.
+
+        return ConversionResult(
+            bengali = emphatic,
+            confidence = 0.93,
+            source = ResolutionSource.DICTIONARY,
+            alternatives = emptyList()
+        )
+    }
+
+    private var inEmphaticICompound = false
 
     private fun convertByRootDecomposition(key: String): ConversionResult? {
         if (key.length < 4) return null // Too short for meaningful decomposition

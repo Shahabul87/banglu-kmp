@@ -52,6 +52,13 @@ internal val ACRONYM_OVERRIDES: Map<String, String> = mapOf(
     "nid" to "এনআইডি",   // current: নিদ (collision — poetic "sleep"; not a natural typed-intent path)
     "hd" to "এইচডি",     // current: হদ (collision — RULE-generated "boundary/limit", not a natural typed-intent path)
     "gb" to "জিবি",      // current: গড়ব (collision — "I will build"; natural typing is "gorbo", not "gb")
+    // S150 (Banglish-corpus study, docs/engine-banglish-study-2026-08-30.md):
+    // the chat register votes the letter-name reading outright — fb 200×,
+    // mb 137×, pc 66× in BanglaTLit against zero natural typed-intent hits
+    // for এফ্ব/মব/প্ on these exact keys. mb moves up from Tier S.
+    "fb" to "এফবি",
+    "mb" to "এমবি",
+    "pc" to "পিসি",
     "km" to "কিমি",      // current: কড়মড় (garbage/collision — "crunch" onomatopoeia)
     "dc" to "ডিসি",      // current: দ্ (garbage — hanging consonant fragment)
     "sp" to "এসপি",      // current: সপ (garbage — RULE fragment, not a standalone word)
@@ -109,7 +116,6 @@ internal val ACRONYM_OVERRIDES: Map<String, String> = mapOf(
 internal val ACRONYM_SUGGESTIONS: Map<String, String> = mapOf(
     "ba" to "বিএ",     // primary বা "or" stays; BA degree offered as a chip
     "ma" to "এমএ",     // primary মা "mother" stays; MA degree offered as a chip
-    "mb" to "এমবি",    // primary মব "mob" stays (topical BD-news word); megabyte offered as a chip
     "dr" to "ডক্টর",   // primary ড্র "draw" stays (real sports loanword); Doctor offered as a chip
     "oc" to "ওসি",     // primary ওচ "vile" stays (real dictionary word); Officer-in-Charge offered as a chip
     "atm" to "এটিএম",  // primary আত্ম "self-" stays (real bound morpheme); ATM machine offered as a chip

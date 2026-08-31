@@ -38,8 +38,11 @@ class CandidateLatticeTest {
         assertEquals("ত", engine.convertWord("t").bengali)
         assertTrue("ট" in suggestions("t"))
 
-        assertEquals("তা", engine.convertWord("ta").bengali)
-        assertTrue("টা" in suggestions("ta"))
+        // S150 pin flip (documented decision, docs/engine-banglish-study-
+        // 2026-08-30.md): standalone "ta" is the clitic টা in the chat
+        // register by a 479× corpus margin; তা keeps its strip slot.
+        assertEquals("টা", engine.convertWord("ta").bengali)
+        assertTrue("তা" in suggestions("ta"))
 
         assertEquals("দ", engine.convertWord("d").bengali)
         assertTrue("ড" in suggestions("d"))

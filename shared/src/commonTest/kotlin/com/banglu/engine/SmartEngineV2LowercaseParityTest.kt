@@ -15,7 +15,8 @@ class SmartEngineV2LowercaseParityTest {
         assertEquals("ত", engine.convertForComposing("T").bengali)
         assertEquals("দ", engine.convertForComposing("D").bengali)
         assertEquals("র", engine.convertForComposing("R").bengali)
-        assertEquals("তা", engine.convertForComposing("Ta").bengali)
+        // S150: the টা clitic decision holds through case folding too.
+        assertEquals("টা", engine.convertForComposing("Ta").bengali)
         assertEquals("দি", engine.convertForComposing("Di").bengali)
     }
 

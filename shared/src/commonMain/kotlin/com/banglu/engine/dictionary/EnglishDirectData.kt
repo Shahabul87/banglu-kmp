@@ -472,6 +472,15 @@ object EnglishDirectData {
             e("সাজেশন", aliasesFor("suggestion"), 70, WordCategory.FOREIGN),
             e("টেস্টার", aliasesFor("tester"), 60, WordCategory.FOREIGN),
             e("ডোর", aliasesFor("door"), 70, WordCategory.FOREIGN),
+            // S150 (Banglish-corpus study): the chat register's own loan
+            // spellings — the dictionary rendering হেলপ loses to the
+            // attested হেল্প; use/nice/new live in the shorthand table for
+            // the commit, these seeds keep every consumer (chips, intent
+            // list, 4x rule) agreeing on the same rendering.
+            e("হেল্প", aliasesFor("help"), 72, WordCategory.FOREIGN),
+            e("ইউজ", aliasesFor("use"), 70, WordCategory.FOREIGN),
+            e("নাইস", aliasesFor("nice"), 70, WordCategory.FOREIGN),
+            e("নিউ", aliasesFor("new"), 70, WordCategory.FOREIGN),
             e("মিল্ক", aliasesFor("milk"), 70, WordCategory.FOREIGN),
             e("মেল", aliasesFor("male"), 60, WordCategory.FOREIGN),
             e("টেল", aliasesFor("tale"), 55, WordCategory.FOREIGN),

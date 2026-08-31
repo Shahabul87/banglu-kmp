@@ -11,8 +11,10 @@ class ConfusingWordsTest {
 
     private val cases = listOf(
         // ত/ট confusion
-        Case("t", "ত", "ত/ট"), Case("ta", "তা", "ত/ট"),
-        Case("T", "ত", "ত/ট"), Case("Ta", "তা", "ত/ট"),
+        Case("t", "ত", "ত/ট"),
+        // S150: "ta" flipped to the clitic টা (corpus-study decision).
+        Case("ta", "টা", "ত/ট"),
+        Case("T", "ত", "ত/ট"), Case("Ta", "টা", "ত/ট"),
         Case("taka", "টাকা", "ত/ট"),
         Case("aponar", "আপনার", "ত/ট"), Case("ekti", "একটি", "ত/ট"),
         Case("ekta", "একটা", "ত/ট"), Case("ektu", "একটু", "ত/ট"),

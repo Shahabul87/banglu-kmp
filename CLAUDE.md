@@ -33,6 +33,21 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-30):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S149/S150 Banglish-corpus round (2026-08-30):** the deep-research
+  datasets (BanglaTLit, Vashantor, Socian, Chaos, SMS, PolCSBD) ran through
+  the real engine (S149BanglishCorpusStudyJvm, opt-in env; report
+  docs/engine-banglish-study-2026-08-30.md): clean standard Banglish 91.2%
+  word-exact / 96.9% top-6, chat register 66.7% / 75.4%, 3.16 ms/word, zero
+  crashes. S150 fixes from its ranked backlog: the টা clitic owns "ta"
+  (documented pin flip, তা stays a strip twin); a→এ deictics ata/aita/ai;
+  vowel-less shorthand onk/vlo/aktu/kno/tnx + use/nice/new join the kmon
+  class; fb/mb/pc promoted to ACRONYM_OVERRIDES Tier P (id deliberately
+  stays Tier S — ঈদ keeps the key, আইডি chips); হেল্প/ইউজ/নাইস/নিউ curated
+  in EnglishDirectData; NEW tryEmphaticICompound layer (khub-i class:
+  ekdomi→একদমই) with diphthong guard (kothai-class i is the word's own
+  vowel) and junk-aware whole-word precedence — khubi stays খুবি (canonical
+  tier-A owner@69) with খুবই on the strip. Pins: S150ChatRegisterJvmTest.
+  Android 1.5.93 (2130).
 - **S147 Android app-UI redesign (2026-08-30, user: "completely redesign like
   this mock … full app UI based on the mock theme, same to same"):** the whole
   :ui process (MainActivity home + onboarding, Settings, Tutorial) committed
