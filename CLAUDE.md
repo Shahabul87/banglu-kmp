@@ -618,6 +618,18 @@ compiler version string AND REQUIRED_DB_VERSION together.
     bypassed — not in code, not in tests.
 12. Desktop/IME privacy = same law as Android: no network entitlement, no
     sockets, typing never leaves the machine.
+13. **No fix ships on partial evidence (user law, 2026-08-30: "do not
+    create mis engine behaviour while fixing others — always test full
+    engine behaviour with all the tests"):** every engine or surface
+    change runs the FULL wall suite before any "done" claim — ALL of
+    `:shared:jvmTest :shared:testDebugUnitTest :shared:jsNodeTest
+    :desktop-app:test :windows-ime:test` (plus the macOS runner whenever
+    its JS bundle is rebuilt), never just the round's own new test. A
+    change that flips an EXISTING pin is a documented decision recorded
+    in the pin itself (corpus/tester evidence cited), never a silent
+    test edit — and the S150-S153 rounds are the case law: the full
+    walls caught শান্তি→শান্তই collateral, the S81 phone pin, and the
+    stale sms duplicate that a new-test-only run would have shipped.
 
 ---
 
