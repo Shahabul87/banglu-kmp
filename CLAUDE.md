@@ -33,6 +33,13 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-30):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S154 propagation round (2026-08-30):** the S150-S153 engine reached
+  all six surfaces: macOS IME bundle rebuilt (runner 105/105) + installed;
+  extension vendor + store zips rebuilt (uploads user-side); bangluweb
+  vendor pushed (Railway auto-deploy); desktop 1.3.7 + Windows টাইপার
+  1.0.11 tagged (CI cuts installers; winime CI refreshes the website MSI
+  alias itself; desktop assets need the downloads-release alias refresh
+  after CI).
 - **S153 general English-register round (2026-08-30, user: "did you just
   fix only courier?? do general fix"):** mined every English token
   Bangladeshis actually type from the study corpora (923 tokens with ≥5
