@@ -33,6 +33,26 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-30):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S158 cross-surface tutorial round (2026-08-31, user: "did you use all
+  varieties… j fola b fola r fola hosanto chandro bindu… add all this kind
+  of tutorial in the web app and also all others apps"):** coverage audit
+  on TutorialWords proved the fola wall (য-ফলা 44, র-ফলা 61, ব-ফলা 18,
+  রেফ 32, ঋ-কার 7, ঁ 6, ৎ 7, ং 8, ক্ষ 13, জ্ঞ 7) and exposed ONE gap —
+  বিসর্গ had only দুঃখ → new ঃ cap (নিঃশ্বাস, নিঃসন্দেহে, দুঃসংবাদ,
+  দুঃসাহস, পুনঃপ্রকাশ; dukkhito/স্বতঃস্ফূর্ত dropped on probe evidence:
+  the dictionary spells স্বতস্ফূর্ত). Curriculum now 305 words/346 pairs.
+  Ports: bangluweb tutorial page gets 9 generated letter-card sections
+  (S158TutorialJsonExportJvm → data/letter-card-sections.ts, TryItBox
+  gives live practice; twins target their real primary); desktop
+  TutorialView gets a native interactive LetterCards section (desktop
+  palette, FlowRow equation); winime ControlWindow footer + extension
+  popup link to bangluweb.com/tutorial (their compact layouts cannot host
+  a curriculum). Root-cause fix caught by the visual check: EditorScreen's
+  unconditional focus.requestFocus() crashed --tutorial launches (field
+  not composed) → keyed on tutorialOpen. Desktop resources/common
+  dictionary was stale 3.9.6 locally — refreshed (CI pulls the release
+  asset, unaffected). Android 1.5.99 (2136), desktop 1.3.9,
+  টাইপার 1.0.13.
 - **S157 tutorial letter-card round (2026-08-31, user: "enrich our tutorial…
   redesign as card… all confusing, complex and conjunction words at least
   thousands… break as syllable… same to same"):** the tutorial's centerpiece

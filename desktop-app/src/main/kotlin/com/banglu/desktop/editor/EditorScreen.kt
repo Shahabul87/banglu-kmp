@@ -486,7 +486,9 @@ fun FrameWindowScope.EditorScreen(startInTutorial: Boolean = false) {
             )
         }
     }
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    // S158: with --tutorial the field (and its FocusRequester) is not composed
+    // until the tutorial closes — an unconditional request crashed at launch.
+    LaunchedEffect(tutorialOpen) { if (!tutorialOpen) focus.requestFocus() }
 }
 
 /** Sky underline on the forming word (spec §3); offsets are identity. */

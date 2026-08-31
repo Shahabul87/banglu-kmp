@@ -361,6 +361,18 @@ private fun Footer(versionLine: String, onHide: () -> Unit, onQuit: () -> Unit) 
     }
     Spacer(Modifier.height(10.dp))
     Text(
+        "শিখুন — অক্ষর কার্ড টিউটোরিয়াল ↗",
+        color = Muted,
+        fontSize = 11.5.sp,
+        fontFamily = BengaliFont,
+        modifier = Modifier
+            .clickable {
+                runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI("https://www.bangluweb.com/tutorial")) }
+            }
+            .padding(vertical = 2.dp),
+    )
+    Spacer(Modifier.height(6.dp))
+    Text(
         "লুকালে টাইপিং চালু থাকে — টাস্কবারের বাংলু আইকনে ক্লিক করলে ফিরে আসবে। " +
             "প্রস্থান করলে বাংলা লেখা বন্ধ হয়ে যাবে।",
         color = Muted.copy(alpha = 0.8f),

@@ -440,6 +440,13 @@ object TutorialWords {
                 Word("প্রশংসা", "proshongsa", listOf("pro", "shong", "sa"), emptyList(), "ং"),
                 Word("ধ্বংস", "dhbongs", listOf("dhbongs"), emptyList(), "ং")
             )),
+            CapWords("ঃ", listOf(
+                Word("নিঃশ্বাস", "nishshash", listOf("nish", "shash"), listOf("nisshash"), "ঃ"),
+                Word("নিঃসন্দেহে", "nissondehe", listOf("nis", "son", "de", "he"), listOf("nihsondehe"), "ঃ"),
+                Word("দুঃসংবাদ", "dussongbad", listOf("dus", "song", "bad"), emptyList(), "ঃ"),
+                Word("দুঃসাহস", "dussahosh", listOf("dus", "sa", "hosh"), emptyList(), "ঃ"),
+                Word("পুনঃপ্রকাশ", "punoprokash", listOf("pu", "no", "pro", "kash"), emptyList(), "ঃ")
+            )),
             CapWords("ঁ", listOf(
                 Word("চাঁদ", "chad", listOf("chad"), listOf("chand"), "ঁ"),
                 Word("দাঁত", "dat", listOf("dat"), listOf("dant"), "ঁ"),

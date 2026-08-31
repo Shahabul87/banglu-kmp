@@ -24,6 +24,21 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
+import com.banglu.engine.TutorialWords
 
 /**
  * শিখুন — the desktop tutorial. Same curriculum as the Android
@@ -290,6 +305,9 @@ fun TutorialView(onClose: () -> Unit) {
                     modifier = Modifier.clickable(onClick = onClose).padding(4.dp))
             }
 
+            SectionHeading("অক্ষর কার্ড — ইঞ্জিন-যাচাই করা কঠিন শব্দ")
+            LetterCards()
+
             SectionHeading("শুরু করুন")
             quickStart.forEach { SectionCard(it) }
 
@@ -302,6 +320,115 @@ fun TutorialView(onClose: () -> Unit) {
             Spacer(Modifier.padding(bottom = 12.dp))
         }
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LetterCards() {
+    var famIndex by remember { mutableStateOf(0) }
+    val families = TutorialWords.FAMILIES
+    val family = families[famIndex]
+    var capIndex by remember(famIndex) { mutableStateOf(0) }
+    var wordIndex by remember(famIndex, capIndex) { mutableStateOf(0) }
+    val cap = family.caps[capIndex.coerceIn(family.caps.indices)]
+    val word = cap.words[wordIndex.coerceIn(cap.words.indices)]
+    Surface(Modifier.fillMaxWidth(), color = PageCard, shape = RoundedCornerShape(14.dp)) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                families.forEachIndexed { index, f ->
+                    val hot = index == famIndex
+                    Text(
+                        f.title,
+                        color = if (hot) Color(0xFF06121F) else SkySoft,
+                        fontSize = 12.sp,
+                        fontFamily = BengaliFontFamily,
+                        fontWeight = if (hot) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier
+                            .background(if (hot) Sky else Color(0x1464D2FF), RoundedCornerShape(99.dp))
+                            .clickable { famIndex = index }
+                            .padding(horizontal = 12.dp, vertical = 5.dp)
+                    )
+                }
+            }
+            Text(family.tagline, color = Muted, fontSize = 12.sp, fontFamily = BengaliFontFamily)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                family.caps.forEachIndexed { index, c ->
+                    val hot = index == capIndex
+                    Box(
+                        Modifier
+                            .size(width = 44.dp, height = 44.dp)
+                            .background(if (hot) Sky else Color(0x1464D2FF), RoundedCornerShape(10.dp))
+                            .clickable { capIndex = index; wordIndex = 0 },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(c.cap, color = if (hot) Color(0xFF06121F) else SkySoft, fontSize = 20.sp,
+                            fontFamily = BengaliFontFamily, fontWeight = if (hot) FontWeight.Bold else FontWeight.Normal)
+                    }
+                }
+            }
+            Text(
+                highlightedWord(word.bengali, word.highlight),
+                color = androidx.compose.ui.graphics.Color.White,
+                fontSize = 34.sp,
+                fontFamily = BengaliFontFamily,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            )
+            if (word.twinNote.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    Text(word.twinNote, color = Color(0xFF06251B), fontSize = 11.5.sp,
+                        fontFamily = BengaliFontFamily, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.background(Green, RoundedCornerShape(99.dp)).padding(horizontal = 10.dp, vertical = 4.dp))
+                }
+            }
+            FlowRow(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                word.split.forEachIndexed { index, syl ->
+                    if (index > 0) Text(" + ", color = Muted, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                    Text(syl, color = Sky, fontSize = 14.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.background(Color(0x1464D2FF), RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 4.dp))
+                }
+                Text(" = ", color = Green, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
+                Text(word.bengali, color = Green, fontSize = 16.sp, fontFamily = BengaliFontFamily, fontWeight = FontWeight.Bold)
+            }
+            if (word.alts.isNotEmpty()) {
+                Text("এভাবেও লেখা যায়: " + word.alts.joinToString("  ·  "), color = Muted, fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { wordIndex = (wordIndex - 1 + cap.words.size) % cap.words.size }) {
+                    Text("‹ আগের", color = SkySoft, fontSize = 12.sp, fontFamily = BengaliFontFamily)
+                }
+                Spacer(Modifier.weight(1f))
+                Text("${wordIndex % cap.words.size + 1} / ${cap.words.size} — প্রতিটি শব্দ আসল ইঞ্জিনে যাচাই করা ✓",
+                    color = Muted, fontSize = 11.sp, fontFamily = BengaliFontFamily)
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = { wordIndex = (wordIndex + 1) % cap.words.size }) {
+                    Text("পরের ›", color = SkySoft, fontSize = 12.sp, fontFamily = BengaliFontFamily)
+                }
+            }
+        }
+    }
+}
+
+private fun isBnCombining(c: Char): Boolean =
+    c in '\u09BE'..'\u09CC' || c == '\u0981' || c == '\u0982' || c == '\u0983' ||
+        c == '\u09BC' || c == '\u09CD' || c == '\u09D7' || c == '\u200D'
+
+private fun highlightedWord(text: String, highlight: String) = buildAnnotatedString {
+    val i = if (highlight.isEmpty()) -1 else text.indexOf(highlight)
+    if (i < 0) { append(text); return@buildAnnotatedString }
+    var start = i
+    var end = i + highlight.length
+    while (start > 0 && (isBnCombining(text[start]) || text[start - 1] == '\u09CD')) start--
+    while (end < text.length && (isBnCombining(text[end]) || text[end - 1] == '\u09CD')) end++
+    append(text.substring(0, start))
+    withStyle(SpanStyle(color = Sky)) { append(text.substring(start, end)) }
+    append(text.substring(end))
 }
 
 @Composable
