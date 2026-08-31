@@ -50,6 +50,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextAlign
+import com.banglu.engine.TutorialWords
 
 private var TutorialPrimary = Color(0xFFE9B84A)
 private var TutorialSuccess = Color(0xFF3FA372)
@@ -337,6 +352,292 @@ private val phoneticMappingSteps = listOf(
     )
 )
 
+// ── S157 letter cards — the mock design, same to same ───────────────────────
+
+private val TutorialCard2 = Color(0xFF2B2A46)
+
+private fun isBnCombining(c: Char): Boolean =
+    c in '\u09BE'..'\u09CC' || c == '\u0981' || c == '\u0982' || c == '\u0983' ||
+        c == '\u09BC' || c == '\u09CD' || c == '\u09D7' || c == '\u200D'
+
+/** Terracotta conjunct highlight, snapped to whole grapheme clusters (S147 law). */
+private fun tutorialHighlighted(text: String, highlight: String) = buildAnnotatedString {
+    val i = if (highlight.isEmpty()) -1 else text.indexOf(highlight)
+    if (i < 0) { append(text); return@buildAnnotatedString }
+    var start = i
+    var end = i + highlight.length
+    while (start > 0 && (isBnCombining(text[start]) || text[start - 1] == '\u09CD')) start--
+    while (end < text.length && (isBnCombining(text[end]) || text[end - 1] == '\u09CD')) end++
+    append(text.substring(0, start))
+    withStyle(SpanStyle(color = TutorialCoral)) { append(text.substring(start, end)) }
+    append(text.substring(end))
+}
+
+@Composable
+private fun TutorialKeyCap(label: String, hot: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .defaultMinSize(minWidth = 48.dp)
+            .height(54.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (hot) TutorialPrimary else TutorialCard2)
+            .border(1.dp, if (hot) TutorialPrimary else TutorialBorder, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label,
+            color = if (hot) Color(0xFF1C1503) else TutorialText,
+            fontSize = 24.sp,
+            fontFamily = BanglaSerif,
+            fontWeight = if (hot) FontWeight.Bold else FontWeight.Normal
+        )
+    }
+}
+
+@Composable
+private fun TutorialLetterCards() {
+    val context = LocalContext.current
+    var famIndex by rememberSaveable { mutableStateOf(0) }
+    val families = TutorialWords.FAMILIES
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            families.forEachIndexed { index, family ->
+                val hot = index == famIndex
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(99.dp))
+                        .background(if (hot) TutorialPrimary else TutorialCard)
+                        .border(1.dp, if (hot) TutorialPrimary else TutorialBorder, RoundedCornerShape(99.dp))
+                        .clickable { famIndex = index }
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        family.title,
+                        color = if (hot) Color(0xFF1C1503) else TutorialText,
+                        fontSize = 15.sp,
+                        fontFamily = BanglaSerif,
+                        fontWeight = if (hot) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+            }
+        }
+        Crossfade(targetState = famIndex, label = "tutorialFamily") { fi ->
+            LetterFamilyCard(families[fi], fi + 1, families.size) {
+                context.startActivity(Intent(context, MainActivity::class.java))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LetterFamilyCard(
+    family: TutorialWords.Family,
+    familyNumber: Int,
+    familyCount: Int,
+    onTryIt: () -> Unit
+) {
+    var capIndex by remember(family) { mutableStateOf(0) }
+    var wordIndex by remember(family) { mutableStateOf(0) }
+    val cap = family.caps[capIndex.coerceIn(family.caps.indices)]
+    val words = cap.words
+    val word = words[wordIndex.coerceIn(words.indices)]
+    fun nextWord() { wordIndex = (wordIndex + 1) % words.size }
+    fun prevWord() { wordIndex = (wordIndex - 1 + words.size) % words.size }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                family.tagline,
+                color = TutorialPrimary,
+                fontSize = 15.sp,
+                fontFamily = BanglaSerif,
+                lineHeight = 22.sp,
+                modifier = Modifier.weight(1f)
+            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(99.dp))
+                    .background(TutorialCard)
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text("$familyNumber/$familyCount", color = TutorialMuted, fontSize = 12.sp)
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            family.caps.forEachIndexed { index, capWords ->
+                TutorialKeyCap(capWords.cap, hot = index == capIndex) {
+                    capIndex = index
+                    wordIndex = 0
+                }
+            }
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(TutorialCard)
+                .border(1.dp, TutorialBorder, RoundedCornerShape(24.dp))
+                .pointerInput(capIndex, family) {
+                    var drag = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { drag = 0f },
+                        onHorizontalDrag = { _, amount -> drag += amount },
+                        onDragEnd = {
+                            if (drag < -60f) nextWord() else if (drag > 60f) prevWord()
+                        }
+                    )
+                }
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    "${wordIndex % words.size + 1} / ${words.size}",
+                    color = TutorialMuted,
+                    fontSize = 12.sp,
+                    fontFamily = RomanMono
+                )
+            }
+            Text(
+                tutorialHighlighted(word.bengali, word.highlight),
+                color = TutorialText,
+                fontSize = 44.sp,
+                lineHeight = 62.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = BanglaSerif,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp)
+            )
+            if (word.twinNote.isNotEmpty()) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(99.dp))
+                            .background(TutorialGreen)
+                            .padding(horizontal = 12.dp, vertical = 5.dp)
+                    ) {
+                        Text(word.twinNote, color = Color(0xFF0D2117), fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                word.split.forEachIndexed { index, syllable ->
+                    if (index > 0) {
+                        Text("+", color = TutorialMuted, fontSize = 17.sp, fontFamily = RomanMono,
+                            modifier = Modifier.padding(horizontal = 5.dp))
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(TutorialCard2)
+                            .border(1.dp, TutorialBorder, RoundedCornerShape(10.dp))
+                            .padding(horizontal = 11.dp, vertical = 7.dp)
+                    ) {
+                        Text(syllable, color = TutorialText, fontSize = 17.sp, fontFamily = RomanMono, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                Text("=", color = TutorialPrimary, fontSize = 20.sp, fontFamily = RomanMono,
+                    modifier = Modifier.padding(horizontal = 8.dp))
+                Text(word.bengali, color = TutorialPrimary, fontSize = 21.sp, fontFamily = BanglaSerif, fontWeight = FontWeight.Bold)
+            }
+            if (word.alts.isNotEmpty()) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("এভাবেও লেখা যায়: ", color = TutorialMuted, fontSize = 13.sp)
+                    word.alts.forEach { alt ->
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 3.dp)
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(TutorialCard2)
+                                .border(1.dp, TutorialBorder, RoundedCornerShape(9.dp))
+                                .padding(horizontal = 9.dp, vertical = 3.dp)
+                        ) {
+                            Text(alt, color = TutorialText, fontSize = 13.5.sp, fontFamily = RomanMono)
+                        }
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(TutorialCard2)
+                        .border(1.dp, TutorialBorder, RoundedCornerShape(14.dp))
+                        .clickable { prevWord() },
+                    contentAlignment = Alignment.Center
+                ) { Text("‹", color = TutorialText, fontSize = 20.sp) }
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    words.forEachIndexed { index, _ ->
+                        val active = index == wordIndex % words.size
+                        Box(
+                            modifier = Modifier
+                                .height(7.dp)
+                                .width(if (active) 20.dp else 7.dp)
+                                .clip(RoundedCornerShape(99.dp))
+                                .background(if (active) TutorialCoral else TutorialBorder)
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(TutorialCard2)
+                        .border(1.dp, TutorialBorder, RoundedCornerShape(14.dp))
+                        .clickable { nextWord() },
+                    contentAlignment = Alignment.Center
+                ) { Text("›", color = TutorialText, fontSize = 20.sp) }
+            }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(TutorialCoral)
+                .clickable(onClick = onTryIt)
+                .padding(vertical = 14.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("নিজে লিখে দেখুন ↗", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+        Text(
+            "প্রতিটি শব্দ আসল ইঞ্জিনে যাচাই করা ✓",
+            color = TutorialMuted,
+            fontSize = 11.5.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
 @Composable
 private fun BangluTutorialScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -385,6 +686,8 @@ private fun BangluTutorialScreen(onBack: () -> Unit) {
             if (!gettingStartedSeen) {
                 item { GettingStartedCard(onDismiss = ::dismissGettingStarted) }
             }
+            item { SectionTitle("অক্ষর কার্ড — কঠিন শব্দ, সহজ টাইপিং", "Letter cards, engine-verified") }
+            item { TutorialLetterCards() }
             item { SectionTitle("প্রথমে টাইপিং শিখুন", "Typing tutorial") }
             typingSteps.forEach { step ->
                 item { TutorialStepCard(step) }

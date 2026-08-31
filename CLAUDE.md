@@ -33,6 +33,23 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-30):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S157 tutorial letter-card round (2026-08-31, user: "enrich our tutorial…
+  redesign as card… all confusing, complex and conjunction words at least
+  thousands… break as syllable… same to same"):** the tutorial's centerpiece
+  is now a letter-card curriculum on the approved mock (scratchpad
+  banglu-tutorial-vowel-mock.html): 9 family pages (স্বরবর্ণ, ৫টি বর্গ,
+  অন্তঃস্থ+হ, উষ্ম, বিশেষ ড়ঢ়য়ৎংঁ), tappable keycaps, 44sp Tiro-Bangla word
+  with the conjunct in terracotta, syllable equation (ot+ta+dhu+nik =
+  অত্যাধুনিক), alt-spelling chips, moss twin pills (pore→পরে/পড়ে,
+  taka→টাকা/তাকা, ঈগল, ঊষা, যন্ত্রণা ণ/ন, ভঙ্গি/ভগ্নি), dots+arrows+swipe.
+  Research: 3,444 dictionary words bulk-verified on the real engine
+  (S157BulkProbeJvm, reverseWord romans — docs/tutorial-letter-cards-s157.md
+  + .tsv); curated cut = shared TutorialWords (308 words / 341 variant
+  pairs), EVERY pair pinned by S157TutorialWordsJvmTest (twins pin the
+  declared primary AND strip membership; splits must concat to the roman).
+  Gotcha: pass-2 curation's 4-consonant-run filter silently dropped
+  sh-cluster words (রাষ্ট্রপতি, সংখ্যা) — lookups must fail loudly.
+  Android 1.5.98 (2135).
 - **S156 chat-n-gram dictionary round (2026-08-31):** the S149 study's own
   gold corpora now feed the context model — chat_trigrams.tsv (54k rows) +
   chat_bigrams.tsv (62k rows) mined from the staged pairs (BanglaTLit +
