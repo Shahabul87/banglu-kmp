@@ -361,7 +361,10 @@ fun main(args: Array<String>) {
                 literature = File(it, "bnwikisource_bigrams.tsv"),
                 unigramCounts = usageCounts,
                 dictionaryWords = wordIdByBengali.keys,
-                chat = File(it, "subtitles_bigrams.tsv"),
+                // S156: the Banglish-corpus chat register joins subtitles at
+                // CHAT_WEIGHT — the study showed the context lane starves on
+                // chat pairs the wiki/news sources never contain.
+                chat = listOf(File(it, "subtitles_bigrams.tsv"), File(it, "chat_bigrams.tsv")),
             )
         }
         if (corpusBigrams != null && corpusBigrams.pairs.isNotEmpty()) {
@@ -439,7 +442,11 @@ fun main(args: Array<String>) {
                     File(dir, "bnwikisource_trigrams.tsv") to 1L,
                     // S100: conversational register — the two-word contexts a
                     // chat keyboard actually predicts into.
-                    File(dir, "subtitles_trigrams.tsv") to CorpusTrigrams.CHAT_WEIGHT
+                    File(dir, "subtitles_trigrams.tsv") to CorpusTrigrams.CHAT_WEIGHT,
+                    // S156: real Banglish-corpus chat triples (প্লিজ হেল্প মি,
+                    // কাজ করে না) — the homograph context evidence the study
+                    // measured as missing.
+                    File(dir, "chat_trigrams.tsv") to CorpusTrigrams.CHAT_WEIGHT
                 ),
                 dictionaryWords = wordIdByBengali.keys
             )

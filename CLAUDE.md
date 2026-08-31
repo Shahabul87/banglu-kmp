@@ -33,6 +33,23 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-30):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S156 chat-n-gram dictionary round (2026-08-31):** the S149 study's own
+  gold corpora now feed the context model — chat_trigrams.tsv (54k rows) +
+  chat_bigrams.tsv (62k rows) mined from the staged pairs (BanglaTLit +
+  Vashantor-std, n≥2, Bengali-only) compile at CHAT_WEIGHT into db 3.9.7
+  (trigram/bigram tables at their 120k/150k caps; CorpusBigrams takes a
+  chat-file list). Measured on the re-run study: chat register 70.0→73.1%
+  word-exact (top-6 75.4→79.5%), vashantor-std homographs-WITH-CONTEXT
+  89.2→91.7% (plain unchanged 84.6% — the gain is purely the context
+  model), WITH-CONTEXT word-exact 93.3%; dialect 70.9→69.5% cumulative
+  S150-S156 drift (documented, non-target register). GOTCHA burned into
+  the process: gradle does NOT see dictionary.sqlite/slim as test inputs —
+  after any dictionary rebuild the walls must run with --rerun or they
+  silently pass as UP-TO-DATE. All five walls + macOS runner (105/105 on
+  the new 32MB slim) re-ran green. Device-smoke frame flake fixed: up to
+  two top-up key bursts before frame_timing, 20-frame floor kept (S138
+  rule intact). Android 1.5.97 (2134), desktop 1.3.8, টাইপার 1.0.12;
+  slim + extension zips + macOS install + bangluweb vendor propagated.
 - **S154 propagation round (2026-08-30):** the S150-S153 engine reached
   all six surfaces: macOS IME bundle rebuilt (runner 105/105) + installed;
   extension vendor + store zips rebuilt (uploads user-side); bangluweb

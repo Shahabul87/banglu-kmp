@@ -398,6 +398,21 @@ def main():
     check("memory_total_pss", pss is not None and pss <= MAX_TOTAL_PSS_MB,
           f"total PSS {pss and round(pss, 1)} MB incl. mapped dictionary pages (max {MAX_TOTAL_PSS_MB})")
     timings = frame_timings_ms()
+    # S156: the 20-frame minimum flaked repeatedly (15-16 frames sampled)
+    # because gfxinfo's 120-frame ring can rotate past the burst on slow
+    # runs. Instead of failing certification on a sampling artifact, top up
+    # with additional key bursts (each press animates) up to twice.
+    topup = 0
+    while len(timings) < MIN_FRAMES_FOR_TIMING and topup < 2 and backspace is not None:
+        topup += 1
+        for n in burst[:13]:
+            tap(n)
+            time.sleep(0.12)
+        for _ in range(min(13, len(burst))):
+            tap(backspace)
+            time.sleep(0.1)
+        time.sleep(1.0)
+        timings = frame_timings_ms()
     p50, p95, worst = percentile(timings, 50), percentile(timings, 95), (max(timings) if timings else None)
     report["measurements"]["frames_sampled"] = len(timings)
     report["measurements"]["frame_ms_p50"] = p50

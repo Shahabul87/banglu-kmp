@@ -70,3 +70,12 @@ Large Parallel Corpora from Movie and TV Subtitles." LREC 2016.
 
 Only aggregate frequency counts are stored here — no subtitle text is
 redistributed.
+
+## chat_trigrams.tsv / chat_bigrams.tsv (S156, 2026-08-31)
+N-gram counts derived from the Bengali gold sides of:
+- BanglaTLit (https://github.com/farhanishmam/BanglaTLit, MIT) — paired
+  Romanized/Bengali chat & comment corpus (EMNLP Findings 2024).
+- Vashantor (https://data.mendeley.com/datasets/bj5jgk878b/2, CC BY 4.0)
+  — standard-Bangla portion only.
+Only aggregate trigram/bigram counts (n>=2) ship; no review or message
+text is redistributed. Attribution per CC BY 4.0 for Vashantor.

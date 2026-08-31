@@ -47,14 +47,14 @@ object CorpusBigrams {
         literature: File,
         unigramCounts: Map<String, Long>,
         dictionaryWords: Set<String>,
-        chat: File? = null,
+        chat: List<File> = emptyList(),
     ): Model? {
         if (!modern.exists() && !literature.exists()) return null
 
         val weighted = HashMap<Pair<String, String>, Long>(1_500_000)
         addPairs(modern, MODERN_WEIGHT, weighted)
         addPairs(literature, 1L, weighted)
-        chat?.let { addPairs(it, CHAT_WEIGHT, weighted) }
+        for (f in chat) addPairs(f, CHAT_WEIGHT, weighted)
 
         // S100: the chat register's 16x weight admits far more pairs than
         // the old wiki-only blend (317K vs 98K on the first S100 build) —

@@ -321,3 +321,27 @@ that merely collide with English words), inflected gold (hospital→
 হাসপাতালে), and context homographs — the same classes already documented
 above, not English-register defects. Pin wall: S153EnglishRegisterJvmTest
 (83 corpus-majority pairs).
+
+## S156 delta — chat n-grams compiled into the dictionary (2026-08-31)
+
+The study's gold corpora now feed the context model itself: `chat_trigrams.tsv`
+(54,127 rows) and `chat_bigrams.tsv` (61,584 rows) mined from the staged gold
+pairs (BanglaTLit + Vashantor-std, Bengali-only tokens, counts n≥2) compile at
+CHAT_WEIGHT into db 3.9.7 — trigram/bigram tables at their 120k/150k caps.
+Full study re-run on the rebuilt dictionary (same harness, 25m38s):
+
+| dataset | word-exact | | gold-in-top6 | | homographs w/ context |
+|---|---|---|---|---|---|
+| | before | S156 | before | S156 | before → S156 |
+| banglatlit (chat) | 70.0% (post-S150) | **73.1%** | 75.4% | **79.5%** | 76.5% w/ ctx |
+| vashantor-std | 91.2% | **91.3%** (94.4% variant-exact) | 96.9% | **97.5%** | 89.2% → **91.7%** |
+| vashantor-dialect | 70.9% (S149) | 69.5% | 82.5% | 82.2% | 96.5% w/ ctx |
+
+- vashantor-std WITH-CONTEXT word-exact reached **93.3%** (rerankWithContext on
+  gold prev-2); plain homograph accuracy is unchanged at 84.6%, so the
+  91.7% figure is purely the new chat context model doing its job.
+- The dialect −1.4pt is cumulative drift across S150–S156 (the dialect set was
+  last measured at S149); dialect (Chittagong/Sylhet renderings) is not a
+  target register — standard + chat are the product contract.
+- Attribution for the derived counts: dictionary-compiler/data/LICENSES.md
+  (BanglaTLit MIT, Vashantor CC BY 4.0 — counts only, no text redistributed).
