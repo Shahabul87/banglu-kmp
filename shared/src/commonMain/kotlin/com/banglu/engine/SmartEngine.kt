@@ -378,6 +378,46 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // tap away on the strip via their store rows.
             "cash" to "ক্যাশ",
             "bank" to "ব্যাংক",
+            // S153 (general English-register round): keys a real Bengali
+            // word holds under the S142 everyday band, where the corpus
+            // votes the loan reading by wide margins (but 518:15, up 34:0,
+            // number 145:39, phone 292:40 — the S81 phone->ফোনে pin flips
+            // here, documented in the study appendix). The displaced words
+            // keep their strip slots via their store rows; বুট is reachable
+            // as "boot", দাঁতে as "dnate", নম্বর as "nombor".
+            "but" to "বাট",
+            "not" to "নট",
+            "up" to "আপ",
+            "date" to "ডেট",
+            "ban" to "ব্যান",
+            "mode" to "মোড",
+            "mail" to "মেইল",
+            "number" to "নাম্বার",
+            "phone" to "ফোন",
+            "any" to "এনি",
+            "my" to "মাই",
+            "ad" to "এড",
+            "vi" to "ভাই",
+            "ak" to "এক",
+            "bt" to "বাট",
+            "gd" to "গুড",
+            // S153b: keys where the everyday-band Bengali reading survived
+            // the curated seed (থেমে, শর্ত, হস্ত, মাইন are real words; the
+            // corpus still votes the loan) plus store-owned old spellings.
+            "and" to "এন্ড",
+            "theme" to "থিম",
+            "lol" to "লল",
+            "main" to "মেইন",
+            "run" to "রান",
+            "host" to "হোস্ট",
+            "sir" to "স্যার",
+            "short" to "শর্ট",
+            "join" to "জয়েন",
+            "account" to "একাউন্ট",
+            "address" to "এড্রেস",
+            // S153: with "id" gone Tier P, the festival keeps its own key —
+            // the pipeline read "eid" as the এইড loan otherwise.
+            "eid" to "ঈদ",
             "tnx" to "থ্যাংকস",
             "thnx" to "থ্যাংকস",
             "use" to "ইউজ",

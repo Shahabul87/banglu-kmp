@@ -50,11 +50,10 @@ class S150ChatRegisterJvmTest {
 
     @Test
     fun techInitialismsGetLetterNames() {
-        // "id" deliberately stays Tier S: ঈদ/ইদ keeps the key (the corpus
-        // skews tech-forum; the greeting register is real) — আইডি rides the
-        // strip via the S52 acronym chip instead.
-        assertTrue(primary("id") in setOf("ইদ", fold("ঈদ")), "id primary: ${primary("id")}")
-        assertTrue(fold("আইডি") in strip("id"), "আইডি chip must ride the strip: ${strip("id")}")
+        // S153 reversal: the corpus is 484:2 for আইডি on this key — Tier P
+        // now; ঈদ keeps its natural key "eid".
+        assertEquals(fold("আইডি"), primary("id"))
+        assertEquals(fold("ঈদ"), primary("eid"))
         assertEquals(fold("এফবি"), primary("fb"))
         assertEquals(fold("এমবি"), primary("mb"))
         assertEquals(fold("জিবি"), primary("gb"))

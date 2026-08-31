@@ -59,6 +59,20 @@ internal val ACRONYM_OVERRIDES: Map<String, String> = mapOf(
     "fb" to "এফবি",
     "mb" to "এমবি",
     "pc" to "পিসি",
+    // S153: the rest of the corpus-frequent initialisms; "id" moves up from
+    // Tier S after all — the corpus is 484:2 for আইডি against the ঈদ
+    // greeting theory (ঈদ keeps its natural keys eid/ঈদ aliases).
+    "id" to "আইডি",
+    "gp" to "জিপি",
+    "ss" to "এসএস",
+    "uc" to "ইউসি",
+    "bd" to "বিডি",
+    "sms" to "এসএমএস",
+    "html" to "এইচটিএমএল",
+    // S153: not an acronym — the chat abbreviation for "nice" — but the
+    // trailing-c hasanta control rule swallows the key (nc -> ন্) before
+    // the shorthand table can speak; this whitelist runs first (S52 note).
+    "nc" to "নাইস",
     "km" to "কিমি",      // current: কড়মড় (garbage/collision — "crunch" onomatopoeia)
     "dc" to "ডিসি",      // current: দ্ (garbage — hanging consonant fragment)
     "sp" to "এসপি",      // current: সপ (garbage — RULE fragment, not a standalone word)
@@ -97,7 +111,6 @@ internal val ACRONYM_OVERRIDES: Map<String, String> = mapOf(
     "usb" to "ইউএসবি",     // current: ইউএসবি (correct)
     "ceo" to "সিইও",       // current: সিইও (correct)
     "md" to "এমডি",        // current: এমডি (correct)
-    "sms" to "এসেমেস",     // current: এসেমেস (correct — colloquial chat register, matches mission's register target)
     "ac" to "এসি",         // current: এসি (correct)
     "pm" to "পিএম",        // current: পিএম (correct)
     "iq" to "আইকিউ",       // current: আইকিউ (correct)
@@ -120,7 +133,5 @@ internal val ACRONYM_SUGGESTIONS: Map<String, String> = mapOf(
     "oc" to "ওসি",     // primary ওচ "vile" stays (real dictionary word); Officer-in-Charge offered as a chip
     "atm" to "এটিএম",  // primary আত্ম "self-" stays (real bound morpheme); ATM machine offered as a chip
     "vat" to "ভ্যাট",  // primary ভাত "rice" stays (dominant everyday word); VAT offered as a chip
-    "bd" to "বিডি",    // primary বদ "bad" stays (real everyday word); Bangladesh offered as a chip
-    "id" to "আইডি",    // primary ঈদ "Eid" stays (Global Constraints' own YES example); ID offered as a chip
     "sos" to "এসওএস",  // primary সস "sauce" stays (natural phonetic key for a real loanword); SOS offered as a chip
 )

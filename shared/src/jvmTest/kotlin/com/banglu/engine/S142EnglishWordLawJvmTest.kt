@@ -42,7 +42,9 @@ class S142EnglishWordLawJvmTest {
         assertEquals(fold("দিনে"), fold(engine.convertWord("dine").bengali))
         // The band, not a word list: phone -> ফোনে@78 (S81), abba -> আব্বা@76,
         // bade -> বাদে@78, more -> মরে@81, are -> আরে@86, mane -> মানে.
-        for ((key, expected) in listOf("phone" to "ফোনে", "abba" to "আব্বা", "bade" to "বাদে", "more" to "মরে", "are" to "আরে", "mane" to "মানে")) {
+        // S153: "phone" left this list — the corpus flipped it to the loan
+        // (ফোন 292:40); the band law itself is unchanged for the rest.
+        for ((key, expected) in listOf("abba" to "আব্বা", "bade" to "বাদে", "more" to "মরে", "are" to "আরে", "mane" to "মানে")) {
             assertEquals(fold(expected), fold(engine.convertWord(key).bengali), key)
         }
         assertTrue(fold("ফোন") in strip("phone"), strip("phone").toString())
@@ -63,7 +65,7 @@ class S142EnglishWordLawJvmTest {
 
     @Test
     fun theComposingPreviewAgreesWithTheCommit() {
-        for (key in listOf("tester", "phone", "engine", "suggestion", "name", "call", "time", "gate", "door", "abba")) {
+        for (key in listOf("tester", "engine", "suggestion", "name", "call", "time", "gate", "door", "abba")) {
             assertEquals(
                 fold(engine.convertWord(key).bengali),
                 fold(engine.convertForComposing(key).bengali),

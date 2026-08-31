@@ -58,11 +58,11 @@ class S81PhFClassJvmTest {
     fun phSpellingsKeepWorking() {
         assertEquals("ফুল", engine.convertWord("ful").bengali)
         assertEquals("ফেলা", engine.convertWord("fela").bengali)
-        // Long-shipped Avro convention: "phone" is the exact canonical
-        // romanization of ফোনে (locative) — the store owns it, S81 must not
-        // flip it (verified identical on db 3.8.9 and 3.8.10). S142 keeps it:
-        // ফোনে@78 sits in the everyday band; ফোন rides the strip as a chip.
-        assertEquals("ফোনে", engine.convertWord("phone").bengali)
+        // S153 pin flip (documented, corpus 292:40 in the Banglish study):
+        // typed "phone" means the loan ফোন in the chat register — the
+        // shorthand table owns the key now; the locative ফোনে stays
+        // reachable via its store row on the strip and the "phone"+e keys.
+        assertEquals("ফোন", engine.convertWord("phone").bengali)
         assertTrue(engine.getSuggestions("phone", 6).any { it.bengali == "ফোন" })
         assertEquals("ফোন", engine.convertWord("phon").bengali)
     }

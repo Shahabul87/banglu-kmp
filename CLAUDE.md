@@ -33,6 +33,21 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-30):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S153 general English-register round (2026-08-30, user: "did you just
+  fix only courier?? do general fix"):** mined every English token
+  Bangladeshis actually type from the study corpora (923 tokens with ≥5
+  gold-aligned occurrences and ≥60% majority rendering; english-register
+  method in the study appendix), diffed the engine against the corpus
+  majority (633/923 already matched), and fixed the 290 misses in three
+  layers: ~56 curated loan seeds (tutorial→টিউটোরিয়াল, config→কনফিগ,
+  flash→ফ্ল্যাশ…), ~28 shorthand chat defaults for band-law keys
+  (but→বাট 518:15, phone→ফোন 292:40 — S81/S142 pin flips documented,
+  number→নাম্বার, date→ডেট, up→আপ…), and 8 acronym Tier-P entries
+  (id→আইডি reversed at 484:2 with eid→ঈদ shorthand; gp/ss/uc/bd/sms/
+  html; nc→নাইস via the pre-control-rule whitelist — the trailing-c
+  hasanta rule swallowed it; stale sms duplicate killed). Corpus-majority
+  spelling flips: data→ডাটা, account→একাউন্ট, address→এড্রেস. Pin wall:
+  S153EnglishRegisterJvmTest (83 pairs). Android 1.5.96 (2133).
 - **S152 tester round (2026-08-30, Siddique Ahit's messages):** the roman
   hint on the primary strip chip 9sp-grey → 11sp near-white ("blue cell er
   vetor nicher English" was unreadable); courier → কুরিয়ার curated (lexicon
