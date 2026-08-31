@@ -282,3 +282,42 @@ path there is the user-bigram lane (S78) — personal repetition, which the
 harness cannot simulate — plus richer chat n-grams at the next dictionary
 rebuild. The ~1.4-3.1pt variant-exact gap over word-exact quantifies the
 spelling-standard noise for future score reading.
+
+---
+
+# S153 — the general English-register round
+
+Method (the "general fix" the user demanded after courier): every English
+token in the corpora was mined with its corpus-gold renderings —
+`english-register.tsv`, 1,209 tokens intersecting google-10k with ≥4
+gold-aligned occurrences; 923 kept at ≥5 occurrences and ≥60% majority.
+The corpus majority is treated as the population's preferred rendering.
+
+Engine vs corpus majority:
+
+| | primary matches | in-strip only | absent |
+|---|---:|---:|---:|
+| before S153 | 633 (68.6%) | 89 | 201 |
+| after S153 | **716 (77.6%)** | 64 | **143** |
+
+The 290 misses were triaged into three mechanical layers:
+1. **Curated loan seeds (~56)** — the English law fired but rendered the
+   wrong spelling (tutorial টুটরিয়েল→টিউটোরিয়াল, config ছন্ফিগ→কনফিগ,
+   flash, theme, recovery, unlimited, official, verification…).
+2. **Shorthand chat defaults (~28)** — a real Bengali word held the key
+   under the S142 band while the corpus voted the loan by landslides:
+   but বুট→বাট (518:15), phone ফোনে→ফোন (292:40 — the S81 pin flipped,
+   documented), number, date, mode, mail, up, my, account, address, and
+   the chat abbreviations vi→ভাই, ak→এক, bt→বাট, gd→গুড.
+3. **Acronym Tier P (8)** — id→আইডি reversed at 484:2 (eid→ঈদ keeps the
+   festival), gp, ss, uc, bd, sms, html; nc→নাইস via the pre-control-rule
+   whitelist. Two traps: a stale sms→এসেমেস duplicate later in the map
+   (the S52 phd lesson, again), and the trailing-c hasanta rule.
+
+Corpus-majority spelling flips in the curated seeds: data→ডাটা,
+account→একাউন্ট, address→এড্রেস. What remains in the 143 "absent" tail is
+dominated by dialect gold (মোরে, ফারে, তনে, চাইর — Banglish romanizations
+that merely collide with English words), inflected gold (hospital→
+হাসপাতালে), and context homographs — the same classes already documented
+above, not English-register defects. Pin wall: S153EnglishRegisterJvmTest
+(83 corpus-majority pairs).
