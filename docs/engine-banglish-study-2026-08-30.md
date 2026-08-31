@@ -249,3 +249,36 @@ chat means টা — and dialect remains explicitly out of scope. Remaining
 backlog (unchanged): ো-final/ি-ী scoring folds, kothai→কথাই root-
 decomposition ranking, and the context homographs that belong to the
 trigram lane.
+
+---
+
+# Post-S151 delta + the first context-mode numbers (engine at v1.5.94+)
+
+New metrics from the upgraded harness (variant-exact folds ো-final and
+ি/ী spelling twins; WITH-CONTEXT feeds the two previous GOLD words through
+`rerankWithContext`, the exact lane the IME uses at commit):
+
+| corpus | word-exact | variant-exact | top-6 | with-context |
+|---|---:|---:|---:|---:|
+| BanglaTLit (chat) | 70.0% | **71.5%** | 77.8% (↑ from 77.1) | 70.1% |
+| Vashantor-standard | 91.2% | **94.3%** | 97.5% (↑ from 96.9) | **91.7%** |
+| Vashantor-dialect | 69.5% | 72.0% | 82.1% | 69.5% |
+
+Homograph keys (ase, hoi, jai, pore, jan, bon, dosh, ar, ki, tar, kore, dan):
+
+| corpus | occurrences | plain | with context |
+|---|---:|---:|---:|
+| Vashantor-standard | 3,380 | 84.6% | **89.2%** |
+| BanglaTLit (chat) | 2,605 | 75.0% | 75.7% |
+| Vashantor-dialect | 777 | 96.4% | 96.1% |
+
+Reading: the trigram/bigram context lane genuinely resolves homographs on
+clean text (+4.6pt on standard), and the S151 twin promotions lifted top-6
+on both main corpora — the right reading is now always one tap away even
+when context is silent. On the chat corpus the context gain is small: the
+noisy register produces prev-word pairs the corpus trigram table has never
+seen (the observed-triple gate correctly refuses to guess). The growth
+path there is the user-bigram lane (S78) — personal repetition, which the
+harness cannot simulate — plus richer chat n-grams at the next dictionary
+rebuild. The ~1.4-3.1pt variant-exact gap over word-exact quantifies the
+spelling-standard noise for future score reading.
