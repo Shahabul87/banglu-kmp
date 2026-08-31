@@ -130,7 +130,11 @@ object EnglishDirectData {
             e("টোকেন", aliasesFor("token"), 76, WordCategory.FOREIGN),
             e("সেশন", aliasesFor("session"), 76, WordCategory.FOREIGN),
             e("কুকি", aliasesFor("cookie"), 76, WordCategory.FOREIGN),
-            e("ক্যাশ", aliasesFor("cache"), 76, WordCategory.FOREIGN),
+            // S152 (tester report: "correct English keo thik banglae convert
+            // korano — courier = কুরিয়ার"): cash shares the ক্যাশ rendering,
+            // and courier's lexicon guess কারিয়ার gets the real spelling.
+            e("ক্যাশ", aliasesForAll("cache", "cash"), 76, WordCategory.FOREIGN),
+            e("কুরিয়ার", aliasesFor("courier"), 76, WordCategory.FOREIGN),
             e("কোয়েরি", aliasesFor("query"), 76, WordCategory.FOREIGN),
             e("স্কিমা", aliasesFor("schema"), 76, WordCategory.FOREIGN),
             e("মাইগ্রেশন", aliasesFor("migration"), 76, WordCategory.FOREIGN),

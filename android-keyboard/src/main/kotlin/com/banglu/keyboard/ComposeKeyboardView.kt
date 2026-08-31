@@ -1568,10 +1568,15 @@ private fun BangluSuggestionRow(
                         val hintFits =
                             LocalConfiguration.current.orientation != Configuration.ORIENTATION_LANDSCAPE
                         if (suggestion.phonetic.isNotEmpty() && isFirst && hintFits) {
+                            // S152 (tester: "blue cell er vetor nicher English"
+                            // — the roman hint was too small to read): 9sp grey
+                            // on the blue chip failed the very users it exists
+                            // for. 11sp near-white; the hint only renders on
+                            // the highlighted first chip, so white is safe.
                             Text(
                                 text = displayPhoneticHint(suggestion.phonetic),
-                                color = colors.subText,
-                                fontSize = scaledSp(9),
+                                color = Color.White.copy(alpha = 0.88f),
+                                fontSize = scaledSp(11),
                                 maxLines = 1
                             )
                         }

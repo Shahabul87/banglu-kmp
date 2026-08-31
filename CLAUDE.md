@@ -33,6 +33,13 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-30):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S152 tester round (2026-08-30, Siddique Ahit's messages):** the roman
+  hint on the primary strip chip 9sp-grey → 11sp near-white ("blue cell er
+  vetor nicher English" was unreadable); courier → কুরিয়ার curated (lexicon
+  guessed কারিয়ার — the tester's own example), cash → ক্যাশ and bank →
+  ব্যাংক chat defaults (চাষ/বাঁক keep strip slots). Probe showed the rest of
+  the courier register already worked. Pins: S152TesterEnglishJvmTest.
+  Android 1.5.95 (2132).
 - **S151 homograph/context round (2026-08-30, "do fix it"):** kothai →
   কোথায় chat default (কথাই was winning a one-point seed race; strip twin
   kept); final-ই/য় homograph twins get a guaranteed strip slot

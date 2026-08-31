@@ -371,6 +371,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // কোথায়@60 on the same alias) — in chat "tumi kothai?" the
             // intent is কোথায় overwhelmingly; কথাই keeps its strip slot.
             "kothai" to "কোথায়",
+            // S152 (tester report): typed exact English "cash"/"bank" mean
+            // the loanwords in the chat register — চাষ and বাঁক are the
+            // everyday-band readings that kept the keys under the S142 law
+            // (their own natural romans are chash/bnak), and both stay one
+            // tap away on the strip via their store rows.
+            "cash" to "ক্যাশ",
+            "bank" to "ব্যাংক",
             "tnx" to "থ্যাংকস",
             "thnx" to "থ্যাংকস",
             "use" to "ইউজ",
