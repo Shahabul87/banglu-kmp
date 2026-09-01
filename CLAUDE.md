@@ -33,6 +33,27 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-31):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S163 glide typing (2026-09-01, user: "if this feature is liked by the
+  user build it before marketing"):** Gboard-style glide on the letter
+  rows — drag through a word's roman letters, release commits the word
+  (BN converts through the normal pipeline, EN direct) + auto space, alt
+  chips swap the just-glided word, no-confidence gestures commit NOTHING
+  (red trail flash). New ADDITIVE com.banglu.engine.glide package
+  (GlideGrid/GlidePath/GlideLexicon/GlideDecoder — geometry+frequency
+  only; SmartEngine untouched except ONE inert internal getter exposing
+  shorthand keys, full walls --rerun green). Decoder: resample+smooth
+  normalization BOTH sides, centroid-aligned shape channel 0.7 (real
+  thumbs drift — study bias model reproduced the field complaint),
+  first-key prior 0.25, corner channel OFF by ablation. Lexicon rev 3:
+  seeds (kmon/tmi shorthands) + ALL-priority index keys (korsi/issa
+  live at priority 1!) + bh→v variants (valo has NO key anywhere —
+  rules produce it) — 52.8K templates ≈ 3.7MB, on-device build cached
+  version#rev-stamped, dropped on memory pressure, 20K in lite.
+  Study S163GlideStudyJvm: top1WORD 83.0% / top6WORD 95.5% (σ.25 bias
+  .18); device 12/14 word-exact via the app_process MotionEvent injector
+  (monkey drops MOVEs — scratchpad GlideInjector/glide_test.py is the
+  only trustworthy synthetic glide tool). Settings: গ্লাইড টাইপিং
+  default ON. Spec+plan in docs/superpowers/. Android 1.5.102 (2139).
 - **S162 ghost-chip strip round (2026-09-01, tester proposal via user,
   approved mock variant ঙ):** the typed roman leads the strip as an
   outlined mono GHOST chip (tap = keep the English literal; never
