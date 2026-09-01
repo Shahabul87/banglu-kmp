@@ -815,11 +815,14 @@ private fun NavItem(icon: String, label: String, active: Boolean = false, onClic
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Text(icon, color = if (active) MockMustard else MockMuted, fontSize = 18.sp)
+        Text(icon, color = if (active) MockMustard else MockMuted, fontSize = 20.sp)
+        // S162 (tester: "হোম শিখুন সেটিংস মতামত … not properly visible"):
+        // 11sp muted labels were below comfortable Bengali legibility on the
+        // 64dp bar — 14sp, and inactive labels lift to near-ink.
         Text(
             label,
-            color = if (active) MockMustard else MockMuted,
-            fontSize = 11.sp,
+            color = if (active) MockMustard else MockInk.copy(alpha = 0.82f),
+            fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold
         )
     }

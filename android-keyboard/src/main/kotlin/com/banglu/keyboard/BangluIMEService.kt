@@ -950,7 +950,10 @@ class BangluIMEService : InputMethodService(),
             }
             if (keyboardMode.value == KeyboardMode.BANGLU && buffer == snapshot) {
                 suggestions.clear()
-                suggestions.addAll(newSuggestions)
+                // S162: the typed roman leads as a ghost chip (tap = keep the
+                // English literal); the blue commit highlight moves to the
+                // first real suggestion in the view.
+                suggestions.addAll(TypedChipPolicy.decorateBanglaStrip(snapshot, newSuggestions))
                 if (BuildConfig.DEBUG) {
                     Log.d(TAG, "sugg '$snapshot': ${newSuggestions.joinToString { "${it.bengali}/${it.source}" }}")
                 }
@@ -2005,10 +2008,30 @@ class BangluIMEService : InputMethodService(),
                 if (prefix.isEmpty()) SmartEngineAdapter.englishPredictions(prev, 3)
                 else SmartEngineAdapter.englishCompletions(prefix, 3)
             }
+            // S162: the mirror — a non-English token (kemon) earns a Bangla
+            // ghost chip; everyday English (the/was) never does.
+            val mirror = if (
+                TypedChipPolicy.mirrorWorthTrying(
+                    prefix,
+                    com.banglu.engine.ai.EnglishDetector.isCommonEnglishWord(prefix)
+                )
+            ) {
+                withContext(engineLane) { safeConvert(prefix) }
+                    .takeIf { TypedChipPolicy.mirrorAccepts(it.bengali, it.confidence) }
+            } else null
             if (keyboardMode.value == KeyboardMode.ENGLISH) {
                 suggestions.clear()
                 // S97: a fresh correction leads with its undo chip.
                 autoCorrectUndoSuggestion()?.let { suggestions.add(it) }
+                mirror?.let { m ->
+                    suggestions.add(
+                        SmartSuggestion(
+                            m.bengali, m.confidence,
+                            TypedChipPolicy.EN_BANGLA_MIRROR_SOURCE, prefix,
+                            TypedChipPolicy.EN_BANGLA_MIRROR_TIER
+                        )
+                    )
+                }
                 items.forEach { w ->
                     suggestions.add(SmartSuggestion(w, 0.9, ENGLISH_WORD_SOURCE, prefix, "en"))
                 }
@@ -2534,7 +2557,39 @@ class BangluIMEService : InputMethodService(),
             return
         }
 
+        // S162: EN-mode Bangla mirror — swap the typed token for its Bangla
+        // reading; the explicit pick may teach the mapping (addWord's
+        // plausibility guard still judges it).
+        if (suggestion.source == TypedChipPolicy.EN_BANGLA_MIRROR_SOURCE) {
+            val icM = currentInputConnection ?: return
+            val beforeM = icM.getTextBeforeCursor(48, 0)?.toString().orEmpty()
+            val (prefixM, _) = englishContextFrom(beforeM)
+            icM.beginBatchEdit()
+            if (prefixM.isNotEmpty()) icM.deleteSurroundingText(prefixM.length, 0)
+            icM.commitText(suggestion.bengali + " ", 1)
+            icM.endBatchEdit()
+            lastCommittedTextLength = suggestion.bengali.length + 1
+            sessionSuggestionTapCount++
+            englishWordPrefix = ""
+            learnCommittedWordAsync(suggestion.phonetic, suggestion.bengali, explicitChoice = true)
+            refreshEnglishSuggestionsAsync()
+            return
+        }
+
         val ic = currentInputConnection ?: return
+
+        // S162: the ghost chip IS the typed roman — commit the literal, learn
+        // nothing (roman→roman is not a mapping) and keep it out of the
+        // Bengali n-grams.
+        if (suggestion.source == TypedChipPolicy.TYPED_ROMAN_SOURCE) {
+            sessionSuggestionTapCount++
+            ic.commitText(suggestion.bengali + " ", 1)
+            lastCommittedTextLength = suggestion.bengali.length + 1
+            buffer = ""
+            suggestions.clear()
+            clearCommitCaches()
+            return
+        }
 
         if (buffer.isEmpty()) {
             // Feature 4.1: This is a next-word prediction — commit directly with space

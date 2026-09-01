@@ -1615,68 +1615,64 @@ private fun BangluSuggestionRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // S162 (tester proposal, mock variant ঙ): the typed roman is its
+            // own leading ghost chip, every chip is single-line, and the blue
+            // commit highlight belongs to the first REAL suggestion — never a
+            // ghost. The S117/S152 two-line hint retires with this layout.
+            val firstReal = shown.firstOrNull { !TypedChipPolicy.isGhostTier(it.tier) }
             items(shown, key = { "${it.bengali}|${it.source}|${it.tier}" }) { suggestion ->
-                val isFirst = suggestion == shown.firstOrNull()
+                val isGhost = TypedChipPolicy.isGhostTier(suggestion.tier)
+                val isFirst = suggestion == firstReal
                 // Feature 4.4: Prediction chips use different styling
                 val isPrediction = suggestion.tier == "prediction"
                 val isPunctuation = suggestion.tier == "punctuation"
-                val chipBg = if (isFirst && !isPunctuation) colors.suggestionHighlight
+                val chipBg = if (isGhost) Color.Transparent
+                    else if (isFirst && !isPunctuation) colors.suggestionHighlight
                     else if (isPrediction) colors.keyBg
                     else colors.suggestionChipBg
-                val chipTextColor = if (isFirst && !isPunctuation) Color.White else colors.keyText
+                val chipTextColor = if (isGhost) colors.keyText.copy(alpha = 0.92f)
+                    else if (isFirst && !isPunctuation) Color.White
+                    else colors.keyText
 
                 Box(
                     modifier = Modifier
                         .semantics {
                             role = Role.Button
-                            contentDescription = "Suggestion ${suggestion.bengali}"
+                            contentDescription =
+                                if (suggestion.tier == TypedChipPolicy.TYPED_ROMAN_TIER)
+                                    "Keep typed text ${suggestion.bengali}"
+                                else "Suggestion ${suggestion.bengali}"
                             if (isFirst) stateDescription = "Primary suggestion"
                         }
                         .shadow(if (isFirst) 1.dp else 0.dp, RoundedCornerShape(16.dp), clip = false)
                         .clip(RoundedCornerShape(16.dp))
                         .background(chipBg)
+                        .then(
+                            if (isGhost)
+                                Modifier.border(
+                                    1.5.dp,
+                                    colors.keyText.copy(alpha = 0.35f),
+                                    RoundedCornerShape(16.dp)
+                                )
+                            else Modifier
+                        )
                         .clickable { onSuggestionClick(suggestion) }
                         .padding(horizontal = 13.dp, vertical = 2.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Feature 4.3: Show phonetic hint on primary suggestion
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = suggestion.bengali,
-                            color = chipTextColor,
-                            fontSize = if (isPunctuation) scaledSp(17) else scaledSp(15),
-                            fontWeight = if (isFirst) FontWeight.Medium else FontWeight.Normal,
-                            fontStyle = if (isPrediction) FontStyle.Italic else FontStyle.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        // S117: the two-line chip (word + roman hint) needs the
-                        // full 38dp portrait strip; in the 0.78x landscape strip
-                        // the hint line clipped mid-glyph. Landscape is single-
-                        // line, Gboard-style.
-                        val hintFits =
-                            LocalConfiguration.current.orientation != Configuration.ORIENTATION_LANDSCAPE
-                        if (suggestion.phonetic.isNotEmpty() && isFirst && hintFits) {
-                            // S152 (tester: "blue cell er vetor nicher English"
-                            // — the roman hint was too small to read): 9sp grey
-                            // on the blue chip failed the very users it exists
-                            // for. 11sp near-white; the hint only renders on
-                            // the highlighted first chip, so white is safe.
-                            // Tight to the Bengali above it (tester follow-up:
-                            // "do not make so much gap") — the two lines are one
-                            // reading, not a list.
-                            Text(
-                                text = displayPhoneticHint(suggestion.phonetic),
-                                color = Color.White.copy(alpha = 0.88f),
-                                fontSize = scaledSp(11),
-                                lineHeight = scaledSp(11),
-                                maxLines = 1,
-                                modifier = Modifier.offset(y = (-3).dp)
-                            )
-                        }
-                    }
+                    Text(
+                        text = suggestion.bengali,
+                        color = chipTextColor,
+                        fontSize = if (isPunctuation) scaledSp(17)
+                            else if (isGhost) scaledSp(13)
+                            else if (isFirst) scaledSp(16.5f)
+                            else scaledSp(15),
+                        fontFamily = if (suggestion.tier == TypedChipPolicy.TYPED_ROMAN_TIER) RomanMono else null,
+                        fontWeight = if (isFirst) FontWeight.Medium else FontWeight.Normal,
+                        fontStyle = if (isPrediction) FontStyle.Italic else FontStyle.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
