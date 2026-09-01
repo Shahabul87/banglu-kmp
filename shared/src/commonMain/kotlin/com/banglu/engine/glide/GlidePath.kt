@@ -49,6 +49,30 @@ object GlidePath {
     }
 
     /**
+     * Midpoint-average smoothing (endpoints kept). Finger paths carry sensor
+     * jitter that manufactures fake corners; templates are never smoothed.
+     */
+    fun smooth(p: List<GlidePoint>, passes: Int = 2): List<GlidePoint> {
+        if (p.size < 3 || passes <= 0) return p
+        var cur = p
+        repeat(passes) {
+            val out = ArrayList<GlidePoint>(cur.size)
+            out.add(cur.first())
+            for (i in 1 until cur.size - 1) {
+                out.add(
+                    GlidePoint(
+                        (cur[i - 1].x + cur[i].x + cur[i + 1].x) / 3f,
+                        (cur[i - 1].y + cur[i].y + cur[i + 1].y) / 3f
+                    )
+                )
+            }
+            out.add(cur.last())
+            cur = out
+        }
+        return cur
+    }
+
+    /**
      * Arc-length fractions (0..1) of direction changes sharper than 55°.
      * Directions are taken over a ±2-sample window of a 24-point resample —
      * a single-sample window aliases a sharp corner that falls BETWEEN

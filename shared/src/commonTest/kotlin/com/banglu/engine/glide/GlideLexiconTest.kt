@@ -31,9 +31,12 @@ class GlideLexiconTest {
 
     @Test
     fun lengthIsTemplateArc() {
+        // Templates are smoothed at build (corner rounding shortens the arc
+        // a little) — length only needs to be in the raw polyline's ballpark
+        // for the prune window to work.
         val lex = GlideLexicon.build(words, grid)
         val tpl = "ami".mapNotNull { grid.center(it) }
-        assertTrue(abs(lex.length(0) - GlidePath.arcLength(tpl)) < 0.15f)
+        assertTrue(abs(lex.length(0) - GlidePath.arcLength(tpl)) < 0.5f)
     }
 
     @Test

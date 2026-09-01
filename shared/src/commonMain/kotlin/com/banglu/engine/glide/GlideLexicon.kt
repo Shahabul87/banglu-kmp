@@ -51,7 +51,12 @@ class GlideLexicon private constructor(
             val freqsArr = IntArray(n) { eligible[it].second }
             val templates = ByteArray(n * BYTES_PER_TEMPLATE)
             for (i in 0 until n) {
-                val pts = GlidePath.resample(eligible[i].first.mapNotNull { grid.center(it) }, N_POINTS)
+                // Same normalization as the decoder applies to gestures
+                // (resample → smooth): both sides round corners identically,
+                // so a clean glide of a zigzag word scores near zero.
+                val pts = GlidePath.smooth(
+                    GlidePath.resample(eligible[i].first.mapNotNull { grid.center(it) }, N_POINTS)
+                )
                 val base = i * BYTES_PER_TEMPLATE
                 for (k in 0 until N_POINTS) {
                     templates[base + 2 * k] = quant(pts[k].x, QX)
