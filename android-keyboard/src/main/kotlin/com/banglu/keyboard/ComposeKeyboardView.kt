@@ -251,7 +251,10 @@ private fun letterKeyInput(key: String, shiftState: ShiftState, useShiftedLetter
 }
 
 private fun bangluShiftInput(char: Char): Char {
-    return char.lowercaseChar()
+    // S167: shift in Bangla mode types a raw CAPITAL English letter (the
+    // service commits the forming Bangla word first). It was a deliberate
+    // lowercase no-op before — capitals were simply impossible in BN mode.
+    return char.uppercaseChar()
 }
 
 private fun displayPhoneticHint(phonetic: String): String {

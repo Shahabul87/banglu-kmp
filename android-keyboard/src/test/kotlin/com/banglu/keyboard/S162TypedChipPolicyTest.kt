@@ -45,30 +45,9 @@ class S162TypedChipPolicyTest {
     @Test
     fun ghostTiersAreExactlyTheTwoGhosts() {
         assertTrue(TypedChipPolicy.isGhostTier(TypedChipPolicy.TYPED_ROMAN_TIER))
-        assertTrue(TypedChipPolicy.isGhostTier(TypedChipPolicy.EN_BANGLA_MIRROR_TIER))
         assertFalse(TypedChipPolicy.isGhostTier("prediction"))
         assertFalse(TypedChipPolicy.isGhostTier("punctuation"))
         assertFalse(TypedChipPolicy.isGhostTier(""))
     }
 
-    @Test
-    fun mirrorGateRejectsEverydayEnglishAndJunk() {
-        // kemon is not an English word — worth converting.
-        assertTrue(TypedChipPolicy.mirrorWorthTrying("kemon", isCommonEnglishWord = false))
-        // the/was ARE everyday English — never a দ্য chip.
-        assertFalse(TypedChipPolicy.mirrorWorthTrying("the", isCommonEnglishWord = true))
-        // Too short, digits, emails: never.
-        assertFalse(TypedChipPolicy.mirrorWorthTrying("k", isCommonEnglishWord = false))
-        assertFalse(TypedChipPolicy.mirrorWorthTrying("k2mon", isCommonEnglishWord = false))
-        assertFalse(TypedChipPolicy.mirrorWorthTrying("a@b", isCommonEnglishWord = false))
-        // Non-ASCII letters (already Bengali) make no sense to mirror.
-        assertFalse(TypedChipPolicy.mirrorWorthTrying("কেমন", isCommonEnglishWord = false))
-    }
-
-    @Test
-    fun mirrorAcceptsOnlyConfidentBengaliScript() {
-        assertTrue(TypedChipPolicy.mirrorAccepts("কেমন", 0.9))
-        assertFalse(TypedChipPolicy.mirrorAccepts("kemon", 0.9))   // engine echoed Latin
-        assertFalse(TypedChipPolicy.mirrorAccepts("কেমন", 0.3))    // floor guess
-    }
 }

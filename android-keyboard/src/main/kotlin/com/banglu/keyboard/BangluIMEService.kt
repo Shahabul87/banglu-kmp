@@ -1917,6 +1917,21 @@ class BangluIMEService : InputMethodService(),
         isToolbarExpanded.value = false
         val ic = currentInputConnection ?: return
 
+        // S167 (user report: "trying to capital english in the editor i can
+        // not" — shift was a deliberate input no-op in Bangla mode): a
+        // SHIFTED letter is a raw capital English insert. The Bangla word in
+        // progress commits first (its visible preview, the S32 contract),
+        // then the capital lands as literal text; single-shift auto-releases,
+        // caps lock holds. Lowercase letters keep composing Bangla as ever.
+        if (char in 'A'..'Z' && !rawCommitInputMode) {
+            commitPendingBuffer()
+            ic.commitText(char.toString(), 1)
+            lastCommittedTextLength = 1
+            suggestions.clear()
+            if (shiftState.value == ShiftState.ON) shiftState.value = ShiftState.OFF
+            return
+        }
+
         if (rawCommitInputMode) {
             ic.commitText(char.toString(), 1)
             sessionRawCommitKeyCount++
@@ -2039,30 +2054,13 @@ class BangluIMEService : InputMethodService(),
                 if (prefix.isEmpty()) SmartEngineAdapter.englishPredictions(prev, 3)
                 else SmartEngineAdapter.englishCompletions(prefix, 3)
             }
-            // S162: the mirror — a non-English token (kemon) earns a Bangla
-            // ghost chip; everyday English (the/was) never does.
-            val mirror = if (
-                TypedChipPolicy.mirrorWorthTrying(
-                    prefix,
-                    com.banglu.engine.ai.EnglishDetector.isCommonEnglishWord(prefix)
-                )
-            ) {
-                withContext(engineLane) { safeConvert(prefix) }
-                    .takeIf { TypedChipPolicy.mirrorAccepts(it.bengali, it.confidence) }
-            } else null
+            // S167 (user: "in english mode no need to mirror bengali —
+            // people might feel bored"): the S162 Bangla-mirror ghost chip
+            // is REMOVED. English mode shows English only.
             if (keyboardMode.value == KeyboardMode.ENGLISH) {
                 suggestions.clear()
                 // S97: a fresh correction leads with its undo chip.
                 autoCorrectUndoSuggestion()?.let { suggestions.add(it) }
-                mirror?.let { m ->
-                    suggestions.add(
-                        SmartSuggestion(
-                            m.bengali, m.confidence,
-                            TypedChipPolicy.EN_BANGLA_MIRROR_SOURCE, prefix,
-                            TypedChipPolicy.EN_BANGLA_MIRROR_TIER
-                        )
-                    )
-                }
                 items.forEach { w ->
                     suggestions.add(SmartSuggestion(w, 0.9, ENGLISH_WORD_SOURCE, prefix, "en"))
                 }
@@ -2697,24 +2695,8 @@ class BangluIMEService : InputMethodService(),
             return
         }
 
-        // S162: EN-mode Bangla mirror — swap the typed token for its Bangla
-        // reading; the explicit pick may teach the mapping (addWord's
-        // plausibility guard still judges it).
-        if (suggestion.source == TypedChipPolicy.EN_BANGLA_MIRROR_SOURCE) {
-            val icM = currentInputConnection ?: return
-            val beforeM = icM.getTextBeforeCursor(48, 0)?.toString().orEmpty()
-            val (prefixM, _) = englishContextFrom(beforeM)
-            icM.beginBatchEdit()
-            if (prefixM.isNotEmpty()) icM.deleteSurroundingText(prefixM.length, 0)
-            icM.commitText(suggestion.bengali + " ", 1)
-            icM.endBatchEdit()
-            lastCommittedTextLength = suggestion.bengali.length + 1
-            sessionSuggestionTapCount++
-            englishWordPrefix = ""
-            learnCommittedWordAsync(suggestion.phonetic, suggestion.bengali, explicitChoice = true)
-            refreshEnglishSuggestionsAsync()
-            return
-        }
+        // S167: the S162 EN-mode Bangla-mirror chip was removed on user
+        // verdict ("no need to mirror bengali") — its tap branch went with it.
 
         val ic = currentInputConnection ?: return
 
