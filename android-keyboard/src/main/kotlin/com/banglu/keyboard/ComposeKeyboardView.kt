@@ -46,6 +46,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -371,7 +372,27 @@ fun BangluKeyboardLayout(
         val navBottomPadding = WindowInsets.navigationBars
             .asPaddingValues()
             .calculateBottomPadding()
-        val bottomSafePadding = if (isLandscape) navBottomPadding else maxOf(navBottomPadding, 3.dp)
+        // S166 (iQOO Neo 9): gestures + "hide indicator bar" report a ZERO
+        // nav inset — the bottom row sat in the system gesture zone and the
+        // OEM's floating IME-switch globe overlaid the !#1 key. Policy:
+        // max(nav, tappableElement) with a 14dp floor ONLY on gesture nav.
+        val tappableBottomPadding = WindowInsets.tappableElement
+            .asPaddingValues()
+            .calculateBottomPadding()
+        val navigationMode = run {
+            val resolver = LocalContext.current.contentResolver
+            remember(resolver) {
+                runCatching {
+                    android.provider.Settings.Secure.getInt(resolver, "navigation_mode", 0)
+                }.getOrDefault(0)
+            }
+        }
+        val bottomSafePadding = GestureNavInsetPolicy.bottomPaddingDp(
+            navInsetDp = navBottomPadding.value,
+            tappableInsetDp = tappableBottomPadding.value,
+            navigationMode = navigationMode,
+            landscape = isLandscape,
+        ).dp
         val isVoiceActive = voiceInputState == VoiceInputState.LISTENING ||
             voiceInputState == VoiceInputState.PROCESSING
         val showNumberRow = numberRowEnabled && !isLandscape
