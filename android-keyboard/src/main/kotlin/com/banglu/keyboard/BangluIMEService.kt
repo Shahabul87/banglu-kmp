@@ -37,6 +37,9 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.banglu.engine.SmartEngineAdapter
+import com.banglu.engine.glide.GlideDecoder
+import com.banglu.engine.glide.GlideLexicon
+import com.banglu.engine.glide.GlidePoint
 import com.banglu.engine.types.ConversionResult
 import com.banglu.engine.types.ResolutionSource
 import com.banglu.engine.types.SmartSuggestion
@@ -314,6 +317,27 @@ class BangluIMEService : InputMethodService(),
     private val kbOnBackToLetters: () -> Unit = { onBackToLetters() }
     private val kbOnSymbolPageToggle: () -> Unit = { onSymbolPageToggle() }
     private val kbOnSuggestionClick: (SmartSuggestion) -> Unit = { onSuggestionTap(it) }
+
+    // ── S163: glide typing ─────────────────────────────────────────────────
+    val glideTypingEnabled = mutableStateOf(true)
+    @Volatile private var glideLexiconStoreField: GlideLexiconStore? = null
+    @Volatile private var glideDecoderBn: GlideDecoder? = null
+    @Volatile private var glideDecoderEn: GlideDecoder? = null
+    /** The word the last glide committed — the strip's glide_alt chips swap it. */
+    private var lastGlideCommit: String? = null
+    private val kbGlideState: GlideUiState = GlideUiState(
+        enabledProvider = {
+            glideTypingEnabled.value && suggestionsEnabled.value &&
+                !privateInputMode && !rawCommitInputMode && !sensitiveInputMode &&
+                voiceInputState.value == VoiceInputState.IDLE &&
+                (keyboardMode.value == KeyboardMode.BANGLU || keyboardMode.value == KeyboardMode.ENGLISH)
+        },
+        onComplete = { onGlideComplete(it) }
+    )
+
+    private fun glideLexiconStore(): GlideLexiconStore =
+        glideLexiconStoreField ?: GlideLexiconStore(filesDir, liteModeEnabled.value)
+            .also { glideLexiconStoreField = it }
     private val kbOnNumberPress: (Char) -> Unit = { onNumberPress(it) }
     private val kbOnPunctuationPress: (Char) -> Unit = { onPunctuationPress(it) }
     private val kbOnCursorMove: (Int) -> Unit = { onCursorMove(it) }
@@ -1040,6 +1064,7 @@ class BangluIMEService : InputMethodService(),
         // reranking + strong gates). shouldUseLiteDictionary() still forces lite
         // on low-RAM devices, and every heavy loader degrades gracefully on OOM.
         liteModeEnabled.value = prefs.getBoolean("lite_mode", false)
+        glideTypingEnabled.value = prefs.getBoolean("glide_typing_enabled", true)
         themeMode.value = prefs.getString("theme", "dark") ?: "dark"
         keyboardHeightMode.value = prefs.getString("keyboard_height", "normal") ?: "normal"
         keyboardFontSizeMode.value = prefs.getString("keyboard_font_size", "large") ?: "large"
@@ -1430,8 +1455,13 @@ class BangluIMEService : InputMethodService(),
         when (MemoryPressurePolicy.onTrim(level, alreadyLite)) {
             MemoryPressurePolicy.Action.DEGRADE_TO_LITE -> degradeToLiteForMemoryPressure("trim_level_$level")
             MemoryPressurePolicy.Action.CLEAR_CACHES -> SmartEngineAdapter.clearTransientCaches()
-            MemoryPressurePolicy.Action.NONE -> Unit
+            MemoryPressurePolicy.Action.NONE -> return
         }
+        // S163: the glide templates (~3.6MB) are droppable — cache files
+        // survive, the next glide rebuilds from disk.
+        glideLexiconStoreField?.dropForMemoryPressure()
+        glideDecoderBn = null
+        glideDecoderEn = null
     }
 
     /** S72: shed the full dictionary under genuine kill pressure — rebuilds
@@ -1499,6 +1529,7 @@ class BangluIMEService : InputMethodService(),
                         keyboardFontSizeMode = keyboardFontSizeMode.value,
                         onKeyPress = kbOnKeyPress,
                         onLetterTouch = kbOnLetterTouch,
+                        glide = kbGlideState,
                         onTextInput = kbOnTextInput,
                         onBackspace = kbOnBackspace,
                         onBackspaceRepeat = kbOnBackspaceRepeat,
@@ -2508,6 +2539,95 @@ class BangluIMEService : InputMethodService(),
         lastSpaceTime = 0L
     }
 
+    // ── S163: glide completion ─────────────────────────────────────────────
+
+    private class GlideOutcome(val roman: String, val text: String)
+
+    private fun glideDecoderFor(bangla: Boolean, lex: GlideLexicon): GlideDecoder =
+        if (bangla) {
+            glideDecoderBn?.takeIf { it.lexicon === lex } ?: GlideDecoder(lex).also { glideDecoderBn = it }
+        } else {
+            glideDecoderEn?.takeIf { it.lexicon === lex } ?: GlideDecoder(lex).also { glideDecoderEn = it }
+        }
+
+    /**
+     * Finger lifted after an armed glide. Decode + (BN) convert on the
+     * engine lane; commit back on the main scope. The commit REPLACES the
+     * whole composing word (the glide's own first press is already in it —
+     * commit-on-down); no candidate above the floor commits NOTHING and the
+     * view flashes the trail red. Top-1 learning is passive (S26 law); only
+     * an alternate-chip tap records an explicit choice.
+     */
+    private fun onGlideComplete(points: List<GlidePoint>) {
+        val mode = keyboardMode.value
+        val bangla = mode == KeyboardMode.BANGLU
+        if (!bangla && mode != KeyboardMode.ENGLISH) {
+            kbGlideState.trail.clear()
+            return
+        }
+        serviceScope.launch {
+            val outcomes: List<GlideOutcome>? = withContext(engineLane) {
+                try {
+                    val store = glideLexiconStore()
+                    val lex = (if (bangla) store.banglaLexicon() else store.englishLexicon())
+                        ?: return@withContext null
+                    val cands = glideDecoderFor(bangla, lex).decode(points)
+                    if (bangla) {
+                        cands.mapNotNull { c ->
+                            val res = safeConvert(c.word)
+                            if (res.bengali.any { it in 'ঀ'..'৿' })
+                                GlideOutcome(c.word, res.bengali)
+                            else null
+                        }
+                    } else {
+                        cands.map { GlideOutcome("", it.word) }
+                    }
+                } catch (e: Throwable) {
+                    recordEngineFailure("glide", e)
+                    null
+                }
+            }
+            if (keyboardMode.value != mode) {
+                kbGlideState.trail.clear()
+                return@launch
+            }
+            if (outcomes.isNullOrEmpty()) {
+                // No confident word: commit nothing, flash the trail red.
+                kbGlideState.failFlash.value = true
+                return@launch
+            }
+            val ic = currentInputConnection ?: run { kbGlideState.trail.clear(); return@launch }
+            val top = outcomes.first()
+            val plan = GlideCommitPolicy.planCommit(
+                if (bangla) GlideMode.BANGLA else GlideMode.ENGLISH,
+                editorCharsFromFirstKey = 1,
+                word = top.text
+            )
+            ic.beginBatchEdit()
+            if (plan.eraseEditorChars > 0) ic.deleteSurroundingText(plan.eraseEditorChars, 0)
+            ic.commitText(plan.commitText, 1)
+            ic.endBatchEdit()
+            lastCommittedTextLength = plan.commitText.length
+            lastGlideCommit = top.text
+            if (bangla) {
+                buffer = ""
+                suggestionJob?.cancel()
+                clearCommitCaches()
+                learnCommittedWordAsync(top.roman, top.text, explicitChoice = false)
+                recordNextWordPairLearning(top.text)
+            } else {
+                englishWordPrefix = ""
+                recordEnglishCommitAsync(top.text, null)
+            }
+            suggestions.clear()
+            outcomes.drop(1).take(5).forEach { alt ->
+                suggestions.add(GlideCommitPolicy.altChip(alt.roman, alt.text))
+            }
+            kbGlideState.trail.clear()
+            if (bangla) updatePredictions(top.text)
+        }
+    }
+
     private fun onSuggestionTap(suggestion: SmartSuggestion) {
         log("onSuggestionTap: '${suggestion.bengali}' (tier=${suggestion.tier})")
         if (suggestion.source == VOICE_DELETE_SOURCE || suggestion.tier == "voice_action") {
@@ -2577,6 +2697,27 @@ class BangluIMEService : InputMethodService(),
         }
 
         val ic = currentInputConnection ?: return
+
+        // S163: glide alternate — swap the just-glided word, but only while
+        // the editor still ends with it (S32-style guard against staleness).
+        if (suggestion.source == GlideCommitPolicy.GLIDE_ALT_SOURCE) {
+            val committed = lastGlideCommit ?: return
+            val before = ic.getTextBeforeCursor(committed.length + 1, 0)?.toString().orEmpty()
+            if (before != "$committed ") return
+            val (del, text) = GlideCommitPolicy.swapLengths(committed, suggestion.bengali)
+            ic.beginBatchEdit()
+            ic.deleteSurroundingText(del, 0)
+            ic.commitText(text, 1)
+            ic.endBatchEdit()
+            lastCommittedTextLength = text.length
+            lastGlideCommit = suggestion.bengali
+            sessionSuggestionTapCount++
+            // The explicit pick teaches (BN chips carry the roman; EN don't).
+            if (suggestion.phonetic.isNotEmpty()) {
+                learnCommittedWordAsync(suggestion.phonetic, suggestion.bengali, explicitChoice = true)
+            }
+            return
+        }
 
         // S162: the ghost chip IS the typed roman — commit the literal, learn
         // nothing (roman→roman is not a mapping) and keep it out of the

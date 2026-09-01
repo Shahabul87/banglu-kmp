@@ -11,7 +11,10 @@ data class GlideTuning(
     val anchorRadius: Float = 1.6f,
     val lengthRatio: Float = 2.6f,
     val freqWeight: Float = 0.16f,
-    val cornerWeight: Float = 0.35f,
+    /** S163 study ablation: any corner penalty HURT on noisy gestures
+     *  (0.35 → −10.6pt top-1 at σ=0.25); default 0, kept as a knob for the
+     *  on-device tuning round where real finger noise may differ. */
+    val cornerWeight: Float = 0.0f,
     /** Candidates scoring above this commit NOTHING — no surprise text. */
     val maxScore: Float = 1.15f,
     /** Gestures shorter than this (key widths) are taps, not glides. */
@@ -24,7 +27,7 @@ data class GlideTuning(
  * context rerank. The decoder never touches SmartEngine.
  */
 class GlideDecoder(
-    private val lexicon: GlideLexicon,
+    val lexicon: GlideLexicon,
     private val tuning: GlideTuning = GlideTuning(),
 ) {
     private val maxFreq: Float =

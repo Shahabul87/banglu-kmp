@@ -188,6 +188,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
     var autoCapitalize by remember { mutableStateOf(prefs.getBoolean("auto_capitalize", true)) }
     var doubleSpacePeriod by remember { mutableStateOf(prefs.getBoolean("double_space_period", true)) }
     var suggestions by remember { mutableStateOf(prefs.getBoolean("suggestions", true)) }
+    var glideTyping by remember { mutableStateOf(prefs.getBoolean("glide_typing_enabled", true)) }
     var typingLearning by remember { mutableStateOf(prefs.getBoolean("typing_learning", true)) }
     var personalDictionary by remember { mutableStateOf(prefs.getBoolean("personal_dictionary", true)) }
     var identityAssist by remember { mutableStateOf(prefs.getBoolean("identity_assist", false)) }
@@ -325,6 +326,12 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
             item {
                 BrandSwitch("সাজেশন", "টাইপ করার সময় শব্দ সাজেশন দেখান", suggestions) {
                     suggestions = it; saveBoolean("suggestions", it)
+                }
+            }
+            item {
+                // S163: glide typing — default ON, visible switch (house law).
+                BrandSwitch("গ্লাইড টাইপিং", "আঙুল টেনে লিখুন — ছেড়ে দিলেই শব্দ বসে", glideTyping) {
+                    glideTyping = it; saveBoolean("glide_typing_enabled", it)
                 }
             }
             item {

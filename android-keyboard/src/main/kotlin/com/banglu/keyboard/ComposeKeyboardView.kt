@@ -13,6 +13,10 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+import com.banglu.engine.glide.GlidePoint
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -288,6 +292,8 @@ fun BangluKeyboardLayout(
     onKeyPress: (Char) -> Unit,
     /** S99: probabilistic touch targeting — letter presses report position. */
     onLetterTouch: ((Char, Char?, Char?, Float) -> Unit)? = null,
+    /** S163: glide typing — service-owned shared state; null = no glide. */
+    glide: GlideUiState? = null,
     onTextInput: (String) -> Unit = { text -> text.forEach { onKeyPress(it) } },
     onBackspace: () -> Unit,
     onBackspaceRepeat: (Int) -> Unit = { count -> repeat(count) { onBackspace() } },
@@ -430,7 +436,8 @@ fun BangluKeyboardLayout(
                         onBackspaceRepeat = onBackspaceRepeat,
                         onBackspaceWord = onBackspaceWord,
                         onShiftTap = onShiftTap,
-                        onLetterTouch = onLetterTouch
+                        onLetterTouch = onLetterTouch,
+                        glide = glide
                     )
                     Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
                     BottomRow(
@@ -484,7 +491,8 @@ fun BangluKeyboardLayout(
                         onBackspaceRepeat = onBackspaceRepeat,
                         onBackspaceWord = onBackspaceWord,
                         onShiftTap = onShiftTap,
-                        onLetterTouch = onLetterTouch
+                        onLetterTouch = onLetterTouch,
+                        glide = glide
                     )
                     Spacer(modifier = Modifier.height(scaledDp(KeyGapV)))
                     BottomRow(
@@ -1797,7 +1805,146 @@ private fun LetterRows(
     onShiftTap: () -> Unit,
     /** S99: (tapped, leftNeighbor, rightNeighbor, xFraction) — when set,
      *  letter keys report press position for probabilistic targeting. */
-    onLetterTouch: ((Char, Char?, Char?, Float) -> Unit)? = null
+    onLetterTouch: ((Char, Char?, Char?, Float) -> Unit)? = null,
+    /** S163: glide typing state; null disables the observer entirely. */
+    glide: GlideUiState? = null
+) {
+    if (glide == null) {
+        LetterRowsContent(
+            shiftState, useShiftedLetterInput, onKeyPress, onTextInput,
+            onBackspace, onBackspaceRepeat, onBackspaceWord, onShiftTap, onLetterTouch
+        )
+        return
+    }
+    GlideLetterRows(glide) {
+        LetterRowsContent(
+            shiftState, useShiftedLetterInput, onKeyPress, onTextInput,
+            onBackspace, onBackspaceRepeat, onBackspaceWord, onShiftTap, onLetterTouch
+        )
+    }
+}
+
+/**
+ * S163: wraps the three letter rows with (a) an Initial-pass pointer
+ * OBSERVER feeding GlideInput — keys keep owning their gestures exactly as
+ * before (S13 commit-on-down, S15 no stale waits, S32/S68 untouched) — and
+ * (b) the trail overlay. LocalGlideActive lets KeyButton suppress its
+ * long-press popup while a glide is running.
+ */
+@Composable
+private fun GlideLetterRows(glide: GlideUiState, content: @Composable () -> Unit) {
+    val colors = LocalKeyboardColors.current
+    val glideInput = remember { GlideInput() }
+
+    // Fail flash: keep the red trail briefly, then clear.
+    LaunchedEffect(glide.failFlash.value) {
+        if (glide.failFlash.value) {
+            delay(150)
+            glide.trail.clear()
+            glide.failFlash.value = false
+        }
+    }
+
+    CompositionLocalProvider(LocalGlideActive provides { glide.active.value }) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .pointerInput(glide) {
+                    awaitPointerEventScope {
+                        var tracking = false
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val keyW = size.width / 10f
+                            val rowH = size.height / 3f
+                            if (keyW <= 0f || rowH <= 0f) continue
+                            when {
+                                event.changes.size > 1 -> {
+                                    // Multi-touch typists: second finger kills the glide.
+                                    if (tracking) {
+                                        glideInput.cancel()
+                                        glide.active.value = false
+                                        glide.trail.clear()
+                                        tracking = false
+                                    }
+                                }
+                                event.type == PointerEventType.Press -> {
+                                    val pos = event.changes.first().position
+                                    val gx = pos.x / keyW
+                                    val gy = pos.y / rowH
+                                    // Row 3's shift/backspace zones are not letters.
+                                    val onLetter = gy < 2f || (gx in 1.5f..8.5f)
+                                    tracking = glide.enabledProvider()
+                                    glideInput.begin(tracking && onLetter, GlidePoint(gx, gy))
+                                }
+                                event.type == PointerEventType.Move && tracking -> {
+                                    val pos = event.changes.first().position
+                                    val wasGlide = glideInput.isGlide
+                                    glideInput.move(GlidePoint(pos.x / keyW, pos.y / rowH))
+                                    if (glideInput.isGlide) {
+                                        if (!wasGlide) {
+                                            glide.active.value = true
+                                            glide.trail.clear()
+                                        }
+                                        glide.trail.add(GlidePoint(pos.x / keyW, pos.y / rowH))
+                                        if (glide.trail.size > 64) glide.trail.removeAt(0)
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                }
+                                event.type == PointerEventType.Release && tracking -> {
+                                    val wasGlide = glideInput.isGlide
+                                    val path = glideInput.finish()
+                                    glide.active.value = false
+                                    tracking = false
+                                    if (wasGlide && path.size >= 4) {
+                                        event.changes.forEach { it.consume() }
+                                        glide.onComplete(path)
+                                    } else {
+                                        glide.trail.clear()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+        ) {
+            Column { content() }
+            val trailColor = colors.suggestionHighlight
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val trail = glide.trail
+                if (trail.size < 2) return@Canvas
+                val keyW = size.width / 10f
+                val rowH = size.height / 3f
+                val color = if (glide.failFlash.value) Color(0xFFE0524D) else trailColor
+                for (i in 1 until trail.size) {
+                    // Newer segments brighter — a fading comet, no allocation.
+                    val alpha = 0.15f + 0.75f * (i.toFloat() / trail.size)
+                    drawLine(
+                        color = color.copy(alpha = alpha),
+                        start = Offset(trail[i - 1].x * keyW, trail[i - 1].y * rowH),
+                        end = Offset(trail[i].x * keyW, trail[i].y * rowH),
+                        strokeWidth = 9f,
+                        cap = StrokeCap.Round
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** S163: while a glide is running, key popups must not fire. */
+private val LocalGlideActive = compositionLocalOf<() -> Boolean> { { false } }
+
+@Composable
+private fun LetterRowsContent(
+    shiftState: ShiftState,
+    useShiftedLetterInput: Boolean,
+    onKeyPress: (Char) -> Unit,
+    onTextInput: (String) -> Unit,
+    onBackspace: () -> Unit,
+    onBackspaceRepeat: (Int) -> Unit,
+    onBackspaceWord: () -> Unit,
+    onShiftTap: () -> Unit,
+    onLetterTouch: ((Char, Char?, Char?, Float) -> Unit)?
 ) {
     val colors = LocalKeyboardColors.current
     val keyHeight = scaledKeyHeight(LetterKeyRowHeight)
@@ -2356,6 +2503,9 @@ private fun KeyButton(
     val previewOn = LocalKeyPreviewEnabled.current
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnClickAt by rememberUpdatedState(onClickAt)
+    // S163: a running glide suppresses the long-press popup (the finger is
+    // travelling, not holding); everything else about the key is untouched.
+    val glideActiveNow by rememberUpdatedState(LocalGlideActive.current)
     var isPressed by remember { mutableStateOf(false) }
     var showAlternatives by remember { mutableStateOf(false) }
 
@@ -2456,9 +2606,14 @@ private fun KeyButton(
                                 }
                             }
                         } catch (_: PointerEventTimeoutCancellationException) {
+                            // S15: longPressed=true always — never re-enter the
+                            // release-wait after this timeout. S163: mid-glide the
+                            // popup itself is suppressed (finger is travelling).
                             longPressed = true
-                            showAlternatives = true
-                            if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (!glideActiveNow()) {
+                                showAlternatives = true
+                                if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
                         }
                     }
                     if (!longPressed && !released) {
