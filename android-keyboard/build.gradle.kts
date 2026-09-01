@@ -51,6 +51,15 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
+            // S166b: the AAB's only native code is androidx.graphics.path, a
+            // Google prebuilt that ships FULLY STRIPPED (llvm-nm: "no
+            // symbols") — so Play's "upload debug symbols" warning cannot be
+            // satisfied for it and is safe to ignore. This setting stays so
+            // any FUTURE native dependency that does carry a symbol table
+            // gets packed into the bundle automatically.
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
         }
         // Release-grade performance (R8, no debuggable overhead) with the
         // DEBUG signature: installs OVER the daily debug build on the dev
