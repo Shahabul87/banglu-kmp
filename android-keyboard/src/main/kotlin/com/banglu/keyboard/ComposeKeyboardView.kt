@@ -17,6 +17,7 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -405,6 +406,7 @@ fun BangluKeyboardLayout(
                             onClipboardOpen = onClipboardOpen,
                             onVoiceInput = onVoiceInput,
                             onPunctuationPress = onPunctuationPress,
+                            onCursorMove = onCursorMove,
                             voiceInputState = voiceInputState,
                             onToggleToolbar = onToggleToolbar,
                             isToolbarExpanded = isToolbarExpanded
@@ -459,6 +461,7 @@ fun BangluKeyboardLayout(
                         onClipboardOpen = onClipboardOpen,
                         onVoiceInput = onVoiceInput,
                         onPunctuationPress = onPunctuationPress,
+                        onCursorMove = onCursorMove,
                         voiceInputState = voiceInputState,
                         onToggleToolbar = onToggleToolbar,
                         isToolbarExpanded = isToolbarExpanded
@@ -513,6 +516,7 @@ fun BangluKeyboardLayout(
                         onClipboardOpen = onClipboardOpen,
                         onVoiceInput = onVoiceInput,
                         onPunctuationPress = onPunctuationPress,
+                        onCursorMove = onCursorMove,
                         voiceInputState = voiceInputState,
                         onToggleToolbar = onToggleToolbar,
                         isToolbarExpanded = isToolbarExpanded
@@ -561,6 +565,7 @@ fun BangluKeyboardLayout(
                         onClipboardOpen = onClipboardOpen,
                         onVoiceInput = onVoiceInput,
                         onPunctuationPress = onPunctuationPress,
+                        onCursorMove = onCursorMove,
                         voiceInputState = voiceInputState,
                         onToggleToolbar = onToggleToolbar,
                         isToolbarExpanded = isToolbarExpanded
@@ -675,6 +680,7 @@ private fun AdaptiveTopStrip(
     onClipboardOpen: () -> Unit,
     onVoiceInput: () -> Unit,
     onPunctuationPress: (Char) -> Unit,
+    onCursorMove: (Int) -> Unit,
     voiceInputState: VoiceInputState,
     onToggleToolbar: () -> Unit,
     isToolbarExpanded: Boolean,
@@ -719,7 +725,7 @@ private fun AdaptiveTopStrip(
                     Box(modifier = Modifier.weight(1f)) {
                         BangluSuggestionRow(suggestions, onSuggestionClick)
                     }
-                    CompactMicToolbarIcon(
+                    MicEmojiSlot(
                         active = voiceInputState == VoiceInputState.LISTENING,
                         modifier = Modifier.width(52.dp),
                         onClick = onVoiceInput
@@ -739,10 +745,9 @@ private fun AdaptiveTopStrip(
             KeyboardActionBar(
                 onSettingsClick = onSettingsClick,
                 onEmojiOpen = onEmojiOpen,
-                onStickerOpen = onStickerOpen,
                 onClipboardOpen = onClipboardOpen,
                 onVoiceInput = onVoiceInput,
-                onPunctuationPress = onPunctuationPress,
+                onCursorMove = onCursorMove,
                 voiceInputState = voiceInputState,
                 onToggleToolbar = onToggleToolbar
             )
@@ -821,15 +826,11 @@ private fun ToolbarRow(
             ToolbarIconSlot("Stickers", modifier = Modifier.weight(1f), onClick = onStickerOpen) {
                 IconSticker(Modifier.size(22.dp), it)
             }
-            ToolbarIconSlot(
-                "Bangla voice typing",
-                highlighted = true,
+            MicEmojiSlot(
                 active = voiceInputState == VoiceInputState.LISTENING || voiceInputState == VoiceInputState.PROCESSING,
                 modifier = Modifier.weight(1f),
                 onClick = onVoiceInput
-            ) {
-                MicGlyph(Modifier.size(21.dp), it)
-            }
+            )
             ToolbarIconSlot("Settings", modifier = Modifier.weight(1f), onClick = onSettingsClick) {
                 IconGear(Modifier.size(22.dp), it)
             }
@@ -1151,10 +1152,9 @@ private fun ToolbarIcon(
 private fun KeyboardActionBar(
     onSettingsClick: () -> Unit,
     onEmojiOpen: () -> Unit,
-    onStickerOpen: () -> Unit,
     onClipboardOpen: () -> Unit,
     onVoiceInput: () -> Unit,
-    onPunctuationPress: (Char) -> Unit,
+    onCursorMove: (Int) -> Unit,
     voiceInputState: VoiceInputState,
     onToggleToolbar: () -> Unit
 ) {
@@ -1171,14 +1171,15 @@ private fun KeyboardActionBar(
         CompactIconSlot("Emoji", modifier = Modifier.weight(1f), onClick = onEmojiOpen) {
             IconEmoji(Modifier.size(21.dp), it)
         }
-        CompactIconSlot("Stickers", modifier = Modifier.weight(1f), onClick = onStickerOpen) {
-            IconSticker(Modifier.size(21.dp), it)
-        }
-        CompactToolbarIcon("\u0964", "Insert dari", modifier = Modifier.weight(1f)) { onPunctuationPress('\u0964') }
+        // S160 (user-approved mock \u0995): the redundant \u09a6\u09be\u0981\u09dc\u09bf slot and the
+        // sticker shortcut (still in the expanded toolbar) make way for
+        // cursor arrows \u2014 tap steps one position, hold repeats.
+        CursorArrowSlot(left = true, "Move cursor left", Modifier.weight(1f)) { onCursorMove(-1) }
+        CursorArrowSlot(left = false, "Move cursor right", Modifier.weight(1f)) { onCursorMove(1) }
         CompactIconSlot("Clipboard", modifier = Modifier.weight(1f), onClick = onClipboardOpen) {
             IconClipboard(Modifier.size(21.dp), it)
         }
-        CompactMicToolbarIcon(
+        MicEmojiSlot(
             active = voiceInputState == VoiceInputState.LISTENING || voiceInputState == VoiceInputState.PROCESSING,
             onClick = onVoiceInput,
             modifier = Modifier.weight(1f)
@@ -1192,6 +1193,58 @@ private fun KeyboardActionBar(
     }
 }
 
+@Composable
+private fun CursorArrowSlot(
+    left: Boolean,
+    accessibilityLabel: String,
+    modifier: Modifier = Modifier,
+    onStep: () -> Unit
+) {
+    val colors = LocalKeyboardColors.current
+    val currentOnStep = rememberUpdatedState(onStep)
+    val scope = rememberCoroutineScope()
+    Box(
+        modifier = modifier
+            .height(scaledDp(ToolbarCollapsedHeight))
+            .semantics {
+                role = Role.Button
+                contentDescription = accessibilityLabel
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(onPress = {
+                    currentOnStep.value()
+                    val holdJob = scope.launch {
+                        kotlinx.coroutines.delay(350)
+                        while (true) {
+                            currentOnStep.value()
+                            kotlinx.coroutines.delay(60)
+                        }
+                    }
+                    tryAwaitRelease()
+                    holdJob.cancel()
+                })
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        // Drawn, not a font glyph: \u2190/\u2192 render at different widths in
+        // some system fonts (S160 report: "two arrow has different font and
+        // size") — a mirrored Canvas pair is pixel-identical by construction.
+        val tint = colors.subText
+        androidx.compose.foundation.Canvas(modifier = Modifier.size(20.dp)) {
+            val w = size.width
+            val h = size.height
+            val cy = h / 2f
+            val stroke = 2.2.dp.toPx()
+            val tipX = if (left) w * 0.16f else w * 0.84f
+            val tailX = if (left) w * 0.88f else w * 0.12f
+            val head = w * 0.30f
+            val headDir = if (left) 1f else -1f
+            drawLine(tint, androidx.compose.ui.geometry.Offset(tailX, cy), androidx.compose.ui.geometry.Offset(tipX, cy), stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawLine(tint, androidx.compose.ui.geometry.Offset(tipX, cy), androidx.compose.ui.geometry.Offset(tipX + head * headDir, cy - head), stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawLine(tint, androidx.compose.ui.geometry.Offset(tipX, cy), androidx.compose.ui.geometry.Offset(tipX + head * headDir, cy + head), stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        }
+    }
+}
 @Composable
 private fun CompactToolbarIcon(
     label: String,
@@ -1227,6 +1280,37 @@ private fun CompactToolbarIcon(
                 maxLines = 1,
                 textAlign = TextAlign.Center
             )
+        }
+    }
+}
+
+/** S160 (mock ক): the tools bar wears the mock's studio-mic emoji — plain at
+ *  rest, voice-accent ring only while listening. */
+@Composable
+private fun MicEmojiSlot(
+    active: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .height(scaledDp(ToolbarCollapsedHeight))
+            .semantics {
+                role = Role.Button
+                contentDescription = "Bangla voice typing"
+                if (active) stateDescription = "Listening"
+            }
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(if (active) BangluVoiceAccent else Color.Transparent),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = "\uD83C\uDFA4", fontSize = scaledSp(19))
         }
     }
 }
@@ -1488,10 +1572,17 @@ private fun BangluSuggestionRow(
     val latestSuggestions = rememberUpdatedState(suggestions)
     var frozen by remember { mutableStateOf<List<SmartSuggestion>?>(null) }
     val shown = frozen ?: suggestions
+    // S160 (field report: "swipe left springs back"): unfreezing after a
+    // SWIPE used to refire this effect and snap to item 0, undoing the
+    // user's scroll. Snap only when a genuinely new ranking arrives (and no
+    // finger is down) — a mere finger-up over unchanged chips keeps the
+    // scroll position the user chose.
+    var lastSnapped by remember { mutableStateOf<List<SmartSuggestion>?>(null) }
     LaunchedEffect(shown, frozen == null) {
-        // Snap only while no finger is down: a programmatic scroll during a
-        // press is precisely the gesture-cancel this fix removes.
-        if (frozen == null) stripState.scrollToItem(0)
+        if (frozen == null && shown != lastSnapped) {
+            stripState.scrollToItem(0)
+            lastSnapped = shown
+        }
     }
 
     Row(

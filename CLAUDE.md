@@ -31,8 +31,30 @@ Future revenue = optional premium (AI rewrite via the :ui process, power-user
 packs). NO cloud API on the keystroke path — decided 2026-07-03 (latency,
 cost, and privacy-promise reasons; see memory + git history).
 
-**Current status (2026-08-30):** ONE ENGINE, SIX SURFACES (Windows IME
+**Current status (2026-08-31):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S160 Android strip + toolbar round (2026-08-31, user: "swipe left…
+  acting like spring" + approved mock ক "exactly make this tools bar
+  design"):** suggestion-strip spring-back root-caused — the LaunchedEffect
+  re-ran scrollToItem(0) on every recomposition while unfrozen, yanking any
+  user scroll back; now a `lastSnapped` guard snaps only when NEW
+  suggestions arrive. Action bar rebuilt to the approved mock
+  (😊 ← → 📋 🎤 ⚙ ⋯): stickers + duplicate দাঁড়ি slots replaced by
+  CursorArrowSlot pair (hold-repeat 350ms then 60ms via onCursorMove;
+  mirrored Canvas vectors — ← → font glyphs render unevenly on Samsung);
+  mic is the 🎤 emoji (MicEmojiSlot) in ALL THREE spots — action bar,
+  expanded ToolbarRow, idle-strip pinned — accent ring only while
+  listening. User feel-tested on device. Android 1.5.100 (2137).
+- **S159 bangluweb tutorial redesign (2026-08-31, user: "right now its too
+  confusing. Do organize all in proper manner"):** /tutorial rebuilt as one
+  organized scroll — hero, LetterCardExplorer (the approved S157 card UI as
+  a theme-aware web component, light + dark via .banglu-lce CSS variables),
+  TryItBox live practice on the real engine, sticky chip nav, per-rule
+  sections with expanders. Deployed (bangluweb 09434b9). S161 same day:
+  feedback form problem select (grouped কী সমস্যা হচ্ছে? menu, 16 problems,
+  shared src/lib/feedbackProblems.ts across form/API/admin; nullable
+  tester_feedback.problem column applied to prod via user-run CLI DDL;
+  bangluweb 056d77d).
 - **S158 cross-surface tutorial round (2026-08-31, user: "did you use all
   varieties… j fola b fola r fola hosanto chandro bindu… add all this kind
   of tutorial in the web app and also all others apps"):** coverage audit
