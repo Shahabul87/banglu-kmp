@@ -447,6 +447,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // be frequency-pinned (priority beats frequency), so the curated
             // default is enumerated here; হইসে stays one tap away in the strip.
             "hoise" to "হইছে",
+            // S165 (handwritten tester note 2026-09-01: hoyce/hoyche listed
+            // under the hoi/hoy complaint): the ye-dropped chat spellings of
+            // হয়েছে were owned by হয়ছে@72 — not a standard word — and হয়েছে
+            // appeared NOWHERE in their strips. No habit chain restores the
+            // dropped e, so the pair is enumerated; হয়ছে stays on the strip.
+            "hoyce" to "হয়েছে",
+            "hoyche" to "হয়েছে",
             // S21: jac-/khac- continuous chat class (S17 leftover). The chat
             // stem is the -চ্ছ- form (যাচ্ছি "jacchi") but the continuous is
             // written with the dialect -তেছি/-তেসি tail: jactesi = যাইতেছি.
@@ -2839,7 +2846,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             if (twin != null && validator.getFrequency(twin) >= 40) {
                 val twinFolded = ReverseTransliterator.foldNukta(twin)
                 val idx = ordered.indexOfFirst { ReverseTransliterator.foldNukta(it.bengali) == twinFolded }
-                val maxIdx = limit - 1
+                // S165 (tester: "engine is not working on hoi"): the twin used
+                // to hold the LAST slot — present but buried at position 6.
+                // A homograph twin is by definition the second most likely
+                // intent of the key; it sits right beside the primary.
+                val maxIdx = 1
                 if (idx in (maxIdx + 1) until ordered.size) {
                     val promoted = ordered.removeAt(idx)
                     ordered.add(minOf(maxIdx, ordered.size), promoted)
