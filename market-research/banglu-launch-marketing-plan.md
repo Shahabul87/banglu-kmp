@@ -29,7 +29,7 @@
 | 143MB dictionary download on first run | Big vs Play norms. | Say it before they feel it: "বড় অভিধান, একবারই নামে" (*"A big dictionary — downloads once"*) — the size IS the offline promise: the whole brain lives on the phone. Never hide it; hidden size is a 1★ generator ("almost 1 gb of rom" — Ridmik +32). |
 | Phonetic-only; no fixed jatiyo/probhat layout | Real demand exists ("please add Jatio (জাতীয়) layout", +456 on Desh). | Position as focus, not absence: "বাংলু এক কাজেই সেরা — ফোনেটিক" and keep a public roadmap item. Do not promise a date. |
 | Android-only | No iOS. | Say "Android now" and nothing else; iOS users aren't the launch audience. |
-| Solo developer | Perceived bus-factor. | Flip it: every review gets answered by the person who wrote the engine. In this corpus, unanswered reviews are the norm (Ridmik's +12,287 voice complaint sat for years; Swarachakra: "Developer died i guess"). One dev who replies beats a company that doesn't. |
+| Tiny team (a two-member team, not a company) | Perceived bus-factor next to Ridmik's 11-year org. | Flip it: every review gets answered by the people who build the engine. In this corpus, unanswered reviews are the norm (Ridmik's +12,287 voice complaint sat for years; Swarachakra: "Developer died i guess"). A small team that replies beats a company that doesn't. |
 | No swipe/glide typing | Gboard's most-praised feature in the Bengali subset. | Don't mention in ads; answer honestly when asked; backlog item. |
 
 Rules: no fake or incentivized reviews (Play policy + it's the exact behavior this market already resents), no competitor names in Play listing metadata (policy), never claim a benchmark we haven't published — the audience that punished Ridmik's untested updates will fact-check us.
@@ -54,7 +54,7 @@ Rules: no fake or incentivized reviews (Play policy + it's the exact behavior th
 
 **trickbd.com** (our corpus work showed exactly this audience lives there): one honest long-form founder post — "কেন আমি আরেকটা বাংলা কিবোর্ড বানালাম" (*Why I built yet another Bangla keyboard*) — architecture story, no competitor bashing, APK + Play link. The tone of the top Ridmik complaint ("be stable, don't experiment on users") is the tone to write in. Same story cross-posted to r/bangladesh and Bangladeshi dev communities (INFERENCE on specific subreddit receptivity — validate with one post before investing).
 
-**YouTube tech reviewers.** Pitch BD Android channels a review unit angle they can demo on camera: airplane-mode typing + the chat-register race vs their current keyboard. Offer nothing but early access; disclose it's a solo dev. (Specific channel shortlist = INFERENCE, build it by searching "বাংলা কিবোর্ড রিভিউ" and ranking by BD audience.)
+**YouTube tech reviewers.** Pitch BD Android channels a review unit angle they can demo on camera: airplane-mode typing + the chat-register race vs their current keyboard. Offer nothing but early access; disclose it's a tiny independent team. (Specific channel shortlist = INFERENCE, build it by searching "বাংলা কিবোর্ড রিভিউ" and ranking by BD audience.)
 
 **Tester word-of-mouth.** Existing testers get a shareable one-pager + a "founding user" tag in release notes. Ask each for one honest Play review and one group share — honest, not scripted.
 
