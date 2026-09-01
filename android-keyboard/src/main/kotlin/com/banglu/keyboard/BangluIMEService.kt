@@ -2565,20 +2565,37 @@ class BangluIMEService : InputMethodService(),
             kbGlideState.trail.clear()
             return
         }
+        // S163b: commit-on-down already resolved the glide's first key — a
+        // strong prior the decoder rewards (never a hard filter).
+        val firstKeyChar: Char? = (
+            if (bangla) buffer.lastOrNull()
+            else currentInputConnection?.getTextBeforeCursor(1, 0)?.lastOrNull()
+            )?.lowercaseChar()?.takeIf { it in 'a'..'z' }
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "glide: ${points.size} pts first=$firstKeyChar " +
+                "p0=(${points.firstOrNull()?.x},${points.firstOrNull()?.y}) " +
+                "pn=(${points.lastOrNull()?.x},${points.lastOrNull()?.y})")
+        }
         serviceScope.launch {
             val outcomes: List<GlideOutcome>? = withContext(engineLane) {
                 try {
                     val store = glideLexiconStore()
                     val lex = (if (bangla) store.banglaLexicon() else store.englishLexicon())
                         ?: return@withContext null
-                    val cands = glideDecoderFor(bangla, lex).decode(points)
+                    val cands = glideDecoderFor(bangla, lex).decode(points, firstKey = firstKeyChar)
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "glide: lex=${lex.size} cands=${cands.joinToString { "${it.word}@${"%.2f".format(it.score)}" }}")
+                    }
                     if (bangla) {
+                        // Alias-inclusive lexicon (S163b): sibling romans of
+                        // one Bengali word crowd the candidates — dedupe on
+                        // the CONVERTED word so chips never repeat.
                         cands.mapNotNull { c ->
                             val res = safeConvert(c.word)
                             if (res.bengali.any { it in 'ঀ'..'৿' })
                                 GlideOutcome(c.word, res.bengali)
                             else null
-                        }
+                        }.distinctBy { it.text }
                     } else {
                         cands.map { GlideOutcome("", it.word) }
                     }
@@ -2619,12 +2636,15 @@ class BangluIMEService : InputMethodService(),
                 englishWordPrefix = ""
                 recordEnglishCommitAsync(top.text, null)
             }
+            // The alternates ARE the strip until the user moves on — calling
+            // updatePredictions here would clobber the swap window (caught on
+            // device: the chips flashed and became next-word predictions).
+            // The next keystroke/space repopulates predictions as usual.
             suggestions.clear()
             outcomes.drop(1).take(5).forEach { alt ->
                 suggestions.add(GlideCommitPolicy.altChip(alt.roman, alt.text))
             }
             kbGlideState.trail.clear()
-            if (bangla) updatePredictions(top.text)
         }
     }
 

@@ -4,6 +4,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import com.banglu.engine.DictionaryVersion
 import com.banglu.engine.glide.GlideEnglishWords
+import com.banglu.engine.glide.GlideSeedRomans
 import com.banglu.engine.glide.GlideGrid
 import com.banglu.engine.glide.GlideLexicon
 import java.io.File
@@ -63,20 +64,30 @@ class GlideLexiconStore(
         if (!dbFile.exists()) return null
         return try {
             SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY).use { db ->
-                val words = ArrayList<Pair<String, Int>>(cap)
+                // S163b: ALL priorities — the chat register (korsi, issa,
+                // bolbo, jabo…) lives in priority-1 habit-alias rows; users
+                // glide the spellings they actually type. Engine shorthand
+                // seeds (kmon, valo) never touch the index at all and join
+                // first at everyday-band frequency.
+                val merged = LinkedHashMap<String, Int>(cap * 2)
+                for ((w, f) in GlideSeedRomans.entries()) merged[w] = f
                 db.rawQuery(
                     """SELECT key, MAX(frequency) f FROM phonetic_index
-                       WHERE priority = 0 GROUP BY key
-                       ORDER BY f DESC LIMIT ${cap * 2}""",
+                       GROUP BY key ORDER BY f DESC LIMIT ${cap * 2}""",
                     null
                 ).use { c ->
-                    while (c.moveToNext() && words.size < cap) {
+                    while (c.moveToNext() && merged.size < cap) {
                         val w = c.getString(0) ?: continue
                         if (w.length < 2 || !w.all { it in 'a'..'z' }) continue
-                        words.add(w to c.getInt(1))
+                        val f = c.getInt(1)
+                        val prev = merged[w]
+                        if (prev == null || f > prev) merged[w] = f
                     }
                 }
-                GlideLexicon.build(words, grid)
+                GlideLexicon.build(
+                    GlideSeedRomans.expandVariants(merged.map { it.key to it.value }),
+                    grid
+                )
             }
         } catch (e: Throwable) {
             Log.e(TAG, "Glide BN lexicon build failed", e)
@@ -86,15 +97,20 @@ class GlideLexiconStore(
 
     private fun fromCache(name: String): GlideLexicon? = try {
         val f = File(filesDir, name)
-        if (f.exists()) GlideLexicon.deserialize(f.readBytes(), DictionaryVersion.REQUIRED) else null
+        if (f.exists()) GlideLexicon.deserialize(f.readBytes(), cacheStamp()) else null
     } catch (_: Throwable) {
         null
     }
 
+    /** Dictionary version PLUS the lexicon-builder revision — a builder
+     *  change (e.g. S163b alias inclusion) must invalidate old caches even
+     *  when the dictionary itself did not move. */
+    private fun cacheStamp() = "${DictionaryVersion.REQUIRED}#$LEXICON_REV"
+
     private fun toCache(name: String, lex: GlideLexicon) {
         try {
             val tmp = File(filesDir, "$name.tmp")
-            tmp.writeBytes(GlideLexicon.serialize(lex, DictionaryVersion.REQUIRED))
+            tmp.writeBytes(GlideLexicon.serialize(lex, cacheStamp()))
             val dst = File(filesDir, name)
             if (!tmp.renameTo(dst)) {
                 dst.delete()
@@ -107,6 +123,9 @@ class GlideLexiconStore(
 
     companion object {
         private const val TAG = "GlideLexiconStore"
+        /** Bump when the SELECTION logic changes
+         *  (2 = S163b alias-inclusive; 3 = +bh→v variants). */
+        private const val LEXICON_REV = 3
         private const val BN_CACHE = "glide_bn.bin"
         private const val EN_CACHE = "glide_en.bin"
         const val BN_CAP = 50_000

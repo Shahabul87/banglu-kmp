@@ -18,6 +18,7 @@ class GlideLexicon private constructor(
     private val starts: FloatArray,   // x,y per word
     private val ends: FloatArray,     // x,y per word
     private val lengths: FloatArray,
+    private val centroids: FloatArray, // x,y per word — for the aligned shape channel
 ) {
     val size: Int get() = wordsArr.size
     fun word(i: Int): String = wordsArr[i]
@@ -25,6 +26,8 @@ class GlideLexicon private constructor(
     fun start(i: Int): GlidePoint = GlidePoint(starts[2 * i], starts[2 * i + 1])
     fun end(i: Int): GlidePoint = GlidePoint(ends[2 * i], ends[2 * i + 1])
     fun length(i: Int): Float = lengths[i]
+    fun centroidX(i: Int): Float = centroids[2 * i]
+    fun centroidY(i: Int): Float = centroids[2 * i + 1]
 
     /** Dequantizes word i's template into [out] as x0,y0,x1,y1,… */
     fun template(i: Int, out: FloatArray) {
@@ -121,8 +124,9 @@ class GlideLexicon private constructor(
             val starts = FloatArray(2 * n)
             val ends = FloatArray(2 * n)
             val lengths = FloatArray(n)
+            val centroids = FloatArray(2 * n)
             val scratch = FloatArray(BYTES_PER_TEMPLATE)
-            val lex = GlideLexicon(wordsArr, freqsArr, templates, starts, ends, lengths)
+            val lex = GlideLexicon(wordsArr, freqsArr, templates, starts, ends, lengths, centroids)
             for (i in 0 until n) {
                 lex.template(i, scratch)
                 starts[2 * i] = scratch[0]
@@ -130,12 +134,18 @@ class GlideLexicon private constructor(
                 ends[2 * i] = scratch[2 * N_POINTS - 2]
                 ends[2 * i + 1] = scratch[2 * N_POINTS - 1]
                 var len = 0f
+                var cx = scratch[0]
+                var cy = scratch[1]
                 for (k in 1 until N_POINTS) {
                     val dx = scratch[2 * k] - scratch[2 * k - 2]
                     val dy = scratch[2 * k + 1] - scratch[2 * k - 1]
                     len += kotlin.math.sqrt(dx * dx + dy * dy)
+                    cx += scratch[2 * k]
+                    cy += scratch[2 * k + 1]
                 }
                 lengths[i] = len
+                centroids[2 * i] = cx / N_POINTS
+                centroids[2 * i + 1] = cy / N_POINTS
             }
             return lex
         }

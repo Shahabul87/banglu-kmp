@@ -318,6 +318,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         private val ENGLISH_SHAPE = Regex("x|q|w[^aeiou]|tion$|sion$|ment$|ness$|ough|ight")
         private val ENGLISH_DERIVATION_SUFFIXES = listOf("ers", "er", "ing", "tion", "ment", "ness", "ful", "ist", "ly")
 
+        /** S163: read-only exposure for the glide lexicon — the chat
+         *  shorthands (kmon, valo…) live here, not in the phonetic index,
+         *  and users glide the spellings they actually type. Inert getter,
+         *  zero conversion-behavior change. */
+        internal val mobileShorthandEntries: Map<String, String>
+            get() = MOBILE_SHORTHAND_OVERRIDES
+
         private val MOBILE_SHORTHAND_OVERRIDES: Map<String, String> = mapOf(
             "amr" to "আমার",
             "tomr" to "তোমার",
