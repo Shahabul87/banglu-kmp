@@ -138,15 +138,19 @@ ONBOARDING_DISMISS_LABELS = ("Skip", "এড়িয়ে যান", "শু�
 def dismiss_onboarding():
     """A fresh install (the certification case) opens the onboarding
     carousel before the home screen; step past it like a first-run user."""
-    for _ in range(4):
+    for _ in range(8):
         tree = nodes(dump_tree(False))
         if any("EditText" in n.get("class", "") for n in tree):
             return
         target = next((n for n in tree if n.get("text") in ONBOARDING_DISMISS_LABELS), None)
-        if target is None:
-            return
-        tap(target)
-        time.sleep(1.5)
+        if target is not None:
+            tap(target)
+            time.sleep(1.5)
+        else:
+            # Cold start: neither the editor nor the carousel has rendered
+            # yet — wait instead of bailing (a first dump that races the
+            # app's first frame failed a whole certification run once).
+            time.sleep(1.2)
 
 
 def find_editor():
