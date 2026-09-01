@@ -33,6 +33,20 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-31):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S162 ghost-chip strip round (2026-09-01, tester proposal via user,
+  approved mock variant ঙ):** the typed roman leads the strip as an
+  outlined mono GHOST chip (tap = keep the English literal; never
+  learned); the blue commit highlight belongs to the first NON-ghost
+  chip (TypedChipPolicy — invariant 5 kept: the big blue word IS what
+  space commits); chips all single-line (primary 16.5sp, the S117/S152
+  two-line hint retired); S141/S142 literal dupes fold into the ghost.
+  EN mode mirror: a non-English token (kemon) earns a Bangla ghost chip
+  (real conversion, gated conf≥0.6 + Bengali script + !common-English) —
+  tap swaps. Bottom nav labels 14sp (were 11sp, tester: "not properly
+  visible"). Pins S162TypedChipPolicyTest. TESTING GOTCHA: `adb input
+  text` bypasses the IME — strip tests need coordinate taps on the
+  on-screen keys; Samsung Notes is the safe field. Android 1.5.101
+  (2138).
 - **S160 Android strip + toolbar round (2026-08-31, user: "swipe left…
   acting like spring" + approved mock ক "exactly make this tools bar
   design"):** suggestion-strip spring-back root-caused — the LaunchedEffect
