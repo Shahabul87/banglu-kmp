@@ -33,6 +33,25 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-31):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S168 closed-testing fix round (2026-09-02, user: "fix all the issue one
+  by one and do test it"):** the 2026-09-01 deep audit
+  (docs/audits/audit-android-closed-testing-v1.5.105-2026-09-01.md) found
+  one device crash (duplicate strip key, fixed in 1.5.102), three P1s and a
+  layout/gesture backlog; ALL fixed in the Android module only (shared
+  engine untouched). New pure policies, each JUnit-pinned: SelectionEditPolicy
+  (range selection → backspace deletes the RANGE), GlideCommitPolicy.
+  resultStillApplies (stale glide dropped), CursorStepPolicy (cluster steps
+  from a 32-char window, no whole-document extract per hold tick),
+  InputPrivacyPolicy (URL/incognito keep chips+glide+voice, never learn),
+  DoubleSpacePolicy, StripKeyPolicy (LazyRow key dedupe = crash insurance),
+  KeyLabelScale (key glyphs ignore the SYSTEM font scale — "EN"→"E" at 1.3x).
+  Glide lexicons warm on IO after the dictionary publishes and the glide
+  path never loads them on the engine lane (cold first glide: lexicon wait
+  1 ms, decode ≤115 ms; was 3-5 s). Popup lifted in dp; haptic/sound via
+  rememberUpdatedState; LTR locked at the root; learning flags re-applied
+  after reset(); mic slot = CompactIconSlot with a canvas-drawn emoji (a Text
+  child split label from click for TalkBack); panels sized to the measured
+  letters layout; onboarding fade. Android 1.5.106 (2143).
 - **S163 glide typing (2026-09-01, user: "if this feature is liked by the
   user build it before marketing"):** Gboard-style glide on the letter
   rows — drag through a word's roman letters, release commits the word

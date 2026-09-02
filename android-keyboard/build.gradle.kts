@@ -28,8 +28,8 @@ android {
         applicationId = "com.banglu.keyboard"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2142
-        versionName = "1.5.105"
+        versionCode = 2143
+        versionName = "1.5.106"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

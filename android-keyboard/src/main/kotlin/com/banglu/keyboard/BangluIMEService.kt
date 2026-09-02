@@ -54,6 +54,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.text.font.createFontFamilyResolver
 import java.io.File
 import java.util.Locale
 import java.util.concurrent.ExecutorService
@@ -246,6 +247,9 @@ class BangluIMEService : InputMethodService(),
      *  typeable; personal learning stays off via shouldDisablePersonalLearning. */
     private var uriInputMode = false
     private var privateInputMode = false
+    // S168 (audit P2-7): URI / no-personalized-learning fields keep the strip
+    // but never learn (InputPrivacyPolicy).
+    private var learningSuppressedInputMode = false
     private var lastCommittedTextLength = 0
     private var lastAutoCorrectOriginal = ""
     // S97: English corrections undo differently (teach-the-word semantics).
@@ -261,6 +265,10 @@ class BangluIMEService : InputMethodService(),
     // separator/field/cursor event; staleness only ever costs a skipped
     // flip, never a wrong one, because the thresholds demand strong evidence.
     private var englishWordPrefix = ""
+    // S168 (audit P1-1): the host's selection as last reported — a RANGE
+    // selection changes what backspace must do (SelectionEditPolicy).
+    private var editorSelStart = -1
+    private var editorSelEnd = -1
 
     /**
      * S99: probabilistic touch targeting. A letter press near a key boundary
@@ -338,6 +346,26 @@ class BangluIMEService : InputMethodService(),
     private fun glideLexiconStore(): GlideLexiconStore =
         glideLexiconStoreField ?: GlideLexiconStore(filesDir, liteModeEnabled.value)
             .also { glideLexiconStoreField = it }
+
+    /**
+     * S168 (audit P1-3): the first glide after a process start used to pay the
+     * lexicon load (3-5 s measured on an S22) at decode time. Warm both
+     * lexicons on IO once the dictionary is published — off the engine lane,
+     * so typing latency is untouched. Memory pressure still drops them
+     * (onTrimMemory); the next glide reloads from the disk cache.
+     */
+    private fun warmGlideLexicons() {
+        if (!glideTypingEnabled.value) return
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                val store = glideLexiconStore()
+                store.banglaLexicon()
+                store.englishLexicon()
+            } catch (e: Throwable) {
+                recordEngineFailure("glide_warm", e)
+            }
+        }
+    }
     private val kbOnNumberPress: (Char) -> Unit = { onNumberPress(it) }
     private val kbOnPunctuationPress: (Char) -> Unit = { onPunctuationPress(it) }
     private val kbOnCursorMove: (Int) -> Unit = { onCursorMove(it) }
@@ -706,7 +734,14 @@ class BangluIMEService : InputMethodService(),
     private fun configureInputSafety(info: EditorInfo?) {
         rawCommitInputMode = shouldUseRawCommitMode(info)
         uriInputMode = isUriInput(info)
-        privateInputMode = shouldDisablePersonalLearning(info)
+        val privacy = InputPrivacyPolicy.resolve(
+            sensitive = isSensitiveInput(info),
+            noPersonalizedLearning =
+                ((info?.imeOptions ?: 0) and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0,
+            uri = isUriInput(info)
+        )
+        privateInputMode = !privacy.showSuggestions
+        learningSuppressedInputMode = !privacy.learn
         // S98: identity assist runs in email fields and normal text, but the
         // SENSITIVE set — passwords, OTP, no-personalized-learning — is
         // excluded absolutely; nothing identity-related may fire there.
@@ -757,18 +792,17 @@ class BangluIMEService : InputMethodService(),
             (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_URI
     }
 
-    private fun shouldDisablePersonalLearning(info: EditorInfo?): Boolean {
+    /** S168: the fully private set — no chips, no glide, no voice, no learning.
+     *  (IME_FLAG_NO_PERSONALIZED_LEARNING and URI fields are handled by
+     *  InputPrivacyPolicy as learning-only restrictions.) */
+    private fun isSensitiveInput(info: EditorInfo?): Boolean {
         val inputType = info?.inputType ?: return false
         val variation = inputType and InputType.TYPE_MASK_VARIATION
-        val noPersonalizedLearning =
-            (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0
         return shouldUseRawCommitMode(info) ||
-            noPersonalizedLearning ||
             isPasswordInput(inputType) ||
             isOneTimeCodeInput(info) ||
             variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
-            variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS ||
-            variation == InputType.TYPE_TEXT_VARIATION_URI
+            variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
     }
 
     private fun isPasswordInput(inputType: Int): Boolean {
@@ -1011,7 +1045,7 @@ class BangluIMEService : InputMethodService(),
         learnAsWord: Boolean = false,
         explicitChoice: Boolean = false
     ) {
-        if (privateInputMode || rawCommitInputMode) return
+        if (privateInputMode || rawCommitInputMode || learningSuppressedInputMode) return
         // S34: no commit learning while the dictionary is still loading. The
         // seed engine's raw fallbacks (kmon -> ক্মন) were being learned as
         // personal words during the few-second load window and then shadowed
@@ -1087,6 +1121,12 @@ class BangluIMEService : InputMethodService(),
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
 
         prefs = getSharedPreferences("banglu_prefs", Context.MODE_PRIVATE)
+        // S168 (audit P3-7): the strip's roman font (JetBrains Mono) loads
+        // with Compose's Blocking strategy on first use — that was a
+        // main-thread TTF read on the FIRST keystroke. Warm it off-thread.
+        serviceScope.launch(Dispatchers.IO) {
+            runCatching { createFontFamilyResolver(applicationContext).preload(RomanMono) }
+        }
         // S139: MUST precede every typed read of the clipboard keys.
         PrefsMigrations.migrate(prefs)
         // S136 (F-013): non-Bengali clusters (emoji ZWJ families, flags,
@@ -1192,6 +1232,7 @@ class BangluIMEService : InputMethodService(),
                 if (!preAttached) attachPhoneticIndexStore(dictionaryLoader, preInitialize = false)
                 loadedDictionaryLiteMode = shouldUseLiteDictionary()
                 dictionaryReadyForLearning = true
+                warmGlideLexicons()
                 log("onCreate: Learned words loaded")
                 degradeIfNoHeapHeadroom()
             } catch (t: Throwable) {
@@ -1230,6 +1271,14 @@ class BangluIMEService : InputMethodService(),
                     if (loadedDictionaryLiteMode != null && loadedDictionaryLiteMode != liteMode) {
                         SmartEngineAdapter.reset()
                         SmartEngineAdapter.configurePersistenceScope(serviceScope)
+                        // S168 (audit P2-6): reset() re-enables every learning
+                        // switch; re-apply the user's choices immediately, not
+                        // on the next keyboard show.
+                        SmartEngineAdapter.configureLearning(
+                            enabled = typingLearningEnabled.value,
+                            personalDictionary = personalDictionaryEnabled.value,
+                            identityAssist = identityAssistEnabled.value
+                        )
                         // S76 (audit): the seed build is ~650ms — never on Main.
                         withContext(Dispatchers.Default) { SmartEngineAdapter.initializeSync() }
                         loadedDictionaryLiteMode = null
@@ -1244,6 +1293,7 @@ class BangluIMEService : InputMethodService(),
                     if (!preAttached) attachPhoneticIndexStore(dictionaryLoader, preInitialize = false)
                     loadedDictionaryLiteMode = liteMode
                     dictionaryReadyForLearning = true
+                    warmGlideLexicons()
                     log("reloadUserLearning: active profile preferences loaded")
                 } while (engineRebuildPending)
             } catch (t: Throwable) {
@@ -1608,6 +1658,8 @@ class BangluIMEService : InputMethodService(),
         recordImeEvent("start_input_view")
         reloadSettings()
         configureInputSafety(info)
+        editorSelStart = info?.initialSelStart ?: -1
+        editorSelEnd = info?.initialSelEnd ?: -1
         // S136 (F-003): expiry is ACTIVE — every keyboard show drops entries
         // older than an hour from memory and disk, not just the panel open.
         clipboardTransientItem = null
@@ -1689,6 +1741,8 @@ class BangluIMEService : InputMethodService(),
             candidatesStart,
             candidatesEnd,
         )
+        editorSelStart = newSelStart
+        editorSelEnd = newSelEnd
 
         // S107 (tester: "place cursor in the middle and start voice typing —
         // not working"): during dictation a selection change we did not
@@ -2094,7 +2148,7 @@ class BangluIMEService : InputMethodService(),
 
     /** A finished English word (space/punctuation/chip) — learn it off-lane. */
     private fun recordEnglishCommitAsync(word: String, prev: String?) {
-        if (privateInputMode || rawCommitInputMode) return
+        if (privateInputMode || rawCommitInputMode || learningSuppressedInputMode) return
         if (word.isBlank()) return
         serviceScope.launch(engineLane) {
             SmartEngineAdapter.ensureEnglishLearningLoaded()
@@ -2252,6 +2306,7 @@ class BangluIMEService : InputMethodService(),
         dismissVoiceTroubleOnUserAction()
         log("onBackspace: mode=${keyboardMode.value}, buffer='$buffer'")
         val ic = currentInputConnection ?: return
+        if (deleteEditorSelectionIfAny(ic)) return
 
         when (keyboardMode.value) {
             KeyboardMode.BANGLU -> {
@@ -2324,6 +2379,7 @@ class BangluIMEService : InputMethodService(),
     private fun onBackspaceRepeat(count: Int) {
         val safeCount = count.coerceIn(1, 48)
         val ic = currentInputConnection ?: return
+        if (deleteEditorSelectionIfAny(ic)) return
 
         if (lastAutoCorrectOriginal.isNotEmpty()) {
             clearAutoCorrectUndoState()
@@ -2348,6 +2404,36 @@ class BangluIMEService : InputMethodService(),
         ic.finishComposingText()
         suggestions.clear()
         deletePreviousGraphemes(ic, safeCount)
+    }
+
+    /**
+     * S168 (audit P1-1): a range selection is deleted as a RANGE. Returns true
+     * when it handled the backspace; false means no range selection exists and
+     * the normal delete-before-cursor paths apply.
+     */
+    private fun deleteEditorSelectionIfAny(ic: InputConnection): Boolean {
+        if (SelectionEditPolicy.backspacePlan(editorSelStart, editorSelEnd) !=
+            SelectionEditPolicy.BackspacePlan.DELETE_SELECTION) return false
+        ic.beginBatchEdit()
+        if (buffer.isNotEmpty()) {
+            ic.finishComposingText()
+            buffer = ""
+            suggestionJob?.cancel()
+            composingJob?.cancel()
+            suggestions.clear()
+            clearCommitCaches()
+        }
+        ic.commitText("", 1)
+        ic.endBatchEdit()
+        // Collapse locally so a delayed onUpdateSelection cannot re-trigger.
+        val caret = minOf(editorSelStart, editorSelEnd)
+        editorSelStart = caret
+        editorSelEnd = caret
+        lastCommittedTextLength = 0
+        englishWordPrefix = ""
+        clearAutoCorrectUndoState()
+        if (keyboardMode.value == KeyboardMode.ENGLISH) refreshEnglishSuggestionsAsync()
+        return true
     }
 
     private fun deletePreviousGraphemes(ic: InputConnection, clusterCount: Int = 1): Boolean {
@@ -2393,7 +2479,11 @@ class BangluIMEService : InputMethodService(),
                 } else {
                     // Feature 1.1: Double-space → Bengali danda + space
                     // (S56: never in URI fields — a danda corrupts URLs/queries)
-                    if (doubleSpacePeriodEnabled.value && !uriInputMode && now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
+                    if (doubleSpacePeriodEnabled.value && !uriInputMode &&
+                        DoubleSpacePolicy.replacesTrailingSpace(now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
+                            ic.getTextBeforeCursor(1, 0)
+                        }
+                    ) {
                         ic.deleteSurroundingText(1, 0)
                         ic.commitText("\u0964 ", 1)  // Bengali danda (।) + space
                         lastCommittedTextLength = 2
@@ -2445,7 +2535,11 @@ class BangluIMEService : InputMethodService(),
                     }
                 }
                 // Feature 1.1: Double-space → period + space (English/Symbol modes)
-                if (doubleSpacePeriodEnabled.value && now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
+                if (doubleSpacePeriodEnabled.value &&
+                    DoubleSpacePolicy.replacesTrailingSpace(now - lastSpaceTime < DOUBLE_SPACE_THRESHOLD_MS) {
+                        ic.getTextBeforeCursor(1, 0)
+                    }
+                ) {
                     ic.deleteSurroundingText(1, 0)
                     ic.commitText(". ", 1)
                     lastCommittedTextLength = 2
@@ -2574,12 +2668,27 @@ class BangluIMEService : InputMethodService(),
                 "p0=(${points.firstOrNull()?.x},${points.firstOrNull()?.y}) " +
                 "pn=(${points.lastOrNull()?.x},${points.lastOrNull()?.y})")
         }
+        // S168 (audit P1-2): snapshot what the editor looked like at finger-lift;
+        // a result that lands after more typing or a session change is dropped.
+        val sessionThen = imeTextSessionToken
+        val typedThen = if (bangla) buffer else englishWordPrefix
+        val liftedAtNs = System.nanoTime()
         serviceScope.launch {
-            val outcomes: List<GlideOutcome>? = withContext(engineLane) {
-                try {
+            // S168 (audit P1-3): the lexicon load/build (seconds on a cold
+            // process) runs on IO — it must never occupy the engine lane that
+            // every keystroke's conversion waits on.
+            val lex = try {
+                withContext(Dispatchers.IO) {
                     val store = glideLexiconStore()
-                    val lex = (if (bangla) store.banglaLexicon() else store.englishLexicon())
-                        ?: return@withContext null
+                    if (bangla) store.banglaLexicon() else store.englishLexicon()
+                }
+            } catch (e: Throwable) {
+                recordEngineFailure("glide_lexicon", e)
+                null
+            }
+            val lexReadyNs = System.nanoTime()
+            val outcomes: List<GlideOutcome>? = if (lex == null) null else withContext(engineLane) {
+                try {
                     val cands = glideDecoderFor(bangla, lex).decode(points, firstKey = firstKeyChar)
                     if (BuildConfig.DEBUG) {
                         Log.d(TAG, "glide: lex=${lex.size} cands=${cands.joinToString { "${it.word}@${"%.2f".format(it.score)}" }}")
@@ -2602,7 +2711,17 @@ class BangluIMEService : InputMethodService(),
                     null
                 }
             }
+            // Perf telemetry only (no text): lexicon wait vs decode+convert.
+            // Measured 2026-09-02 on SM-S901W perf build: lexicon 0-1ms
+            // (warmed), decode 23-115ms.
+            if (BuildConfig.DEBUG) Log.d(TAG, "glide timing: lexicon=${(lexReadyNs - liftedAtNs) / 1_000_000}ms " +
+                "decode=${(System.nanoTime() - lexReadyNs) / 1_000_000}ms points=${points.size}")
             if (keyboardMode.value != mode) {
+                kbGlideState.trail.clear()
+                return@launch
+            }
+            val typedNow = if (bangla) buffer else englishWordPrefix
+            if (!GlideCommitPolicy.resultStillApplies(sessionThen, imeTextSessionToken, typedThen, typedNow)) {
                 kbGlideState.trail.clear()
                 return@launch
             }
@@ -4607,6 +4726,7 @@ class BangluIMEService : InputMethodService(),
      */
     private fun onBackspaceWord() {
         val ic = currentInputConnection ?: return
+        if (deleteEditorSelectionIfAny(ic)) return
 
         // In Banglu mode with buffer, clear the whole buffer at once
         if (keyboardMode.value == KeyboardMode.BANGLU && buffer.isNotEmpty()) {
@@ -4646,17 +4766,28 @@ class BangluIMEService : InputMethodService(),
         moveCursorByKeyEvent(ic, direction)
     }
 
+    /**
+     * S168 (audit P2-5): steps by user-visible cluster from a 32-char window
+     * on the relevant side of the caret (CursorStepPolicy) — no whole-document
+     * extraction per 60 ms hold tick, and no caret parked inside কি / ক্ষ.
+     * Needs the caret position the host last reported; a range selection or
+     * an unknown caret falls back to the DPAD key event.
+     */
     private fun moveCursorBySelection(ic: InputConnection, direction: Int): Boolean {
-        val extracted = ic.getExtractedText(ExtractedTextRequest(), 0) ?: return false
-        val text = extracted.text?.toString() ?: return false
-        val current = extracted.selectionEnd.coerceIn(0, text.length)
-        val target = if (direction > 0) {
-            if (current >= text.length) return true
-            Character.offsetByCodePoints(text, current, 1)
+        val caret = editorSelEnd
+        if (caret < 0 || editorSelStart != editorSelEnd) return false
+        val step = if (direction > 0) {
+            val after = ic.getTextAfterCursor(CursorStepPolicy.WINDOW_CHARS, 0)?.toString() ?: return false
+            CursorStepPolicy.rightStep(after)
         } else {
-            if (current <= 0) return true
-            Character.offsetByCodePoints(text, current, -1)
-        }.coerceIn(0, text.length)
+            val before = ic.getTextBeforeCursor(CursorStepPolicy.WINDOW_CHARS, 0)?.toString() ?: return false
+            CursorStepPolicy.leftStep(before)
+        }
+        if (step == 0) return true
+        val target = (if (direction > 0) caret + step else caret - step).coerceAtLeast(0)
+        // Optimistic: hold-repeat ticks arrive faster than onUpdateSelection.
+        editorSelStart = target
+        editorSelEnd = target
         return ic.setSelection(target, target)
     }
 
@@ -4803,7 +4934,7 @@ class BangluIMEService : InputMethodService(),
      * text before the cursor actually ends with "previous committed".
      */
     private fun recordNextWordPairLearning(committed: String, previousOverride: String? = null) {
-        if (privateInputMode || rawCommitInputMode) return
+        if (privateInputMode || rawCommitInputMode || learningSuppressedInputMode) return
         val previous = previousOverride ?: lastCommittedBengali
         if (previous.isEmpty() || committed.isEmpty()) return
         if (!previous.any { isBengaliChar(it) } || !committed.any { isBengaliChar(it) }) return

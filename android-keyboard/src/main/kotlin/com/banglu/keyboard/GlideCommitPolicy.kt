@@ -34,6 +34,15 @@ object GlideCommitPolicy {
     fun altChip(roman: String, bengali: String): SmartSuggestion =
         SmartSuggestion(bengali, 0.8, GLIDE_ALT_SOURCE, roman, GLIDE_ALT_TIER)
 
+    /**
+     * S168 (audit P1-2): the decode runs off-thread; a result may only be
+     * committed if nothing happened in the editor since finger-lift — same
+     * text session and the typed prefix (BN composing buffer / EN word prefix,
+     * which holds the glide's own first key) is exactly what it was.
+     */
+    fun resultStillApplies(sessionThen: Int, sessionNow: Int, typedThen: String, typedNow: String): Boolean =
+        sessionThen == sessionNow && typedThen == typedNow
+
     /** Delete the committed word + its auto space, commit replacement + space. */
     fun swapLengths(justCommitted: String, replacement: String): Pair<Int, String> =
         justCommitted.length + 1 to "$replacement "

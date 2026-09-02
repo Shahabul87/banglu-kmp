@@ -39,6 +39,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -856,9 +858,10 @@ private fun BangluAnimatedOnboarding(onFinish: () -> Unit) {
                 .padding(horizontal = 10.dp, vertical = 5.dp)
         )
 
+        Box(modifier = Modifier.weight(1f)) {
         Column(
             modifier = Modifier
-                .weight(1f)
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
             AnimatedContent(
@@ -883,6 +886,16 @@ private fun BangluAnimatedOnboarding(onFinish: () -> Unit) {
                     }
                 }
             }
+        }
+        // S168 (audit P3-2): a slide taller than the viewport fades out at
+        // the bottom instead of cutting a card mid-title — the scroll cue.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(40.dp)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, MockBg)))
+        )
         }
 
         Row(

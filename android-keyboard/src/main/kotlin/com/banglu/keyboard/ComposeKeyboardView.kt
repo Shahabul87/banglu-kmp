@@ -56,6 +56,15 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -135,10 +144,12 @@ val LocalKeyboardHeightScale = compositionLocalOf { 1f }
 val LocalKeyboardFontScale = compositionLocalOf { 1.08f }
 
 @Composable
-private fun scaledSp(base: Int) = (base * LocalKeyboardFontScale.current).sp
+private fun scaledSp(base: Int) =
+    KeyLabelScale.systemIndependentSp(base * LocalKeyboardFontScale.current, LocalDensity.current.fontScale).sp
 
 @Composable
-private fun scaledSp(base: Float) = (base * LocalKeyboardFontScale.current).sp
+private fun scaledSp(base: Float) =
+    KeyLabelScale.systemIndependentSp(base * LocalKeyboardFontScale.current, LocalDensity.current.fontScale).sp
 
 @Composable
 private fun scaledDp(base: Dp) = base * LocalKeyboardHeightScale.current
@@ -170,7 +181,11 @@ private fun currentKeyGapH(): Dp {
 
 @Composable
 private fun middleLetterRowIndent(): Dp {
-    return if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 14.dp else 24.dp
+    val config = LocalConfiguration.current
+    // S168 (audit P3-6): proportional — a fixed 24dp ate a whole key's worth
+    // of width on 320dp phones. 5.8% = the 24dp the 411dp design assumed.
+    return if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) 14.dp
+    else (config.screenWidthDp * 0.058f).dp
 }
 
 private data class KeyAlternative(val label: String, val input: String)
@@ -359,6 +374,9 @@ fun BangluKeyboardLayout(
     val fontScale = baseFontScale * if (isLandscape) 0.94f else 1.0f
 
     CompositionLocalProvider(
+        // S168 (audit P2-4): the keyboard is a fixed LTR artefact — an RTL
+        // system locale must not mirror the rows or the glide grid.
+        LocalLayoutDirection provides LayoutDirection.Ltr,
         LocalKeyboardColors provides colors,
         LocalHapticEnabled provides hapticEnabled,
         LocalSoundEnabled provides soundEnabled,
@@ -400,12 +418,21 @@ fun BangluKeyboardLayout(
             voiceInputState == VoiceInputState.PROCESSING
         val showNumberRow = numberRowEnabled && !isLandscape
 
+        // S168 (audit P3-5): the emoji/clipboard panels take the SAME height
+        // as the letter layout they replace, so the host app's content never
+        // jumps when a panel opens. Measured from the live letters layout.
+        var lettersContentHeightPx by remember { mutableIntStateOf(0) }
+        val lettersMode = keyboardMode == KeyboardMode.BANGLU || keyboardMode == KeyboardMode.ENGLISH
+        val panelHeight: Dp? = if (lettersContentHeightPx > 0) {
+            with(LocalDensity.current) { lettersContentHeightPx.toDp() }
+        } else null
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(colors.keyboardBg)
                 .padding(horizontal = if (isLandscape) 4.dp else KeyboardPadding)
                 .padding(top = if (isLandscape) 1.dp else 3.dp, bottom = bottomSafePadding)
+                .onSizeChanged { if (lettersMode) lettersContentHeightPx = it.height }
         ) {
             if (noticeText != null) {
                 KeyboardNoticeRow(text = noticeText, onDismiss = onNoticeDismiss)
@@ -638,6 +665,7 @@ fun BangluKeyboardLayout(
                 KeyboardMode.EMOJI -> {
                     EmojiPanel(
                         colors = colors,
+                        panelHeight = panelHeight,
                         initialCategory = emojiInitialCategory,
                         recentEmojisProvider = recentEmojisProvider,
                         onEmojiClick = onEmojiClick,
@@ -650,6 +678,7 @@ fun BangluKeyboardLayout(
                 KeyboardMode.CLIPBOARD -> {
                     ClipboardPanel(
                         colors = colors,
+                        panelHeight = panelHeight,
                         itemsProvider = clipboardItemsProvider,
                         onPaste = onClipboardPaste,
                         onClear = onClipboardClear,
@@ -756,6 +785,18 @@ private fun AdaptiveTopStrip(
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
                         BangluSuggestionRow(suggestions, onSuggestionClick)
+                        // S168 (audit P3-4): soft edge where chips run under the pinned mic.
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .width(18.dp)
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(Color.Transparent, LocalKeyboardColors.current.suggestionBg)
+                                    )
+                                )
+                        )
                     }
                     MicEmojiSlot(
                         active = voiceInputState == VoiceInputState.LISTENING,
@@ -1100,6 +1141,8 @@ private fun CompactIconSlot(
     accessibilityLabel: String,
     active: Boolean = false,
     modifier: Modifier = Modifier,
+    activeStateDescription: String = "Active",
+    cornerRadius: Dp = 10.dp,
     onClick: () -> Unit,
     icon: @Composable (tint: Color) -> Unit
 ) {
@@ -1110,7 +1153,7 @@ private fun CompactIconSlot(
             .semantics {
                 role = Role.Button
                 contentDescription = accessibilityLabel
-                if (active) stateDescription = "Active"
+                if (active) stateDescription = activeStateDescription
             }
             .clickable { onClick() },
         contentAlignment = Alignment.Center
@@ -1118,7 +1161,7 @@ private fun CompactIconSlot(
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(cornerRadius))
                 .background(if (active) BangluVoiceAccent else Color.Transparent),
             contentAlignment = Alignment.Center
         ) {
@@ -1241,6 +1284,8 @@ private fun CursorArrowSlot(
             .semantics {
                 role = Role.Button
                 contentDescription = accessibilityLabel
+                // S168 (audit P3-1): TalkBack/Switch Access step once per activation.
+                onClick { currentOnStep.value(); true }
             }
             .pointerInput(Unit) {
                 detectTapGestures(onPress = {
@@ -1324,25 +1369,29 @@ private fun MicEmojiSlot(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    Box(
-        modifier = modifier
-            .height(scaledDp(ToolbarCollapsedHeight))
-            .semantics {
-                role = Role.Button
-                contentDescription = "Bangla voice typing"
-                if (active) stateDescription = "Listening"
-            }
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
+    // S168 (audit P3-1): built on CompactIconSlot so the mic exposes the SAME
+    // single Button node (label + click together) as every other slot.
+    CompactIconSlot(
+        accessibilityLabel = "Bangla voice typing",
+        active = active,
+        modifier = modifier,
+        activeStateDescription = "Listening",
+        cornerRadius = 18.dp,
+        onClick = onClick
     ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(if (active) BangluVoiceAccent else Color.Transparent),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text = "\uD83C\uDFA4", fontSize = scaledSp(19))
+        // Drawn, not a Text node: a Text child (even with cleared semantics)
+        // made Compose hang the label on a separate a11y node from the click.
+        val measurer = rememberTextMeasurer()
+        val style = TextStyle(fontSize = scaledSp(19))
+        Canvas(modifier = Modifier.size(36.dp)) {
+            val layout = measurer.measure("\uD83C\uDFA4", style)
+            drawText(
+                layout,
+                topLeft = Offset(
+                    (size.width - layout.size.width) / 2f,
+                    (size.height - layout.size.height) / 2f
+                )
+            )
         }
     }
 }
@@ -1357,7 +1406,10 @@ private fun CompactMicToolbarIcon(
     Box(
         modifier = modifier
             .height(scaledDp(ToolbarCollapsedHeight))
-            .semantics {
+            // S168 (audit P3-1): ONE merged node — with the emoji Text as a
+            // separate semantics node the label and the click action landed on
+            // different a11y nodes (TalkBack saw an unlabeled button).
+            .semantics(mergeDescendants = true) {
                 role = Role.Button
                 contentDescription = "Bangla voice typing"
                 if (active) stateDescription = "Listening"
@@ -1383,6 +1435,7 @@ private fun CompactMicToolbarIcon(
 @Composable
 private fun ClipboardPanel(
     colors: KeyboardColors,
+    panelHeight: Dp?,
     itemsProvider: () -> List<String>,
     onPaste: (String) -> Unit,
     onClear: () -> Unit,
@@ -1392,7 +1445,7 @@ private fun ClipboardPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 260.dp)
+            .heightIn(min = panelHeight ?: 260.dp)
             .background(colors.keyboardBg)
             .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
@@ -1651,8 +1704,11 @@ private fun BangluSuggestionRow(
             // own leading ghost chip, every chip is single-line, and the blue
             // commit highlight belongs to the first REAL suggestion — never a
             // ghost. The S117/S152 two-line hint retires with this layout.
-            val firstReal = shown.firstOrNull { !TypedChipPolicy.isGhostTier(it.tier) }
-            items(shown, key = { "${it.bengali}|${it.source}|${it.tier}" }) { suggestion ->
+            // S168 (audit P0-1): a duplicate LazyRow key is an IME-process
+            // crash (seen on device 2026-08-31) — dedupe at the strip itself.
+            val uniqueShown = StripKeyPolicy.uniqueByKey(shown)
+            val firstReal = uniqueShown.firstOrNull { !TypedChipPolicy.isGhostTier(it.tier) }
+            items(uniqueShown, key = { StripKeyPolicy.key(it) }) { suggestion ->
                 val isGhost = TypedChipPolicy.isGhostTier(suggestion.tier)
                 val isFirst = suggestion == firstReal
                 // Feature 4.4: Prediction chips use different styling
@@ -1946,7 +2002,7 @@ private fun GlideLetterRows(glide: GlideUiState, content: @Composable () -> Unit
                         color = color.copy(alpha = alpha),
                         start = Offset(trail[i - 1].x * keyW, trail[i - 1].y * rowH),
                         end = Offset(trail[i].x * keyW, trail[i].y * rowH),
-                        strokeWidth = 9f,
+                        strokeWidth = 3.dp.toPx(),
                         cap = StrokeCap.Round
                     )
                 }
@@ -2399,8 +2455,8 @@ private fun EnterActionKey(
     val colors = LocalKeyboardColors.current
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
-    val hapticOn = LocalHapticEnabled.current
-    val soundOn = LocalSoundEnabled.current
+    val hapticOn by rememberUpdatedState(LocalHapticEnabled.current)
+    val soundOn by rememberUpdatedState(LocalSoundEnabled.current)
     val currentOnClick by rememberUpdatedState(onClick)
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -2522,8 +2578,8 @@ private fun KeyButton(
     val colors = LocalKeyboardColors.current
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
-    val hapticOn = LocalHapticEnabled.current
-    val soundOn = LocalSoundEnabled.current
+    val hapticOn by rememberUpdatedState(LocalHapticEnabled.current)
+    val soundOn by rememberUpdatedState(LocalSoundEnabled.current)
     val previewOn = LocalKeyPreviewEnabled.current
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnClickAt by rememberUpdatedState(onClickAt)
@@ -2690,9 +2746,12 @@ private fun KeyButton(
             )
         }
         if (showAlternatives) {
+            // S168 (audit P2-1): lift by the key's own height in dp — the old
+            // -96 raw px sat the popup ON the pressed key at 3x+ densities.
+            val popupLift = with(LocalDensity.current) { -(height + 10.dp).roundToPx() }
             Popup(
                 alignment = Alignment.TopCenter,
-                offset = IntOffset(0, -96),
+                offset = IntOffset(0, popupLift),
                 // S68: focusable=false — a focusable popup is its own window
                 // and CONSUMED the tap that dismissed it, so the user's next
                 // keystroke after an (often accidental) long-press vanished.
@@ -2754,8 +2813,8 @@ private fun SpaceBar(
     val colors = LocalKeyboardColors.current
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
-    val hapticOn = LocalHapticEnabled.current
-    val soundOn = LocalSoundEnabled.current
+    val hapticOn by rememberUpdatedState(LocalHapticEnabled.current)
+    val soundOn by rememberUpdatedState(LocalSoundEnabled.current)
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnCursorMove by rememberUpdatedState(onCursorMove)
     var isPressed by remember { mutableStateOf(false) }
@@ -2885,8 +2944,8 @@ private fun BackspaceKey(
     val colors = LocalKeyboardColors.current
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
-    val hapticOn = LocalHapticEnabled.current
-    val soundOn = LocalSoundEnabled.current
+    val hapticOn by rememberUpdatedState(LocalHapticEnabled.current)
+    val soundOn by rememberUpdatedState(LocalSoundEnabled.current)
     val currentOnBackspace by rememberUpdatedState(onBackspace)
     val currentOnBackspaceRepeat by rememberUpdatedState(onBackspaceRepeat)
     val currentOnBackspaceWord by rememberUpdatedState(onBackspaceWord)
@@ -2964,7 +3023,7 @@ private fun BackspaceKey(
             Text(
                 text = "\u232B",
                 color = colors.keyText,
-                fontSize = 20.sp,
+                fontSize = scaledSp(19),
                 textAlign = TextAlign.Center
             )
         }
@@ -2989,8 +3048,8 @@ private fun NumberKey(
     val symbol = NUMBER_SYMBOL_MAP[number] ?: '!'
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
-    val hapticOn = LocalHapticEnabled.current
-    val soundOn = LocalSoundEnabled.current
+    val hapticOn by rememberUpdatedState(LocalHapticEnabled.current)
+    val soundOn by rememberUpdatedState(LocalSoundEnabled.current)
     val currentOnNumberPress by rememberUpdatedState(onNumberPress)
     val currentOnSymbolPress by rememberUpdatedState(onSymbolPress)
     var isPressed by remember { mutableStateOf(false) }
@@ -3053,13 +3112,13 @@ private fun NumberKey(
             Text(
                 text = displayNumber.toString(),
                 color = colors.keyText,
-                fontSize = 18.sp,
+                fontSize = scaledSp(17),
                 modifier = Modifier.align(Alignment.Center)
             )
             Text(
                 text = symbol.toString(),
                 color = colors.subText,
-                fontSize = 10.sp,
+                fontSize = scaledSp(9),
                 modifier = Modifier.align(Alignment.TopEnd)
             )
         }
@@ -3073,6 +3132,7 @@ private fun NumberKey(
 @Composable
 private fun EmojiPanel(
     colors: KeyboardColors,
+    panelHeight: Dp?,
     initialCategory: Int,
     recentEmojisProvider: () -> List<String>,
     onEmojiClick: (String) -> Unit,
@@ -3089,15 +3149,15 @@ private fun EmojiPanel(
     var searchRecorded by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
-    val hapticOn = LocalHapticEnabled.current
-    val soundOn = LocalSoundEnabled.current
+    val hapticOn by rememberUpdatedState(LocalHapticEnabled.current)
+    val soundOn by rememberUpdatedState(LocalSoundEnabled.current)
     // S57: drop stale recents from older builds (removed sticker texts
     // rendered as broken emoji cells).
     val recentEmojis = recentEmojisProvider().filter { EmojiData.isKnownEmoji(it) }
     val searching = searchQuery.isNotBlank()
     val showingPhrases = !searching && selectedCategory == EmojiData.PHRASES_CATEGORY_INDEX
     val currentEmojis = when {
-        searching -> EmojiData.search(searchQuery)
+        searching -> remember(searchQuery) { EmojiData.search(searchQuery) }
         selectedCategory == 0 && recentEmojis.isNotEmpty() -> recentEmojis
         else -> EmojiData.categories.getOrNull(selectedCategory)?.emojis.orEmpty()
     }
@@ -3185,7 +3245,14 @@ private fun EmojiPanel(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (searchActive) 132.dp else 286.dp)
+                .height(
+                    when {
+                        searchActive -> 132.dp
+                        // search row 48dp + tab row 48dp frame the grid
+                        panelHeight != null -> (panelHeight - 96.dp).coerceIn(180.dp, 420.dp)
+                        else -> 286.dp
+                    }
+                )
                 .padding(horizontal = 8.dp)
         ) {
             when {
