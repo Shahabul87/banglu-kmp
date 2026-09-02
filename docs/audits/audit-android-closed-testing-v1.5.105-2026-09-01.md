@@ -342,3 +342,19 @@ Verified on device: dexopt state `speed-profile` after install+launch+compile.
 which ~3.8 ms is GPU issue/swap and the rest touch dispatch + a 5-9 ms measure on
 strip-change frames; tail frames come from the strip's Bengali text layout. Next
 lever, if ever needed: a fixed-height strip with pre-measured chip widths.
+
+**S169b — first-install native-heap spike (found by the 1.5.107 release smoke).** The
+gate's device smoke failed `memory_heap` at 322 MB (cap 320) while a standalone re-run
+passed at 78 MB: the difference was timing. A native-heap sampler alongside the smoke
+showed the keyboard process at 17 MB native during the probe and 100 → 182 MB right
+after, and heapprofd attributed 453 MB of cumulative allocations to
+`SQLiteCursor.fillWindow` under `GlideLexiconStore` ← `warmGlideLexicons`: the BN
+lexicon build's `GROUP BY key ORDER BY f DESC` made SQLite sort all 1.65M keys in
+memory (Android's SQLite keeps temp stores in RAM). Present since S163 (on the first
+glide) and since S168 right after the dictionary load — an LMK risk on 2 GB phones at
+the worst moment. Fix (Android module only): `GROUP BY key` walks
+`idx_phonetic_index_key` in order (query plan: no temp b-tree) and
+`GlideLexiconStore.topKByFrequency` keeps a bounded top-K in Kotlin
+(`S169GlideTopKTest`, LEXICON_REV 4). Verified with wiped app data: native heap peak
+22 MB across the whole cold start and lexicon build (was 182 MB); glide commits from
+the fresh lexicon.
