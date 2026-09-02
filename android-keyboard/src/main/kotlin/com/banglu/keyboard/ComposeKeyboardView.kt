@@ -1708,7 +1708,15 @@ private fun BangluSuggestionRow(
             // crash (seen on device 2026-08-31) — dedupe at the strip itself.
             val uniqueShown = StripKeyPolicy.uniqueByKey(shown)
             val firstReal = uniqueShown.firstOrNull { !TypedChipPolicy.isGhostTier(it.tier) }
-            items(uniqueShown, key = { StripKeyPolicy.key(it) }) { suggestion ->
+            // S169 (perf trace 2026-09-02): SLOT identity, not content identity.
+            // Content keys made every keystroke tear down and rebuild 5-8 chip
+            // subtrees (Pending.keyMap + UiApplier.dispatchChanges were 17% and
+            // 12% of main-thread samples; measure spikes 7-10 ms). With the
+            // default index key the six chip nodes persist and only their text
+            // changes. Duplicate keys are impossible by construction, so the
+            // dedupe above is now purely cosmetic insurance.
+            items(uniqueShown.size) { index ->
+                val suggestion = uniqueShown[index]
                 val isGhost = TypedChipPolicy.isGhostTier(suggestion.tier)
                 val isFirst = suggestion == firstReal
                 // Feature 4.4: Prediction chips use different styling

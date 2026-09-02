@@ -59,6 +59,9 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.BangluKeyboard">
+        <!-- S169: shell-profileable so release builds can be sampled with
+             perfetto/simpleperf (no debuggable overhead; Play-safe). -->
+        <profileable android:shell="true" />
 
         <!-- S44: keep AndroidX auto-init out of the IME process — these
              initializers (emoji2/lifecycle/profileinstaller) add cold-start

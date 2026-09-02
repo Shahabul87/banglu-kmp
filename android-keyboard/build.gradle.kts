@@ -28,8 +28,8 @@ android {
         applicationId = "com.banglu.keyboard"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2143
-        versionName = "1.5.106"
+        versionCode = 2144
+        versionName = "1.5.107"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -92,6 +92,10 @@ dependencies {
     implementation(project(":shared"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.core.ktx)
+    // S169: installs the shipped baseline profile (src/main/baseline-prof.txt) on
+    // first launch so ART AOT-compiles the typing path instead of interpreting it
+    // for the first day. Perf-only; no behaviour.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 
     // Compose
     implementation(platform(libs.compose.bom))

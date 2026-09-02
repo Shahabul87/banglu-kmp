@@ -1126,6 +1126,12 @@ class BangluIMEService : InputMethodService(),
         // main-thread TTF read on the FIRST keystroke. Warm it off-thread.
         serviceScope.launch(Dispatchers.IO) {
             runCatching { createFontFamilyResolver(applicationContext).preload(RomanMono) }
+            // S169: the androidx.startup initializer is removed from the manifest
+            // (cold-start budget), so install the shipped baseline profile
+            // ourselves. Idempotent (marker in filesDir); Play installs already
+            // receive it as install-time dex metadata — this covers sideloaded
+            // tester/perf APKs. Offline; no behaviour.
+            runCatching { androidx.profileinstaller.ProfileInstaller.writeProfile(applicationContext) }
         }
         // S139: MUST precede every typed read of the clipboard keys.
         PrefsMigrations.migrate(prefs)

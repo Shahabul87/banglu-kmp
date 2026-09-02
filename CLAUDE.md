@@ -33,6 +33,23 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-31):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S169 frame-budget profiling (2026-09-02, user: "continue but engine
+  behaviour should not be change"):** Perfetto sched/binder + callstack
+  sampling of the release build (manifest now `profileable shell=true`)
+  ruled OUT binder IPC, the key preview, recomposition scope and ripple; the
+  real costs were (1) INTERPRETED code on fresh installs (~30% of main-thread
+  samples in nterp; day-one keystroke frames p50 15-16 / p95 30-33 ms vs
+  compiled p50 8-9 / p95 17-21 ms, paired cold-process cycles) and (2) the
+  suggestion strip rebuilding every chip subtree per keystroke under
+  content keys (Pending.keyMap 17% + dispatchChanges 12.5%). Shipped:
+  `android-keyboard/src/main/baseline-prof.txt` (wildcards compile EVERY
+  method of com.banglu.engine + com.banglu.keyboard — 4,909 after R8 — plus
+  the observed androidx hot set; regenerate only from a `-dontobfuscate`
+  build, an obfuscated build exports R8 names), profileinstaller 1.4.1 with
+  an explicit `ProfileInstaller.writeProfile` in the service (the startup
+  initializer is stripped for cold-start; Play delivers the profile as dex
+  metadata anyway), slot-keyed strip items. Conjunct set 30/30 correct in
+  every cycle. Shared engine untouched. Android 1.5.107 (2144).
 - **S168 closed-testing fix round (2026-09-02, user: "fix all the issue one
   by one and do test it"):** the 2026-09-01 deep audit
   (docs/audits/audit-android-closed-testing-v1.5.105-2026-09-01.md) found

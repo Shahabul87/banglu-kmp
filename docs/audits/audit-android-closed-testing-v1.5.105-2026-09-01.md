@@ -291,3 +291,54 @@ bar at 2196 (`home-3button-fixed.png`). Gesture navigation was correct throughou
 with `enable-exclusive --category` and verify `dumpsys window` reports a single
 navbar overlay and a 144 px (3-button) or ~45 px (gesture) inset before handing
 the phone back; never leave two navbar overlays enabled.
+
+---
+
+## S169 — frame-budget profiling round (2026-09-02, Android 1.5.107 / 2144)
+
+Engine untouched (no change under `shared/`). Method: `dumpsys gfxinfo framestats`
+per-phase split → Perfetto system trace (sched/binder/gfx/view) → Perfetto
+`linux.perf` callstack sampling of the keyboard process on a release build
+(manifest now `<profileable android:shell="true"/>`; symbols from a temporary
+`-dontobfuscate` build). Restore point before this work: tag
+`restore-closed-testing-1.5.106`.
+
+**Hypotheses rejected with evidence:** blocking InputConnection IPC (653 binder
+calls, 10 ms total over a 46-key burst); the key-preview popup (drawn in place, no
+window); Compose recomposition scope (all 47 keyboard composables skippable, strong
+skipping on); a Material ripple on key presses (16% of samples on the interpreted
+build, 0% once compiled — a symbolization artefact of interpreted frames).
+
+**Root causes found:**
+1. **Interpreted code on fresh installs.** ~30% of main-thread samples were in ART's
+   interpreter. Paired cold-process measurements, 3 cycles each, same 36-key easy
+   sentence and 30 conjunct words at 50 ms/key:
+
+   | State | easy p50 | easy p95 | frames > 32 ms | conjunct p50 | conjunct p95 |
+   |---|---|---|---|---|---|
+   | interpreted (`compile --reset`, = day-one install without profile) | 14.7-16.2 ms | 30-33 ms | 2-8 / ~85 | 11.3-13.5 ms | 22.5-27 ms |
+   | compiled with the baseline profile | 8.0-8.8 ms | 17-21 ms | 0 / ~115 | 8.8-9.5 ms | 18-19 ms |
+
+   Conjunct correctness 30/30 in every cycle. During the very first interpreted
+   minutes at 40 ms/key one compound (`bujteparcina`) committed the rule-only preview
+   (S29 fast-commit path, reconcile window missed) — the same mechanism the profile
+   protects.
+2. **Strip node churn.** Content-keyed LazyRow items rebuilt 5-8 chip subtrees per
+   keystroke (`Pending.keyMap` 17%, `UiApplier.dispatchChanges` 12.5% of samples;
+   measure spikes 7-10 ms). Chips are now slot-keyed; duplicate keys are impossible
+   by construction (StripKeyPolicy dedupe kept as cosmetic insurance).
+
+**Shipped:** `src/main/baseline-prof.txt` = wildcard rules compiling every method of
+`com.banglu.engine` and `com.banglu.keyboard` (4,909 methods after R8 expansion — no
+dependence on which words a session typed) + the observed androidx/kotlin hot set
+(4,686 methods, 1,680 classes) from a realistic unobfuscated session;
+`androidx.profileinstaller` 1.4.1 with an explicit `ProfileInstaller.writeProfile`
+on the service's IO startup lane (the androidx.startup initializer is stripped from
+the manifest for cold-start time, so sideloaded APKs would otherwise never install
+the profile; Play installs receive it as install-time dex metadata regardless).
+Verified on device: dexopt state `speed-profile` after install+launch+compile.
+
+**Still open:** the median keystroke frame on this 120 Hz flagship is ~8.5 ms, of
+which ~3.8 ms is GPU issue/swap and the rest touch dispatch + a 5-9 ms measure on
+strip-change frames; tail frames come from the strip's Bengali text layout. Next
+lever, if ever needed: a fixed-height strip with pre-measured chip widths.
