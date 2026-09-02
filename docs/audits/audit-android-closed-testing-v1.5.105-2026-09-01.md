@@ -261,3 +261,33 @@ Android module; policies are pure objects pinned by 26 new JUnit tests
 | P3-9 light-mode default | Left as-is — product decision (dark plum is the brand default; "auto" exists in Settings) | — |
 
 Gates: `:shared:jvmTest` 741, `:shared:testDebugUnitTest` 435, `:android-keyboard:testDebugUnitTest` 191 (fresh), `:shared:jsNodeTest` 451, `:desktop-app:test` 41, `:windows-ime:test` 161 — all green (the non-Android walls are cached from today's fresh run; `shared/` is unchanged). Perf build typed the full test sentence, glided six words, and left the crash buffer empty.
+
+---
+
+## Post-release note — navigation-bar overlap on the dev phone (2026-09-02)
+
+**Symptom (user):** the app's bottom tabs (হোম / শিখুন / সেটিংস / মতামত) drawn on
+top of the phone's ||| ○ < buttons.
+
+**Cause: test-harness artefact, not app code.** The audit switched the S22
+between gesture and 3-button navigation with `cmd overlay enable …navbar.gestural`
+/ `…navbar.threebutton`. Enabling the second overlay did not disable the first,
+so BOTH stayed enabled. SystemUI then drew the 144 px three-button bar but
+reported the 45 px gesture-pill inset to apps (`dumpsys window`: navigationBars
+`frame=[0,2295][1080,2340]`, `insetsSize bottom=45`, while the bar surface sat at
+y=2196). `BottomNav` applies `navigationBarsPadding()` correctly and padded for
+the 45 px it was told about. Every app launch on the phone between the gesture-nav
+test (2026-09-01 ~23:41) and the repair looked overlapped; the audit screenshots
+taken before any toggling (`kb-bn-home.png`) show the tabs clear of the bar.
+
+**Repair:** `cmd overlay disable …navbar.gestural` +
+`cmd overlay enable-exclusive --category …navbar.threebutton`. Inset back to
+`frame=[0,2196][1080,2340]`; a cold start places the tabs at y 2119-2178 above the
+bar at 2196 (`home-3button-fixed.png`). Gesture navigation was correct throughout.
+
+**Consequence for the release:** none — no source change, 1.5.106 (2143) stands.
+
+**Process rule going forward:** when a test toggles navigation mode, restore it
+with `enable-exclusive --category` and verify `dumpsys window` reports a single
+navbar overlay and a 144 px (3-button) or ~45 px (gesture) inset before handing
+the phone back; never leave two navbar overlays enabled.
