@@ -454,3 +454,26 @@ The two differences are the same documented engine choices as on the phone
 vocabulary because the sqlite phonetic index carries the canonical mapping in both
 profiles (S26b law holds). Data: `top1000/top1000-lowram-emulator-results.tsv`,
 `top1000/lowram-emulator-memory-timeline.tsv`.
+
+---
+
+## S171 — low-RAM validation redone on the real build (2026-09-02, 1.5.109 / 2146)
+
+Same setup as S170b (2 GB `Pixel_7_API_34`, Android 14, rooted,
+`dalvik.vm.heapgrowthlimit=128m` → lite profile, `dictionary_status = lite`), this time
+after `adb uninstall` + install of the 1.5.109 release APK with the version and the
+release signer read back (`versionName=1.5.109`, cert 8fa2de6d…).
+
+| Measure | 1.5.109 (lite) |
+|---|---|
+| Keyboard visible / store-backed conversion ready | 11 s / 18 s after app start (first run, dictionary copied from assets) |
+| Top-1,000 conjunct words, 50 ms/key | **998 / 1000 dictionary-exact, 1000 / 1000 identical to the full-mode JVM engine**, 0 missing (differences: আসতে, ঘণ্টা — the documented choices) |
+| Process | one PID for the whole ~21-minute session; 0 LMK / OOM / ANR |
+| Memory (2 s samples) | median total PSS 131 MB after warm-up; periodic native peaks 100-115 MB during sustained querying (SQLite page cache), one sample at 160 MB native / 235 MB total 14 min in; Dalvik peak 53 MB |
+| Glide (lite lexicon) | `kemon` → কেমন; cache written as `glide_bn_20000.bin` = 1.58 MB (S171 cap-keyed; was a 4.0 MB full-cap `glide_bn.bin` before), legacy file removed |
+| Frames | software GPU, not comparable (p50 16.8 ms); no stall class |
+
+S171 fix confirmed: the lite profile now builds the 20K lexicon (~2.4 MB less heap on
+2 GB phones) and can no longer load a full-cap cache. Data:
+`top1000/top1000-lowram-emulator-results-1.5.109.tsv`,
+`top1000/lowram-emulator-memory-timeline-1.5.109.tsv`.

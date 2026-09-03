@@ -33,6 +33,17 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-31):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S171 lite-profile glide lexicon (2026-09-02, user: "you can do it if
+  its not damage engine power"):** the lexicon store took the MANUAL lite
+  switch, so auto-lite (memoryClass < 256) 2 GB phones built the full 50K
+  lexicon (4.0 MB cache) and a single cache name let a lite store load a
+  full-cap file. Now shouldUseLiteDictionary() + cap-keyed
+  `glide_bn_<cap>.bin` (legacy file deleted once), store/decoders dropped on
+  the profile-flip rebuild. Low-RAM validation REDONE on the real build
+  (after finding the S170b run had measured a stale 1.5.104 — see
+  [[verify-installed-build]] memory): 998/1000 dictionary-exact, 1000/1000
+  engine-exact, one PID, 0 LMK/OOM/ANR, median PSS 131 MB, lite cache
+  1.58 MB, glide works. Engine untouched. Android 1.5.109 (2146).
 - **S170 fast-commit reconcile (2026-09-02, from the S169c study; user
   "go"):** the S32 fast commit's reconcile refused whenever the NEXT word was
   already composing, so at machine-speed typing right after a backspace
