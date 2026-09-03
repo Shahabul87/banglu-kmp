@@ -68,14 +68,25 @@ class S109TypingResumeTest {
     }
 
     @Test
-    fun nonRoundTrippingPrefixFallsBack() {
-        // A prefix whose reverse key does not reproduce it exactly must
-        // return null — the caller keeps plain fresh composition, so the
-        // gate can never make editing WORSE than before.
+    fun nonEchoingPrefixStillResumes() {
+        // S175b PIN FLIP (documented decision, device evidence 2026-09-03):
+        // this pin used to demand null when the rule-only preview could not
+        // echo the prefix. On the phone that gate refused EVERY word with an
+        // internal ো (তোমার → "tomar" → তমার), so তোমার + e produced তোমারএ
+        // and a letter typed inside a word landed plainly at the caret. The
+        // typing paths now need only a sane reverse roman (a-z, bounded); the
+        // engine renders the whole roman on the next keystroke anyway.
         val weird = "ক্ক্ক"
         val roman = ReverseTransliterator.reverseWord(weird).lowercase()
         if (engine.convertForInstantPreview(roman) != weird) {
-            assertNull(plan(weird))
+            val p = plan(weird)
+            assertNotNull(p)
+            assertEquals(roman, p.romanBuffer)
+            assertEquals(weird, p.visibleFragment)
         }
+        // Everyday case that the old gate refused:
+        val p = plan("তোমার")
+        assertNotNull(p)
+        assertEquals("tomar", p.romanBuffer)
     }
 }

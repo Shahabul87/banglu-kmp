@@ -277,9 +277,10 @@ class BangluIMEService : InputMethodService(),
     // selection changes what backspace must do (SelectionEditPolicy).
     private var editorSelStart = -1
     private var editorSelEnd = -1
-    /** S174: roman of the word part AFTER the caret, appended right after the
-     *  letter that triggered a mid-word resume (BackspaceResume.planForMidWordEdit). */
-    private var midWordSuffixRoman: String? = null
+    /** S174/S175: roman edit point inside the composing word after a mid-word
+     *  resume (BackspaceResume.planForMidWordEdit / planForMidWordBackspace);
+     *  letters and backspaces apply there (MidWordCaret). Null = end of word. */
+    private var midWordInsertAt: Int? = null
 
     /**
      * S99: probabilistic touch targeting. A letter press near a key boundary
@@ -1814,6 +1815,7 @@ class BangluIMEService : InputMethodService(),
         candidatesStart: Int,
         candidatesEnd: Int,
     ) {
+        log("onUpdateSelection: sel $oldSelStart-$oldSelEnd -> $newSelStart-$newSelEnd cand $candidatesStart-$candidatesEnd buffer='$buffer' insertAt=$midWordInsertAt")
         super.onUpdateSelection(
             oldSelStart,
             oldSelEnd,
@@ -1994,7 +1996,7 @@ class BangluIMEService : InputMethodService(),
         suggestionJob = null
         suggestions.clear()
         buffer = ""
-        midWordSuffixRoman = null
+        midWordInsertAt = null
         clearCommitCaches()
         lastSpaceTime = 0L
         resetShiftState()
@@ -2088,10 +2090,15 @@ class BangluIMEService : InputMethodService(),
         // re-converts (dobaa class: দ|বা + 'a' -> দাবা, not দআবা). One
         // IC read per word START only — the per-keystroke path stays on the
         // shadow buffer (S28 law).
-        if (buffer.isEmpty() && char.isLetter()) tryResumeComposingBeforeTyping(ic)
-        buffer += char
-        // S174: the typed letter lands between the two halves of the word.
-        midWordSuffixRoman?.let { buffer += it; midWordSuffixRoman = null }
+        if (buffer.isEmpty()) {
+            midWordInsertAt = null
+            if (char.isLetter()) tryResumeComposingBeforeTyping(ic)
+        }
+        // S174/S175: after a mid-word resume the letter lands at the edit
+        // point inside the word, not at its end.
+        val edited = MidWordCaret.insert(MidWordCaret.State(buffer, midWordInsertAt), char)
+        buffer = edited.buffer
+        midWordInsertAt = edited.insertAt
         sessionBangluKeyCount++
 
         // Auto-unshift after typing a letter (unless caps lock)
@@ -2113,7 +2120,6 @@ class BangluIMEService : InputMethodService(),
     private fun tryResumeComposingBeforeTyping(ic: InputConnection) {
         if (rawCommitInputMode || uriInputMode || sensitiveInputMode) return
         if (keyboardMode.value != KeyboardMode.BANGLU) return
-        midWordSuffixRoman = null
         val before = ic.getTextBeforeCursor(32, 0)?.toString().orEmpty()
         // S174: caret INSIDE a word — both halves are re-composed around the
         // typed letter; the caret ends after the word (the transliteration-
@@ -2126,17 +2132,19 @@ class BangluIMEService : InputMethodService(),
                 reverse = { com.banglu.engine.util.ReverseTransliterator.reverseWord(it) },
                 instantPreview = { SmartEngineAdapter.convertForInstantPreview(it) },
             )?.let { plan ->
-                val visible = if (plan.romanPrefix.isEmpty()) "" else
-                    runCatching { SmartEngineAdapter.convertForInstantPreview(plan.romanPrefix) }.getOrDefault("")
+                // S175: the WHOLE word composes (prefix + suffix) and the
+                // typed letter is inserted at the edit point by the caller.
+                val roman = plan.romanPrefix + plan.romanSuffix
+                val visible = plan.visibleWord   // S175b: the word's own text until the letter lands
                 ic.beginBatchEdit()
                 ic.deleteSurroundingText(plan.deleteBefore, plan.deleteAfter)
-                buffer = plan.romanPrefix
-                if (visible.isNotEmpty()) ic.setComposingText(visible, 1)
+                buffer = roman
+                ic.setComposingText(visible, 1)
                 ic.endBatchEdit()
-                composingInput = plan.romanPrefix
+                composingInput = roman
                 composingResult = null
                 composingVisibleText = visible
-                midWordSuffixRoman = plan.romanSuffix
+                midWordInsertAt = plan.romanPrefix.length
                 return
             }
         }
@@ -2421,7 +2429,9 @@ class BangluIMEService : InputMethodService(),
         when (keyboardMode.value) {
             KeyboardMode.BANGLU -> {
                 if (buffer.isNotEmpty()) {
-                    buffer = buffer.dropLast(1)
+                    val edited = MidWordCaret.backspace(MidWordCaret.State(buffer, midWordInsertAt))
+                    buffer = edited.buffer
+                    midWordInsertAt = edited.insertAt
                     if (buffer.isEmpty()) {
                         ic.setComposingText("", 0)
                         ic.finishComposingText()
@@ -2479,7 +2489,7 @@ class BangluIMEService : InputMethodService(),
                 instantPreview = { SmartEngineAdapter.convertForInstantPreview(it) },
             )?.let { plan ->
                 val roman = plan.romanPrefix + plan.romanSuffix
-                val visible = runCatching { SmartEngineAdapter.convertForInstantPreview(roman) }.getOrDefault(roman)
+                val visible = plan.visibleWord
                 ic.beginBatchEdit()
                 ic.deleteSurroundingText(plan.deleteBefore, plan.deleteAfter)
                 buffer = roman
@@ -2488,6 +2498,7 @@ class BangluIMEService : InputMethodService(),
                 composingInput = roman
                 composingResult = null
                 composingVisibleText = visible
+                midWordInsertAt = plan.romanPrefix.length   // S175: keep editing here
                 refreshSuggestionsAsync(buffer)
                 prepareCommitConversionAsync(buffer)
                 return true
@@ -2522,7 +2533,10 @@ class BangluIMEService : InputMethodService(),
 
         if (keyboardMode.value == KeyboardMode.BANGLU && buffer.isNotEmpty()) {
             val dropCount = safeCount.coerceAtMost(buffer.length)
-            buffer = buffer.dropLast(dropCount)
+            var edited = MidWordCaret.State(buffer, midWordInsertAt)
+            repeat(dropCount) { edited = MidWordCaret.backspace(edited) }
+            buffer = edited.buffer
+            midWordInsertAt = edited.insertAt
             if (buffer.isEmpty()) {
                 ic.setComposingText("", 0)
                 ic.finishComposingText()

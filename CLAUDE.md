@@ -33,6 +33,26 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S175 mid-word editing, second pass (2026-09-03, user: "is this mid
+  word issue fixed??"):** measured the caret directly (shifted-capital
+  marker + emulator selection log) and found three Android-module causes:
+  (1) no insertion point after a re-composition — MidWordCaret now carries
+  a roman edit point with the buffer (insert/backspace/hold apply there);
+  (2) the S109/S174 typing gate demanded a rule-only echo, which every
+  internal-ো word fails (তোমা → toma → তমা) — তোমার + e gave তোমারএ and a
+  mid-word letter was plainly inserted, the space then split the word;
+  typing paths now need only a sane reverse roman and show the word's own
+  text until the letter lands, delete paths keep a whole-word echo gate
+  (documented pin flips in S109TypingResumeTest / S174MidWordEditTest);
+  (3) a lone consonant reverses without its inherent vowel (তমাদের minus
+  মা → "t"), so the delete path derives the prefix roman from the whole
+  original word minus the deleted tail. Emulator flows: tomoder → তোমাদের,
+  tomar|r + de → তোমাদের, tomar + e → তোমারে, bola|la + h → ভোলা. Harness
+  law: move the caret with DPAD_LEFT from the END (cluster steps) and
+  read the caret with a shifted capital — never DPAD_RIGHT from HOME.
+  Engine untouched. Android 1.5.112 (2149). Same round: S173 engine
+  propagated — macOS bundle (runner 105/105) installed, extension zips,
+  bangluweb vendor pushed, desktop 1.3.10 / টাইপার 1.0.14 tags.
 - **S174 mid-word edit (2026-09-02, user: "try to type a letter wrong
   in the middle and try to fix that. you will feel it"):** the S88 resume
   only re-composed the text BEFORE the caret, so fixing a letter inside a

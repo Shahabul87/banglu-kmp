@@ -13,7 +13,7 @@ import org.junit.Test
  */
 class S174MidWordEditTest {
     private val reverse: (String) -> String = { mapOf("স্বাধ" to "sbadh", "নতা" to "nota", "স্বা" to "sba", "বল" to "bol")[it] ?: "?" }
-    private val preview: (String) -> String = { mapOf("sbadh" to "স্বাধ", "nota" to "নতা", "sba" to "স্বা", "bol" to "বল")[it] ?: "?" }
+    private val preview: (String) -> String = { mapOf("sbadh" to "স্বাধ", "nota" to "নতা", "sba" to "স্বা", "bol" to "বল", "sbanota" to "স্বানতা")[it] ?: "?" }
 
     @Test
     fun insertInsideAWordPlansBothSides() {
@@ -31,9 +31,15 @@ class S174MidWordEditTest {
     }
 
     @Test
-    fun suffixThatDoesNotRoundTripIsRefused() {
+    fun suffixWithUnusableRomanIsRefused() {
+        // S175b PIN FLIP (documented decision): a suffix whose rule-only
+        // preview merely differs (নতা → "nota" → নট) now PLANS — the echo gate
+        // refused every internal-ো word on device. Only an unusable reverse
+        // (non a-z, empty, over-long) refuses the typing plan.
         val badPreview: (String) -> String = { if (it == "nota") "নট" else preview(it) }
-        assertNull(BackspaceResume.planForMidWordEdit("স্বাধ", "নতা", reverse, badPreview))
+        assertEquals("sbadhnota", BackspaceResume.planForMidWordEdit("স্বাধ", "নতা", reverse, badPreview)!!.let { it.romanPrefix + it.romanSuffix })
+        val badReverse: (String) -> String = { if (it == "নতা") "n?ta" else reverse(it) }
+        assertNull(BackspaceResume.planForMidWordEdit("স্বাধ", "নতা", badReverse, preview))
     }
 
     @Test

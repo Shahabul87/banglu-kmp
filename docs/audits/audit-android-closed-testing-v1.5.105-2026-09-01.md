@@ -575,3 +575,56 @@ so the caret did not land where the script assumed; those paths are pinned by
 clean-install device smoke: installed 1.5.111, typing probe আমি, delete-and-retype
 আমি, heap 285 MB, frames p50 11.7 / p95 31.8 ms over 76 frames, no ANR — certified.
 Tag `v1.5.111`; artifacts `releases/banglu-1.5.111-2148.{apk,aab}`.
+
+## S175 — mid-word editing, second pass (2026-09-03, Android 1.5.112 / 2149)
+
+User: "is this mid word issue fixed??" — the honest answer after S174 was "not fully",
+and the S174 device harness had hidden it (it moved the caret with DPAD presses from
+HOME and read only the committed text). This round measured the caret directly: a
+shifted capital (S167 raw insert) typed after each edit shows where the caret sits, and
+the emulator debug build logs every `onUpdateSelection`. Harness: scratchpad
+`midword4.py` (caret marker), `midword6_emu.py`/`midword7_eow.py` (logged), `midword8.py`
+(realistic flows). Caret movement uses `DPAD_LEFT` from the END of the word, which the
+framework EditText and the keyboard's own ← arrow both step by grapheme cluster.
+
+**Three root causes, all in the Android module (shared engine untouched):**
+
+1. **No insertion point after a re-composition (S175).** S174 stashed the suffix roman
+   and appended it after the FIRST typed letter, so every later letter — and the letter
+   retyped after a mid-word backspace — landed at the end of the word (kamon-class fix
+   gave মনে-class results). `MidWordCaret` now carries a roman edit point with the
+   buffer: letters insert there, backspace removes the letter before it, hold-repeat
+   walks it, and it is dropped at the end of the word or on any new word. Pins:
+   `S175MidWordCaretTest` (7).
+2. **The round-trip gate refused every word with an internal ো (S175b).** The S109/S174
+   typing resumes required reverse → rule-only instant preview to echo the text, but
+   তোমা → "toma" previews as তমা (the ো needs the dictionary), so তোমার + e produced
+   তোমারএ and a letter typed inside তোমার was plainly inserted at the caret; the next
+   space then split the word (`তোমাদে র`). Same in the Messages EditText, so not a field
+   quirk. Typing paths now need only a sane reverse roman (a-z, bounded) and show the
+   word's own text until the letter lands; the engine renders the whole roman on the
+   next keystroke. Delete paths keep an echo gate on the WHOLE re-composed word (a
+   space right after the backspace commits exactly what is shown) and fall back to
+   plain grapheme deletion. Two documented pin flips: `S109TypingResumeTest.
+   nonEchoingPrefixStillResumes`, `S174MidWordEditTest.suffixWithUnusableRomanIsRefused`.
+3. **A lone consonant reverses without its inherent vowel (S175c).** Deleting মা from
+   তমাদের left ত → "t", so the retyped "ma" built "tmader" (ট্রেডার). On the delete path
+   the original word is still known: prefix roman = reverse(whole word) minus
+   reverse(deleted tail) ("tomader" − "mader" = "to"). The insert path keeps separate
+   halves — that is what makes ব|লা + h → ভোলা work. Pin: `S175MidWordBackspaceRomanTest`.
+
+**Device evidence (emulator Pixel 7 API 34, debug 1.5.112; every flow ends with a space):**
+
+| Flow | Before (1.5.111) | After |
+|---|---|---|
+| wrong letter, delete + retype (amoder → amader) | আমাদের (already worked) | আমাদের |
+| wrong letter with internal ো (tomoder → tomader) | ট্রেডার | তোমাদের |
+| insert two letters inside (tomar → tomader) | তোমাদে র | তোমাদের |
+| insert one letter inside (bola → bhola) | ভোলা (already worked) | ভোলা |
+| continue at word end (tomar + e) | তোমারএ | তোমারে |
+| pure delete inside, then space (tomader) | তোমা র | তোমা র (caret stays; plain delete) |
+
+Phone (S22, release 1.5.112 first build): the insertion-index fix alone gave আমদের →
+আমাদের and বলা → ভোলা; the phone was disconnected before the S175b/c build could be
+re-run there, so the internal-ো rows above are emulator evidence only. All six walls
+green (jvmTest 745, shared 435, android 222, js 451, desktop 41, windows 161).

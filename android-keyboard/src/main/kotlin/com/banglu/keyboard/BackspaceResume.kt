@@ -37,6 +37,8 @@ internal data class MidWordEditPlan(
     val deleteAfter: Int,
     val romanPrefix: String,
     val romanSuffix: String,
+    /** S175b: what the editor shows at plan time — the word's own text. */
+    val visibleWord: String,
 )
 
 internal object BackspaceResume {
@@ -55,11 +57,27 @@ internal object BackspaceResume {
         return text.substring(0, end)
     }
 
-    /** The round-trip gate every resume shares: reverse → instant preview must echo the part. */
-    private fun roundTrip(part: String, reverse: (String) -> String, instantPreview: (String) -> String): String? {
+    /**
+     * S175b: the roman for a word part on a TYPING path — reverse
+     * transliteration, sanity-checked (a-z, bounded) but NOT required to echo
+     * through the rule-only instant preview. That echo gate refused every
+     * word with an internal ো (তোমা → "toma" → তমা) and the typed letter then
+     * landed plainly inside the committed word; the next keystroke renders the
+     * whole roman through the engine anyway, so the typing paths only need a
+     * sane key. Delete paths keep [roundTrip]: plain grapheme deletion is a
+     * correct fallback there, an unverified re-composition is not.
+     */
+    private fun cleanRoman(part: String, reverse: (String) -> String): String? {
         if (part.isEmpty()) return ""
         val roman = runCatching { reverse(part).lowercase() }.getOrNull() ?: return null
         if (roman.isEmpty() || roman.length > MAX_WORD_LENGTH || !roman.all { it in 'a'..'z' }) return null
+        return roman
+    }
+
+    /** The round-trip gate of the DELETE resumes: reverse → instant preview must echo the part. */
+    private fun roundTrip(part: String, reverse: (String) -> String, instantPreview: (String) -> String): String? {
+        val roman = cleanRoman(part, reverse) ?: return null
+        if (part.isEmpty()) return roman
         val echo = runCatching { instantPreview(roman) }.getOrNull() ?: return null
         return if (echo == part) roman else null
     }
@@ -82,9 +100,9 @@ internal object BackspaceResume {
         if (suffix.isEmpty()) return null
         val prefix = wordBefore(textBeforeCursor)
         if (prefix.length + suffix.length > MAX_WORD_LENGTH) return null
-        val romanPrefix = roundTrip(prefix, reverse, instantPreview) ?: return null
-        val romanSuffix = roundTrip(suffix, reverse, instantPreview) ?: return null
-        return MidWordEditPlan(prefix.length, suffix.length, romanPrefix, romanSuffix)
+        val romanPrefix = cleanRoman(prefix, reverse) ?: return null
+        val romanSuffix = cleanRoman(suffix, reverse) ?: return null
+        return MidWordEditPlan(prefix.length, suffix.length, romanPrefix, romanSuffix, prefix + suffix)
     }
 
     /**
@@ -102,10 +120,30 @@ internal object BackspaceResume {
         if (suffix.isEmpty()) return null
         val prefix = wordBefore(textBeforeCursor)
         if (prefix.isEmpty() || prefix.length + suffix.length > MAX_WORD_LENGTH) return null
-        val fragment = prefix.substring(0, previousUserVisibleClusterBoundary(prefix))
-        val romanPrefix = roundTrip(fragment, reverse, instantPreview) ?: return null
-        val romanSuffix = roundTrip(suffix, reverse, instantPreview) ?: return null
-        return MidWordEditPlan(prefix.length, suffix.length, romanPrefix, romanSuffix)
+        val boundary = previousUserVisibleClusterBoundary(prefix)
+        val fragment = prefix.substring(0, boundary)
+        val dropped = prefix.substring(boundary)
+        val romanSuffix = cleanRoman(suffix, reverse) ?: return null
+        // S175c: a lone consonant reverses without its inherent vowel (ত → "t"),
+        // so a retyped syllable built "tmader" for তমাদের. The original word is
+        // still known here — its reversal minus the reversal of the deleted
+        // tail keeps that vowel ("tomader" − "mader" = "to").
+        val romanWhole = cleanRoman(prefix + suffix, reverse)
+        val romanTail = cleanRoman(dropped + suffix, reverse)
+        val romanPrefix = when {
+            fragment.isEmpty() -> ""
+            romanWhole != null && !romanTail.isNullOrEmpty() &&
+                romanWhole.length > romanTail.length && romanWhole.endsWith(romanTail) ->
+                romanWhole.dropLast(romanTail.length)
+            else -> cleanRoman(fragment, reverse) ?: return null
+        }
+        // Delete-path gate: the re-composed word must echo through the instant
+        // preview — a space right after the backspace commits exactly what is
+        // shown. Otherwise plain grapheme deletion (the caller's fallback).
+        val visible = fragment + suffix
+        val echo = runCatching { instantPreview(romanPrefix + romanSuffix) }.getOrNull() ?: return null
+        if (echo != visible) return null
+        return MidWordEditPlan(prefix.length, suffix.length, romanPrefix, romanSuffix, visible)
     }
 
     /**
@@ -159,11 +197,9 @@ internal object BackspaceResume {
         while (start > 0 && isBengaliWordChar(textBeforeCursor[start - 1])) start--
         val word = textBeforeCursor.substring(start)
         if (word.isEmpty() || word.length > MAX_WORD_LENGTH) return null
-        val roman = runCatching { reverse(word).lowercase() }.getOrNull() ?: return null
-        if (roman.isEmpty() || roman.length > MAX_WORD_LENGTH) return null
-        if (!roman.all { it in 'a'..'z' }) return null
-        val echo = runCatching { instantPreview(roman) }.getOrNull() ?: return null
-        if (echo != word) return null
+        // S175b: typing path — sane roman only (see cleanRoman); the echo gate
+        // made তোমার + e produce তোমারএ because "tomar" previews as তমার.
+        val roman = cleanRoman(word, reverse) ?: return null
         return BackspaceResumePlan(word.length, roman, word)
     }
 
