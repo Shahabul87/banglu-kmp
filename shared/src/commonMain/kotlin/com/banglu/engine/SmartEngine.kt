@@ -212,6 +212,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
          * below it (যেলা@1, যাতি@25); real roots sit above (ফার্স@37, তৃতীয়@73).
          */
         private const val MIN_COMPOSITION_STEM_FREQUENCY = 30
+        /** S173: a store-only canonical stem carries the store layer's whole-word confidence. */
+        private const val STORE_STEM_CONFIDENCE = 0.96
+        private const val STORE_STEM_MIN_FREQUENCY = 10
 
         /**
          * Seed/learned dictionary frequency at which an entry is a deliberate
@@ -7453,13 +7456,70 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * convention — রাফসান@120 composes রাফসানের). Inert without frequency data
      * (tiny test validators, seed-only mode): behavior is unchanged there.
      */
+    /** S173: the store row for [stemKey] that is [bengali] AND its canonical romanization. */
+    private var stemOwnerCheckDepth = 0
+
+    /**
+     * S173: [bengali] is trusted as the stem for [stemKey] when it is a
+     * canonical-owner store row above the stray-token floor AND it is what
+     * the engine itself commits for the bare stem key — the law "if the
+     * engine would commit the stem, it may compose its inflection". The
+     * second condition is what keeps the S33 চ্ছ law, ণ/ন spellings and the
+     * typo/English arbitration in charge (hochchete, dharonate, baccate
+     * regressed without it on the prevalence probe).
+     */
+    private fun isCanonicalOwnerStem(stemKey: String, bengali: String): Boolean {
+        val want = ReverseTransliterator.foldNukta(bengali)
+        val ownerRow = storeLookup(stemKey).any {
+            it.priority == PhoneticIndexHit.PRIORITY_CANONICAL &&
+                it.frequency >= STORE_STEM_MIN_FREQUENCY &&
+                ReverseTransliterator.foldNukta(it.bengali) == want
+        }
+        if (!ownerRow) return false
+        if (stemOwnerCheckDepth > 0) return false   // never recurse through nested stems
+        stemOwnerCheckDepth++
+        return try {
+            ReverseTransliterator.foldNukta(convertWord(stemKey).bengali) == want
+        } catch (_: Throwable) {
+            false
+        } finally {
+            stemOwnerCheckDepth--
+        }
+    }
+
+    /** S173: dependent vowel sign directly after a vowel sign / independent vowel. */
+    private fun isInvalidVowelJunction(stem: String, suffix: String): Boolean {
+        if (stem.isEmpty() || suffix.isEmpty()) return false
+        val last = stem.last(); val first = suffix.first()
+        val firstIsSign = first in '\u09BE'..'\u09CC'
+        val lastIsVowel = last in '\u09BE'..'\u09CC' || last in '\u0985'..'\u0994'
+        return firstIsSign && lastIsVowel
+    }
+
+    /** S173: inflection rendering that respects the stem's final sound. */
+    private fun renderInflection(suffix: InflectionalSuffix, bengaliStem: String): String =
+        if (suffix.phonetic == "r" && bengaliStem.isNotEmpty() && isBengaliConsonantChar(bengaliStem.last())) "ের"
+        else suffix.bengali
+
     private fun isCompositionStemTrusted(stemBengali: String, seedFrequency: Int): Boolean {
         if (!validator.isLoaded() || !validator.hasFrequencyData()) return true
         if (validator.getFrequency(stemBengali) >= MIN_COMPOSITION_STEM_FREQUENCY) return true
         return seedFrequency >= USER_WORD_FREQUENCY_FLOOR
     }
 
-    internal fun trySuffixStrippedDictionary(key: String): ConversionResult? {
+    /**
+     * S173: strictly additive two-pass scan. Pass 1 is the pre-S173 layer
+     * (trie stems, original trust rules). Only when it finds NOTHING does pass
+     * 2 admit store-only stems and canonical-owner trust — so a rare stem
+     * (ষড়রিপু) composes, while no key that composed before can change its
+     * answer (the probe showed longer loan stems like ট্রেন্ট+ে beating
+     * ট্রেন+তে when both passes competed on stem length).
+     */
+    internal fun trySuffixStrippedDictionary(key: String): ConversionResult? =
+        scanSuffixStrippedDictionary(key, allowStoreStems = false)
+            ?: scanSuffixStrippedDictionary(key, allowStoreStems = true)
+
+    private fun scanSuffixStrippedDictionary(key: String, allowStoreStems: Boolean): ConversionResult? {
         var bestResult: ConversionResult? = null
         var bestStemLength = 0
         var bestFrequency = 0
@@ -7477,6 +7537,31 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
                 for (candidate in candidates) {
                     var stemResults = dictionary.lookup(candidate)
+                    if (stemResults.isEmpty() && allowStoreStems) {
+                        // S173 (shororipur): stems that live ONLY in the sqlite
+                        // index (rare canonical words such as ষড়রিপু) were
+                        // invisible here, so their inflections fell through to
+                        // the compound splitter ("সরো রিপুর"). Take the store's
+                        // canonical-owner rows at the store layer's own
+                        // confidence; alias rows (S1/D3 junk) stay out.
+                        stemResults = storeLookup(candidate)
+                            .filter {
+                                it.priority == PhoneticIndexHit.PRIORITY_CANONICAL &&
+                                    it.frequency >= STORE_STEM_MIN_FREQUENCY &&
+                                    // …and the engine commits this word for the bare stem.
+                                    isCanonicalOwnerStem(candidate, it.bengali)
+                            }
+                            .take(1)
+                            .map { hit ->
+                                com.banglu.engine.types.LookupResult(
+                                    bengali = hit.bengali,
+                                    matchedPhonetic = candidate,
+                                    frequency = hit.frequency,
+                                    confidence = STORE_STEM_CONFIDENCE,
+                                    source = ResolutionSource.DICTIONARY
+                                )
+                            }
+                    }
                     if (stemResults.isNotEmpty()) {
                         // Enforce consonant rules on stem results
                         if (key.startsWith("z")) {
@@ -7500,7 +7585,21 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                             if (candidate != stem) {
                                 bengaliStem = bengaliStem.trimEnd('া', 'ো')
                             }
-                            val combined = bengaliStem + suffix.bengali
+                            // S173 (telephoner → টেলিফোনর): the genitive after a
+                            // consonant-final stem is always ের; a bare র only
+                            // follows a vowel. English silent-e loans are the
+                            // everyday case (telephone+r, microphone+r).
+                            val suffixBengali = renderInflection(suffix, bengaliStem)
+                            val combined = bengaliStem + suffixBengali
+                            // S173 junction law: a suffix that begins with a vowel
+                            // SIGN cannot follow a vowel-final stem (আমা + ের) — no
+                            // Bengali word is spelled that way, and such a
+                            // composition used to fall through to the English
+                            // rescue (S143 amaer pin). The validator may still
+                            // attest an exception; otherwise skip the candidate.
+                            if (isInvalidVowelJunction(bengaliStem, suffixBengali) &&
+                                !(validator.isLoaded() && validator.isValid(combined))
+                            ) continue
                             val isExact = best.matchedPhonetic.isEmpty() || best.matchedPhonetic == candidate
                             // S141 (banglute -> বাংলোতে): a stem matched only
                             // FUZZILY may not change the typed stem's spelling
@@ -7525,7 +7624,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                             // through ambiguity-aliased keys (zati → যাতি@25,
                             // zela → যেলা@1) otherwise mint invented DICTIONARY-source
                             // words (যাতির, যেলায়).
-                            val stemTrusted = isValid || isCompositionStemTrusted(best.bengali, best.frequency)
+                            // S173 (shororipur → "সরো রিপুর"): a stem that is the
+                            // CANONICAL OWNER of exactly the typed stem key is trusted
+                            // regardless of corpus frequency — the engine already
+                            // commits it for the bare stem, so composing its inflection
+                            // is what the user means. Alias-reached junk (S1/D3 zati →
+                            // যাতি) stays excluded: those rows are priority-1 aliases.
+                            val stemTrusted = isValid ||
+                                isCompositionStemTrusted(best.bengali, best.frequency) ||
+                                (allowStoreStems && isExact && isCanonicalOwnerStem(candidate, best.bengali))
                             if (isValid || (isExact && best.confidence >= 0.85 && stemTrusted)) {
                                 bestResult = ConversionResult(
                                     bengali = combined,
