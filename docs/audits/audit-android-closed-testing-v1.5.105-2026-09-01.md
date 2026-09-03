@@ -423,7 +423,15 @@ dictionary-exact (was 995), **1000/1000 engine-exact** (was 997); frames p50 9.5
 
 ---
 
-## S170b — low-RAM validation (2026-09-02, build 1.5.108 on the 2 GB emulator)
+## S170b — low-RAM validation (2026-09-02, 2 GB emulator) — CORRECTION: measured build was 1.5.104
+
+> **Correction (same day):** the emulator still carried a debug-signed 1.5.104 from an
+> earlier session; the release-signed `adb install -r` of 1.5.108 failed with
+> INSTALL_FAILED_UPDATE_INCOMPATIBLE and the failure was hidden by a piped `tail -1`.
+> Everything in this section was therefore measured on **1.5.104** (before the S168-S170
+> fixes and the baseline profile). The numbers stand for that build; the validation of the
+> current build is S171 below, done after an uninstall + install with the version and
+> signer read back.
 
 Setup: `Pixel_7_API_34` AVD (2 GB RAM, arm64, Android 14, swiftshader GPU), rooted,
 `dalvik.vm.heapgrowthlimit=128m` set before the keyboard process started (→ memoryClass

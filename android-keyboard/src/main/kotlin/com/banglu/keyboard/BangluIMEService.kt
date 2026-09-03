@@ -344,7 +344,9 @@ class BangluIMEService : InputMethodService(),
     )
 
     private fun glideLexiconStore(): GlideLexiconStore =
-        glideLexiconStoreField ?: GlideLexiconStore(filesDir, liteModeEnabled.value)
+        // S171: the EFFECTIVE profile (manual switch OR auto low-RAM decision),
+        // not just the manual switch — 2 GB phones were building the 50K lexicon.
+        glideLexiconStoreField ?: GlideLexiconStore(filesDir, shouldUseLiteDictionary())
             .also { glideLexiconStoreField = it }
 
     /**
@@ -1276,6 +1278,12 @@ class BangluIMEService : InputMethodService(),
                     val liteMode = shouldUseLiteDictionary()
                     if (loadedDictionaryLiteMode != null && loadedDictionaryLiteMode != liteMode) {
                         SmartEngineAdapter.reset()
+                        // S171: the lexicon store is cap-bound to the profile —
+                        // rebuild it with the new decision (warmGlideLexicons runs
+                        // after this load and recreates it lazily).
+                        glideLexiconStoreField = null
+                        glideDecoderBn = null
+                        glideDecoderEn = null
                         SmartEngineAdapter.configurePersistenceScope(serviceScope)
                         // S168 (audit P2-6): reset() re-enables every learning
                         // switch; re-apply the user's choices immediately, not

@@ -42,11 +42,10 @@ cost, and privacy-promise reasons; see memory + git history).
   live composing text, delete back through the committed segment, commit
   the authoritative word, re-set the composing span. Top-1,000 conjunct
   pass rerun: 998/1000 dictionary-exact, 1000/1000 engine-exact. S170b
-  low-RAM validation on the 2 GB emulator (heapgrowthlimit 128m → lite
-  profile, fresh install): same 998/1000, 1000/1000 engine-exact, one PID
-  for the whole session, 0 LMK/OOM/ANR, peak total PSS 181 MB (native 123
-  during the first-run copy), glide works on the 20K lexicon. Engine
-  untouched. Android 1.5.108 (2145).
+  low-RAM run on the 2 GB emulator turned out to have measured a STALE
+  debug-signed 1.5.104 (release install failed on signature, hidden by a
+  piped tail) — corrected in the audit doc; S171 redoes it on the real
+  build. Engine untouched. Android 1.5.108 (2145).
 - **S169 frame-budget profiling (2026-09-02, user: "continue but engine
   behaviour should not be change"):** Perfetto sched/binder + callstack
   sampling of the release build (manifest now `profileable shell=true`)

@@ -35,7 +35,12 @@ class GlideLexiconStore(
         synchronized(this) {
             bangla?.let { return it }
             val cap = if (liteMode) LITE_BN_CAP else BN_CAP
-            val built = fromCache(BN_CACHE) ?: buildBangla(cap)?.also { toCache(BN_CACHE, it) }
+            // S171: cap-keyed cache — a lite store must never load a full-cap
+            // file (seen on the 2 GB emulator). The pre-S171 single-name cache
+            // is removed once so it stops occupying 4 MB of app storage.
+            File(filesDir, LEGACY_BN_CACHE).takeIf { it.exists() }?.delete()
+            val name = banglaCacheName(liteMode)
+            val built = fromCache(name) ?: buildBangla(cap)?.also { toCache(name, it) }
             bangla = built
             return built
         }
@@ -131,7 +136,9 @@ class GlideLexiconStore(
          *  (2 = S163b alias-inclusive; 3 = +bh→v variants; 4 = S169 streaming
          *  top-K — same set, ties may order differently). */
         private const val LEXICON_REV = 4
-        private const val BN_CACHE = "glide_bn.bin"
+        private const val LEGACY_BN_CACHE = "glide_bn.bin"
+        /** S171: one cache file per cap. */
+        fun banglaCacheName(liteMode: Boolean) = "glide_bn_${if (liteMode) LITE_BN_CAP else BN_CAP}.bin"
         private const val EN_CACHE = "glide_en.bin"
         const val BN_CAP = 50_000
         const val LITE_BN_CAP = 20_000
