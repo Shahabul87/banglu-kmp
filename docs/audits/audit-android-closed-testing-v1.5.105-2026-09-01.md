@@ -624,7 +624,7 @@ framework EditText and the keyboard's own ← arrow both step by grapheme cluste
 | continue at word end (tomar + e) | তোমারএ | তোমারে |
 | pure delete inside, then space (tomader) | তোমা র | তোমা র (caret stays; plain delete) |
 
-Phone (S22, release 1.5.112 first build): the insertion-index fix alone gave আমদের →
-আমাদের and বলা → ভোলা; the phone was disconnected before the S175b/c build could be
-re-run there, so the internal-ো rows above are emulator evidence only. All six walls
+Phone (S22, release 1.5.112 final build, installed version read back, 2026-09-03): all
+six flows pass identically — আমদের → আমাদের, তমদের → তোমাদের, তোমার + de → তোমাদের,
+বলা → ভোলা, তোমার + e → তোমারে, pure delete keeps the caret (`তোমা র`). All six walls
 green (jvmTest 745, shared 435, android 222, js 451, desktop 41, windows 161).
