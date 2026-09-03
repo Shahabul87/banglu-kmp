@@ -420,3 +420,29 @@ unchanged. All other guards (session token, Banglu mode, raw fields) kept.
 word and spacing intact. Full top-1,000 conjunct pass rerun on the same build: 998/1000
 dictionary-exact (was 995), **1000/1000 engine-exact** (was 997); frames p50 9.5 / p95
 19.0 / max 55 ms over 5,996 samples. Android unit suite 200/200.
+
+---
+
+## S170b — low-RAM validation (2026-09-02, build 1.5.108 on the 2 GB emulator)
+
+Setup: `Pixel_7_API_34` AVD (2 GB RAM, arm64, Android 14, swiftshader GPU), rooted,
+`dalvik.vm.heapgrowthlimit=128m` set before the keyboard process started (→ memoryClass
+128 → the loader's lite profile: no 476K validator, no extended dictionary, no freq
+scores/bigrams; sqlite store + seeds only). Fresh install of the 1.5.108 release APK,
+first run — the 176 MB dictionary copied from assets and loaded during the session.
+
+| Measure | Result |
+|---|---|
+| Keyboard visible after field tap | 10 s after app start (cold process, first run) |
+| Store-backed conversion available (`sbadhinota` → স্বাধীনতা) | 17 s after app start |
+| Top-1,000 conjunct words, 50 ms/key | **998 / 1000 dictionary-exact, 1000 / 1000 identical to the full-mode JVM engine**, 0 missing |
+| Process | one PID for the whole 20-minute session; 0 LMK / OOM / ANR lines |
+| Memory (sampled every 2 s, 543 samples) | peak total PSS 181 MB, peak native 123 MB (first-run copy + sqlite cache), peak Dalvik 47 MB; steady 95-140 MB |
+| Glide (lite 20K lexicon) | `kemon` → কেমন |
+| Frames | p50 16.4 / p95 17.3 ms — software GPU, not comparable to hardware; recorded only to show no stall class |
+
+The two differences are the same documented engine choices as on the phone
+(আসতে, ঘণ্টা). Lite mode's canonical-key conversions match full mode on this
+vocabulary because the sqlite phonetic index carries the canonical mapping in both
+profiles (S26b law holds). Data: `top1000/top1000-lowram-emulator-results.tsv`,
+`top1000/lowram-emulator-memory-timeline.tsv`.
