@@ -396,3 +396,27 @@ Verdict: on the build testers run, the conjunct-heavy and the overall top-1,000
 vocabularies convert at 99.4-99.5% dictionary-exact and 99.7-99.8% engine-exact end to
 end through the real IME, with keystroke frames p50 ~10 ms and p95 ~21 ms sustained
 over ~1,400-1,600 s of continuous typing per list.
+
+---
+
+## S170 — fast-commit reconcile while the next word is composing (2026-09-02, Android 1.5.108 / 2145)
+
+**Reproduction (device, before):** fill the editor, hold backspace 5 s (the S88 resume
+path queues a conversion per deleted grapheme on the engine lane), then immediately type
+`inostitiut iyork robiindronath rajye bondyopadhyay bondhon` at 40 ms/key → 3/6, 6/6, 5/6
+correct over three trials; the misses are the rule-only previews (ইনস্তিতিউত,
+রবীন্দ্রণাথ, বন্দয়পাধ্যায়). Cause: the S32 fast commit landed the preview, and the
+reconcile refused because the guard demanded an empty buffer and an editor tail equal
+to the committed text — by then the next word was composing.
+
+**Fix (service only, engine untouched):** `FastCommitReconcilePolicy` (5 tests). New
+plan `ReplaceBeforeComposing`: when the buffer is active and the editor ends with
+`committed + composingNow`, finish the composing text, delete back through the
+committed segment, commit the authoritative word, and re-establish the composing span
+from the same visible text; the idle `ReplaceTail` (+ one tight punctuation, S70) is
+unchanged. All other guards (session token, Banglu mode, raw fields) kept.
+
+**Verification:** recipe replayed 4× on the fixed build → 24/24 (was 14/18), composing
+word and spacing intact. Full top-1,000 conjunct pass rerun on the same build: 998/1000
+dictionary-exact (was 995), **1000/1000 engine-exact** (was 997); frames p50 9.5 / p95
+19.0 / max 55 ms over 5,996 samples. Android unit suite 200/200.

@@ -4885,35 +4885,54 @@ class BangluIMEService : InputMethodService(),
             val ic = currentInputConnection
             val expected = committedNow + appendText
             // S70: a punctuation key right after the fast commit appends দাঁড়ি/
-            // comma to the editor before this reconcile lands, so the plain
-            // endsWith(expected) guard could NEVER match dot-terminated words
-            // — they permanently kept the preview spelling while
-            // space-terminated words self-corrected. Tolerate exactly one
-            // trailing tight-punctuation character and preserve it.
-            val before = ic?.getTextBeforeCursor(expected.length + 4, 0)?.toString()
-            val trailing = when {
-                before == null -> null
-                before.endsWith(expected) -> ""
-                before.length > expected.length &&
-                    isBanglaTightPunctuation(before.last()) &&
-                    before.dropLast(1).endsWith(expected) -> before.last().toString()
-                else -> null
-            }
+            // comma before this reconcile lands — tolerate exactly one trailing
+            // tight-punctuation character. S170 (top-1,000 device study): the
+            // user may ALREADY be composing the next word (machine-speed typing
+            // right after a backspace hold left the engine lane busy); then the
+            // correction goes in front of the live composing text, which is
+            // re-established afterwards. FastCommitReconcilePolicy decides.
+            val composingNow = if (buffer.isNotEmpty()) composingVisibleText else ""
+            val before = ic?.getTextBeforeCursor(expected.length + composingNow.length + 4, 0)?.toString()
+            val plan = FastCommitReconcilePolicy.plan(
+                before = before,
+                expected = expected,
+                composingNow = composingNow,
+                bufferActive = buffer.isNotEmpty(),
+                isTightPunctuation = ::isBanglaTightPunctuation
+            )
             if (ic != null &&
                 sessionToken == imeTextSessionToken &&
-                buffer.isEmpty() &&
                 keyboardMode.value == KeyboardMode.BANGLU &&
                 !rawCommitInputMode &&
-                trailing != null
+                plan != null
             ) {
-                ic.beginBatchEdit()
-                ic.deleteSurroundingText(expected.length + trailing.length, 0)
-                ic.commitText(result.bengali + appendText + trailing, 1)
-                ic.endBatchEdit()
-                lastCommittedTextLength = result.bengali.length + appendText.length + trailing.length
-                maybeOfferAutoCorrectUndo(phonetic, committedNow, result.bengali, appendText)
+                when (plan) {
+                    is FastCommitReconcilePolicy.Plan.ReplaceTail -> {
+                        ic.beginBatchEdit()
+                        ic.deleteSurroundingText(plan.deleteLength, 0)
+                        ic.commitText(result.bengali + appendText + plan.trailing, 1)
+                        ic.endBatchEdit()
+                        lastCommittedTextLength = result.bengali.length + appendText.length + plan.trailing.length
+                        maybeOfferAutoCorrectUndo(phonetic, committedNow, result.bengali, appendText)
+                        log("reconcileFastCommit: '$committedNow' -> '${result.bengali}' (trailing='${plan.trailing}')")
+                    }
+                    is FastCommitReconcilePolicy.Plan.ReplaceBeforeComposing -> {
+                        // finishComposingText turns the live composing word into
+                        // plain text so deleteSurroundingText can reach past it;
+                        // the composing span is rebuilt from the same visible text
+                        // (the buffer stays the source of truth, later refines
+                        // simply replace it again).
+                        ic.beginBatchEdit()
+                        ic.finishComposingText()
+                        ic.deleteSurroundingText(plan.deleteLength, 0)
+                        ic.commitText(result.bengali + appendText, 1)
+                        ic.setComposingText(plan.composingNow, 1)
+                        ic.endBatchEdit()
+                        lastCommittedTextLength = result.bengali.length + appendText.length
+                        log("reconcileFastCommit: '$committedNow' -> '${result.bengali}' before composing '${plan.composingNow}'")
+                    }
+                }
                 finalWord = result.bengali
-                log("reconcileFastCommit: '$committedNow' -> '${result.bengali}' (trailing='$trailing')")
             }
         }
         // Learning always uses the ENGINE result, never a preview the engine

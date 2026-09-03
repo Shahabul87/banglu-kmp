@@ -33,6 +33,16 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-31):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S170 fast-commit reconcile (2026-09-02, from the S169c study; user
+  "go"):** the S32 fast commit's reconcile refused whenever the NEXT word was
+  already composing, so at machine-speed typing right after a backspace
+  hold (engine lane busy with S88 resume conversions) long words kept their
+  rule-only preview (ইনস্তিতিউত for ইনস্টিটিউট). Reproduced 3/6 → fixed
+  24/24: FastCommitReconcilePolicy adds ReplaceBeforeComposing — finish the
+  live composing text, delete back through the committed segment, commit
+  the authoritative word, re-set the composing span. Top-1,000 conjunct
+  pass rerun: 998/1000 dictionary-exact, 1000/1000 engine-exact. Engine
+  untouched. Android 1.5.108 (2145).
 - **S169 frame-budget profiling (2026-09-02, user: "continue but engine
   behaviour should not be change"):** Perfetto sched/binder + callstack
   sampling of the release build (manifest now `profileable shell=true`)
