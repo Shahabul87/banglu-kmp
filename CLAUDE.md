@@ -33,6 +33,17 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-08-31):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S172 personal hot set (2026-09-02, user idea, constraint "if it
+  breaks engine main functionality we can leave it"):** per-user roman keys
+  with usage count + last-used day (PersonalHotSet, cap 500 / lite 200,
+  count × 30-day-half-life recency), recorded behind the existing learning
+  gates, persisted in the `personal_hot_set` scoped key family (erased with
+  the rest), replayed through ordinary convertWord at startup one key per
+  engine-lane turn with yield — warm memos for THIS person's words, never a
+  ranking input; the frequency-ordered strip half was deliberately NOT built.
+  Spec docs/superpowers/specs/2026-09-02-personal-hot-set.md. Verified on
+  the rooted emulator (persist / restart / erase) and phone (18/18 recipe).
+  Engine untouched. Android 1.5.110 (2147).
 - **S171 lite-profile glide lexicon (2026-09-02, user: "you can do it if
   its not damage engine power"):** the lexicon store took the MANUAL lite
   switch, so auto-lite (memoryClass < 256) 2 GB phones built the full 50K

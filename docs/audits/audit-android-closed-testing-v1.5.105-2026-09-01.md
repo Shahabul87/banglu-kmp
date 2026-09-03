@@ -477,3 +477,34 @@ S171 fix confirmed: the lite profile now builds the 20K lexicon (~2.4 MB less he
 2 GB phones) and can no longer load a full-cap cache. Data:
 `top1000/top1000-lowram-emulator-results-1.5.109.tsv`,
 `top1000/lowram-emulator-memory-timeline-1.5.109.tsv`.
+
+---
+
+## S172 — personal hot set (2026-09-02, Android 1.5.110 / 2147)
+
+User idea: "engine will be aware of that person's words choice and uses frequency …
+keep them in their phones … as a cache and give them faster", with the constraint
+"if it breaks engine main functionality we can leave it". Built the safe half only —
+spec `docs/superpowers/specs/2026-09-02-personal-hot-set.md`.
+
+**What it does.** `PersonalHotSet` (pure, `S172PersonalHotSetTest`): per-user roman keys
+with a usage count and last-used day; cap 500 (200 on the lite profile); eviction by
+count × recency (30-day half-life). Recorded inside `learnCommittedWordAsync` after the
+existing gates (no private / raw / no-learning fields, dictionary ready); persisted
+debounced on IO into the `banglu_learning` scoped prefs as the new `personal_hot_set`
+key family; loaded once the dictionary is published and its top keys replayed through
+the engine's ordinary `convertWord` — one key per engine-lane turn with a `yield()`
+between keys — so the engine's store memos are warm for this person's words from the
+first keystroke of a session. Cancelled under memory pressure.
+
+**What it does NOT do.** No ranking input, no new dictionary, no shared-engine change:
+a replayed key gets exactly the answer the engine gives anyway. The frequency-ordered
+strip (the other half of the idea) is deliberately not built.
+
+**Verification.** Emulator (rooted, lite profile): 20 words typed twice →
+`personal_hot_set` persisted with counts; process restart → warm-up ran, first word
+converts normally; the existing erase call (`erase_learning` on the keyboard-process
+provider, what Settings uses) removes the hot set together with learned words. Phone
+(1.5.110): sentence exact, frames p50 11.4 / p95 27.6 ms, fast-commit recipe 18/18, no
+crash. Android unit suite 207/207. The felt speed gain is by construction (memo warm)
+and was not separately timed.

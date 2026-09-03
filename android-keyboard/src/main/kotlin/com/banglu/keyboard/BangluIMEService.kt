@@ -54,6 +54,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import java.io.File
 import java.util.Locale
@@ -104,6 +105,13 @@ class BangluIMEService : InputMethodService(),
 
     // Feature 4.1: Bengali next-word predictions
     private var lastCommittedBengali = ""
+    // S172: the user's everyday roman keys; replayed through the engine at
+    // startup so its memos are warm for THIS person's words. Never a ranking
+    // input. Spec: docs/superpowers/specs/2026-09-02-personal-hot-set.md
+    @Volatile private var personalHotSet: PersonalHotSet? = null
+    private var hotSetDirtyRecords = 0
+    private var hotSetSaveJob: Job? = null
+    private var hotSetWarmJob: Job? = null
 
     // S20: the word before lastCommittedBengali — trigram context. Follows
     // the same never-reset convention; adjacency safety comes from the
@@ -356,6 +364,53 @@ class BangluIMEService : InputMethodService(),
      * so typing latency is untouched. Memory pressure still drops them
      * (onTrimMemory); the next glide reloads from the disk cache.
      */
+    private fun hotSetCap(): Int = if (shouldUseLiteDictionary()) HOT_SET_CAP_LITE else HOT_SET_CAP
+
+    private fun todayDay(): Int = (System.currentTimeMillis() / 86_400_000L).toInt()
+
+    /** S172: count one committed use; the same gates as learning apply (caller). */
+    private fun recordPersonalHotSetUse(key: String) {
+        val set = personalHotSet ?: return
+        if (!PersonalHotSet.eligible(key)) return
+        set.record(key, todayDay())
+        if (++hotSetDirtyRecords >= HOT_SET_SAVE_EVERY) schedulePersonalHotSetSave(0L)
+        else if (hotSetSaveJob?.isActive != true) schedulePersonalHotSetSave(HOT_SET_SAVE_DELAY_MS)
+    }
+
+    private fun schedulePersonalHotSetSave(delayMs: Long) {
+        hotSetSaveJob?.cancel()
+        hotSetSaveJob = serviceScope.launch(Dispatchers.IO) {
+            if (delayMs > 0) delay(delayMs)
+            val text = personalHotSet?.serialize() ?: return@launch
+            hotSetDirtyRecords = 0
+            runCatching { AndroidStorage(applicationContext).savePersonalHotSet(text) }
+        }
+    }
+
+    /**
+     * S172: load the hot set for the active profile, then replay its top keys
+     * through the engine's ordinary conversion — ONE key per engine-lane turn
+     * with a yield in between, so a keystroke's own conversion never queues
+     * behind more than one warm-up conversion. Cancelled by memory pressure.
+     */
+    private fun loadAndWarmPersonalHotSet() {
+        hotSetWarmJob?.cancel()
+        hotSetWarmJob = serviceScope.launch {
+            val cap = hotSetCap()
+            val loaded = withContext(Dispatchers.IO) {
+                runCatching { AndroidStorage(applicationContext).loadPersonalHotSet() }.getOrNull()
+            }
+            val set = if (loaded != null) PersonalHotSet.parse(loaded, cap) else PersonalHotSet(cap)
+            personalHotSet = set
+            val keys = set.topKeys(cap, todayDay())
+            for (key in keys) {
+                if (!isActive) break
+                withContext(engineLane) { safeConvert(key) }
+                yield()
+            }
+        }
+    }
+
     private fun warmGlideLexicons() {
         if (!glideTypingEnabled.value) return
         serviceScope.launch(Dispatchers.IO) {
@@ -449,6 +504,11 @@ class BangluIMEService : InputMethodService(),
 
     companion object {
         private const val TAG = "BangluIME"
+        // S172 personal hot set: size caps and persistence cadence.
+        private const val HOT_SET_CAP = 500
+        private const val HOT_SET_CAP_LITE = 200
+        private const val HOT_SET_SAVE_EVERY = 20
+        private const val HOT_SET_SAVE_DELAY_MS = 30_000L
         private const val VOICE_LANGUAGE = "bn-BD"
         private const val VOICE_COMPLETE_SILENCE_MS = 5_000
         private const val VOICE_POSSIBLY_COMPLETE_SILENCE_MS = 2_800
@@ -1048,6 +1108,7 @@ class BangluIMEService : InputMethodService(),
         explicitChoice: Boolean = false
     ) {
         if (privateInputMode || rawCommitInputMode || learningSuppressedInputMode) return
+        recordPersonalHotSetUse(phonetic)
         // S34: no commit learning while the dictionary is still loading. The
         // seed engine's raw fallbacks (kmon -> ক্মন) were being learned as
         // personal words during the few-second load window and then shadowed
@@ -1241,6 +1302,7 @@ class BangluIMEService : InputMethodService(),
                 loadedDictionaryLiteMode = shouldUseLiteDictionary()
                 dictionaryReadyForLearning = true
                 warmGlideLexicons()
+                loadAndWarmPersonalHotSet()
                 log("onCreate: Learned words loaded")
                 degradeIfNoHeapHeadroom()
             } catch (t: Throwable) {
@@ -1308,6 +1370,7 @@ class BangluIMEService : InputMethodService(),
                     loadedDictionaryLiteMode = liteMode
                     dictionaryReadyForLearning = true
                     warmGlideLexicons()
+                    loadAndWarmPersonalHotSet()
                     log("reloadUserLearning: active profile preferences loaded")
                 } while (engineRebuildPending)
             } catch (t: Throwable) {
@@ -1526,6 +1589,7 @@ class BangluIMEService : InputMethodService(),
         glideLexiconStoreField?.dropForMemoryPressure()
         glideDecoderBn = null
         glideDecoderEn = null
+        hotSetWarmJob?.cancel()
     }
 
     /** S72: shed the full dictionary under genuine kill pressure — rebuilds

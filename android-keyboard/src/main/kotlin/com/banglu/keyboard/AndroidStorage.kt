@@ -38,10 +38,13 @@ class AndroidStorage(context: Context) : PlatformStorage {
         private const val KEY_ENGLISH_USER_DATA = "english_user_data"
         private const val KEY_IDENTITY_USER_DATA = "identity_user_data"
         private const val KEY_DICT_VERSION = "dict_version"
+        /** S172: the user's everyday roman keys (PersonalHotSet) — learned
+         *  personal data, so it lives in the same erase family. */
+        private const val KEY_PERSONAL_HOT_SET = "personal_hot_set"
         /** S136: every key family that holds learned personal data. */
         private val LEARNING_KEY_PREFIXES = listOf(
             KEY_LEARNED_WORDS, KEY_CUSTOM_CONVERSIONS, KEY_USER_BIGRAMS,
-            KEY_ENGLISH_USER_DATA, KEY_IDENTITY_USER_DATA
+            KEY_ENGLISH_USER_DATA, KEY_IDENTITY_USER_DATA, KEY_PERSONAL_HOT_SET
         )
         private const val SEPARATOR = "::"
         private const val MAX_LEARNED_WORDS = 500
@@ -315,6 +318,13 @@ class AndroidStorage(context: Context) : PlatformStorage {
     override suspend fun getCachedDictionary(currentVersion: String): CachedDictionary? {
         // Dictionary is loaded directly from SQLite, not from a cache layer.
         return null
+    }
+
+    /** S172: serialized PersonalHotSet for the active profile (null = none yet). */
+    fun loadPersonalHotSet(): String? = getScopedString(KEY_PERSONAL_HOT_SET)
+
+    fun savePersonalHotSet(serialized: String) {
+        prefs.edit().putString(scopedKey(KEY_PERSONAL_HOT_SET), serialized).apply()
     }
 
     private fun getScopedString(baseKey: String): String? {
