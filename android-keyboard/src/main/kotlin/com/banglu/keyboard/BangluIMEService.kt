@@ -277,6 +277,9 @@ class BangluIMEService : InputMethodService(),
     // selection changes what backspace must do (SelectionEditPolicy).
     private var editorSelStart = -1
     private var editorSelEnd = -1
+    /** S174: roman of the word part AFTER the caret, appended right after the
+     *  letter that triggered a mid-word resume (BackspaceResume.planForMidWordEdit). */
+    private var midWordSuffixRoman: String? = null
 
     /**
      * S99: probabilistic touch targeting. A letter press near a key boundary
@@ -1991,6 +1994,7 @@ class BangluIMEService : InputMethodService(),
         suggestionJob = null
         suggestions.clear()
         buffer = ""
+        midWordSuffixRoman = null
         clearCommitCaches()
         lastSpaceTime = 0L
         resetShiftState()
@@ -2086,6 +2090,8 @@ class BangluIMEService : InputMethodService(),
         // shadow buffer (S28 law).
         if (buffer.isEmpty() && char.isLetter()) tryResumeComposingBeforeTyping(ic)
         buffer += char
+        // S174: the typed letter lands between the two halves of the word.
+        midWordSuffixRoman?.let { buffer += it; midWordSuffixRoman = null }
         sessionBangluKeyCount++
 
         // Auto-unshift after typing a letter (unless caps lock)
@@ -2107,7 +2113,33 @@ class BangluIMEService : InputMethodService(),
     private fun tryResumeComposingBeforeTyping(ic: InputConnection) {
         if (rawCommitInputMode || uriInputMode || sensitiveInputMode) return
         if (keyboardMode.value != KeyboardMode.BANGLU) return
+        midWordSuffixRoman = null
         val before = ic.getTextBeforeCursor(32, 0)?.toString().orEmpty()
+        // S174: caret INSIDE a word — both halves are re-composed around the
+        // typed letter; the caret ends after the word (the transliteration-
+        // keyboard convention; a composing span cannot hold a mid-word caret).
+        if (before.isNotEmpty() && BackspaceResume.isBengaliWordChar(before.last())) {
+            val after = ic.getTextAfterCursor(32, 0)?.toString().orEmpty()
+            BackspaceResume.planForMidWordEdit(
+                textBeforeCursor = before,
+                textAfterCursor = after,
+                reverse = { com.banglu.engine.util.ReverseTransliterator.reverseWord(it) },
+                instantPreview = { SmartEngineAdapter.convertForInstantPreview(it) },
+            )?.let { plan ->
+                val visible = if (plan.romanPrefix.isEmpty()) "" else
+                    runCatching { SmartEngineAdapter.convertForInstantPreview(plan.romanPrefix) }.getOrDefault("")
+                ic.beginBatchEdit()
+                ic.deleteSurroundingText(plan.deleteBefore, plan.deleteAfter)
+                buffer = plan.romanPrefix
+                if (visible.isNotEmpty()) ic.setComposingText(visible, 1)
+                ic.endBatchEdit()
+                composingInput = plan.romanPrefix
+                composingResult = null
+                composingVisibleText = visible
+                midWordSuffixRoman = plan.romanSuffix
+                return
+            }
+        }
         val plan = BackspaceResume.planForTyping(
             textBeforeCursor = before,
             reverse = { com.banglu.engine.util.ReverseTransliterator.reverseWord(it) },
@@ -2436,6 +2468,31 @@ class BangluIMEService : InputMethodService(),
     private fun tryResumeComposingOnBackspace(ic: InputConnection): Boolean {
         if (rawCommitInputMode || uriInputMode) return false
         val before = ic.getTextBeforeCursor(48, 0)?.toString().orEmpty()
+        // S174: backspace with the caret INSIDE a word — drop the cluster
+        // before the caret and re-compose the whole word.
+        if (before.isNotEmpty() && BackspaceResume.isBengaliWordChar(before.last())) {
+            val after = ic.getTextAfterCursor(32, 0)?.toString().orEmpty()
+            BackspaceResume.planForMidWordBackspace(
+                textBeforeCursor = before,
+                textAfterCursor = after,
+                reverse = { com.banglu.engine.util.ReverseTransliterator.reverseWord(it) },
+                instantPreview = { SmartEngineAdapter.convertForInstantPreview(it) },
+            )?.let { plan ->
+                val roman = plan.romanPrefix + plan.romanSuffix
+                val visible = runCatching { SmartEngineAdapter.convertForInstantPreview(roman) }.getOrDefault(roman)
+                ic.beginBatchEdit()
+                ic.deleteSurroundingText(plan.deleteBefore, plan.deleteAfter)
+                buffer = roman
+                ic.setComposingText(visible, 1)
+                ic.endBatchEdit()
+                composingInput = roman
+                composingResult = null
+                composingVisibleText = visible
+                refreshSuggestionsAsync(buffer)
+                prepareCommitConversionAsync(buffer)
+                return true
+            }
+        }
         val plan = BackspaceResume.plan(
             textBeforeCursor = before,
             reverse = { com.banglu.engine.util.ReverseTransliterator.reverseWord(it) },

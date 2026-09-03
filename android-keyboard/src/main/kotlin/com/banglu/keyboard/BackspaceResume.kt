@@ -27,9 +27,86 @@ internal data class BackspaceResumePlan(
     val visibleFragment: String,
 )
 
+/**
+ * S174: an edit with the caret INSIDE a Bengali word. Both sides of the word
+ * are removed and the whole word is re-composed from
+ * `romanPrefix + <edit> + romanSuffix`; the caret ends after the word.
+ */
+internal data class MidWordEditPlan(
+    val deleteBefore: Int,
+    val deleteAfter: Int,
+    val romanPrefix: String,
+    val romanSuffix: String,
+)
+
 internal object BackspaceResume {
 
     private const val MAX_WORD_LENGTH = 24
+
+    private fun wordBefore(text: String): String {
+        var start = text.length
+        while (start > 0 && isBengaliWordChar(text[start - 1])) start--
+        return text.substring(start)
+    }
+
+    private fun wordAfter(text: String): String {
+        var end = 0
+        while (end < text.length && isBengaliWordChar(text[end])) end++
+        return text.substring(0, end)
+    }
+
+    /** The round-trip gate every resume shares: reverse → instant preview must echo the part. */
+    private fun roundTrip(part: String, reverse: (String) -> String, instantPreview: (String) -> String): String? {
+        if (part.isEmpty()) return ""
+        val roman = runCatching { reverse(part).lowercase() }.getOrNull() ?: return null
+        if (roman.isEmpty() || roman.length > MAX_WORD_LENGTH || !roman.all { it in 'a'..'z' }) return null
+        val echo = runCatching { instantPreview(roman) }.getOrNull() ?: return null
+        return if (echo == part) roman else null
+    }
+
+    /**
+     * S174 (user: "type a letter wrong in the middle and try to fix that"):
+     * a LETTER typed with Bengali word text on BOTH sides of the caret. The
+     * one-sided S109 resume re-composed only the prefix and left the suffix
+     * behind (স্বাধ|নতা + i → "স্বাধি" + "নতা", then a space inside the
+     * word on commit). Null when the caret is not inside a word or either
+     * side fails the round-trip gate — the caller keeps the old behaviour.
+     */
+    fun planForMidWordEdit(
+        textBeforeCursor: String,
+        textAfterCursor: String,
+        reverse: (String) -> String,
+        instantPreview: (String) -> String,
+    ): MidWordEditPlan? {
+        val suffix = wordAfter(textAfterCursor)
+        if (suffix.isEmpty()) return null
+        val prefix = wordBefore(textBeforeCursor)
+        if (prefix.length + suffix.length > MAX_WORD_LENGTH) return null
+        val romanPrefix = roundTrip(prefix, reverse, instantPreview) ?: return null
+        val romanSuffix = roundTrip(suffix, reverse, instantPreview) ?: return null
+        return MidWordEditPlan(prefix.length, suffix.length, romanPrefix, romanSuffix)
+    }
+
+    /**
+     * S174: BACKSPACE with Bengali word text on both sides of the caret —
+     * drop the last user-visible cluster before the caret and re-compose the
+     * whole word.
+     */
+    fun planForMidWordBackspace(
+        textBeforeCursor: String,
+        textAfterCursor: String,
+        reverse: (String) -> String,
+        instantPreview: (String) -> String,
+    ): MidWordEditPlan? {
+        val suffix = wordAfter(textAfterCursor)
+        if (suffix.isEmpty()) return null
+        val prefix = wordBefore(textBeforeCursor)
+        if (prefix.isEmpty() || prefix.length + suffix.length > MAX_WORD_LENGTH) return null
+        val fragment = prefix.substring(0, previousUserVisibleClusterBoundary(prefix))
+        val romanPrefix = roundTrip(fragment, reverse, instantPreview) ?: return null
+        val romanSuffix = roundTrip(suffix, reverse, instantPreview) ?: return null
+        return MidWordEditPlan(prefix.length, suffix.length, romanPrefix, romanSuffix)
+    }
 
     /**
      * @param textBeforeCursor text directly before the cursor (no composing).
@@ -90,7 +167,7 @@ internal object BackspaceResume {
         return BackspaceResumePlan(word.length, roman, word)
     }
 
-    private fun isBengaliWordChar(ch: Char): Boolean =
+    internal fun isBengaliWordChar(ch: Char): Boolean =
         ch in '\u0980'..'\u09FF' || ch == '\u200C' || ch == '\u200D'
 
     /**
