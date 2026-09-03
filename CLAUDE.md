@@ -53,8 +53,15 @@ cost, and privacy-promise reasons; see memory + git history).
   spike (17 → 182 MB) — the BN glide lexicon build's `GROUP BY … ORDER BY`
   sorted all 1.65M index keys in SQLite's in-memory temp store (LMK risk on
   2 GB phones); now an index-order GROUP BY + bounded Kotlin top-K
-  (GlideLexiconStore.topKByFrequency, LEXICON_REV 4): peak 22 MB. Shared
-  engine untouched. Android 1.5.107 (2144).
+  (GlideLexiconStore.topKByFrequency, LEXICON_REV 4): peak 22 MB. S169c
+  device study (user: "at least most frequent 1000 words"): top-1,000
+  conjunct words AND top-1,000 overall typed end-to-end on the S22 at
+  50 ms/key — 995/1000 and 994/1000 dictionary-exact, 997 and 998 engine-
+  exact; every difference is a documented engine choice except 3 long
+  words (10-13 letters) that fast-committed the rule-only preview under
+  sustained machine-speed load (correct in isolation; S29 reconcile guard
+  candidate). Data in docs/audits/…/top1000/. Shared engine untouched.
+  Android 1.5.107 (2144).
 - **S168 closed-testing fix round (2026-09-02, user: "fix all the issue one
   by one and do test it"):** the 2026-09-01 deep audit
   (docs/audits/audit-android-closed-testing-v1.5.105-2026-09-01.md) found

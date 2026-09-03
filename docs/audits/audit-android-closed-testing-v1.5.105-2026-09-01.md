@@ -358,3 +358,41 @@ the worst moment. Fix (Android module only): `GROUP BY key` walks
 (`S169GlideTopKTest`, LEXICON_REV 4). Verified with wiped app data: native heap peak
 22 MB across the whole cold start and lexicon build (was 182 MB); glide commits from
 the fresh lexicon.
+
+---
+
+## S169c — end-to-end device typing study, top-1,000 words (2026-09-02, build 1.5.107)
+
+User's bar: "Bengali is a very complex conjunct-producing language, so at least the most
+frequent 1000 words." Two lists from the dictionary (`words` by frequency; each word's
+canonical roman = its priority-0 `phonetic_index` key), typed on the SM-S901W through
+the accessibility tree at 50 ms per key, space after each word, 20-word batches read
+back from the editor. Oracle = the same keys through the real engine on the JVM
+(`convertWord`, no context). Data: `top1000/` next to this report.
+
+| List | Device == dictionary | Device == JVM engine top-1 | Frames (p50 / p95 / max, n) |
+|---|---|---|---|
+| Top 1,000 words containing a conjunct | 995 / 1000 | 997 / 1000 | 10.2 / 21.0 / 70.4 ms, 5,995 |
+| Top 1,000 words overall (257 with a conjunct) | 994 / 1000 | 998 / 1000 | 10.6 / 21.1 / 71.1 ms, 5,998 |
+
+Every difference, classified:
+- **Engine choices, identical on JVM and device** (documented spelling/homograph
+  decisions, dictionary form in the top 3): `aste`→আসতে (dict আস্তে), `ghonta`→ঘণ্টা
+  (dict ঘন্টা), `pore`→পরে (dict পড়ে, twin), `mot`→মত (dict মোট), `uchit`→উচিত (dict
+  উচিৎ), `karon`→কারণ (dict কারন), `mi`→মি (dict মিঃ). `ta` committed তা on device (JVM
+  without context gives টা): the context rerank at work, not a fault.
+- **Fast-commit under sustained load, 3 of 2,000**: `inostitiut`, `robiindronath`,
+  `bohissongzog` (10-13 letters) committed the rule-only preview during the batch.
+  Retyped in isolation at 50 ms/key and at 120 ms/key all convert correctly — the S29
+  space-commit path committed the visible preview because the async conversion of a
+  long word had not landed within one 50 ms keystroke and the reconcile window was
+  gone once the next word started. Engine behaviour is correct; the exposure is the
+  reconcile guard's strictness at machine-speed typing. Left as is (engine/commit
+  semantics unchanged per the round's constraint); candidate for a later S-round:
+  allow the reconcile when the committed segment is still intact before newly typed
+  text.
+
+Verdict: on the build testers run, the conjunct-heavy and the overall top-1,000
+vocabularies convert at 99.4-99.5% dictionary-exact and 99.7-99.8% engine-exact end to
+end through the real IME, with keystroke frames p50 ~10 ms and p95 ~21 ms sustained
+over ~1,400-1,600 s of continuous typing per list.
