@@ -508,3 +508,70 @@ provider, what Settings uses) removes the hot set together with learned words. P
 (1.5.110): sentence exact, frames p50 11.4 / p95 27.6 ms, fast-commit recipe 18/18, no
 crash. Android unit suite 207/207. The felt speed gain is by construction (memo warm)
 and was not separately timed.
+
+## S173 — inflections of rare stems (2026-09-02, engine, Android 1.5.111 / 2148)
+
+User report: "when I am trying to write something by adding suffix the engine can not
+handle it — shororipu produces the word, shororipur cannot; hydrogen is okay,
+hydrogener the engine cannot produce." Constraint: "be careful do not create any bugs
+while fixing this. do full engine test all time."
+
+**Root cause** (JVM probe on the real dictionary): `trySuffixStrippedDictionary` only
+sees stems that live in the in-memory dictionary trie. Rare canonical words such as
+ষড়রিপু exist ONLY in the sqlite `phonetic_index`, so their inflections found no stem
+and fell through to the compound splitter ("সরো রিপুর"). Separately, the genitive
+suffix "r" was rendered as a bare র after consonant-final loan stems (টেলিফোনর).
+
+**Fix** (`SmartEngine.kt`, strictly additive): two-pass scan — pass 1 is the pre-S173
+layer unchanged; pass 2 runs only when pass 1 found nothing and admits store-only
+canonical-owner stems (priority 0, frequency ≥ 10) that the engine itself commits for
+the bare stem key (`isCanonicalOwnerStem`, recursion-guarded). Alias rows (S1/D3 junk
+stems, zati → যাতি) stay excluded. `renderInflection` gives ের after a consonant-final
+stem. `isInvalidVowelJunction` refuses a vowel-sign suffix on a vowel-final stem
+unless the validator attests the word (keeps the S143 amaer pin). Two earlier
+shapes of the fix were rejected by the probes: trusting low-frequency store rows
+regressed S143, and letting both passes compete on stem length flipped hochchete
+and baccate.
+
+**Evidence.**
+
+| Measure | Before | After |
+|---|---|---|
+| OOV inflections of the top-2,000 stems, top-1 correct (of 8,384) | 7,318 | 7,648 (+329, lost 0) |
+| … of which compound splits | 100 | 9 |
+| Real-usage 1,000-word list, JVM oracle | 993 | 997 |
+| Real-usage list typed on the S22 (1.5.111) — dictionary-exact | — | 996/1000 |
+| … device == JVM engine | — | 999/1000 |
+
+Walls with `--rerun`: jvmTest 745, testDebugUnitTest 435, android unit 211, jsNodeTest
+451, desktop 41, windows-ime 161 — all green. Pins: `S173InflectionCompositionJvmTest`
+(shororipur → ষড়রিপুর, telephoner → টেলিফোনের, microphoner → মাইক্রোফোনের, existing
+inflections unchanged, alias-reached junk still does not compose). The change lives in
+`shared`, so the JS surfaces pick it up on their next propagation build.
+
+## S174 — editing a letter in the MIDDLE of a word (2026-09-02, Android 1.5.111 / 2148)
+
+User: "try to type a letter wrong in the middle and try to fix that. you will feel it."
+
+**Reproduced on 1.5.110** (S22, harness `midword_scenarios2.py`): kotha → কথা, caret
+placed after ক, type `o` → the S88 backspace-resume only re-composed the text BEFORE
+the caret, so the next space committed "কো" and left "থা" stranded: `'কো থা '`.
+
+**Fix** (Android module only, shared engine untouched): `BackspaceResume.
+planForMidWordEdit` — when the caret is inside a Bengali word whose two halves both
+round-trip through the reverse transliterator, delete both halves and compose
+prefix-roman + typed letter + suffix-roman as ONE word; `planForMidWordBackspace` —
+backspace inside a word drops the last user-visible cluster before the caret (S88
+cluster law) and re-composes the rest. `BangluIMEService` carries the suffix roman in
+`midWordSuffixRoman`, appends it right after the typed letter, and clears it on
+session cleanup. Mid-word plans are tried before the existing end-of-word resume, so
+the S88 path is unchanged.
+
+**After (1.5.111):** the same scenario commits `'কথা '` — no split. Two further harness
+scenarios (a kar inserted mid-word, a mid-word backspace) were inconclusive on the
+device because `DPAD_RIGHT` steps do not map one-to-one to Bengali grapheme clusters,
+so the caret did not land where the script assumed; those paths are pinned by
+`S174MidWordEditTest` (4 tests) instead. Release gate on the committed tree with a
+clean-install device smoke: installed 1.5.111, typing probe আমি, delete-and-retype
+আমি, heap 285 MB, frames p50 11.7 / p95 31.8 ms over 76 frames, no ANR — certified.
+Tag `v1.5.111`; artifacts `releases/banglu-1.5.111-2148.{apk,aab}`.

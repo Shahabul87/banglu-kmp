@@ -31,8 +31,37 @@ Future revenue = optional premium (AI rewrite via the :ui process, power-user
 packs). NO cloud API on the keystroke path — decided 2026-07-03 (latency,
 cost, and privacy-promise reasons; see memory + git history).
 
-**Current status (2026-08-31):** ONE ENGINE, SIX SURFACES (Windows IME
+**Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S174 mid-word edit (2026-09-02, user: "try to type a letter wrong
+  in the middle and try to fix that. you will feel it"):** the S88 resume
+  only re-composed the text BEFORE the caret, so fixing a letter inside a
+  committed word split it (kotha → কথা, caret after ক, type o, space →
+  'কো থা'). BackspaceResume.planForMidWordEdit / planForMidWordBackspace:
+  when the caret sits inside a Bengali word whose two halves both
+  round-trip, both halves are deleted and prefix-roman + typed letter +
+  suffix-roman compose as ONE word (the service carries the suffix in
+  midWordSuffixRoman); mid-word backspace drops the last cluster before
+  the caret. Tried before the end-of-word resume, so S88 is unchanged.
+  Device: 'কথা' (no split). Pins S174MidWordEditTest. Release gate +
+  clean-install smoke certified. Engine untouched. Android 1.5.111 (2148).
+- **S173 rare-stem inflections (2026-09-02, user: "shororipu produces the
+  word, shororipur cannot… hydrogener… do full engine test all time"):**
+  trySuffixStrippedDictionary only saw trie stems, so store-only canonical
+  words (ষড়রিপু) had no stem and their inflections fell to the compound
+  splitter ("সরো রিপুর"); the genitive "r" rendered as bare র after
+  consonant-final loans (টেলিফোনর). Strictly additive two-pass scan: pass 2
+  runs only when the pre-S173 pass finds nothing and admits store
+  canonical-owner stems (priority 0, freq ≥ 10) that the engine itself
+  commits for the bare key (isCanonicalOwnerStem); renderInflection gives
+  ের after a consonant; isInvalidVowelJunction refuses a vowel-sign suffix
+  on a vowel-final stem unless attested (S143 amaer pin kept). Prevalence
+  probe on the top-2,000 stems' OOV inflections: top-1 7318 → 7648 of
+  8384 (+329, lost 0), splits 100 → 9; real-usage 1,000 list JVM 993 → 997,
+  device 996/1000 dictionary-exact, 999/1000 == JVM. Rejected shapes:
+  trusting low-freq store rows broke S143; competing passes flipped
+  hochchete/baccate. Pins S173InflectionCompositionJvmTest. All six walls
+  --rerun green. JS surfaces pick it up on the next propagation build.
 - **S172 personal hot set (2026-09-02, user idea, constraint "if it
   breaks engine main functionality we can leave it"):** per-user roman keys
   with usage count + last-used day (PersonalHotSet, cap 500 / lite 200,
