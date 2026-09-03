@@ -56,7 +56,7 @@ compose.desktop {
             // java.sql the installed app dies at first convert (JDBC store).
             modules("java.sql", "java.instrument", "java.management", "jdk.unsupported")
             packageName = "Banglu"
-            packageVersion = "1.3.10"
+            packageVersion = "1.3.11"
             description = "Type Bangla anywhere with lowercase English letters"
             vendor = "Banglu"
             licenseFile.set(rootProject.layout.projectDirectory.file("LICENSE"))
