@@ -665,6 +665,17 @@ editor "correct" words while the user is still typing, so it stays deliberate. H
 Pins: `S176ComposingPreviewParityJvmTest` (the screenshot words, the loan-inflection class,
 and every 4+ letter prefix of them never previews raw Latin).
 
+**Device (S22, release builds, 79 inflected keys typed in the try-it editor; per key the
+editor's live preview, the strip's blue chip and the committed word were read):**
+1.5.112 agreed on 41/79; 1.5.113 agrees on 74/79 — hydrogener → হাইড্রোজেনের, oxygener →
+অক্সিজেনের, hridjontro → হৃদযন্ত্র, telephoner → টেলিফোনের now show in the editor as typed.
+The five left (basiner, easilyer, winterer, chintaer, asoteer) are invented keys where the
+commit wrapper's typo correction shortens the word — the deliberately un-mirrored class.
+Release gate with clean-install smoke certified (typing probe আমি, frames p50 13.2 /
+p95 31.4 ms, no ANR); tag `v1.5.113`, artifacts `releases/banglu-1.5.113-2150.{apk,aab}`.
+Harness: scratchpad `preview_parity_device.py` (S177 keys hrid/pira/trisha included: হৃদ,
+পীড়া, তৃষা on device).
+
 ## S177 — the typed word beats a completion (2026-09-03, engine, Android 1.5.113 / 2150)
 
 Tester: "I typed hrid and the engine produced হৃদয়; হৃদয় should be in the suggestions.
