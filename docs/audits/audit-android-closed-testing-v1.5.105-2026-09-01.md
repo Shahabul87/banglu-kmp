@@ -628,3 +628,69 @@ Phone (S22, release 1.5.112 final build, installed version read back, 2026-09-03
 six flows pass identically — আমদের → আমাদের, তমদের → তোমাদের, তোমার + de → তোমাদের,
 বলা → ভোলা, তোমার + e → তোমারে, pure delete keeps the caret (`তোমা র`). All six walls
 green (jvmTest 745, shared 435, android 222, js 451, desktop 41, windows 161).
+
+## S176 — the editor preview must be what Space commits (2026-09-03, engine, Android 1.5.113 / 2150)
+
+Tester screenshots: the editor showed হৃয্দ্রগেনের, ওক্স্য্গেনের and হ্রিদজন্ত্র while the
+strip's blue chip read হাইড্রোজেনের, অক্সিজেনের and হৃদযন্ত্র. "Engine is producing garbage in
+the editor … while the words show in the suggestion bar — why?"
+
+**Root cause.** The live editor text is `convertForComposing` (the composing preview), the
+strip is `convertWord` (the commit). The composing preview was a hand-maintained MIRROR of
+the commit layers (the S83 lesson) and it lacked the productive-suffix, suffix-stripped-
+dictionary (incl. S173), root-decomposition, Layer-6 recovery, compound-split and
+typo/fuzzy layers. For an inflected loanword it fell to the rule-only floor (0.60), and the
+S143 spelling rescue then rendered the nearest English STEM without the suffix
+(telephoner → টেলিফোন, doctorer → ডকটার্ড). The strip was right, the editor was wrong, and
+a fast commit (S32) could even commit the garbage before the reconcile.
+
+**Fix (one mechanism, no more mirrors).** After the composing core's deliberately
+conservative layers have had their say, a completed-looking key (≥ 4 letters — the 2–3
+letter kar contract is untouched) previews `convertWordRaw`'s own answer, served from its
+per-key cache (the strip already computed it on the same keystroke, so zero extra engine-
+lane cost). The raw-Latin passthrough stays un-mirrored (the live echo is Bangla for
+lexicon-miss English). The composing wrapper's S142/S143/junk mirrors are unchanged.
+
+**Measured on thousands of keys (JVM, real dictionary):**
+
+| Study | Keys | Preview ≠ commit before | After |
+|---|---|---|---|
+| S83 parity: every dictionary word with frequency ≥ 60 | 100,191 | 659 | 638 (all but 17 are the documented 2–3 letter kar contract; the 17 are homograph choices, pre-existing) |
+| S176 inflection parity: top-3,000 stems × 10 suffixes + 2,500 common loans × 5 suffixes | 41,190 | 11,273 (9,302 rule-floor garbage) | 1,979 (912) |
+
+The remaining 1,979 are keys the commit wrapper's typo correction shortens (amie → আমি,
+gariteke → গাড়িটি) while the preview keeps the literal; mirroring that would make the
+editor "correct" words while the user is still typing, so it stays deliberate. Harness:
+`S176InflectionParityStudyJvm` (opt-in `S176_STUDY=1`, TSV under build/reports/s176-study).
+Pins: `S176ComposingPreviewParityJvmTest` (the screenshot words, the loan-inflection class,
+and every 4+ letter prefix of them never previews raw Latin).
+
+## S177 — the typed word beats a completion (2026-09-03, engine, Android 1.5.113 / 2150)
+
+Tester: "I typed hrid and the engine produced হৃদয়; হৃদয় should be in the suggestions.
+This type of issue exists for many words."
+
+**Root cause.** Two rules combined. (1) The extended dictionary (compiled web wordlists)
+maps the key "hrid" straight to হৃদয়@69 — a completion whose own roman ("hridoy") merely
+starts with the key — while the index holds হৃদ@67 only as an alias row (its compiler-
+canonical key is "hrrid", the ৃ spelling nobody types). (2) The S7 "continuation" guard in
+the corpus layer bails whenever the index's top row for a key is an alias and a canonical
+word continues the key (so brit does not flash বৃত্ত while typing british) — which handed
+the key to the extended dictionary's completion.
+
+**Fix (shared arbitration, so preview == commit).** (a) The S7 bail no longer fires when
+the alias row IS the literal reading of the typed key (`romanReadsKey`, with the typist's
+folds ৃ→ri, ী→i, ূ→u; বৃত্ত reads "britt", so brit keeps its guard). (b) In
+`storeBeatsDictionary`, a new branch: when the dictionary layer's word is a completion of
+the key that the index never maps to this key, and the index's first tier-A word for the
+exact key is an attested (≥ 30) different word that is not a mere spelling twin (the S141
+spelling skeleton), the typed word keeps the commit and the completion rides the strip.
+
+**Measured.** `S177CompletionStudyJvm` (opt-in `S177_STUDY=1`) scans the whole extended
+dictionary for this shape: 1,280 keys. Before: typed word 1,206, completion 33, other 41.
+After: 1,210 / 29 / 41. The 29 that still complete are correct: six are ি/ী spelling
+twins where the standard spelling should win (dayi → দায়ী), the rest have an index word
+that does not actually read the key (okh → অক্ষ "okkh", khach → খাচ্ছ "khachchh"), so the
+mid-word guard rightly keeps them. Flips: hrid → হৃদ, pira → পীড়া (was পিরায়), trisha →
+তৃষা (was তৃষায়), otish → অতীশ, joyi → জয়ী (was জোয়ি). Walls (all six) green with no pin
+flip: jvmTest 752, shared 435, android 222, js 451, desktop 41, windows-ime 161.

@@ -33,6 +33,31 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S176/S177 preview-parity + typed-word round (2026-09-03, tester
+  screenshots: "engine is producing garbage in the editor … words showing
+  in the suggestion bar why??" / "hrid produces hridoy, hridoy should be
+  in the suggestions … for many words"):** S176 — the composing preview
+  was a hand-mirror of the commit layers missing suffix/root/recovery/
+  compound/typo, so inflected loanwords previewed rule-floor garbage
+  (হৃয্দ্রগেনের) while the strip read হাইড্রোজেনের; now a ≥4-letter key
+  previews convertWordRaw's own (cached) answer after the conservative
+  layers — parity by construction, kar contract untouched, raw-Latin
+  passthrough still un-mirrored. Study on 41,190 inflected keys: 11,273
+  preview≠commit → 1,979 (rule-floor garbage 9,302 → 912; the rest is the
+  commit wrapper's typo shortening, deliberately not mirrored); 100K
+  dictionary keys 659 → 638. S177 — the extended dictionary maps "hrid"
+  to the completion হৃদয় while হৃদ@67 is only an alias row and the S7
+  continuation bail handed the key over; the bail now spares an alias
+  that IS the literal reading (romanReadsKey, typist folds ৃ/ী/ূ), and
+  storeBeatsDictionary gained a completion-over-typed-word branch
+  (completion's own roman extends the key, index never maps the key to
+  it, first tier-A index word attested and not a spelling twin). Whole-
+  extended-dictionary study: 1,280 keys of the shape, completion wins
+  33 → 29 (the 29 are ি/ী twins or index words that do not read the
+  key). Opt-in harnesses S176InflectionParityStudyJvm /
+  S177CompletionStudyJvm; pins S176ComposingPreviewParityJvmTest,
+  S177TypedWordBeatsCompletionJvmTest. All six walls green, no pin flip.
+  Android 1.5.113 (2150); engine re-propagated to every surface.
 - **S175 mid-word editing, second pass (2026-09-03, user: "is this mid
   word issue fixed??"):** measured the caret directly (shifted-capital
   marker + emulator selection log) and found three Android-module causes:

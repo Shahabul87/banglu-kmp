@@ -997,12 +997,27 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
         val exactSpellingFidelity = storeCanonicalFirst &&
             storeTop.priority == PhoneticIndexHit.PRIORITY_CANONICAL && !seedOwnsKey
+        // S177 (hrid → হৃদয় over হৃদ@67; pira → পিরায় over পীড়া@74; trisha →
+        // তৃষায় over তৃষা@68): the dictionary layer's word is a COMPLETION —
+        // its own roman strictly extends the typed key, and the index never
+        // maps this key to it — while the index's first tier-A word for the
+        // exact key is an attested different word. The typed word keeps the
+        // commit (S141: never ignore what was typed); the completion rides the
+        // strip. Spelling twins (দায়ি/দায়ী, গরবিনী/গরবিণী) are not this
+        // shape — the standard spelling keeps winning there. Study: 1,280
+        // keys of this shape in the extended dictionary, 33 completion wins
+        // before, see docs/audits (S177).
+        val completionOverTypedWord = storeCanonicalFirst &&
+            storeTop.frequency >= MIN_COMPOSITION_STEM_FREQUENCY &&
+            !seedOwnsKey && storeLookup(key).none { it.bengali == result.bengali } &&
+            isCompletionOfKey(result.bengali, key) &&
+            spellingSkeleton(storeTop.bengali) != spellingSkeleton(result.bengali)
         val corpusClearlyBetter = if (corpusExactKey && typedExtendsDictPhonetic) {
             !(dictFreq > corpusFreq + 15 && dictFreq > corpusFreq * 2)
         } else {
             corpusFreq > dictFreq + 5 || result.confidence < 0.90 ||
                 (storeCanonicalFirst && corpusFreq >= dictFreq) ||
-                exactSpellingFidelity
+                exactSpellingFidelity || completionOverTypedWord
         }
         return if (corpusClearlyBetter) corpusResult else null
     }
@@ -1137,7 +1152,14 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // hits are (tier, priority)-sorted, so priority > 0 at the top means
             // no canonical word owns this exact key at all.
             val top = hits.first()
+            // S177 (tester: "I typed hrid, the engine produced হৃদয়"): the
+            // bail is for aliases that do NOT read the key (brit ≠ বৃত্ত's
+            // "britt"). A row that IS the literal reading of the typed key
+            // (হৃদ reads "hrid"; the compiler's canonical "hrrid" is the ৃ
+            // spelling nobody types) is what the user spelled — S141 law —
+            // and must stay the primary; the continuation rides the strip.
             if (top.priority > 0 && top.tier == PhoneticIndexHit.TIER_A &&
+                !romanReadsKey(top.bengali, key) &&
                 store.lookupPrefix(key, 8).any { it.priority == 0 && it.frequency >= top.frequency }
             ) {
                 return null
@@ -2162,6 +2184,26 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val sectionResult = if (sectionEngine.isReady() && key.length >= 4) convertBySection(key) else null
         if (sectionResult != null && sectionResult.confidence >= 0.95) {
             return sectionResult.copy(alternatives = emptyList())
+        }
+
+        // S176 (tester screenshots: the editor showed হৃয্দ্রগেনের / ওক্স্য্গেনের /
+        // হ্রিদজন্ত্র while the strip's blue chip read হাইড্রোজেনের / অক্সিজেনের /
+        // হৃদযন্ত্র): every layer this mirror lacked — productive suffix,
+        // suffix-stripped dictionary, root decomposition, Layer 6 recovery,
+        // compound split, typo/fuzzy — is the commit path's, and a preview that
+        // falls to the rule floor while Space commits a dictionary word breaks
+        // invariant 2. Once the conservative layers above have had their say, a
+        // completed-looking key (≥4, the kar contract untouched) previews
+        // EXACTLY what Space will commit: convertWordRaw's own answer, served
+        // from its per-key cache (the strip already computed it this keystroke).
+        // The raw-Latin passthrough stays un-mirrored (V2 law: the live echo
+        // is Bangla for lexicon-miss English). Study: 41,190 inflected keys,
+        // 9,302 rule-floor previews before the fix (docs/audits, S176 section).
+        if (key.length >= 4) {
+            val committed = convertWordRaw(key)
+            if (committed.source != ResolutionSource.ENGLISH_PASSTHROUGH) {
+                return committed.copy(alternatives = emptyList())
+            }
         }
 
         // V2 parity: the live editor should still show the rule-composed Bangla
@@ -4346,6 +4388,26 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * representative (long/short vowels, dental/retroflex, ন/ণ, শ/ষ/স, জ/য).
      * Two strings with equal skeletons are spellings of the SAME word.
      */
+    /**
+     * S177: does [bengali] read as exactly the typed [key]? Reverse
+     * transliteration with the typist's folds (ৃ "rri"→"ri", ী "ii"→"i",
+     * ূ "uu"→"u") so a canonical-spelling difference is not a different word.
+     */
+    internal fun romanReadsKey(bengali: String, key: String): Boolean =
+        typistRoman(bengali) == typistRoman(key)
+
+    private fun typistRoman(text: String): String {
+        val r = if (text.all { it in 'a'..'z' }) text
+        else com.banglu.engine.util.ReverseTransliterator.reverseWord(text).lowercase()
+        return r.replace("rri", "ri").replace("ii", "i").replace("uu", "u")
+    }
+
+    /** S177: [candidate]'s own roman strictly extends the typed [key] (হৃদয় "hridoy" over "hrid"). */
+    private fun isCompletionOfKey(candidate: String, key: String): Boolean {
+        val own = typistRoman(candidate); val k = typistRoman(key)
+        return own.length > k.length && own.startsWith(k)
+    }
+
     internal fun spellingSkeleton(bengali: String): String {
         val folded = ReverseTransliterator.foldNukta(bengali)
             // The glide the orthography inserts between vowels (dunia ->
