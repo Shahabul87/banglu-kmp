@@ -779,5 +779,5 @@ advertised (e.g. byakti → ব্যাক্তি, kendra → কেন্ড
 Splits come from a digraph-aware syllable splitter (kh/gh/ch/jh/th/dh/ph/bh/sh/ng and the
 oi/ou/ai/au diphthongs are single units; a vowel followed by two consonants keeps the
 first) — the pin wall asserts concat == roman. Card notes: conjunct caps say "অন্য কিবোর্ডে
-হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু <roman>", sign caps say "আলাদা কি লাগে". Curriculum
+হসন্ত লাগে — এখানে শুধু <roman>", sign caps say "আলাদা কি". Curriculum
 now 454 words / 11 families, every (spelling, word) pair pinned by `S157TutorialWordsJvmTest`.

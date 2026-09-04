@@ -368,6 +368,13 @@ private fun tutorialHighlighted(text: String, highlight: String) = buildAnnotate
     var end = i + highlight.length
     while (start > 0 && (isBnCombining(text[start]) || text[start - 1] == '\u09CD')) start--
     while (end < text.length && (isBnCombining(text[end]) || text[end - 1] == '\u09CD')) end++
+    // S179: a span boundary right after a below-base vowel sign (বিদ্যু|ৎ)
+    // opens a visible gap between the two shaping runs — pull the whole
+    // preceding cluster into the highlight instead.
+    if (start > 0 && text[start - 1] in "\u09C1\u09C2\u09C3") {
+        start--
+        while (start > 0 && (isBnCombining(text[start]) || text[start - 1] == '\u09CD' || text[start] == '\u09CD')) start--
+    }
     append(text.substring(0, start))
     withStyle(SpanStyle(color = TutorialCoral)) { append(text.substring(start, end)) }
     append(text.substring(end))
@@ -531,7 +538,7 @@ private fun LetterFamilyCard(
                             .background(TutorialGreen)
                             .padding(horizontal = 12.dp, vertical = 5.dp)
                     ) {
-                        Text(word.twinNote.ifEmpty { word.note }, color = Color(0xFF0D2117), fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                        Text(word.twinNote.ifEmpty { word.note }, color = Color(0xFF0D2117), fontSize = 12.5.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                     }
                 }
             }

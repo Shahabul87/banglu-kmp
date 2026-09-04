@@ -378,7 +378,7 @@ private fun LetterCards() {
             if (word.twinNote.isNotEmpty() || word.note.isNotEmpty()) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                     Text(word.twinNote.ifEmpty { word.note }, color = Color(0xFF06251B), fontSize = 11.5.sp,
-                        fontFamily = BengaliFontFamily, fontWeight = FontWeight.Bold,
+                        fontFamily = BengaliFontFamily, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
                         modifier = Modifier.background(Green, RoundedCornerShape(99.dp)).padding(horizontal = 10.dp, vertical = 4.dp))
                 }
             }
@@ -426,6 +426,12 @@ private fun highlightedWord(text: String, highlight: String) = buildAnnotatedStr
     var end = i + highlight.length
     while (start > 0 && (isBnCombining(text[start]) || text[start - 1] == '\u09CD')) start--
     while (end < text.length && (isBnCombining(text[end]) || text[end - 1] == '\u09CD')) end++
+    // S179: a span boundary right after a below-base vowel sign opens a gap
+    // between shaping runs — pull the preceding cluster into the highlight.
+    if (start > 0 && text[start - 1] in "\u09C1\u09C2\u09C3") {
+        start--
+        while (start > 0 && (isBnCombining(text[start]) || text[start - 1] == '\u09CD' || text[start] == '\u09CD')) start--
+    }
     append(text.substring(0, start))
     withStyle(SpanStyle(color = Sky)) { append(text.substring(start, end)) }
     append(text.substring(end))
