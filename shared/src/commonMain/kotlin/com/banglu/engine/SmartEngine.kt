@@ -437,6 +437,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // layer — absent in Android lite mode and the slim web tier, where
             // it degraded to ক্মন. Top-frequency chat token; enumerate it.
             "kmon" to "কেমন",
+            "betha" to "ব্যথা",   // S181: the everyday spelling of ব্যথা (bytha/byatha already resolve)
             "kmn" to "কেমন",
             "vdo" to "ভিডিও",
             "rain" to "রেইন",
@@ -1335,7 +1336,56 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // that can't reach this check would show junk while Space, running
         // this same wrapper, commits the loanword (F-ANDROID-001/002).
         tryJunkLexiconRescue(key, raw)?.let { return it }
-        val corrected = tryStoreTypoCorrection(key)?.takeIf { it.bengali != raw.bengali }?.let { c ->
+        // S181 (shonchito → শঞ্চিত while সঞ্চিত is attested): a final "o" is the
+        // ordinary way to type a consonant-final word's inherent vowel, and a
+        // junk reading of the full key that becomes a confident consonant-final
+        // dictionary word without that "o" is that word. Bounded: junk raw
+        // only, the shorter key must read within one letter of its word, and
+        // never nested (a shorter key ending in "o" again is not retried).
+        // Only the two shapes it was built for: a rule-floor reading (শঞ্চিত) or
+        // a spaced তো split ("পুঁজি তো"). A dictionary reading such as বর্তমানেও
+        // for "bortomano" is left alone — the final o there is most likely the
+        // emphatic ও, which this rule would wrongly drop (132K-key diff).
+        val rawIsFloorOrSplit = raw.source == ResolutionSource.CLEAN_TRANSLITERATION || ' ' in raw.bengali
+        if (!inInherentO && rawIsFloorOrSplit && key.length >= 6 && key.endsWith("o") && key[key.length - 2] !in "aeiou") {
+            inInherentO = true
+            val shorter = try { convertWord(key.dropLast(1)) } finally { inInherentO = false }
+            if (shorter.source == ResolutionSource.DICTIONARY && shorter.confidence >= 0.85 &&
+                ' ' !in shorter.bengali && shorter.bengali.isNotEmpty() &&
+                isEvidencedWord(shorter.bengali) &&
+                isBengaliConsonantChar(shorter.bengali.last()) &&
+                keyReadingDistance(shorter.bengali, key.dropLast(1)) <= 1
+            ) {
+                return shorter.copy(
+                    alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.7))) +
+                        shorter.alternatives.filter { it.bengali != raw.bengali }.take(2)
+                )
+            }
+        }
+        // S181 (Nazrul recording: shantrira → ছাত্রীরা, phenaiya → ফেনায়): a
+        // "correction" that reads the typed key WORSE than the pipeline's own
+        // dictionary answer is not a correction. সান্ত্রীরা reads "santrira"
+        // (one letter from the key), ছাত্রীরা "chatrira" (two); ফেনাইয়া reads
+        // the key exactly. Ties keep the old behaviour (the corpus-frequent
+        // repair wins), so the finger-slip shapes (amdaer, bangaldesh) are
+        // untouched: their raw result is the rule floor, not a dictionary word.
+        val corrected = tryStoreTypoCorrection(key)?.takeIf { it.bengali != raw.bengali }
+            ?.takeIf { c ->
+                // Only an EXACT reading is protected, and only against a
+                // correction that is (a) two or more letters from the key
+                // (ছাত্রীরা for shantrira, ফেনায় for phenaiya) or (b) the
+                // same word minus a typed emphatic particle (হচ্ছেও → হচ্ছে).
+                // A single-slip correction to a real word still wins
+                // (motamoto → মতামত over the junk exact reading মোটামতো;
+                // bishwabiddaloy → বিশ্ববিদ্যালয়): membership evidence cannot
+                // tell a corpus-tail misspelling from a rare real word (both
+                // validator-valid at frequency 0 — probed on the 132K diff).
+                val exactRaw = raw.source == ResolutionSource.DICTIONARY && raw.confidence >= 0.9 &&
+                    isEvidencedWord(raw.bengali) && keyReadingDistance(raw.bengali, key) == 0
+                val particleKept = raw.bengali.length > c.bengali.length && raw.bengali.startsWith(c.bengali) &&
+                    raw.bengali.removePrefix(c.bengali) in EMPHATIC_PARTICLES
+                !exactRaw || !(particleKept || keyReadingDistance(c.bengali, key) >= 2)
+            }?.let { c ->
             c.copy(
                 alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.7))) +
                     raw.alternatives.filter { it.bengali != c.bengali }.take(2)
@@ -4402,6 +4452,31 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         return r.replace("rri", "ri").replace("ii", "i").replace("uu", "u")
     }
 
+    /**
+     * S181: how far [bengali]'s typist roman is from the typed [key] (edit
+     * distance), with the spellings a typist uses interchangeably folded on
+     * BOTH sides first (chh/ch/c, sh/s, z/j, v/bh, ph/f) — the reverse
+     * transliterator writes চ as "c", a typist writes "ch". Distance only;
+     * [romanReadsKey] keeps its stricter folds.
+     */
+    private fun distanceRoman(text: String): String =
+        typistRoman(text).replace("chh", "c").replace("ch", "c").replace("sh", "s")
+            .replace("z", "j").replace("v", "bh").replace("ph", "f")
+
+    private fun keyReadingDistance(bengali: String, key: String): Int {
+        val a = distanceRoman(bengali); val b = distanceRoman(key)
+        if (a == b) return 0
+        var prev = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            val cur = IntArray(b.length + 1); cur[0] = i
+            for (j in 1..b.length) {
+                cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+            }
+            prev = cur
+        }
+        return prev[b.length]
+    }
+
     /** S177: [candidate]'s own roman strictly extends the typed [key] (হৃদয় "hridoy" over "hrid"). */
     private fun isCompletionOfKey(candidate: String, key: String): Boolean {
         val own = typistRoman(candidate); val k = typistRoman(key)
@@ -4509,6 +4584,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             .take(limit)
             .map { it.bengali }
     }
+
+    /** S181: the emphatic particles a typist appends as a final o/i. */
+    private val EMPHATIC_PARTICLES = setOf("ও", "ই")
+
+    /** S181: a word some evidence source attests — the validator list, the seed/extended dictionary, or the corpus index. */
+    private fun isEvidencedWord(bengali: String): Boolean =
+        validator.isValid(bengali) || dictionary.containsBengali(bengali) ||
+            phoneticIndex?.containsWord(ReverseTransliterator.foldNukta(bengali)) == true
+
+    /** S181: guards the inherent-final-o retry in the wrapper against nesting. */
+    private var inInherentO = false
 
     private var inTypoCorrection = false
     private fun tryStoreTypoCorrection(key: String): ConversionResult? {
@@ -4702,6 +4788,20 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         if (storeTopReal != null && suffix.first != "ne" && suffix.first != "nane") {
             return null
+        }
+        // S181 (punjito → "পুঁজি তো" while পুঞ্জিত is attested): a final "o" is
+        // the ordinary way to type a consonant-final word's inherent vowel
+        // (gonito → গণিত). When the key minus that "o" is CANONICALLY owned by
+        // a consonant-final real word, that word owns this key too — the
+        // particle only serves keys nothing owns.
+        if (suffix.first == "to" && key.endsWith("o")) {
+            val ownerOfInherent = storeLookup(key.dropLast(1))
+                .firstOrNull { it.priority == PhoneticIndexHit.PRIORITY_CANONICAL }
+                ?.takeIf { top ->
+                    (top.tier == PhoneticIndexHit.TIER_A || validator.isValid(top.bengali)) &&
+                        top.bengali.isNotEmpty() && isBengaliConsonantChar(top.bengali.last())
+                }
+            if (ownerOfInherent != null) return null
         }
         // S111: HABIT-priority owners defer too, but evidence-competitively
         // (the S79 নে rule, generalized): স্পষ্ট@82 rides "sposhto" as a

@@ -33,6 +33,38 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S181 literary-faithful round (2026-09-04, from the Nazrul demo; user:
+  "do not create bug while fixing this"):** four engine rules, each pinned
+  (S181LiteraryFaithfulJvmTest) and measured before/after on every
+  available oracle. (1) The commit wrapper's typo correction never
+  replaces a dictionary result (≥0.9, evidenced) that reads the typed key
+  EXACTLY after typist folds (chh/ch/c, sh/s, z/j, v/bh, ph/f;
+  keyReadingDistance) when the correction is two or more letters from the
+  key OR is the same word minus a typed emphatic ও/ই — shantrira keeps
+  সান্ত্রীরা (was ছাত্রীরা), phenaiya keeps ফেনাইয়া (was ফেনায়), and 113
+  emphatic keys keep their particle (hochcheo → হচ্ছেও); a single-slip
+  correction to a real word still wins (motamoto → মতামত, bishwabiddaloy
+  → বিশ্ববিদ্যালয়). Two wider versions were REJECTED by the 132K-key
+  diff: "reads better" (kept the glued বিশ্বাবিদ্যালয়) and "exact only"
+  (kept the junk মোটামতো) — membership evidence cannot tell a corpus-tail
+  misspelling from a rare real word (both validator-valid at frequency 0). (2) CleanTransliterator
+  writes ঞ before চ ছ জ ঝ (ন্চ never occurs) — shonchito → শঞ্চিত → সঞ্চিত.
+  (3) tryNegationCompound's তো split defers when the key minus its final
+  "o" is canonically owned by a consonant-final word (punjito → পুঞ্জিত;
+  the 132K diff also turned dukkhito/minito/orthato/porinoto/jorito/
+  nikoto/sileto/chihnito/byosto/bajeto/siimito into their real words).
+  (4) A wrapper retry reads a final "o" as the inherent vowel ONLY when the
+  raw is the rule floor or a spaced split, and the shorter key resolves to
+  an evidenced consonant-final word within one letter (shonchito); a
+  wider version dropped emphatic ও on bortomano/gurutbo/holeno and was
+  narrowed. betha → ব্যথা shorthand. Measured: 100K parity 633 → 633;
+  41K inflection parity 1,975 → 1,823; completion class unchanged;
+  English study 8,237 → 8,238 English-or-correct; book study in-dictionary
+  97.2 → 97.6% (chandrabindu 94.7 → 96.5); top-1,000 lists 994/998
+  unchanged; the S149 Banglish corpora were NOT re-run (that session's
+  staged data is gone). Lesson: a JVM-only StringBuilder call in
+  commonMain (setCharAt) is caught only by the JS wall — run all six.
+  Android 1.5.117 (2154).
 - **S180 fast-commit reconcile tolerates a tail (2026-09-04, from the
   Facebook demo recording: "bujhte parcina is error in the recording"):**
   under screen-recording CPU load the authoritative বুঝতে পারছিনা arrived

@@ -810,3 +810,66 @@ pick পড়ে), 2 hard words (হঠাৎ বিদ্যুৎ চাঁ�
 3 Nazrul's কান্ডারী হুঁশিয়ার (eight lines; ঘোষিয়াছে and কান্ডারী picked from the strip).
 Harness lessons: `adb input tap` spacing must be a real double tap (≈ 0.15 s) for the দাঁড়ি
 window; chip content-descriptions carry য়/ড় as base + nukta, so matches must fold nukta.
+
+## S181 — literary-faithful round (2026-09-04, engine, Android 1.5.117 / 2154)
+
+From the Nazrul demo recording (user: "what we can do for this case" … "do not create bug
+while fixing this"). Method: every available oracle was run on the current engine BEFORE any
+edit, then again after, and a commit dump of 132,769 keys (every dictionary word with
+frequency ≥ 60, the two top-1,000 device lists, the 41K inflection keys) was diffed word by
+word so every changed key was reviewed by name. The S149 Banglish corpora could not be
+re-run: that session's staged data is gone with its scratchpad.
+
+**Root causes (all confirmed by layer probes):**
+
+1. `shantrira` → ছাত্রীরা and `phenaiya` → ফেনায়: the pipeline itself returned সান্ত্রীরা and
+   ফেনাইয়া at 0.96, then the wrapper's typo correction (deletion shapes are allowed even on
+   clean literals) replaced them with a more frequent word that reads the key WORSE. The
+   S176 study had flagged this class as "typo shortening" on invented keys; it is real on
+   literary -ইয়া forms and on every typed emphatic ও/ই (হচ্ছেও was committed as হচ্ছে).
+2. `shonchito` → শন্চিত: `CleanTransliterator` has no ঞ at all, so "nch" produced an
+   impossible ন্চ conjunct and nothing downstream could reach সঞ্চিত.
+3. `punjito` → "পুঁজি তো": the তো particle split beat the attested পুঞ্জিত because the
+   whole-word guard only knew the canonical key "punjit".
+4. `betha` → বেথা: a rare real word wins over the everyday spelling of ব্যথা.
+
+**Rules shipped (SmartEngine.kt, CleanTransliterator.kt), each pinned in
+`S181LiteraryFaithfulJvmTest`:**
+
+- Typo correction never replaces a dictionary result (≥ 0.9, evidenced) that reads the
+  typed key exactly after the typist folds (chh/ch/c, sh/s, z/j, v/bh, ph/f) when the
+  correction is two or more letters from the key, or is the same word minus a typed
+  emphatic ও/ই. A single-slip correction to a real word still wins.
+- ঞ before চ ছ জ ঝ in the rule layer (a JVM-only `setCharAt` in commonMain was caught by
+  the JS wall — the six-wall rule earned its keep).
+- The তো split defers when the key minus its final "o" is canonically owned by a
+  consonant-final word.
+- A wrapper retry reads a final "o" as the inherent vowel only when the raw result is the
+  rule floor or a spaced split and the shorter key resolves to an evidenced consonant-final
+  word within one letter.
+- `betha` → ব্যথা shorthand.
+
+**Two wider versions were rejected by the diff, not by intuition:** "the correction must
+read the key at least as well as the raw result" kept the glued বিশ্বাবিদ্যালয় (S147/S157
+pins failed); "protect every exact reading" kept the junk মোটামতো for `motamoto`. Both
+junk readings are validator-valid at frequency 0 exactly like the rare real words
+(probed), so membership evidence cannot separate them — the particle/two-letter rule does.
+The first inherent-o version also dropped the emphatic ও on `bortomano`/`gurutbo`/`holeno`
+and was narrowed to the two shapes it was built for.
+
+| Oracle | Before | After |
+|---|---|---|
+| S83 parity, 100,191 dictionary keys (preview ≠ commit) | 633 | 633 |
+| S176 inflection parity, 41,190 keys | 1,975 | 1,823 |
+| S177 completion class, 1,280 keys (typed word / completion / other) | 1210 / 29 / 41 | 1210 / 29 / 41 |
+| S143 English study, 8,400 words English-or-correct (residue) | 8,237 (163) | 8,238 (162) |
+| S110 book study, in-dictionary primary (chandrabindu class) | 97.2% (94.7%) | 97.6% (96.5%) |
+| Top-1,000 device lists (all / conjunct), JVM oracle | 994 / 998 | 994 / 998 |
+| All six walls | green | green (jvmTest 759) |
+
+**132K-key diff (final shape):** see the S181 changed-keys list in the session scratchpad;
+the classes are the typed emphatic ও/ই now kept (113 keys, e.g. এসেছেও, ঘটেছেই, তাকিয়েও),
+junk English keys now carrying ঞ্ছ instead of ন্ছ (223), তো splits that became the real
+word (21: দুঃখিত, মিনিট, অর্থাৎ, পরিণত, জড়িত, নিকট, সিলেট, চিহ্নিত, ব্যস্ত, অতীত, বাজেট,
+সীমিত …), and a residue of synthetic junk keys from the study's own inflection generator.
+No top-1,000 word changed.

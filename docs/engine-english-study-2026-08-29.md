@@ -3,37 +3,47 @@
 Source: google-10000-english (no swears), 8810 words of 4+ letters; 410 unknown to the english_lexicon (skipped).
 
 ## Exact spellings (8400 lexicon words)
-- rendered as English (pronunciation or passthrough): 7912
-- dictionary's own loanword spelling (reads the key; not the CMU row): 193
-- kept as an everyday Bengali word (evidence >= 75): 154
-- Bengali reading below the band still won: 141
+- rendered as English (pronunciation or passthrough): 7884
+- dictionary's own loanword spelling (reads the key; not the CMU row): 207
+- kept as an everyday Bengali word (evidence >= 75): 147
+- Bengali reading below the band still won: 162
 - English spelling missing from the 6-chip strip: 0
 
 ## One-slip misspellings (6031 slips)
-- rescued to the same rendering: 5721 (94%)
+- rescued to the same rendering: 5722 (94%)
 
 ## Samples: Bengali below the band won
+- contact -> কন্টাক্ট [DICTIONARY ev=0 lex=কন্ট্যাক্ট]
 - available -> অ্যাভেইলেবল [DICTIONARY ev=0 lex=অ্যাভেইলিবল]
 - software -> সফটওয়্যার [DICTIONARY ev=0 lex=সফটওয়েয়ার]
 - privacy -> প্রাইভেসি [DICTIONARY ev=0 lex=প্রাইভিসি]
 - book -> বই [DICTIONARY ev=0 lex=বুক]
 - company -> কোম্পানি [DICTIONARY ev=0 lex=কাম্পিনি]
+- read -> রোড [DICTIONARY ev=0 lex=রিড]
 - university -> ইউনিভার্সিটি [DICTIONARY ev=0 lex=ইউনভার্সিটি]
 - management -> ম্যানেজমেন্ট [DICTIONARY ev=0 lex=ম্যানিজমেন্ট]
 - education -> এডুকেশন [DICTIONARY ev=0 lex=এজকেশন]
+- address -> এড্রেস [DICTIONARY ev=0 lex=অ্যাড্রেস]
 - area -> আরো [DICTIONARY ev=0 lex=এরিয়া]
 - black -> ব্ল্যাক [DICTIONARY ev=0 lex=ব্লাক]
 - version -> ভার্সন [DICTIONARY ev=0 lex=ভার্শন]
+- account -> একাউন্ট [DICTIONARY ev=0 lex=অ্যাকাউন্ট]
 - previous -> প্রিভিয়াস [DICTIONARY ev=0 lex=প্রিভিয়েস]
 - content -> কনটেন্ট [DICTIONARY ev=0 lex=কন্টেন্ট]
 - customer -> কাস্টমার [DICTIONARY ev=0 lex=কাস্টিমার]
 - college -> কলেজ [DICTIONARY ev=0 lex=কলিজ]
+- author -> অথর [DICTIONARY ev=0 lex=অথার]
 - course -> কোর্স [DICTIONARY ev=0 lex=কর্স]
 - teen -> তিন [DICTIONARY ev=0 lex=টিন]
 - advanced -> অ্যাডভান্সড [DICTIONARY ev=0 lex=অ্যাডভ্যান্সট]
+- category -> ক্যাটাগরি [DICTIONARY ev=0 lex=ক্যাটিগরি]
+- really -> রিয়েলি [DICTIONARY ev=0 lex=রিলি]
 - required -> রিকোয়ার্ড [DICTIONARY ev=0 lex=রিকোয়ায়ারড]
 - application -> এপ্লিকেশন [DICTIONARY ev=0 lex=অ্যাপ্লকেশন]
+- again -> এগেইন [DICTIONARY ev=0 lex=অ্যাগেন]
 - below -> বেলা [DICTIONARY ev=0 lex=বিলো]
+- social -> সোশ্যাল [DICTIONARY ev=0 lex=সোশল]
+- create -> ক্রিয়েট [DICTIONARY ev=0 lex=ক্রিএট]
 - court -> কোর্ট [DICTIONARY ev=0 lex=কর্ট]
 - february -> ফেব্রুয়ারি [DICTIONARY ev=0 lex=ফেবুওয়েরি]
 - analysis -> অ্যানালাইসিস [DICTIONARY ev=0 lex=অ্যান্যালিসিস]
@@ -41,8 +51,10 @@ Source: google-10000-english (no swears), 8810 words of 4+ letters; 410 unknown 
 - delivery -> ডেলিভারি [DICTIONARY ev=0 lex=ডিলিভারি]
 - australia -> অস্ট্রেলিয়া [DICTIONARY ev=0 lex=অস্ট্রেইলিয়া]
 - format -> ফরম্যাট [DICTIONARY ev=0 lex=ফর্ম্যাট]
+- already -> অলরেডি [DICTIONARY ev=0 lex=অল্রেডি]
 - close -> ক্লোজ [DICTIONARY ev=0 lex=ক্লোস]
 - electronics -> ইলেকট্রনিক্স [DICTIONARY ev=0 lex=ইলেকট্রনিকস]
+- official -> অফিসিয়াল [DICTIONARY ev=0 lex=অ্যাফিশল]
 - update -> আপডেট [DICTIONARY ev=0 lex=অ্যাপডেট]
 - finance -> ফাইন্যান্স [DICTIONARY ev=0 lex=ফন্যান্স]
 - function -> ফাংশন [DICTIONARY ev=0 lex=ফাংকশন]
@@ -52,9 +64,11 @@ Source: google-10000-english (no swears), 8810 words of 4+ letters; 410 unknown 
 - receive -> রিসিভ [DICTIONARY ev=0 lex=রসিভ]
 - engineering -> ইঞ্জিনিয়ারিং [DICTIONARY ev=0 lex=এনজিনিরিং]
 - engine -> ইঞ্জিন [DICTIONARY ev=0 lex=এনজেন]
+- union -> ইউনিয়ন [DICTIONARY ev=0 lex=ইউনুন]
 - machine -> মেশিন [DICTIONARY ev=0 lex=মশিন]
 - england -> ইংল্যান্ড [DICTIONARY ev=0 lex=ইঙ্গলেন্ড]
 - allow -> আলো [DICTIONARY ev=0 lex=অ্যালাউ]
+- custom -> কাস্টম [DICTIONARY ev=0 lex=কাস্টাম]
 - communication -> কমিউনিকেশন [DICTIONARY ev=0 lex=কমিউনকেশন]
 - chicago -> শিকাগো [DICTIONARY ev=0 lex=শকগো]
 - mexico -> মেক্সিকো [DICTIONARY ev=0 lex=মেকসিকো]
@@ -74,45 +88,30 @@ Source: google-10000-english (no swears), 8810 words of 4+ letters; 410 unknown 
 - dictionary -> ডিকশনারি [DICTIONARY ev=0 lex=ডিকশনেরি]
 - doctor -> ডাক্তার [DICTIONARY ev=0 lex=ডক্টার]
 - upgrade -> আপগ্রেড [DICTIONARY ev=0 lex=অ্যাপগ্রেড]
+- recovery -> রিকভারি [DICTIONARY ev=0 lex=রিকাভ্রি]
 - variable -> ভেরিয়েবল [DICTIONARY ev=0 lex=ভেরিয়াবল]
 - russia -> রাশিয়া [DICTIONARY ev=0 lex=রাশা]
 - electrical -> ইলেকট্রিক্যাল [DICTIONARY ev=0 lex=ইলেকট্রিকেল]
 - atom -> অ্যাটম [DICTIONARY ev=19 lex=অ্যাটাম]
-- blow -> বলো [DICTIONARY ev=0 lex=ব্লো]
-- query -> কোয়েরি [DICTIONARY ev=0 lex=কোয়িরি]
-- wire -> ওয়্যার [DICTIONARY ev=0 lex=ওয়ায়ার]
-- zero -> জেরো [DICTIONARY ev=16 lex=জিরো]
-- frequency -> ফ্রিকোয়েন্সি [DICTIONARY ev=0 lex=ফ্রিকোয়েনসি]
-- physics -> ফিজিক্স [DICTIONARY ev=0 lex=ফিজিকস]
-- bars -> বাড়ছ [DICTIONARY ev=1 lex=বার্স]
-- accuracy -> অ্যাকুরেসি [DICTIONARY ev=0 lex=অ্যাকিয়ারিসি]
-- seat -> ছোট [DICTIONARY ev=69 lex=সিট]
-- manner -> মানের [DICTIONARY ev=0 lex=ম্যানার]
-- beat -> বোট [DICTIONARY ev=0 lex=বিট]
-- circuit -> সার্কিট [DICTIONARY ev=0 lex=সার্কেট]
-- array -> অ্যারে [DICTIONARY ev=0 lex=আরে]
-- percentage -> পারসেন্ট [DICTIONARY ev=0 lex=পারসেন্টেজ]
-- backup -> ব্যাকআপ [DICTIONARY ev=0 lex=ব্যাকাপ]
 
 ## Samples: English chip missing
 
 ## Samples: slip not rescued
-- numebr (for number) -> নাম্বার [ENGLISH_LEXICON] vs নম্বর
+- adderss (for address) -> অ্যাড্রেস [ENGLISH_LEXICON] vs এড্রেস
 - chagne (for change) -> চাগনে [DICTIONARY] vs চেঞ্জ
 - artcile (for article) -> আর্টছিলে [RULE] vs আর্টিকল
 - soucre (for source) -> সুকার [ENGLISH_LEXICON] vs সর্স
 - phoots (for photos) -> ফুটছ [DICTIONARY] vs ফোটোজ
 - howveer (for however) -> হুভার [ENGLISH_LEXICON] vs হাওএভার
-- realy (for really) -> রোলয় [DICTIONARY] vs রিলি
+- realy (for really) -> রোলয় [DICTIONARY] vs রিয়েলি
 - formus (for forums) -> ফর্মস [ENGLISH_LEXICON] vs ফরামস
 - appliaction (for application) -> অ্যাপ্লিকেশন [ENGLISH_LEXICON] vs এপ্লিকেশন
 - stret (for street) -> স্ট্রেট [DICTIONARY] vs স্ট্রিট
-- cretae (for create) -> ক্রিট [ENGLISH_LEXICON] vs ক্রিএট
 - relaese (for release) -> রিল্যাপ্স [ENGLISH_LEXICON] vs রিলিস
 - probelms (for problems) -> প্রবেশ শুল্ক [DICTIONARY] vs প্রবলেমস
 - ediiton (for edition) -> এডিসন [ENGLISH_LEXICON] vs অ্যাডিশন
 - writen (for written) -> রাইট [ENGLISH_LEXICON] vs রিটেন
-- poliices (for policies) -> পলিস [ENGLISH_LEXICON] vs পলিসিজ
+- poliices (for policies) -> পুলিশ [ENGLISH_LEXICON] vs পলিসিজ
 - mangaer (for manager) -> মাঙ্গাের [DICTIONARY] vs ম্যানেজার
 - enginering (for engineering) -> ইঞ্জিন রিং [DICTIONARY] vs ইঞ্জিনিয়ারিং
 - poliitcal (for political) -> পলিত চাল [DICTIONARY] vs পলিটিকেল
@@ -123,11 +122,10 @@ Source: google-10000-english (no swears), 8810 words of 4+ letters; 410 unknown 
 - diviison (for division) -> ডিভিসন [RULE] vs ডিভিশন
 - kithcen (for kitchen) -> কিথছেন [RULE] vs কিচেন
 - senoir (for senior) -> সেনইর [DICTIONARY] vs সিনিয়ার
-- entrie (for entire) -> এন্ট্রিে [DICTIONARY] vs ইন্টায়ার
 - parites (for parties) -> পারিতে [DICTIONARY] vs পার্টিজ
 - prety (for pretty) -> প্রেতয় [DICTIONARY] vs প্রিটি
 - offreed (for offered) -> ফ্রিড [ENGLISH_LEXICON] vs অফার্ড
-- theroy (for theory) -> থেরয় [DICTIONARY] vs থিওরি
+- theroy (for theory) -> থেরোয় [DICTIONARY] vs থিওরি
 - vareity (for variety) -> ভার্সিটি [ENGLISH_LEXICON] vs ভারায়াটি
 - clases (for classes) -> ক্লাস [ENGLISH_LEXICON] vs ক্লাসেস
 - carers (for careers) -> কেয়ারস [ENGLISH_LEXICON] vs কারিয়ারস
@@ -153,12 +151,11 @@ Source: google-10000-english (no swears), 8810 words of 4+ letters; 410 unknown 
 - thetaer (for theater) -> থেটাের [DICTIONARY] vs থিয়াটার
 - graits (for gratis) -> গ্রাফটস [ENGLISH_LEXICON] vs গ্রাটিস
 - houess (for houses) -> হাউস [ENGLISH_LEXICON] vs হাউসেস
-- refered (for referred) -> রেফারি [ENGLISH_LEXICON] vs রফার্ড
+- refered (for referred) -> রেফেরেদ [CLEAN_TRANSLITERATION] vs রফার্ড
 - junoir (for junior) -> জুনের [RULE] vs জুনিয়র
 - annonuced (for announced) -> অন্ন অনুচ্ছেদ [DICTIONARY] vs অ্যানাউন্সট
 - agred (for agreed) -> এজড [ENGLISH_LEXICON] vs অ্যাগ্রিড
-- manenr (for manner) -> মানেনর [DICTIONARY] vs মানের
-- librraies (for libraries) -> লিব্রা ইয়েস [DICTIONARY] vs লাইব্রেরিজ
+- manenr (for manner) -> মানেনের [DICTIONARY] vs মানের
 - phoneix (for phoenix) -> ফোনিক্স [DICTIONARY] vs ফিনিক্স
 - diseny (for disney) -> দিসেনয় [DICTIONARY] vs ডিজনি
 - inded (for indeed) -> ইন্দেদ [CLEAN_TRANSLITERATION] vs ইন্ডিড
@@ -169,14 +166,14 @@ Source: google-10000-english (no swears), 8810 words of 4+ letters; 410 unknown 
 - chetas (for cheats) -> ছেটাচ্ছ [DICTIONARY] vs চিটস
 - guetss (for guests) -> গেস্ট [ENGLISH_LEXICON] vs গেস্টস
 - cabels (for cables) -> ক্যামেলস [ENGLISH_LEXICON] vs কেবেলস
-- boredr (for border) -> বোর্ড [ENGLISH_LEXICON] vs বোর্ডের
+- boredr (for border) -> বরেদ্র [DICTIONARY] vs বোর্ডের
 - statrs (for starts) -> স্টার্স [ENGLISH_LEXICON] vs স্টার্টস
 - cauess (for causes) -> কজ [ENGLISH_LEXICON] vs কজেস
 - opeend (for opened) -> ওপেন [ENGLISH_LEXICON] vs ওপেন্ড
 - linaer (for linear) -> লিনাের [DICTIONARY] vs লিনিয়ার
 - paraemter (for parameter) -> পারায়ে মতের [DICTIONARY] vs পার্যামিটার
 - planed (for planned) -> প্লেন [ENGLISH_LEXICON] vs প্লান্ড
-- mirorr (for mirror) -> মিররর [DICTIONARY] vs মিরর
+- mirorr (for mirror) -> মিররের [DICTIONARY] vs মিরর
 - preimer (for premier) -> প্রাইমার [ENGLISH_LEXICON] vs প্রেমিয়ার
 - chabmer (for chamber) -> চার্মার [ENGLISH_LEXICON] vs চেমবার
 - chikcen (for chicken) -> চিকছেন [RULE] vs চিকেন
@@ -192,6 +189,7 @@ Source: google-10000-english (no swears), 8810 words of 4+ letters; 410 unknown 
 - textoboks (for textbooks) -> টেক্সট বক্স [DICTIONARY] vs টেকস্টবুকস
 - concerte (for concrete) -> কনসার্টে [DICTIONARY] vs কনক্রিট
 - caslte (for castle) -> কাস্ট [ENGLISH_LEXICON] vs কাসল
+- philipines (for philippines) -> ফিলিপ ইনেস [DICTIONARY] vs ফিলিপাইন
 - sevree (for severe) -> সার্ভ [ENGLISH_LEXICON] vs সভিয়ার
 - stailness (for stainless) -> স্টাইল নেস [DICTIONARY] vs স্টেনলিস
 - marekd (for marked) -> মারেক [ENGLISH_LEXICON] vs মার্কট
@@ -202,7 +200,7 @@ Source: google-10000-english (no swears), 8810 words of 4+ letters; 410 unknown 
 - chesee (for cheese) -> চয়েসী [DICTIONARY] vs চেয়েছে
 - appiles (for applies) -> পাইলস [ENGLISH_LEXICON] vs অ্যাপ্লাইজ
 - lougne (for lounge) -> লগ্নে [DICTIONARY] vs লাউন্জ
-- hororr (for horror) -> হররর [DICTIONARY] vs হরার
+- hororr (for horror) -> হররের [DICTIONARY] vs হরার
 - carriyng (for carrying) -> কেরিং [ENGLISH_LEXICON] vs ক্যারিইং
 - horess (for horses) -> হর্স [ENGLISH_LEXICON] vs হর্সেস
 - harirs (for harris) -> হারিস [ENGLISH_LEXICON] vs হেরিস
@@ -217,3 +215,5 @@ Source: google-10000-english (no swears), 8810 words of 4+ letters; 410 unknown 
 - thomspon (for thompson) -> টমসন [ENGLISH_LEXICON] vs টমপসন
 - losess (for losses) -> লস [ENGLISH_LEXICON] vs লসেস
 - stoped (for stopped) -> স্টুপ্ট [ENGLISH_LEXICON] vs স্টপ্ট
+- plaets (for plates) -> প্লান্টস [ENGLISH_LEXICON] vs প্লেটস
+- failry (for fairly) -> ফেরি [ENGLISH_LEXICON] vs ফেয়ারলি

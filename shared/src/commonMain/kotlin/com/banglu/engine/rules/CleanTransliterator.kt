@@ -44,6 +44,9 @@ object CleanTransliterator {
 
     private val UNIT_LENGTHS = intArrayOf(3, 2, 1)
 
+    /** S181: consonants that take ঞ (not ন) as their conjunct nasal. */
+    private val PALATALS = setOf("চ", "ছ", "জ", "ঝ")
+
     // Letters that count as a vowel for lookahead purposes (single-char vowel starters).
     private val VOWEL_START_CHARS = setOf('a', 'e', 'i', 'o', 'u')
 
@@ -116,6 +119,14 @@ object CleanTransliterator {
                         out.append(c)
                         prevWasConsonant = false
                     } else {
+                        // S181: Bengali never writes ন before a palatal — the
+                        // nasal of a চ/ছ/জ/ঝ conjunct is ঞ (অঞ্চল, ইঞ্জিন,
+                        // সঞ্চিত). Rewrite a pending ন so "nch"/"nj" read as
+                        // real conjuncts instead of the impossible ন্চ.
+                        if (prevWasConsonant && c in PALATALS && out.endsWith("ন")) {
+                            out.deleteAt(out.length - 1)
+                            out.append('ঞ')
+                        }
                         if (prevWasConsonant && c != ANUSVARA) out.append(HASANTA)
                         out.append(c)
                         prevWasConsonant = c != ANUSVARA
