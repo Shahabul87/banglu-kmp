@@ -28,6 +28,7 @@ class S158TutorialJsonExportJvm {
                     if (w.alts.isNotEmpty()) sb.append(",\"alts\":${arr(w.alts)}")
                     if (w.highlight.isNotEmpty()) sb.append(",\"hl\":${q(w.highlight)}")
                     if (w.twinPrimary.isNotEmpty()) sb.append(",\"twinPrimary\":${q(w.twinPrimary)},\"twinNote\":${q(w.twinNote)}")
+                    if (w.note.isNotEmpty()) sb.append(",\"note\":${q(w.note)}")
                     sb.append("}")
                 }
                 sb.append("]}")

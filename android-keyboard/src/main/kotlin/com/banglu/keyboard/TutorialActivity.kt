@@ -523,7 +523,7 @@ private fun LetterFamilyCard(
                     .fillMaxWidth()
                     .padding(vertical = 6.dp)
             )
-            if (word.twinNote.isNotEmpty()) {
+            if (word.twinNote.isNotEmpty() || word.note.isNotEmpty()) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                     Box(
                         modifier = Modifier
@@ -531,7 +531,7 @@ private fun LetterFamilyCard(
                             .background(TutorialGreen)
                             .padding(horizontal = 12.dp, vertical = 5.dp)
                     ) {
-                        Text(word.twinNote, color = Color(0xFF0D2117), fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                        Text(word.twinNote.ifEmpty { word.note }, color = Color(0xFF0D2117), fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

@@ -705,3 +705,38 @@ that does not actually read the key (okh → অক্ষ "okkh", khach → খ�
 mid-word guard rightly keeps them. Flips: hrid → হৃদ, pira → পীড়া (was পিরায়), trisha →
 তৃষা (was তৃষায়), otish → অতীশ, joyi → জয়ী (was জোয়ি). Walls (all six) green with no pin
 flip: jvmTest 752, shared 435, android 222, js 451, desktop 41, windows-ime 161.
+
+## S178 — tutorial: many spellings, and what is hard elsewhere (2026-09-03, Android 1.5.114 / 2151)
+
+User: "user can get same words in many ways like pacci or pacchi or passi or assa or acca or
+accha. check did we provide multiple ways … check what kinds of words is very difficult to
+generate on other keyboards but we are generating it using only lowercase english letter."
+
+**Audit.** Android and web share one curriculum (`TutorialWords`, exported to the web as
+`tutorial-words.json`): 313 words, 9 families, 50 caps, identical on both. Only 33 words
+showed a second spelling and one showed two; none of the everyday chat words (pacchi,
+korchi, hocche, kemon, valo) were in it. The multi-spelling idea lived only in one Android
+guide step (9 examples) and a hand-written 14-row web table. The letters other keyboards
+need special keys for (ৎ ঁ ঃ ঐ ঔ ঋ) were present as cards but never framed as a difference.
+
+**Engine reality (probe, real dictionary):** ~100 candidate groups; 36 have three or more
+spellings converging on the intended word (পাচ্ছি ← pacci/pacchi/passi/pachchi; আচ্ছা ←
+assa/acca/accha/acha/achha; ইচ্ছা ← issa/icca/iccha/ichchha; করছি ← korsi/korci/korchi/
+korchhi; হচ্ছে ← hosse/hochche/hocche/hocce; বিশ্ব ← bisso/bishsho/bishwo/bissho; …), ~30
+more have a verified second spelling. Gaps found and NOT advertised: keno → কেনো,
+achchha → আঁচছ, jbo → জ্ব, shotto → ষত্ব, ha → হা / hna → হয়না (হ্যাঁ needs hya/hyan),
+utsov → উৎস, oushod → ঔষদ, hotat → হটাত, and the shorthand misses thk, khb, taile, ame,
+apne, glo, kkhn, krbo. Hard-elsewhere classes verified from lowercase only: hothat → হঠাৎ,
+chad → চাঁদ, kadchi → কাঁদছি, tnar → তাঁর, dukkho → দুঃখ, nishshash → নিঃশ্বাস, oikko → ঐক্য,
+oushodh → ঔষধ, ritu → ঋতু, khoma → ক্ষমা, ggan/gyan → জ্ঞান, lokkhi → লক্ষ্মী, smriti → স্মৃতি,
+biddut → বিদ্যুৎ, utsob → উৎসব, rastro → রাষ্ট্র, jontro → যন্ত্র.
+
+**Built.** Two families, placed first: "একই শব্দ, অনেক বানান" (36 words, caps চ্ছ / ছি /
+শ স / শর্ট, 3–5 spellings each) and "অন্য কিবোর্ডে কঠিন, এখানে সহজ" (19 words over ৎ / ঁ /
+ঃ / ঐ ঔ / ঋ / ক্ষ জ্ঞ / ষ্ট্র ন্ত্র, each with a one-line note). A new optional `note` on
+the shared Word renders in the existing pill on Android, desktop and web, and is exported
+to the JSON. Curriculum now 368 words / 11 families; `S157TutorialWordsJvmTest` pins every
+(spelling, word) pair — the cards cannot advertise a miss. Web: JSON regenerated, the
+Conversational Spelling rows derive from the shared family (bangluweb 05e09ff). Walls: all
+six green (jvmTest 752, shared 435, android 222, js 451, desktop 41, windows 161). Engine
+untouched.

@@ -375,9 +375,9 @@ private fun LetterCards() {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
             )
-            if (word.twinNote.isNotEmpty()) {
+            if (word.twinNote.isNotEmpty() || word.note.isNotEmpty()) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    Text(word.twinNote, color = Color(0xFF06251B), fontSize = 11.5.sp,
+                    Text(word.twinNote.ifEmpty { word.note }, color = Color(0xFF06251B), fontSize = 11.5.sp,
                         fontFamily = BengaliFontFamily, fontWeight = FontWeight.Bold,
                         modifier = Modifier.background(Green, RoundedCornerShape(99.dp)).padding(horizontal = 10.dp, vertical = 4.dp))
                 }

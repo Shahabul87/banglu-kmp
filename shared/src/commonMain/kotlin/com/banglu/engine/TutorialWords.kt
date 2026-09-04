@@ -19,12 +19,95 @@ object TutorialWords {
         val alts: List<String> = emptyList(),
         val highlight: String = "",
         val twinPrimary: String = "",
-        val twinNote: String = ""
+        val twinNote: String = "",
+        /** S178: a one-line card note (e.g. what other keyboards need for this letter). */
+        val note: String = ""
     )
     data class CapWords(val cap: String, val words: List<Word>)
     data class Family(val title: String, val tagline: String, val caps: List<CapWords>)
 
     val FAMILIES: List<Family> = listOf(
+        Family("একই শব্দ, অনেক বানান", "pacci, pacchi, passi — যেভাবেই লিখুন, উত্তর একটাই: পাচ্ছি", listOf(
+            CapWords("চ্ছ", listOf(
+                Word("পাচ্ছি", "pacchi", listOf("pac", "chi"), listOf("pacci", "passi", "pachchi"), "চ্ছ", "", "", "cc, ss, chch — চারটা বানান, এক শব্দ"),
+                Word("আচ্ছা", "accha", listOf("ac", "cha"), listOf("acca", "assa", "acha", "achha"), "চ্ছ", "", "", "পাঁচ রকম বানানে একই আচ্ছা"),
+                Word("ইচ্ছা", "iccha", listOf("ic", "cha"), listOf("icca", "issa", "ichchha"), "চ্ছ"),
+                Word("হচ্ছে", "hocche", listOf("hoc", "che"), listOf("hochche", "hosse", "hocce"), "চ্ছ"),
+                Word("খাচ্ছি", "khacchi", listOf("khac", "chi"), listOf("khacci", "khassi", "khachchi"), "চ্ছ"),
+                Word("দিচ্ছি", "dicchi", listOf("dic", "chi"), listOf("dicci", "dissi", "dichchi"), "চ্ছ"),
+                Word("নিচ্ছি", "nicchi", listOf("nic", "chi"), listOf("nicci", "nissi", "nichchi"), "চ্ছ"),
+                Word("চাচ্ছি", "chacchi", listOf("chac", "chi"), listOf("chacci", "chassi"), "চ্ছ"),
+                Word("ঘুমাচ্ছি", "ghumacchi", listOf("ghu", "mac", "chi"), listOf("ghumacci", "ghumassi"), "চ্ছ")
+            )),
+            CapWords("ছি", listOf(
+                Word("করছি", "korchi", listOf("kor", "chi"), listOf("korsi", "korci", "korchhi"), "ছি", "", "", "চ্যাটের -si, -ci — সবই ছি"),
+                Word("বলছি", "bolchi", listOf("bol", "chi"), listOf("bolsi", "bolci", "bolchhi"), "ছি"),
+                Word("দেখছি", "dekhchi", listOf("dekh", "chi"), listOf("dekhsi", "dekhci"), "ছি"),
+                Word("ভাবছি", "bhabchi", listOf("bhab", "chi"), listOf("vabchi", "vabsi", "vabci"), "ছি"),
+                Word("শুনছি", "shunchi", listOf("shun", "chi"), listOf("sunsi", "shunsi", "shunci"), "ছি"),
+                Word("লিখছি", "likhchi", listOf("likh", "chi"), listOf("likhsi", "likhci"), "ছি"),
+                Word("পড়ছি", "porchi", listOf("por", "chi"), listOf("porsi", "porci"), "ছি"),
+                Word("খেলছি", "khelchi", listOf("khel", "chi"), listOf("khelsi", "khelci"), "ছি"),
+                Word("বুঝছি", "bujhchi", listOf("bujh", "chi"), listOf("bujhsi", "bujsi"), "ছি"),
+                Word("আসছি", "ashchi", listOf("ash", "chi"), listOf("aschi", "asci", "ashsi"), "ছি")
+            )),
+            CapWords("শ স", listOf(
+                Word("সমস্যা", "somossa", listOf("so", "mos", "sa"), listOf("somosya", "shomossa", "somossha"), "স্যা", "", "", "s বা sh — বানান বাংলুর কাজ"),
+                Word("বিশ্ব", "bisso", listOf("bis", "so"), listOf("bishsho", "bishwo", "bissho"), "শ্ব"),
+                Word("ভালোবাসা", "bhalobasha", listOf("bha", "lo", "ba", "sha"), listOf("valobasha", "bhalobasa", "valobasa"), "স"),
+                Word("স্বাগতম", "swagotom", listOf("swa", "go", "tom"), listOf("shagotom", "sagotom"), "স্ব"),
+                Word("সত্যি", "sotti", listOf("sot", "ti"), listOf("shotti", "sottyi"), "ত্য"),
+                Word("শুভ", "shubho", listOf("shu", "bho"), listOf("subho", "shuvo"), "শ"),
+                Word("ছিলো", "chilo", listOf("chi", "lo"), listOf("cilo", "silo", "chhilo"), "ছ"),
+                Word("কিছু", "kichu", listOf("ki", "chu"), listOf("kisu", "kichhu", "kicu"), "ছ")
+            )),
+            CapWords("শর্ট", listOf(
+                Word("কেমন", "kemon", listOf("ke", "mon"), listOf("kmon", "kamon"), "", "", "", "স্বর বাদ দিলেও চলে: kmon"),
+                Word("ভালো", "bhalo", listOf("bha", "lo"), listOf("valo", "vlo"), ""),
+                Word("এখন", "ekhon", listOf("e", "khon"), listOf("akhon", "ekhn"), ""),
+                Word("তোমার", "tomar", listOf("to", "mar"), listOf("tmr", "tomr"), ""),
+                Word("আজকে", "ajke", listOf("aj", "ke"), listOf("aajke", "azke"), ""),
+                Word("কোথায়", "kothay", listOf("ko", "thay"), listOf("kothai", "kothae"), "য়"),
+                Word("হয়েছে", "hoyeche", listOf("ho", "ye", "che"), listOf("hoyechhe", "hoyce", "hoeche"), "য়ে"),
+                Word("দুঃখ", "dukkho", listOf("duk", "kho"), listOf("dukkha", "dukho"), "ঃ"),
+                Word("ইনশাআল্লাহ", "inshallah", listOf("in", "shal", "lah"), listOf("insaallah", "inshaallah"), "")
+            ))
+        )),
+        Family("অন্য কিবোর্ডে কঠিন, এখানে সহজ", "ৎ ঁ ঃ ঐ ঔ ঋ ক্ষ জ্ঞ — বিশেষ কি নয়, শুধু ছোট হাতের অক্ষর", listOf(
+            CapWords("ৎ", listOf(
+                Word("হঠাৎ", "hothat", listOf("ho", "that"), listOf("hothath"), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু t"),
+                Word("বিদ্যুৎ", "biddut", listOf("bid", "dut"), listOf("bidyut"), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু t"),
+                Word("উৎসব", "utsob", listOf("ut", "sob"), listOf("utshob"), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু t")
+            )),
+            CapWords("ঁ", listOf(
+                Word("চাঁদ", "chad", listOf("chad"), listOf("chand", "chnad"), "ঁ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু chad"),
+                Word("কাঁদছি", "kadchi", listOf("kad", "chi"), listOf("kandchi", "kadsi"), "ঁ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু kadchi"),
+                Word("তাঁর", "tnar", listOf("tnar"), emptyList(), "ঁ", "", "", "tar → তার, সাজেশনে তাঁর; tnar → সরাসরি তাঁর")
+            )),
+            CapWords("ঃ", listOf(
+                Word("দুঃখ", "dukkho", listOf("duk", "kho"), listOf("dukkha", "dukho"), "ঃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু kkh"),
+                Word("নিঃশ্বাস", "nishshash", listOf("nish", "shash"), listOf("nihshash", "nisshash"), "ঃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু ssh")
+            )),
+            CapWords("ঐ ঔ", listOf(
+                Word("ঐক্য", "oikko", listOf("oik", "ko"), listOf("oikyo", "oikya"), "ঐ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু oi"),
+                Word("ঐতিহ্য", "oitijjo", listOf("oi", "tij", "jo"), listOf("oitihyo"), "ঐ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু oi"),
+                Word("ঔষধ", "oushodh", listOf("ou", "shodh"), emptyList(), "ঔ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু ou")
+            )),
+            CapWords("ঋ", listOf(
+                Word("ঋতু", "ritu", listOf("ri", "tu"), listOf("rritu"), "ঋ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু ri")
+            )),
+            CapWords("ক্ষ জ্ঞ", listOf(
+                Word("ক্ষমা", "khoma", listOf("kho", "ma"), listOf("kkhoma", "kshoma"), "ক্ষ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু kh"),
+                Word("লক্ষ্মী", "lokkhi", listOf("lok", "khi"), listOf("lokkhmi"), "ক্ষ্ম", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু kkh"),
+                Word("জ্ঞান", "ggan", listOf("ggan"), listOf("gyan"), "জ্ঞ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু gg বা gy"),
+                Word("অভিজ্ঞতা", "obhiggota", listOf("o", "bhig", "go", "ta"), listOf("oviggota"), "জ্ঞ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু gg")
+            )),
+            CapWords("ষ্ট্র ন্ত্র", listOf(
+                Word("রাষ্ট্র", "rashtro", listOf("rash", "tro"), listOf("rastro", "rastra"), "ষ্ট্র", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু shtr বা str"),
+                Word("যন্ত্র", "jontro", listOf("jon", "tro"), listOf("zontro", "jantra"), "ন্ত্র", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু ntr"),
+                Word("স্মৃতি", "smriti", listOf("smri", "ti"), listOf("sriti"), "স্মৃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু smri")
+            ))
+        )),
         Family("স্বরবর্ণ", "স্বরবর্ণ দিয়ে শুরু — ছোটহাতের ইংরেজিতেই কঠিন সব শব্দ", listOf(
             CapWords("অ", listOf(
                 Word("অত্যাধুনিক", "ottadhunik", listOf("ot", "ta", "dhu", "nik"), listOf("otyadhunik"), "ত্যা"),

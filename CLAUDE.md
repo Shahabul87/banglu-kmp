@@ -33,6 +33,25 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S178 tutorial "many spellings" + "hard elsewhere" families (2026-09-03,
+  user: "user can get same words in many ways like pacci or pacchi or
+  passi … check did we provide multiple ways … what kinds of words is very
+  difficult on other keyboards"):** audit found the 313-word curriculum
+  taught conjuncts but not multi-spelling (33 words with one alt, 1 with
+  two, no everyday chat words). Probed ~100 candidate groups on the real
+  engine, kept only groups with ≥3 verified spellings (36) → two new
+  families FIRST in shared TutorialWords: "একই শব্দ, অনেক বানান" (caps চ্ছ /
+  ছি / শ স / শর্ট; pacchi·pacci·passi·pachchi → পাচ্ছি, accha·acca·assa·
+  acha·achha → আচ্ছা, korchi·korsi·korci·korchhi → করছি …) and "অন্য
+  কিবোর্ডে কঠিন, এখানে সহজ" (ৎ ঁ ঃ ঐ ঔ ঋ ক্ষ জ্ঞ ষ্ট্র ন্ত্র, each card
+  carrying a `note` — new optional Word field, rendered in the existing
+  pill on Android/desktop/web, exported to JSON). 368 words / 11 families,
+  every (spelling, word) pair pinned by S157TutorialWordsJvmTest. Web:
+  tutorial-words.json regenerated, Conversational Spelling rows now derived
+  from the shared family (bangluweb 05e09ff). Probe gaps NOT advertised
+  (engine candidates for a later round): keno→কেনো, achchha→আঁচছ, jbo→জ্ব,
+  shotto→ষত্ব, ha→হা, hna→হয়না, utsov→উৎস, oushod→ঔষদ, hotat→হটাত, thk/khb/
+  taile/ame/apne shorthand misses. Engine untouched. Android 1.5.114 (2151).
 - **S176/S177 preview-parity + typed-word round (2026-09-03, tester
   screenshots: "engine is producing garbage in the editor … words showing
   in the suggestion bar why??" / "hrid produces hridoy, hridoy should be
