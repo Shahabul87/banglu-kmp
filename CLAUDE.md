@@ -33,6 +33,22 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S180 fast-commit reconcile tolerates a tail (2026-09-04, from the
+  Facebook demo recording: "bujhte parcina is error in the recording"):**
+  under screen-recording CPU load the authoritative বুঝতে পারছিনা arrived
+  AFTER the double-space দাঁড়ি, and FastCommitReconcilePolicy refused the
+  shape `committed + "। " + next word` (a documented S170 pin said a
+  double space in between must block) — so the rule-only preview
+  বুজতেপার্ছিনা। stayed on screen. Policy now peels a tail of ≤ 3 chars
+  (spaces / tight punctuation) between the committed word and the caret
+  or the live composing text and re-commits `word + tail`; a letter on
+  the word, a longer gap, or a deleted appended space still block. Pin
+  flip documented in S170FastCommitReconcilePolicyTest.
+  dandaFromDoubleSpaceThenNextWordStillReconciles. Same round: three
+  Facebook demo videos recorded in WhatsApp via adb screenrecord
+  (scratchpad demo_record.py — human pace, touch dots, chip picks matched
+  after nukta fold, real double tap for দাঁড়ি) → ~/Desktop/banglu-demos.
+  Android 1.5.116 (2153).
 - **S179 "কঠিন শব্দ, এখানে সহজ" conjunct curriculum (2026-09-04, user:
   "change this to kothin sobdo ekhane sohoj, add more complex … multiple
   cards with all kinds of complex conjunct which might be difficult in

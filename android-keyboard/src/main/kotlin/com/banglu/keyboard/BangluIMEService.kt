@@ -5035,10 +5035,11 @@ class BangluIMEService : InputMethodService(),
             // correction goes in front of the live composing text, which is
             // re-established afterwards. FastCommitReconcilePolicy decides.
             val composingNow = if (buffer.isNotEmpty()) composingVisibleText else ""
-            val before = ic?.getTextBeforeCursor(expected.length + composingNow.length + 4, 0)?.toString()
+            val before = ic?.getTextBeforeCursor(expected.length + composingNow.length + FastCommitReconcilePolicy.MAX_TAIL + 4, 0)?.toString()
             val plan = FastCommitReconcilePolicy.plan(
                 before = before,
-                expected = expected,
+                committed = committedNow,
+                appendText = appendText,
                 composingNow = composingNow,
                 bufferActive = buffer.isNotEmpty(),
                 isTightPunctuation = ::isBanglaTightPunctuation
@@ -5053,11 +5054,11 @@ class BangluIMEService : InputMethodService(),
                     is FastCommitReconcilePolicy.Plan.ReplaceTail -> {
                         ic.beginBatchEdit()
                         ic.deleteSurroundingText(plan.deleteLength, 0)
-                        ic.commitText(result.bengali + appendText + plan.trailing, 1)
+                        ic.commitText(result.bengali + plan.tail, 1)
                         ic.endBatchEdit()
-                        lastCommittedTextLength = result.bengali.length + appendText.length + plan.trailing.length
+                        lastCommittedTextLength = result.bengali.length + plan.tail.length
                         maybeOfferAutoCorrectUndo(phonetic, committedNow, result.bengali, appendText)
-                        log("reconcileFastCommit: '$committedNow' -> '${result.bengali}' (trailing='${plan.trailing}')")
+                        log("reconcileFastCommit: '$committedNow' -> '${result.bengali}' (tail='${plan.tail}')")
                     }
                     is FastCommitReconcilePolicy.Plan.ReplaceBeforeComposing -> {
                         // finishComposingText turns the live composing word into
@@ -5068,10 +5069,10 @@ class BangluIMEService : InputMethodService(),
                         ic.beginBatchEdit()
                         ic.finishComposingText()
                         ic.deleteSurroundingText(plan.deleteLength, 0)
-                        ic.commitText(result.bengali + appendText, 1)
+                        ic.commitText(result.bengali + plan.tail, 1)
                         ic.setComposingText(plan.composingNow, 1)
                         ic.endBatchEdit()
-                        lastCommittedTextLength = result.bengali.length + appendText.length
+                        lastCommittedTextLength = result.bengali.length + plan.tail.length
                         log("reconcileFastCommit: '$committedNow' -> '${result.bengali}' before composing '${plan.composingNow}'")
                     }
                 }

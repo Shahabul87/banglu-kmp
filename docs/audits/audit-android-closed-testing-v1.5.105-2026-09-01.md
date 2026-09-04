@@ -781,3 +781,32 @@ oi/ou/ai/au diphthongs are single units; a vowel followed by two consonants keep
 first) — the pin wall asserts concat == roman. Card notes: conjunct caps say "অন্য কিবোর্ডে
 হসন্ত লাগে — এখানে শুধু <roman>", sign caps say "আলাদা কি". Curriculum
 now 454 words / 11 families, every (spelling, word) pair pinned by `S157TutorialWordsJvmTest`.
+
+## S180 — fast-commit reconcile after a দাঁড়ি (2026-09-04, Android 1.5.116 / 2153)
+
+Found while recording the Facebook demo videos (user: "bujhte parcina is error in the
+recording"): typing `bujteparcina` at a human pace followed by a double space committed the
+rule-only preview বুজতেপার্ছিনা and the দাঁড়ি model turned it into `বুজতেপার্ছিনা। `; the
+authoritative বুঝতে পারছিনা arrived a beat later (the screen recorder loads the CPU) and the
+S32 reconcile refused to replace it. Repro in the try-it editor without recording load: all
+three shapes (single space, double space, double space then next word) correct — the race
+needs the conversion to land after the দাঁড়ি.
+
+**Root cause.** `FastCommitReconcilePolicy` accepted only `committed + " "` or that plus one
+tight punctuation at the very end, and refused anything between the committed word and
+the live composing text — a documented S170 pin ("double space in between must block").
+The দাঁড়ি model's "। " is a tail the keyboard itself wrote, not a user edit.
+
+**Fix.** The policy peels a tail of at most 3 characters (spaces / tight punctuation)
+between the committed word and the caret or the live composing text, and the service
+re-commits `word + tail` (in front of the re-established composing text when there is
+one). A letter typed onto the word, a gap longer than the tail, or a deleted appended
+space still block. Pin flip documented in the S170 test. Android unit 223, all six walls
+green. Re-recorded: the same sentence now reads বুঝতে পারছিনা। in the chat video.
+
+**Demo videos** (`~/Desktop/banglu-demos/`, WhatsApp chat, touch dots on, nothing sent,
+drafts cleared): 1 everyday chat (kmon acho → কেমন আছো, shorthand, compound split, chip
+pick পড়ে), 2 hard words (হঠাৎ বিদ্যুৎ চাঁদ দুঃখ শিক্ষা বিজ্ঞান যুদ্ধ সৃষ্টি বিশ্বাস ঐক্য কৃষ্ণ মৃত্যু),
+3 Nazrul's কান্ডারী হুঁশিয়ার (eight lines; ঘোষিয়াছে and কান্ডারী picked from the strip).
+Harness lessons: `adb input tap` spacing must be a real double tap (≈ 0.15 s) for the দাঁড়ি
+window; chip content-descriptions carry য়/ড় as base + nukta, so matches must fold nukta.

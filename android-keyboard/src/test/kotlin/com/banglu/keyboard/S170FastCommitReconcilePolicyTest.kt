@@ -4,44 +4,55 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/**
- * S170 (top-1,000 device study): a fast-committed preview must still be
- * corrected when the user is already composing the NEXT word. The old guard
- * required an empty buffer and an editor tail equal to the committed text, so
- * at machine-speed typing long words (ইনস্টিটিউট, রবীন্দ্রনাথ, বহিঃসংযোগ) kept
- * their rule-only preview forever.
- */
 class S170FastCommitReconcilePolicyTest {
-
     private val punct: (Char) -> Boolean = { it == '।' || it == ',' || it == '?' || it == '!' }
+    private fun plan(before: String?, committed: String, composing: String = "", active: Boolean = false, append: String = " ") =
+        FastCommitReconcilePolicy.plan(before, committed, append, composing, active, punct)
 
     @Test
-    fun idleTailReplacesInPlace() {
-        val p = FastCommitReconcilePolicy.plan(before = "আমি ইনস্তিতিউত ", expected = "ইনস্তিতিউত ", composingNow = "", bufferActive = false, isTightPunctuation = punct)
-        assertEquals(FastCommitReconcilePolicy.Plan.ReplaceTail(deleteLength = 11, trailing = ""), p)
+    fun plainTailIsReplaced() {
+        assertEquals(FastCommitReconcilePolicy.Plan.ReplaceTail(11, " "), plan("আমি ইনস্তিতিউত ", "ইনস্তিতিউত"))
     }
 
     @Test
-    fun idleTailKeepsOneTrailingPunctuation() {
-        val p = FastCommitReconcilePolicy.plan(before = "ইনস্তিতিউত ।", expected = "ইনস্তিতিউত ", composingNow = "", bufferActive = false, isTightPunctuation = punct)
-        assertEquals(FastCommitReconcilePolicy.Plan.ReplaceTail(deleteLength = 12, trailing = "।"), p)
+    fun oneTightPunctuationAfterTheSpaceIsKept() {
+        assertEquals(FastCommitReconcilePolicy.Plan.ReplaceTail(12, " ।"), plan("ইনস্তিতিউত ।", "ইনস্তিতিউত"))
     }
 
     @Test
-    fun composingNextWordReplacesBeforeTheComposingText() {
-        val p = FastCommitReconcilePolicy.plan(before = "আমি ইনস্তিতিউত রব", expected = "ইনস্তিতিউত ", composingNow = "রব", bufferActive = true, isTightPunctuation = punct)
-        assertEquals(FastCommitReconcilePolicy.Plan.ReplaceBeforeComposing(deleteLength = 13, composingNow = "রব"), p)
+    fun replacesInFrontOfTheLiveComposingWord() {
+        assertEquals(
+            FastCommitReconcilePolicy.Plan.ReplaceBeforeComposing(13, " ", "রব"),
+            plan("আমি ইনস্তিতিউত রব", "ইনস্তিতিউত", composing = "রব", active = true),
+        )
     }
 
     @Test
-    fun composingButEditorDisagreesIsSkipped() {
-        assertNull(FastCommitReconcilePolicy.plan(before = "আমি ইনস্তিতিউত  রব", expected = "ইনস্তিতিউত ", composingNow = "রব", bufferActive = true, isTightPunctuation = punct))
-        assertNull(FastCommitReconcilePolicy.plan(before = "আমি ইনস্তিতিউত রব", expected = "ইনস্তিতিউত ", composingNow = "", bufferActive = true, isTightPunctuation = punct))
+    fun dandaFromDoubleSpaceThenNextWordStillReconciles() {
+        // S180 PIN FLIP (documented decision, device evidence 2026-09-04): the
+        // Facebook demo recording committed বুজতেপার্ছিনা।, the authoritative
+        // বুঝতে পারছিনা arrived after the double-space দাঁড়ি, and this shape
+        // was refused — the wrong word stayed on screen. The দাঁড়ি model's
+        // "। " is a tail, not a user edit.
+        assertEquals(
+            FastCommitReconcilePolicy.Plan.ReplaceBeforeComposing("বুজতেপার্ছিনা".length + 2 + 2, "। ", "তো"),
+            plan("আমি বুজতেপার্ছিনা। তো", "বুজতেপার্ছিনা", composing = "তো", active = true),
+        )
+        assertEquals(FastCommitReconcilePolicy.Plan.ReplaceTail("বুজতেপার্ছিনা".length + 2, "। "), plan("আমি বুজতেপার্ছিনা। ", "বুজতেপার্ছিনা"))
+        assertEquals(FastCommitReconcilePolicy.Plan.ReplaceTail("ইনস্তিতিউত".length + 2, "  "), plan("আমি ইনস্তিতিউত  ", "ইনস্তিতিউত"))
     }
 
     @Test
-    fun unknownEditorTextIsSkipped() {
-        assertNull(FastCommitReconcilePolicy.plan(before = null, expected = "ইনস্তিতিউত ", composingNow = "", bufferActive = false, isTightPunctuation = punct))
-        assertNull(FastCommitReconcilePolicy.plan(before = "কিছু", expected = "ইনস্তিতিউত ", composingNow = "", bufferActive = false, isTightPunctuation = punct))
+    fun aRealEditInBetweenIsLeftAlone() {
+        assertNull(plan("আমি ইনস্তিতিউত    রব", "ইনস্তিতিউত", composing = "রব", active = true))   // gap longer than the tail
+        assertNull(plan("আমি ইনস্তিতিউত রব", "ইনস্তিতিউত", composing = "", active = true))       // composing unknown
+        assertNull(plan("আমি ইনস্তিতিউত", "ইনস্তিতিউত"))                                        // the appended space was deleted
+        assertNull(plan("আমি ইনস্তিতিউতক ", "ইনস্তিতিউত"))                                      // a letter was typed onto the word
+    }
+
+    @Test
+    fun missingOrUnrelatedTextIsLeftAlone() {
+        assertNull(plan(null, "ইনস্তিতিউত"))
+        assertNull(plan("কিছু", "ইনস্তিতিউত"))
     }
 }
