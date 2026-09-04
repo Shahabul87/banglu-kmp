@@ -33,6 +33,24 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S182 English mode never pushes a word (2026-09-04, tester screenshot:
+  typed "Lal", Space auto-replaced it with "all"; user: "engine should not
+  push anything, always user selection has to be on the top … make
+  English typing feel like Samsung keyboard; if user type any email, user,
+  domain name suggest it beforehand"):** EnglishCommitPolicy (pure,
+  S182 test) — the typed word ALWAYS commits on Space; a likely correction
+  becomes a "→ all" tap chip (applyPendingEnglishOffer replaces the kept
+  word and learns the correction); the old auto-replace lives behind a new
+  Settings switch "ইংরেজি অটো-রিপ্লেস" (`english_auto_replace`, default
+  OFF). While typing, the typed word is the strip's FIRST chip (the same
+  contract as the Bangla blue chip), then identity fills, then
+  completions. IdentityAssist gains `prefixCompletions` — saved addresses
+  AND site names (bangluweb.com, learned from tokens with a dot) appear
+  after two letters in any non-sensitive field when identity memory is
+  ON; the S136 opt-in default (OFF + purge) is deliberately unchanged
+  (privacy audit decision) — flipping it is the user's call. S181 device
+  pass (S22, 1.5.117): 996/1000 dictionary-exact (the same four documented
+  differences), frames p50 10.2 / p95 21.1 ms.
 - **S181 literary-faithful round (2026-09-04, from the Nazrul demo; user:
   "do not create bug while fixing this"):** four engine rules, each pinned
   (S181LiteraryFaithfulJvmTest) and measured before/after on every

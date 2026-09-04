@@ -757,6 +757,10 @@ object SmartEngineAdapter {
     fun identitySavedFills(limit: Int = 3): List<String> =
         if (identityAssistActive()) identityAssist.savedIdentities(limit) else emptyList()
 
+    /** S182: saved addresses / site names starting with the typed letters (identity memory ON only). */
+    fun identityPrefixCompletions(prefix: String, limit: Int = 2): List<String> =
+        if (identityAssistActive()) identityAssist.prefixCompletions(prefix, limit) else emptyList()
+
     fun identityIsEmailLikeToken(token: String): Boolean =
         identityAssist.isEmailLikeToken(token)
 

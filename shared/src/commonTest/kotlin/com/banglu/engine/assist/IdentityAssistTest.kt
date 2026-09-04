@@ -99,3 +99,19 @@ class IdentityAssistTest {
         assertEquals(listOf("ok@gmail.com"), a.savedIdentities(3))
     }
 }
+
+class S182IdentityPrefixTest {
+    @Test
+    fun savedAddressesAndSitesCompleteFromTwoLetters() {
+        val a = com.banglu.engine.assist.IdentityAssist()
+        a.recordIdentity("isham251087@gmail.com")
+        a.recordIdentity("bangluweb.com")
+        a.recordIdentity("hello")            // not an identity
+        assertEquals(listOf("isham251087@gmail.com"), a.prefixCompletions("is"))
+        assertEquals(listOf("bangluweb.com"), a.prefixCompletions("ban"))
+        assertEquals(emptyList<String>(), a.prefixCompletions("i"))        // one letter is too early
+        assertEquals(emptyList<String>(), a.prefixCompletions("he"))
+        val b = com.banglu.engine.assist.IdentityAssist(); b.load(a.serialize())
+        assertEquals(listOf("bangluweb.com"), b.prefixCompletions("bangl"))
+    }
+}

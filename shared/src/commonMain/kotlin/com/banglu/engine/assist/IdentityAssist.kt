@@ -25,6 +25,7 @@ class IdentityAssist {
     private companion object {
         const val MAX_SAVED_EMAILS = 8
         const val MAX_SAVED_DOMAINS = 8
+        const val MAX_SAVED_SITES = 8
         const val MAX_TOKEN_LENGTH = 64
         val COMMON_DOMAINS = listOf(
             "gmail.com", "yahoo.com", "outlook.com", "hotmail.com",
@@ -35,6 +36,8 @@ class IdentityAssist {
     /** Most-recent first. */
     private val savedEmails = ArrayDeque<String>()
     private val savedDomains = ArrayDeque<String>()
+    /** S182: site names typed on their own (bangluweb.com), most-recent first. */
+    private val savedSites = ArrayDeque<String>()
 
     // ── suggestions ──────────────────────────────────────────────────────
 
@@ -72,6 +75,23 @@ class IdentityAssist {
     /** The user's saved addresses, most-recent first — the one-tap fills. */
     fun savedIdentities(limit: Int = 3): List<String> = savedEmails.take(limit)
 
+    /**
+     * S182 (tester: "if user type any email, user, domain name suggest it
+     * beforehand"): the saved addresses and site names that START with the
+     * letters typed so far (≥ 2), most-recent first — the Samsung-style
+     * "your email appears after two letters" chip.
+     */
+    fun prefixCompletions(prefixRaw: String, limit: Int = 2): List<String> {
+        val prefix = prefixRaw.trim().lowercase()
+        if (prefix.length < 2 || limit <= 0) return emptyList()
+        val out = ArrayList<String>()
+        for (item in savedEmails + savedSites) {
+            if (out.size >= limit) break
+            if (item.startsWith(prefix) && item != prefix) out.add(item)
+        }
+        return out
+    }
+
     // ── learning ─────────────────────────────────────────────────────────
 
     /**
@@ -82,7 +102,17 @@ class IdentityAssist {
      */
     fun recordIdentity(tokenRaw: String) {
         val token = tokenRaw.trim()
-        if (!isCompleteEmail(token)) return
+        if (!isCompleteEmail(token)) {
+            // S182: a site name typed on its own (banglu.app, bangluweb.com)
+            // is an identity too — remembered for prefix completion only.
+            val site = token.lowercase()
+            if ('@' !in site && site.length in 4..MAX_TOKEN_LENGTH && isPlausibleDomain(site)) {
+                savedSites.remove(site)
+                savedSites.addFirst(site)
+                while (savedSites.size > MAX_SAVED_SITES) savedSites.removeLast()
+            }
+            return
+        }
         val normalized = token.lowercase()
         savedEmails.remove(normalized)
         savedEmails.addFirst(normalized)
@@ -96,6 +126,7 @@ class IdentityAssist {
     fun clear() {
         savedEmails.clear()
         savedDomains.clear()
+        savedSites.clear()
     }
 
     // ── persistence (caller-owned) ───────────────────────────────────────
@@ -104,6 +135,7 @@ class IdentityAssist {
     fun serialize(): String = buildString {
         for (e in savedEmails) append("e\t").append(e).append('\n')
         for (d in savedDomains) append("d\t").append(d).append('\n')
+        for (w in savedSites) append("s\t").append(w).append('\n')
     }
 
     /** Tolerant — malformed lines are skipped, never fatal. */
@@ -119,6 +151,9 @@ class IdentityAssist {
                 "d" -> if (isPlausibleDomain(parts[1]) && savedDomains.size < MAX_SAVED_DOMAINS &&
                     parts[1] !in savedDomains
                 ) savedDomains.addLast(parts[1].lowercase())
+                "s" -> if (isPlausibleDomain(parts[1]) && savedSites.size < MAX_SAVED_SITES &&
+                    parts[1] !in savedSites
+                ) savedSites.addLast(parts[1].lowercase())
             }
         }
     }

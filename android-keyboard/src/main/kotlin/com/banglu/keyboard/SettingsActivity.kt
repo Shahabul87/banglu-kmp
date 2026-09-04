@@ -187,6 +187,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
 
     var autoCapitalize by remember { mutableStateOf(prefs.getBoolean("auto_capitalize", true)) }
     var doubleSpacePeriod by remember { mutableStateOf(prefs.getBoolean("double_space_period", true)) }
+    var englishAutoReplace by remember { mutableStateOf(prefs.getBoolean("english_auto_replace", false)) }
     var suggestions by remember { mutableStateOf(prefs.getBoolean("suggestions", true)) }
     var glideTyping by remember { mutableStateOf(prefs.getBoolean("glide_typing_enabled", true)) }
     var typingLearning by remember { mutableStateOf(prefs.getBoolean("typing_learning", true)) }
@@ -321,6 +322,11 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
             item {
                 BrandSwitch("ডাবল-স্পেস পিরিয়ড", "দুবার স্পেস চাপলে দাড়ি/পিরিয়ড", doubleSpacePeriod) {
                     doubleSpacePeriod = it; saveBoolean("double_space_period", it)
+                }
+            }
+            item {
+                BrandSwitch("ইংরেজি অটো-রিপ্লেস", "বন্ধ থাকলে আপনার লেখা শব্দই থাকে, সঠিক বানান সাজেশনে (Lal → all নিজে বদলাবে না)", englishAutoReplace) {
+                    englishAutoReplace = it; saveBoolean("english_auto_replace", it)
                 }
             }
             item {

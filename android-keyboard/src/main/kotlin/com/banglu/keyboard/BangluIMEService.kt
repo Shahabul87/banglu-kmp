@@ -493,6 +493,10 @@ class BangluIMEService : InputMethodService(),
     val personalDictionaryEnabled = mutableStateOf(true)
     /** S135 (F-004): dedicated saved-email identity switch (see settings). */
     val identityAssistEnabled = mutableStateOf(true)
+    /** S182: EN-mode auto-replace on Space (default OFF — the typed word always commits). */
+    val englishAutoReplaceEnabled = mutableStateOf(false)
+    /** S182: a correction the user may tap after Space kept their word (typed, correction). */
+    private var pendingEnglishOffer: Pair<String, String>? = null
     /** S138 (F-003): clipboard HISTORY is opt-in. Off (default) → the panel
      *  offers only the current system clip as a one-shot; nothing persists. */
     val clipboardHistoryEnabled = mutableStateOf(false)
@@ -582,6 +586,10 @@ class BangluIMEService : InputMethodService(),
 
         /** S98: identity-assist chips (email fills / domain completions). */
         private const val IDENTITY_FILL_SOURCE = "identity_fill"
+        /** S182: the typed English word itself, always the strip's first chip. */
+        private const val ENGLISH_TYPED_SOURCE = "english_typed"
+        /** S182: "did you mean" — tap replaces the word Space just kept. */
+        private const val ENGLISH_CORRECTION_OFFER_SOURCE = "english_correction_offer"
         /** S138 (F-012): how long onDestroy waits for cancelled jobs to unwind. */
         private const val TEARDOWN_JOIN_TIMEOUT_MS = 300L
         /** S136 (F-015): minimum spacing between automatic dictionary retries. */
@@ -1145,6 +1153,7 @@ class BangluIMEService : InputMethodService(),
         typingLearningEnabled.value = prefs.getBoolean("typing_learning", true)
         personalDictionaryEnabled.value = prefs.getBoolean("personal_dictionary", true)
         identityAssistEnabled.value = prefs.getBoolean("identity_assist", false)
+        englishAutoReplaceEnabled.value = prefs.getBoolean("english_auto_replace", false)
         clipboardHistoryEnabled.value = prefs.getBoolean(PrefsMigrations.CLIPBOARD_ENABLED_KEY, false)
         if (!clipboardHistoryEnabled.value) {
             // Switched off (or never on): nothing may remain in memory (now)
@@ -2175,6 +2184,7 @@ class BangluIMEService : InputMethodService(),
         val ic = currentInputConnection ?: return
         // S97: typing again closes the undo window for the last correction.
         if (lastAutoCorrectWasEnglish) clearAutoCorrectUndoState()
+        pendingEnglishOffer = null   // S182: the offer is for the word just kept only
         ic.commitText(char.toString(), 1)
         // S99: shadow the word prefix for the sync touch resolver.
         englishWordPrefix =
@@ -2226,6 +2236,10 @@ class BangluIMEService : InputMethodService(),
                 if (prefix.isEmpty()) SmartEngineAdapter.englishPredictions(prev, 3)
                 else SmartEngineAdapter.englishCompletions(prefix, 3)
             }
+            val identityFills = if (prefix.length >= 2 && identityMemoryAllowed()) withContext(engineLane) {
+                SmartEngineAdapter.ensureIdentityLoaded()
+                SmartEngineAdapter.identityPrefixCompletions(prefix, 2)
+            } else emptyList()
             // S167 (user: "in english mode no need to mirror bengali —
             // people might feel bored"): the S162 Bangla-mirror ghost chip
             // is REMOVED. English mode shows English only.
@@ -2233,7 +2247,24 @@ class BangluIMEService : InputMethodService(),
                 suggestions.clear()
                 // S97: a fresh correction leads with its undo chip.
                 autoCorrectUndoSuggestion()?.let { suggestions.add(it) }
-                items.forEach { w ->
+                // S182: right after Space kept the typed word, the likely
+                // correction is offered as a tap chip ("→ all").
+                if (prefix.isEmpty()) pendingEnglishOffer?.let { (_, correction) ->
+                    suggestions.add(SmartSuggestion("→ $correction", 0.95, ENGLISH_CORRECTION_OFFER_SOURCE, correction, "correction_offer"))
+                }
+                // S182: the typed word is ALWAYS the first chip while typing —
+                // what Space will commit (the same contract as the Bangla
+                // strip's blue chip).
+                if (prefix.isNotEmpty()) {
+                    suggestions.add(SmartSuggestion(prefix, 1.0, ENGLISH_TYPED_SOURCE, prefix, "typed"))
+                    // S182: saved addresses / site names appear after two letters.
+                    if (prefix.length >= 2 && identityMemoryAllowed()) {
+                        identityFills.forEach { fill ->
+                            suggestions.add(SmartSuggestion(fill, 0.95, IDENTITY_FILL_SOURCE, prefix, "identity"))
+                        }
+                    }
+                }
+                items.filter { it != prefix }.forEach { w ->
                     suggestions.add(SmartSuggestion(w, 0.9, ENGLISH_WORD_SOURCE, prefix, "en"))
                 }
                 // S122: inline emoji suggestions — typed word matches an
@@ -2652,7 +2683,8 @@ class BangluIMEService : InputMethodService(),
                 // S98: space also finishes an email token in any mode.
                 if (identityAssistAllowed()) {
                     val token = identityTokenBeforeCursor(ic)
-                    if (token.contains('@')) recordIdentityAsync(token)
+                    // S182: site names (bangluweb.com) are identities too; IdentityAssist decides.
+                    if (token.contains('@') || (token.contains('.') && token.length >= 4)) recordIdentityAsync(token)
                 }
                 // S96: space finishes an English word — learn it (with its
                 // previous word) BEFORE the separator lands. S97: mistyped
@@ -2664,21 +2696,31 @@ class BangluIMEService : InputMethodService(),
                         val correction = if (suggestionsAllowedForCurrentInput()) {
                             SmartEngineAdapter.englishAutocorrect(word)
                         } else null
-                        if (correction != null && correction != word) {
-                            ic.beginBatchEdit()
-                            ic.deleteSurroundingText(word.length, 0)
-                            ic.commitText("$correction ", 1)
-                            ic.endBatchEdit()
-                            lastCommittedTextLength = correction.length + 1
-                            lastAutoCorrectOriginal = word
-                            lastAutoCorrectReplacement = correction
-                            lastAutoCorrectPhonetic = word
-                            lastAutoCorrectWasEnglish = true
-                            recordImeEvent("autocorrect_offer")
-                            recordEnglishCommitAsync(correction, prev)
-                            lastSpaceTime = now
-                            refreshEnglishSuggestionsAsync()
-                            return
+                        // S182: the typed word always commits; the correction
+                        // is a chip (EnglishCommitPolicy) unless the user
+                        // switched auto-replace on.
+                        when (val d = EnglishCommitPolicy.decide(word, correction, englishAutoReplaceEnabled.value)) {
+                            is EnglishCommitPolicy.Decision.Replace -> {
+                                ic.beginBatchEdit()
+                                ic.deleteSurroundingText(word.length, 0)
+                                ic.commitText("${d.correction} ", 1)
+                                ic.endBatchEdit()
+                                lastCommittedTextLength = d.correction.length + 1
+                                lastAutoCorrectOriginal = word
+                                lastAutoCorrectReplacement = d.correction
+                                lastAutoCorrectPhonetic = word
+                                lastAutoCorrectWasEnglish = true
+                                recordImeEvent("autocorrect_offer")
+                                recordEnglishCommitAsync(d.correction, prev)
+                                lastSpaceTime = now
+                                refreshEnglishSuggestionsAsync()
+                                return
+                            }
+                            is EnglishCommitPolicy.Decision.KeepWithOffer -> {
+                                pendingEnglishOffer = d.word to d.correction
+                                recordImeEvent("english_correction_offered")
+                            }
+                            is EnglishCommitPolicy.Decision.Keep -> Unit
                         }
                         recordEnglishCommitAsync(word, prev)
                     }
@@ -2940,6 +2982,14 @@ class BangluIMEService : InputMethodService(),
 
         // S96: English chips replace the word being typed (or commit a
         // prediction) and feed the English learning store.
+        if (suggestion.source == ENGLISH_TYPED_SOURCE) {
+            onEnglishSuggestionTap(suggestion)   // S182: commits exactly what was typed
+            return
+        }
+        if (suggestion.source == ENGLISH_CORRECTION_OFFER_SOURCE) {
+            applyPendingEnglishOffer()
+            return
+        }
         if (suggestion.source == ENGLISH_WORD_SOURCE) {
             onEnglishSuggestionTap(suggestion)
             return
@@ -4940,6 +4990,19 @@ class BangluIMEService : InputMethodService(),
         return ic.setSelection(target, target)
     }
 
+    /**
+     * S183 (tester: "একের অধিক লাইনের ক্ষেত্রে উপর নিচে কার্সর"): line moves.
+     * The host editor owns line geometry, so this is the DPAD key pair the
+     * editor itself interprets (works in every EditText/Compose field).
+     */
+    private fun onCursorMoveVertical(direction: Int) {
+        val ic = currentInputConnection ?: return
+        commitPendingBuffer()
+        val keyCode = if (direction > 0) KeyEvent.KEYCODE_DPAD_DOWN else KeyEvent.KEYCODE_DPAD_UP
+        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+    }
+
     private fun moveCursorByKeyEvent(ic: InputConnection, direction: Int) {
         val keyCode = if (direction > 0) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
         ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
@@ -5143,6 +5206,24 @@ class BangluIMEService : InputMethodService(),
         } else {
             clearAutoCorrectUndoState()
         }
+    }
+
+    /** S182: the user tapped "→ correction" — replace the word Space kept, and learn the correction. */
+    private fun applyPendingEnglishOffer() {
+        val ic = currentInputConnection ?: return
+        val (typed, correction) = pendingEnglishOffer ?: return
+        pendingEnglishOffer = null
+        val before = ic.getTextBeforeCursor(typed.length + 2, 0)?.toString().orEmpty()
+        // Only while the editor still ends with the kept word and its space.
+        if (!before.endsWith("$typed ")) { suggestions.clear(); return }
+        ic.beginBatchEdit()
+        ic.deleteSurroundingText(typed.length + 1, 0)
+        ic.commitText("$correction ", 1)
+        ic.endBatchEdit()
+        lastCommittedTextLength = correction.length + 1
+        recordImeEvent("english_correction_applied")
+        recordEnglishCommitAsync(correction, null)
+        refreshEnglishSuggestionsAsync()
     }
 
     private fun autoCorrectUndoSuggestion(): SmartSuggestion? {

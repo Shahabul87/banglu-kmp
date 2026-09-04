@@ -873,3 +873,29 @@ junk English keys now carrying ঞ্ছ instead of ন্ছ (223), তো spli
 word (21: দুঃখিত, মিনিট, অর্থাৎ, পরিণত, জড়িত, নিকট, সিলেট, চিহ্নিত, ব্যস্ত, অতীত, বাজেট,
 সীমিত …), and a residue of synthetic junk keys from the study's own inflection generator.
 No top-1,000 word changed.
+
+## S182 — English mode: the typed word always wins (2026-09-04, Android module)
+
+Tester (screenshot): typed "Lal" in EN mode, Space auto-replaced it with "all"; "how can I
+turn it off from setting?" User: "engine should not push anything, always user selection
+has to be on the top … make English typing feel like Samsung keyboard; if user type any
+email, user, domain name suggest it beforehand."
+
+**Root cause.** The EN Space handler (S97) auto-replaced any unknown word whose weighted
+edit-1 neighbour scored high enough, with an ↶ undo chip after the fact — so a name the
+personal dictionary had not seen yet was never allowed to commit.
+
+**Built.** `EnglishCommitPolicy` (pure, pinned): the typed word always commits; a likely
+correction is offered as a "→ all" chip that replaces the kept word on tap and teaches
+the correction; the old auto-replace sits behind a new Settings switch "ইংরেজি
+অটো-রিপ্লেস" (default OFF). The strip leads with the typed word while typing (the Bangla
+blue-chip contract), then identity fills, then completions. `IdentityAssist.
+prefixCompletions`: saved addresses and site names (learned from tokens containing a
+dot, e.g. bangluweb.com) appear after two typed letters in any non-sensitive field when
+identity memory is on. The S136 opt-in default for identity memory (OFF, with purge) is
+deliberately unchanged; the user decides whether to flip it. Unit: android 226, shared
+436; all six walls green.
+
+**S181 device pass (S22, 1.5.117):** real-usage 1,000-word list 996/1000 dictionary-exact
+— the same four documented differences (shororipuke, darao → দাঁড়াও, kothai → কোথায়
+policy, chor → চর); frames p50 10.2 / p95 21.1 ms over 5,994 frames.
