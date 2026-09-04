@@ -99,7 +99,20 @@ def installed_version():
 
 def bind_ime():
     adb("shell", "ime", "disable", IME_ID, check=False)
-    adb("shell", "ime", "enable", IME_ID)
+    # S183: right after a clean install the input-method manager may not have
+    # registered the service yet — `ime enable` then exits 255 (seen on the
+    # 1.5.113 and 1.5.117 gates). Retry briefly instead of failing the gate.
+    last = None
+    for attempt in range(8):
+        try:
+            adb("shell", "ime", "enable", IME_ID)
+            last = None
+            break
+        except subprocess.CalledProcessError as e:
+            last = e
+            time.sleep(1.0)
+    if last is not None:
+        raise last
     adb("shell", "ime", "set", IME_ID)
 
 
