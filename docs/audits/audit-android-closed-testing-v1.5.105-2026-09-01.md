@@ -740,3 +740,44 @@ to the JSON. Curriculum now 368 words / 11 families; `S157TutorialWordsJvmTest` 
 Conversational Spelling rows derive from the shared family (bangluweb 05e09ff). Walls: all
 six green (jvmTest 752, shared 435, android 222, js 451, desktop 41, windows 161). Engine
 untouched.
+
+## S179 — "কঠিন শব্দ, এখানে সহজ": the conjunct curriculum (2026-09-04, Android 1.5.115 / 2152)
+
+User: "change this to kothin sobdo ekhane sohoj, add more complex in this list, add multiple
+cards here with all kinds of complex conjunct which might be difficult in other keyboards."
+
+The S178 second family is renamed and rebuilt as a full conjunct curriculum: 16 caps, one
+per class, 105 words. Candidates were mined from the dictionary by conjunct regex (words
+with frequency ≥ 35), but the mined romans are the compiler's canonical keys (সঙ্গে →
+"songoe", অঞ্চল → "oncol", যুদ্ধ → "zuddh") — not what a person types — so every card
+carries hand-written NATURAL spellings verified on the real engine before it was written
+(111 candidate words, 105 with at least one passing spelling). The six that fail are engine
+gaps and stay off the cards: dukkhito → "দুঃখী তো" (a compound split on a plain word — a
+real bug candidate), ingit → ইংগিত, bhenge → ভেঙে (both spellings exist), inchi → ইঞ্চ,
+trishna → ত্রিশনা, oporahno → অপরাহ্ণ. Partial misses were dropped as alternates, not
+advertised (e.g. byakti → ব্যাক্তি, kendra → কেন্ড্রা, ghanta → ঘাঁটা).
+
+| Cap | Examples (first spelling · alternates) |
+|---|---|
+| ৎ | hothat · hothath → হঠাৎ, biddut · bidyut → বিদ্যুৎ, chomotkar → চমৎকার, bhobishshot → ভবিষ্যৎ |
+| ঁ | chad · chand → চাঁদ, khuje · khunje → খুঁজে, jhuki · jhunki → ঝুঁকি, pouche → পৌঁছে |
+| ঃ | dukkho · dukkha → দুঃখ, nishshash · nihshash → নিঃশ্বাস, dusswopno → দুঃস্বপ্ন |
+| ঐ ঔ ঋ | oikko → ঐক্য, oitihashik → ঐতিহাসিক, ouponnashik → ঔপন্যাসিক, rishi → ঋষি, rin → ঋণ |
+| ক্ষ জ্ঞ | khoma · kkhoma → ক্ষমা, shikkha → শিক্ষা, biggan · bigyan → বিজ্ঞান |
+| ঙ্ক ঙ্গ | songe · shonge → সঙ্গে, mongol → মঙ্গল, ongko → অঙ্ক, sthanangko → স্থানাঙ্ক |
+| ঞ্চ ঞ্জ | onchol → অঞ্চল, ponchom → পঞ্চম, injin → ইঞ্জিন, challenge → চ্যালেঞ্জ |
+| ণ্ড ণ্ঠ ষ্ণ | ghonta → ঘণ্টা, khondo → খণ্ড, konth → কণ্ঠ, krishno → কৃষ্ণ |
+| হ্ন হ্ম হ্ব | chihno → চিহ্ন, brahmon → ব্রাহ্মণ, ahban → আহ্বান, jihba → জিহ্বা |
+| ত্ম দ্ভ ম্ভ | atma → আত্মা, odbhut · odvut → অদ্ভুত, sombhob · somvob → সম্ভব |
+| দ্ধ ক্ত ল্প | juddho · zuddho → যুদ্ধ, siddhanto → সিদ্ধান্ত, bekti → ব্যক্তি, golpo · golp → গল্প |
+| ন্ত্র ষ্ট্র স্ত্র | jontro → যন্ত্র, kendro → কেন্দ্র, rashtro · rastro → রাষ্ট্র, totto → তত্ত্ব |
+| য-ফলা | jonno · jonyo → জন্য, moddhe · modhye → মধ্যে, shahajjo · sahajjo → সাহায্য |
+| ব-ফলা | dara · dwara → দ্বারা, bishwas · bisshash → বিশ্বাস, sbadhinota · swadhinota → স্বাধীনতা |
+| র-ফলা রেফ | prothom → প্রথম, grohon → গ্রহণ, dhormo → ধর্ম, antorjatik → আন্তর্জাতিক |
+| ৃ | mrittu · mrityu → মৃত্যু, srishti → সৃষ্টি, prithibi → পৃথিবী, songskriti → সংস্কৃতি |
+
+Splits come from a digraph-aware syllable splitter (kh/gh/ch/jh/th/dh/ph/bh/sh/ng and the
+oi/ou/ai/au diphthongs are single units; a vowel followed by two consonants keeps the
+first) — the pin wall asserts concat == roman. Card notes: conjunct caps say "অন্য কিবোর্ডে
+হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু <roman>", sign caps say "আলাদা কি লাগে". Curriculum
+now 454 words / 11 families, every (spelling, word) pair pinned by `S157TutorialWordsJvmTest`.

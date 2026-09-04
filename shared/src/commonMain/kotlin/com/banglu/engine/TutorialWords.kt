@@ -73,39 +73,143 @@ object TutorialWords {
                 Word("ইনশাআল্লাহ", "inshallah", listOf("in", "shal", "lah"), listOf("insaallah", "inshaallah"), "")
             ))
         )),
-        Family("অন্য কিবোর্ডে কঠিন, এখানে সহজ", "ৎ ঁ ঃ ঐ ঔ ঋ ক্ষ জ্ঞ — বিশেষ কি নয়, শুধু ছোট হাতের অক্ষর", listOf(
+        Family("কঠিন শব্দ, এখানে সহজ", "যুক্তবর্ণ, ৎ ঁ ঃ ঐ ঔ ঋ — হসন্ত নয়, বিশেষ কি নয়, শুধু ছোট হাতের অক্ষর", listOf(
             CapWords("ৎ", listOf(
-                Word("হঠাৎ", "hothat", listOf("ho", "that"), listOf("hothath"), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু t"),
-                Word("বিদ্যুৎ", "biddut", listOf("bid", "dut"), listOf("bidyut"), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু t"),
-                Word("উৎসব", "utsob", listOf("ut", "sob"), listOf("utshob"), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু t")
+                Word("হঠাৎ", "hothat", listOf("ho", "that"), listOf("hothath"), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু hothat"),
+                Word("বিদ্যুৎ", "biddut", listOf("bid", "dut"), listOf("bidyut"), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু biddut"),
+                Word("উৎসব", "utsob", listOf("ut", "sob"), listOf("utshob"), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু utsob"),
+                Word("চমৎকার", "chomotkar", listOf("cho", "mot", "kar"), listOf("chomotokar"), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু chomotkar"),
+                Word("চিকিৎসা", "chikitsa", listOf("chi", "kit", "sa"), listOf("chikitsha"), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু chikitsa"),
+                Word("ভবিষ্যৎ", "bhobishshot", listOf("bho", "bish", "shot"), listOf("vobishshot", "bhobishyot"), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু bhobishshot"),
+                Word("অর্থাৎ", "orthat", listOf("or", "that"), emptyList(), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু orthat")
             )),
             CapWords("ঁ", listOf(
-                Word("চাঁদ", "chad", listOf("chad"), listOf("chand", "chnad"), "ঁ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু chad"),
-                Word("কাঁদছি", "kadchi", listOf("kad", "chi"), listOf("kandchi", "kadsi"), "ঁ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু kadchi"),
-                Word("তাঁর", "tnar", listOf("tnar"), emptyList(), "ঁ", "", "", "tar → তার, সাজেশনে তাঁর; tnar → সরাসরি তাঁর")
+                Word("চাঁদ", "chad", listOf("chad"), listOf("chand", "chnad"), "ঁ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু chad"),
+                Word("কাঁদছি", "kadchi", listOf("kad", "chi"), listOf("kandchi", "kadsi"), "ঁ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু kadchi"),
+                Word("তাঁর", "tnar", listOf("tnar"), emptyList(), "ঁ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু tnar"),
+                Word("খুঁজে", "khuje", listOf("khu", "je"), listOf("khunje"), "ঁ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু khuje"),
+                Word("ঝুঁকি", "jhuki", listOf("jhu", "ki"), listOf("jhunki"), "ঁ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু jhuki"),
+                Word("দাঁড়িয়ে", "dariye", listOf("da", "ri", "ye"), listOf("danriye"), "ঁ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু dariye"),
+                Word("পৌঁছে", "pouche", listOf("pou", "che"), listOf("pounche"), "ঁ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু pouche")
             )),
             CapWords("ঃ", listOf(
-                Word("দুঃখ", "dukkho", listOf("duk", "kho"), listOf("dukkha", "dukho"), "ঃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু kkh"),
-                Word("নিঃশ্বাস", "nishshash", listOf("nish", "shash"), listOf("nihshash", "nisshash"), "ঃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু ssh")
+                Word("দুঃখ", "dukkho", listOf("duk", "kho"), listOf("dukkha", "dukho"), "ঃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু dukkho"),
+                Word("নিঃশ্বাস", "nishshash", listOf("nish", "shash"), listOf("nihshash", "nisshash"), "ঃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু nishshash"),
+                Word("নিঃসন্দেহে", "nissondehe", listOf("nis", "son", "de", "he"), listOf("nihsondehe"), "ঃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু nissondehe"),
+                Word("দুঃস্বপ্ন", "dusswopno", listOf("dus", "swop", "no"), listOf("dussopno"), "ঃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু dusswopno")
             )),
-            CapWords("ঐ ঔ", listOf(
-                Word("ঐক্য", "oikko", listOf("oik", "ko"), listOf("oikyo", "oikya"), "ঐ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু oi"),
-                Word("ঐতিহ্য", "oitijjo", listOf("oi", "tij", "jo"), listOf("oitihyo"), "ঐ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু oi"),
-                Word("ঔষধ", "oushodh", listOf("ou", "shodh"), emptyList(), "ঔ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু ou")
-            )),
-            CapWords("ঋ", listOf(
-                Word("ঋতু", "ritu", listOf("ri", "tu"), listOf("rritu"), "ঋ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু ri")
+            CapWords("ঐ ঔ ঋ", listOf(
+                Word("ঐক্য", "oikko", listOf("oik", "ko"), listOf("oikyo", "oikya"), "ঐ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু oikko"),
+                Word("ঐতিহ্য", "oitijjo", listOf("oi", "tij", "jo"), listOf("oitihyo"), "ঐ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু oitijjo"),
+                Word("ঐতিহাসিক", "oitihashik", listOf("oi", "ti", "ha", "shik"), listOf("oitihasik"), "ঐ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু oitihashik"),
+                Word("ঔষধ", "oushodh", listOf("ou", "shodh"), emptyList(), "ঔ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু oushodh"),
+                Word("ঔপন্যাসিক", "ouponnashik", listOf("ou", "pon", "na", "shik"), listOf("ouponyasik"), "ঔ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু ouponnashik"),
+                Word("ঋতু", "ritu", listOf("ri", "tu"), listOf("rritu"), "ঋ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু ritu"),
+                Word("ঋষি", "rishi", listOf("ri", "shi"), listOf("rrishi"), "ঋ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু rishi"),
+                Word("ঋণ", "rin", listOf("rin"), listOf("rrin"), "ঋ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু rin")
             )),
             CapWords("ক্ষ জ্ঞ", listOf(
-                Word("ক্ষমা", "khoma", listOf("kho", "ma"), listOf("kkhoma", "kshoma"), "ক্ষ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু kh"),
-                Word("লক্ষ্মী", "lokkhi", listOf("lok", "khi"), listOf("lokkhmi"), "ক্ষ্ম", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু kkh"),
-                Word("জ্ঞান", "ggan", listOf("ggan"), listOf("gyan"), "জ্ঞ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু gg বা gy"),
-                Word("অভিজ্ঞতা", "obhiggota", listOf("o", "bhig", "go", "ta"), listOf("oviggota"), "জ্ঞ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু gg")
+                Word("ক্ষমা", "khoma", listOf("kho", "ma"), listOf("kkhoma", "kshoma"), "ক্ষ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু khoma"),
+                Word("লক্ষ্মী", "lokkhi", listOf("lok", "khi"), listOf("lokkhmi"), "ক্ষ্ম", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু lokkhi"),
+                Word("শিক্ষা", "shikkha", listOf("shik", "kha"), listOf("shiksha", "sikkha"), "ক্ষ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু shikkha"),
+                Word("ক্ষেত্রে", "khetre", listOf("khet", "re"), listOf("kkhetre"), "ক্ষেত্র", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু khetre"),
+                Word("জ্ঞান", "ggan", listOf("ggan"), listOf("gyan"), "জ্ঞ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু ggan"),
+                Word("বিজ্ঞান", "biggan", listOf("big", "gan"), listOf("bigyan"), "জ্ঞ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু biggan"),
+                Word("অভিজ্ঞতা", "obhiggota", listOf("o", "bhig", "go", "ta"), listOf("oviggota"), "জ্ঞ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু obhiggota")
             )),
-            CapWords("ষ্ট্র ন্ত্র", listOf(
-                Word("রাষ্ট্র", "rashtro", listOf("rash", "tro"), listOf("rastro", "rastra"), "ষ্ট্র", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু shtr বা str"),
-                Word("যন্ত্র", "jontro", listOf("jon", "tro"), listOf("zontro", "jantra"), "ন্ত্র", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু ntr"),
-                Word("স্মৃতি", "smriti", listOf("smri", "ti"), listOf("sriti"), "স্মৃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — বাংলুতে শুধু smri")
+            CapWords("ঙ্ক ঙ্গ", listOf(
+                Word("সঙ্গে", "songe", listOf("so", "nge"), listOf("shonge", "sange"), "ঙ্গ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু songe"),
+                Word("মঙ্গল", "mongol", listOf("mo", "ngol"), listOf("mongal"), "ঙ্গ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু mongol"),
+                Word("অঙ্গ", "ongo", listOf("o", "ngo"), listOf("ango"), "ঙ্গ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু ongo"),
+                Word("তরঙ্গ", "torongo", listOf("to", "ro", "ngo"), emptyList(), "ঙ্গ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু torongo"),
+                Word("স্থানাঙ্ক", "sthanangko", listOf("stha", "nang", "ko"), listOf("sthanangk"), "ঙ্ক", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু sthanangko"),
+                Word("অঙ্ক", "ongko", listOf("ong", "ko"), emptyList(), "ঙ্ক", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু ongko")
+            )),
+            CapWords("ঞ্চ ঞ্জ", listOf(
+                Word("অঞ্চল", "onchol", listOf("on", "chol"), emptyList(), "ঞ্চ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু onchol"),
+                Word("পঞ্চম", "ponchom", listOf("pon", "chom"), emptyList(), "ঞ্চ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু ponchom"),
+                Word("ইঞ্জিন", "injin", listOf("in", "jin"), listOf("engine"), "ঞ্জ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু injin"),
+                Word("চ্যালেঞ্জ", "challenge", listOf("chal", "le", "nge"), listOf("chyalenj"), "ঞ্জ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু challenge"),
+                Word("গঞ্জ", "gonj", listOf("gonj"), emptyList(), "ঞ্জ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু gonj"),
+                Word("পুঞ্জ", "punjo", listOf("pun", "jo"), listOf("punj"), "ঞ্জ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু punjo")
+            )),
+            CapWords("ণ্ড ণ্ঠ ষ্ণ", listOf(
+                Word("ঘণ্টা", "ghonta", listOf("ghon", "ta"), emptyList(), "ণ্ট", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু ghonta"),
+                Word("খণ্ড", "khondo", listOf("khon", "do"), listOf("khond"), "ণ্ড", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু khondo"),
+                Word("কণ্ঠ", "konth", listOf("konth"), emptyList(), "ণ্ঠ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু konth"),
+                Word("প্রচণ্ড", "prochondo", listOf("pro", "chon", "do"), listOf("prochond"), "ণ্ড", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু prochondo"),
+                Word("পণ্ডিত", "pondit", listOf("pon", "dit"), emptyList(), "ণ্ড", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু pondit"),
+                Word("কৃষ্ণ", "krishno", listOf("krish", "no"), emptyList(), "ষ্ণ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু krishno")
+            )),
+            CapWords("হ্ন হ্ম হ্ব", listOf(
+                Word("চিহ্ন", "chihno", listOf("chih", "no"), listOf("chinho"), "হ্ন", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু chihno"),
+                Word("ব্রাহ্মণ", "brahmon", listOf("brah", "mon"), listOf("bramhon"), "হ্ম", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু brahmon"),
+                Word("ব্রহ্মপুত্র", "brohmoputro", listOf("broh", "mo", "put", "ro"), listOf("bromhoputro"), "হ্ম", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু brohmoputro"),
+                Word("আহ্বান", "ahban", listOf("ah", "ban"), emptyList(), "হ্ব", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু ahban"),
+                Word("জিহ্বা", "jihba", listOf("jih", "ba"), emptyList(), "হ্ব", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু jihba")
+            )),
+            CapWords("ত্ম দ্ভ ম্ভ", listOf(
+                Word("আত্মা", "atma", listOf("at", "ma"), emptyList(), "ত্ম", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু atma"),
+                Word("মারাত্মক", "maratmok", listOf("ma", "rat", "mok"), listOf("marattok"), "ত্ম", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু maratmok"),
+                Word("অদ্ভুত", "odbhut", listOf("od", "bhut"), listOf("odvut"), "দ্ভ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু odbhut"),
+                Word("উদ্ভিদ", "udbhid", listOf("ud", "bhid"), listOf("udvid"), "দ্ভ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু udbhid"),
+                Word("সম্ভব", "sombhob", listOf("som", "bhob"), listOf("somvob"), "ম্ভ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু sombhob"),
+                Word("আরম্ভ", "arombho", listOf("a", "rom", "bho"), listOf("arombh"), "ম্ভ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু arombho"),
+                Word("সম্ভাবনা", "sombhabona", listOf("som", "bha", "bo", "na"), emptyList(), "ম্ভ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু sombhabona")
+            )),
+            CapWords("দ্ধ ক্ত ল্প", listOf(
+                Word("যুদ্ধ", "juddho", listOf("jud", "dho"), listOf("zuddho"), "দ্ধ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু juddho"),
+                Word("সিদ্ধান্ত", "siddhanto", listOf("sid", "dhan", "to"), listOf("shiddhanto"), "দ্ধ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু siddhanto"),
+                Word("পদ্ধতি", "poddhoti", listOf("pod", "dho", "ti"), emptyList(), "দ্ধ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু poddhoti"),
+                Word("বুদ্ধি", "buddhi", listOf("bud", "dhi"), emptyList(), "দ্ধ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু buddhi"),
+                Word("ব্যক্তি", "bekti", listOf("bek", "ti"), emptyList(), "ক্ত", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু bekti"),
+                Word("শক্তি", "shokti", listOf("shok", "ti"), listOf("sokti"), "ক্ত", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু shokti"),
+                Word("গল্প", "golpo", listOf("gol", "po"), listOf("golp"), "ল্প", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু golpo"),
+                Word("শিল্প", "shilpo", listOf("shil", "po"), listOf("shilp"), "ল্প", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু shilpo")
+            )),
+            CapWords("ন্ত্র ষ্ট্র স্ত্র", listOf(
+                Word("যন্ত্র", "jontro", listOf("jon", "tro"), listOf("zontro"), "ন্ত্র", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু jontro"),
+                Word("কেন্দ্র", "kendro", listOf("ken", "dro"), emptyList(), "ন্দ্র", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু kendro"),
+                Word("মন্ত্রী", "montri", listOf("mon", "tri"), listOf("mantri"), "ন্ত্র", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু montri"),
+                Word("নিয়ন্ত্রণ", "niyontron", listOf("ni", "yon", "tron"), listOf("niontron"), "ন্ত্র", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু niyontron"),
+                Word("রাষ্ট্র", "rashtro", listOf("rash", "tro"), listOf("rastro"), "ষ্ট্র", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু rashtro"),
+                Word("স্ত্রী", "stri", listOf("stri"), emptyList(), "স্ত্র", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু stri"),
+                Word("অস্ত্র", "ostro", listOf("os", "tro"), listOf("astro"), "স্ত্র", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু ostro"),
+                Word("তত্ত্ব", "totto", listOf("tot", "to"), listOf("tottwo"), "ত্ত্ব", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু totto"),
+                Word("স্বাস্থ্য", "shastho", listOf("shas", "tho"), listOf("sbastho"), "স্থ্য", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু shastho")
+            )),
+            CapWords("য-ফলা", listOf(
+                Word("জন্য", "jonno", listOf("jon", "no"), listOf("jonyo"), "ন্য", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু jonno"),
+                Word("মধ্যে", "moddhe", listOf("mod", "dhe"), listOf("modhye"), "ধ্য", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু moddhe"),
+                Word("ব্যবহার", "bebohar", listOf("be", "bo", "har"), emptyList(), "ব্য", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু bebohar"),
+                Word("সাহায্য", "shahajjo", listOf("sha", "haj", "jo"), listOf("sahajyo", "sahajjo"), "য্য", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু shahajjo"),
+                Word("পর্যন্ত", "porjonto", listOf("por", "jon", "to"), listOf("poryonto"), "র্য", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু porjonto"),
+                Word("অবশ্যই", "oboshshoi", listOf("o", "bosh", "shoi"), listOf("obosshoi"), "শ্য", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু oboshshoi")
+            )),
+            CapWords("ব-ফলা", listOf(
+                Word("দ্বারা", "dara", listOf("da", "ra"), listOf("dwara"), "দ্ব", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু dara"),
+                Word("বিশ্বাস", "bishwas", listOf("bish", "was"), listOf("bisshash", "bishash"), "শ্ব", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু bishwas"),
+                Word("দ্বিতীয়", "dwitiyo", listOf("dwi", "ti", "yo"), listOf("ditiyo"), "দ্ব", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু dwitiyo"),
+                Word("স্বাধীনতা", "sbadhinota", listOf("sba", "dhi", "no", "ta"), listOf("swadhinota"), "স্ব", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু sbadhinota"),
+                Word("দায়িত্ব", "daitto", listOf("dait", "to"), emptyList(), "ত্ব", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু daitto"),
+                Word("পূর্ব", "purbo", listOf("pur", "bo"), listOf("purba"), "র্ব", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু purbo")
+            )),
+            CapWords("র-ফলা রেফ", listOf(
+                Word("প্রথম", "prothom", listOf("pro", "thom"), emptyList(), "প্র", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু prothom"),
+                Word("চিত্র", "chitro", listOf("chit", "ro"), emptyList(), "ত্র", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু chitro"),
+                Word("গ্রহণ", "grohon", listOf("gro", "hon"), emptyList(), "গ্র", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু grohon"),
+                Word("ধর্ম", "dhormo", listOf("dhor", "mo"), emptyList(), "র্ম", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু dhormo"),
+                Word("অর্থ", "ortho", listOf("or", "tho"), listOf("artho"), "র্থ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু ortho"),
+                Word("বর্তমান", "bortoman", listOf("bor", "to", "man"), emptyList(), "র্ত", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু bortoman"),
+                Word("আন্তর্জাতিক", "antorjatik", listOf("an", "tor", "ja", "tik"), emptyList(), "র্জ", "", "", "অন্য কিবোর্ডে হসন্ত দিয়ে জোড়া লাগাতে হয় — এখানে শুধু antorjatik")
+            )),
+            CapWords("ৃ", listOf(
+                Word("মৃত্যু", "mrittu", listOf("mrit", "tu"), listOf("mrityu"), "ৃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু mrittu"),
+                Word("সৃষ্টি", "srishti", listOf("srish", "ti"), listOf("sristi"), "ৃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু srishti"),
+                Word("তৃতীয়", "tritiyo", listOf("tri", "ti", "yo"), listOf("tritio"), "ৃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু tritiyo"),
+                Word("কৃষি", "krishi", listOf("kri", "shi"), emptyList(), "ৃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু krishi"),
+                Word("পৃথিবী", "prithibi", listOf("pri", "thi", "bi"), listOf("prithivi"), "ৃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু prithibi"),
+                Word("সংস্কৃতি", "songskriti", listOf("song", "skri", "ti"), listOf("sonskriti"), "ৃ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে — এখানে শুধু songskriti")
             ))
         )),
         Family("স্বরবর্ণ", "স্বরবর্ণ দিয়ে শুরু — ছোটহাতের ইংরেজিতেই কঠিন সব শব্দ", listOf(
