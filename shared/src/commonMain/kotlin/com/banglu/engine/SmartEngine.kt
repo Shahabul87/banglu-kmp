@@ -445,6 +445,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // layer — absent in Android lite mode and the slim web tier, where
             // it degraded to ক্মন. Top-frequency chat token; enumerate it.
             "kmon" to "কেমন",
+            "hath" to "হাত",   // S192 device pass: the English-word law rendered হ্যাথ; হাত is what a Bengali typist means
             "betha" to "ব্যথা",   // S181: the everyday spelling of ব্যথা (bytha/byatha already resolve)
             "kmn" to "কেমন",
             "vdo" to "ভিডিও",
@@ -1240,9 +1241,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * exactly, not fuzzily.
      */
     fun convertWord(input: String): ConversionResult {
-        val raw = convertWordRaw(input)
-        if (inTypoCorrection || inCompoundSplit || inNegationCompound || inEmphaticOCompound || inEmphaticICompound) return raw
+        val raw0 = convertWordRaw(input)
+        if (inTypoCorrection || inCompoundSplit || inNegationCompound || inEmphaticOCompound || inEmphaticICompound) return raw0
         val key = input.trim().lowercase()
+        // S192: a far-off fuzzy real word never replaces a clean reading of a
+        // long key (chorpara → চর্চার). Shared with the composing preview.
+        val raw = honestFloorForFarOffFuzzy(key, raw0) ?: raw0
         if (key.length < 4 || !key.all { it in 'a'..'z' }) return raw
         // S24/S26: English-intent arbitration. When an English key collides
         // with an EVIDENCED Bengali inflection (time -> টিমে, printer ->
@@ -1392,7 +1396,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     isEvidencedWord(raw.bengali) && keyReadingDistance(raw.bengali, key) == 0
                 val particleKept = raw.bengali.length > c.bengali.length && raw.bengali.startsWith(c.bengali) &&
                     raw.bengali.removePrefix(c.bengali) in EMPHATIC_PARTICLES
-                !exactRaw || !(particleKept || keyReadingDistance(c.bengali, key) >= 2)
+                // S192 (device: chorpara → চর্চার, a real word FOUR letters from
+                // the key): a long key whose rule floor reads cleanly is a
+                // name, not a slip. The correction must stay within two
+                // letters — transposition slips (amdaer, bangaldesh) are two
+                // and still win; a far-off real word does not replace it.
+                val cleanFloor = (raw.source == ResolutionSource.CLEAN_TRANSLITERATION || raw.source == ResolutionSource.RULE) &&
+                    key.length >= 7 && readsAsCleanBengali(raw.bengali)
+                val farOff = cleanFloor && keyReadingDistance(c.bengali, key) >= 3
+                !farOff && (!exactRaw || !(particleKept || keyReadingDistance(c.bengali, key) >= 2))
             }?.let { c ->
             c.copy(
                 alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.7))) +
@@ -2278,7 +2290,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // is Bangla for lexicon-miss English). Study: 41,190 inflected keys,
         // 9,302 rule-floor previews before the fix (docs/audits, S176 section).
         if (key.length >= 4) {
-            val committed = convertWordRaw(key)
+            val committed = convertWordRaw(key).let { honestFloorForFarOffFuzzy(key, it) ?: it }
             if (committed.source != ResolutionSource.ENGLISH_PASSTHROUGH) {
                 return committed.copy(alternatives = emptyList())
             }
@@ -3102,12 +3114,20 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // combinations take only the slots those do not need, and any
             // real chip a combination displaced is moved back inside the
             // window (S79 পার্বণে and S141 বাংলা pins).
+            // Prefix COMPLETIONS of other words (bhorbari → ভরবেগ) are validated
+            // words but not readings of this key — the combinations rank ahead
+            // of them (device pass 2026-09-05); validated readings stay first.
             val protectedChips = ordered.take(limit).drop(1).filter {
-                validator.isValid(it.bengali) || it.source == "acronym_suggestion" || it.source == "phrase_completion" ||
+                (validator.isValid(it.bengali) && it.source != "dictionary_prefix" && it.source != "corpus_prefix" && it.source != "roman_prefix") ||
+                    it.source == "acronym_suggestion" || it.source == "phrase_completion" ||
                     it.source == "homograph_twin" || it.source == "fold_twin" || it.source == "chandrabindu_twin"
             }
-            val allowed = (limit - 1 - protectedChips.size).coerceIn(1, OOV_COMBO_SLOTS)
-            val combos = generateCandidateLattice(key, 40)
+            // Free slots are what validated words of ANY kind leave inside the
+            // window (the strip law: validated first); when none are free the
+            // combinations wait beyond it (hosts ask for 8, scrollable).
+            val validatedInside = ordered.take(limit).drop(1).count { validator.isValid(it.bengali) }
+            val allowed = (limit - 1 - validatedInside).coerceIn(0, OOV_COMBO_SLOTS)
+            val combos = generateCandidateLattice(key, 40, nameStyle = true)
                 .asSequence()
                 .filter { it.bengali.isNotEmpty() && ReverseTransliterator.foldNukta(it.bengali) != primaryFolded }
                 .filter { readsAsCleanBengali(it.bengali) && !hasImpossibleNukta(it.bengali) }
@@ -3123,7 +3143,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             // window; they never sit above a real word.
             var slot = 1
             for (i in 0 until minOf(limit, ordered.size)) {
-                if (i > 0 && (ordered[i] in protectedChips || validator.isValid(ordered[i].bengali))) slot = i + 1
+                if (i > 0 && ordered[i] in protectedChips) slot = i + 1
             }
             for (combo in combos) {
                 val folded = ReverseTransliterator.foldNukta(combo)
@@ -3135,9 +3155,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 }
                 slot++
             }
+            // A displaced validated chip returns ABOVE the typed-literal slot
+            // (the S141 rule below takes limit-1 and would push it out again).
             for (chip in protectedChips) {
                 val ci = ordered.indexOf(chip)
-                if (ci >= limit) { ordered.removeAt(ci); ordered.add(minOf(limit - 1, ordered.size), chip) }
+                if (ci >= limit) { ordered.removeAt(ci); ordered.add(minOf(maxOf(1, limit - 2), ordered.size), chip) }
             }
         }
 
@@ -5852,8 +5874,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         while (i < key.length) {
             val token = nextLatticeToken(key, i) ?: return null
             val rest = bengali.substring(cur.length)
-            val pick = expandLatticeToken(token, key, i, cur)
-                .filter { it.out.isNotEmpty() && rest.startsWith(it.out) }
+            val pick = expandLatticeToken(token, key, i, cur, nameStyle = true)
+                .filter { rest.startsWith(it.out) }
                 .maxByOrNull { it.out.length } ?: return null
             out += token to pick.out
             cur += pick.out
@@ -5862,7 +5884,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         return if (cur == bengali) out else null
     }
 
-    private fun generateCandidateLattice(key: String, limit: Int = 20): List<CandidatePath> {
+    /**
+     * [nameStyle] (S192): also enumerate the English-style name spellings
+     * (medial "a" as the inherent vowel, initial "a" as অ). ONLY the S191
+     * combination chips and the habit alignment ask for it — the commit-side
+     * lattice ranking must never see those paths (bariwala → বড়বালা).
+     */
+    private fun generateCandidateLattice(key: String, limit: Int = 20, nameStyle: Boolean = false): List<CandidatePath> {
         if (key.isEmpty() || key.length > 18 || key.any { it !in 'a'..'z' }) return emptyList()
 
         var beam = listOf(CandidatePath("", 0.0, true))
@@ -5873,7 +5901,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             val next = mutableListOf<CandidatePath>()
 
             for (path in beam) {
-                val expansions = expandLatticeToken(token, key, i, path.bengali)
+                val expansions = expandLatticeToken(token, key, i, path.bengali, nameStyle)
                 for (expansion in expansions) {
                     next.add(
                         CandidatePath(
@@ -5920,7 +5948,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         return rest.firstOrNull()?.toString()
     }
 
-    private fun expandLatticeToken(token: String, key: String, index: Int, current: String): List<TokenExpansion> {
+    private fun expandLatticeToken(token: String, key: String, index: Int, current: String, nameStyle: Boolean = false): List<TokenExpansion> {
         val afterConsonant = endsWithBengaliConsonant(current)
         val nextIndex = index + token.length
         val next = if (nextIndex < key.length) key[nextIndex] else null
@@ -5987,7 +6015,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
         if (mapped != null) return mapped
 
-        if (token == "a" || token == "aa") return dependent("া")
+        if (token == "aa") return dependent("া")
+        if (token == "a") {
+            // S192 (device: nayanpur → নায়ান্পুর): English-style name spellings
+            // write the inherent vowel as "a" (Nayan = নয়ন, Rahman = রহমান) and
+            // the initial অ as "a" — low-prior combinations, never the primary,
+            // and only when the caller asked for name style.
+            val base = dependent("া").toMutableList()
+            if (nameStyle && afterConsonant && nextIsConsonant) base += TokenExpansion("", 0.30, false)
+            if (nameStyle && !afterConsonant) base += TokenExpansion("অ", 0.45, false)
+            return base
+        }
         if (token == "i") return dependent("ি", "ী")
         if (token == "ee" || token == "ii") return dependent("ী", "ি")
         if (token == "u") return dependent("ু", "ূ")
@@ -8076,6 +8114,64 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             if (dict.bengali.isNotEmpty() && dict.bengali != rule) listOf(Alternative(dict.bengali, minOf(dict.confidence, 0.85))) else emptyList()
         } else emptyList()
         return ConversionResult(rule, 0.9, ResolutionSource.RULE, alternatives)
+    }
+
+    /**
+     * S192 (device pass over 80 confusing words: chorpara → চর্চার, a real word
+     * four letters from the key, from the fuzzy dictionary layer at 0.85): for
+     * a long key (≥ 7) whose fuzzy answer reads the key three or more letters
+     * away, the clean rule reading is the honest commit — the far-off word
+     * rides as an alternative and the S191 combinations fill the strip. Used
+     * by BOTH the commit wrapper and the composing preview (WYSIWYG law).
+     * Transposition slips read two letters away and are untouched.
+     */
+    private fun honestFloorForFarOffFuzzy(key: String, raw: ConversionResult): ConversionResult? {
+        if (raw.source != ResolutionSource.DICTIONARY || raw.confidence >= 0.9) return null
+        if (key.length < 7 || !key.all { it in 'a'..'z' }) return null
+        // Compound splits and root decompositions are constructions, not
+        // fuzzy substitutions — never touched (walls: jetepårbona, bariwala).
+        if (' ' in raw.bengali) return null
+        // Transposition-aware (OSA) distance over the typist folds: a slip
+        // (amdaer, bangaldesh) is ONE, a far-off word (chorchar for chorpara) two or more.
+        if (osaDistance(distanceRoman(raw.bengali), distanceRoman(key)) < 2) return null
+        // The rule reading may carry a reph the clean-reading predicate
+        // refuses (চর্পারা); the lattice's best literal spelling (চরপারা) is
+        // the fallback floor. A floor must be Bengali script only — the rule
+        // layer leaves unmapped Latin in place (bissobiddaloi → বিssঅ…).
+        fun bengaliOnly(t: String) = t.isNotEmpty() && t.all { it in '\u0980'..'\u09FF' }
+        val rule = typedReading(key)
+        val floor = if (bengaliOnly(rule) && readsAsCleanBengali(rule)) rule
+            else generateCandidateLattice(key, 8).firstOrNull { it.literal && bengaliOnly(it.bengali) && readsAsCleanBengali(it.bengali) }?.bengali ?: return null
+        if (floor == raw.bengali) return null
+        if (keyReadingDistance(floor, key) > 1) return null
+        // The far-off word must ALSO differ from the floor in spelling skeleton
+        // (letter twins folded): বাড়িওয়ালা vs বারিওয়ালা is the same skeleton —
+        // the roman distance there only reflects how ওয়া is romanised.
+        if (osaDistance(spellingSkeleton(raw.bengali), spellingSkeleton(floor)) < 2) return null
+        return ConversionResult(
+            floor, 0.62, ResolutionSource.CLEAN_TRANSLITERATION,
+            listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.8))) + raw.alternatives.filter { it.bengali != floor }.take(2)
+        )
+    }
+
+    /** Optimal string alignment distance (Levenshtein + adjacent transposition as one edit). */
+    private fun osaDistance(a: String, b: String): Int {
+        val d = Array(a.length + 1) { IntArray(b.length + 1) }
+        for (i in 0..a.length) d[i][0] = i
+        for (j in 0..b.length) d[0][j] = j
+        for (i in 1..a.length) for (j in 1..b.length) {
+            val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+            d[i][j] = minOf(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
+            if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) d[i][j] = minOf(d[i][j], d[i - 2][j - 2] + 1)
+        }
+        return d[a.length][b.length]
+    }
+
+    /** S192 diagnostics (tests only). */
+    internal fun debugFarOff(key: String): String {
+        val raw = convertWordRaw(key)
+        val floor = typedReading(key)
+        return "raw=${raw.bengali}:${raw.source}:${raw.confidence} osa=${osaDistance(distanceRoman(raw.bengali), distanceRoman(key))} dr(raw)=${distanceRoman(raw.bengali)} dr(key)=${distanceRoman(key)} floor=$floor clean=${readsAsCleanBengali(floor)} floorDist=${keyReadingDistance(floor, key)}"
     }
 
     private fun cacheResult(key: String, result: ConversionResult) {

@@ -33,6 +33,44 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S192 confusing-word device pass (2026-09-05, user: "do see the
+  suggestion by real typing such a lot of confusing words"):** 80 keys
+  typed on the S22 (homographs, র/ড়, dental/retroflex, sibilants,
+  shorthand spellings, unknown place names) — 68/81 commit-exact, 76/81
+  on the strip; the commit misses are frequency twins with the wanted
+  word on the strip (pori→পড়ি+পরি, dan→ডান+দান, sari→সারি+শাড়ি, chor→চর+চোর,
+  noon→নয়ন+নুন, tumar→তুমার+তোমার) plus four real defects, each fixed:
+  (1) chorpara → চর্চার — the fuzzy dictionary layer returned a real word
+  FOUR letters from the key at 0.85 → honestFloorForFarOffFuzzy, shared
+  by the commit wrapper AND the composing delegation (WYSIWYG): for a
+  key ≥ 7 whose fuzzy answer is ≥ 2 away under a transposition-aware
+  (OSA) distance over the typist folds (slips amdaer/bangaldesh stay at
+  1), the clean literal floor commits (rule reading, or the lattice's
+  best literal spelling when the rule reading carries a reph the
+  clean-reading predicate refuses; the floor must be Bengali-only — the
+  rule layer leaves unmapped Latin in place, বিssঅ…; never a result with a
+  space — compounds and root decompositions are constructions, not fuzzy
+  substitutions; and the raw must differ from the floor in spelling
+  SKELETON too — বাড়িওয়ালা vs বারিওয়ালা is the same skeleton, its roman
+  distance only reflects how ওয়া is romanised) and the far-off word rides as an
+  alternative; the commit's typo layer may still improve the floor by ONE
+  letter (চরপারা → চরপাড়া, a real place — the S176 preview exception);
+  (2) nayanpur → নায়ান্পুর — English-style name spellings write the
+  inherent vowel as "a" (Nayan = নয়ন): the lattice gets a low-prior
+  empty expansion for a medial "a" and অ for an initial "a" behind a
+  `nameStyle` flag that ONLY the combination chips and the habit
+  alignment pass — the walls caught the first cut leaking those paths
+  into the commit-side lattice ranking (bariwala → বড়বালা, a real word);
+  LAW: any new lattice expansion must be flag-gated away from
+  applyCandidateLatticeRanking; (3) bhorbari — the S191 combinations sat
+  behind unrelated prefix COMPLETIONS (ভরবেগ): protected (validated
+  readings, acronym/phrase/twin chips) excludes dictionary_prefix /
+  corpus_prefix / roman_prefix; free slots = limit-1-validated inside the
+  window (0 allowed when full: at limit 6 banglu keeps বাংলা, at the
+  host's 8 the combos follow) and a displaced protected chip returns
+  ABOVE the typed-literal slot; (4) hath → হ্যাথ (English-word law) →
+  "hath" shorthand → হাত. Pins S192ConfusingWordsJvmTest. Android 1.5.124
+  (2161).
 - **S191 combination strip for unknown words (2026-09-05, user's hand
   note: "arpara → অর্পারা … since we only use lowercase we have to handle
   this word construction very carefully — where one letter represents two

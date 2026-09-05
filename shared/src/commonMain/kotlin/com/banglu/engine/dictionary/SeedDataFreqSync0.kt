@@ -127,7 +127,7 @@ object SeedDataFreqSync0 {
             e("কাজ", listOf("kaj", "kaz"), 54),
             e("কথা", listOf("kotha", "ktha", "kothaa", "kthaa"), 53),
             e("চোখ", listOf("chokh", "cokh"), 51),
-            e("হাত", listOf("hat", "haat"), 50),
+            e("হাত", listOf("hat", "haat", "hath"), 50),
             e("পা", listOf("pa", "paa"), 49),
             e("মাথা", listOf("matha", "mathaa"), 48),
             e("স্বামী", listOf("shami", "swami", "sami", "shamii", "swamii", "shamee", "swamee", "samee"), 46),

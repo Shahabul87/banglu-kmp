@@ -436,3 +436,15 @@ S26 key preference), and the order survives a keyboard-process restart; `borpara
 combination; `korbone` / `dekhbone` commit করবোনে / দেখবোনে (the reph is only the
 transient preview before the vowel).
 
+## 9. Real-typing pass over confusing words (S192)
+
+80 keys typed on the S22 (`scripts/s188-realworld-study/confusing.tsv`): 68/81 commit-
+exact, 76/81 on the strip. Commit misses are frequency twins with the wanted word on
+the strip (pori → পড়ি + পরি, dan → ডান + দান, sari → সারি + শাড়ি, ban → ব্যান + বান,
+chor → চর + চোর, noon → নয়ন + নুন, tumar → তুমার + তোমার, asa → আসা + আশা). Four real
+defects, fixed the same day: chorpara → চর্চার (far-off fuzzy real word; honest literal
+floor now, shared by preview and commit), nayanpur → নায়ান্পুর (English-style "a" for the
+inherent vowel; lattice combination added), bhorbari (combinations were behind unrelated
+completions; strip law refined: free slots are what validated words leave, completions
+do not block combinations), hath → হ্যাথ (shorthand → হাত).
+

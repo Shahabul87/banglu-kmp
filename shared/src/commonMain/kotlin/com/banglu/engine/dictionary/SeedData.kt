@@ -224,7 +224,7 @@ object SeedData {
             e("কথা", listOf("kotha", "ktha", "kothaa", "kthaa", "katha", "kathaa"), 80, WordCategory.TADBHAVA),
             e("মন", listOf("mon"), 85, WordCategory.TATSAMA),
             e("চোখ", listOf("chokh", "cokh", "chok", "cok", "chokkh"), 75, WordCategory.TADBHAVA),
-            e("হাত", listOf("hat", "haat"), 75, WordCategory.TADBHAVA),
+            e("হাত", listOf("hat", "haat", "hath"), 75, WordCategory.TADBHAVA),   // S192: hath (device pass) → হাত, not হ্যাথ
             e("পা", listOf("pa", "paa"), 75, WordCategory.TADBHAVA),
             e("মাথা", listOf("matha", "mathaa"), 70, WordCategory.TADBHAVA),
             e("খাবার", listOf("khabar", "khabaar", "khaabar", "khaabaar"), 90, WordCategory.TADBHAVA),
