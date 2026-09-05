@@ -1,0 +1,77 @@
+key	expected	device_commit	device_strip	match	in_strip
+tara	তাঁরা	তারা	তারা|টারা|টায়রা|তারায়|তাড়া	False	False
+ba	বাঁ	বা	বা|বাড়|বায়|বড়া|বয়া|বয়ড়া	False	False
+jader	যাঁদের	যাদের	যাদের|জাতের|জাহের	False	False
+kacharii	কাঁচারী	কাচারী	কাচারী|কাছারী|কাছারি|কাচারীপাড়া	False	False
+pulis	পুলিশ	পুলিস	পুলিস|পুলিশি|পুলিন|পুলিসের	False	False
+des	দেশ	ডেস	ডেস|দেস|দেশ|দ্বেষ|দেছ	False	True
+bes	বেশ	বেস	বেস|বয়েস|বেচছ|বেশি|বেস্ট	False	False
+asa	আশা	আসা	আসা|আসায়|আচ্ছা|আস্হা	False	False
+sekh	শেখ	সেখ	সেখ|সেখানে|সেখান|সেখানেই	False	False
+las	লাশ	লাস	লাস|লাস্য|লস|লাস্ট|লাং	False	False
+sah	শাহ	সাহ	সাহ|সাহিত্য|সাহিত্যিক|সাহস	False	False
+sona	শোনা	সোনা	সোনা|ছোঁয়া|সোনার|সোনালী	False	False
+notis	নোটিশ	নোটিস	নোটিস|নতিস্বীকার|নোটিশে|নোটিশের	False	False
+chas	চাষ	চাস	চাস|চাচ্ছ|চাষের|চাষে|চাষী	False	False
+pas	পাশ	পাস	পাস|পায়স|পাচ্ছ|পাছ|পাস্তা	False	False
+rosid	রশিদ	রসিদ	রসিদ|রশীদ|রসিক|রসিদের	False	False
+sahed	সাহেদ	শাহেদ	শাহেদ|শাহে|সাহেদা|শাহেদা	False	False
+ongs	অংশ	অংস	অংস|অংশে|অংশগ্রহণ|অংশের	False	False
+sonakt	শনাক্ত	সনাক্ত	সনাক্ত|সনাক্তযোগ্য|সনাক্তকরণ	False	False
+poriskar	পরিষ্কার	পরিস্কার	পরিস্কার|পরিষ্কারক|পরিসংখ্যা	False	False
+ai	আই	এই	এই|আইড়|আড়ি|আয়ই|অই	False	False
+ata	আতা	এটা	এটা|আটা|আটটা|আওতা|আঁটা	False	False
+ariya	আড়িয়া	আরিয়া	আরিয়া|আরিকা|আড়িয়াল|আরিয়ান	False	False
+joyoshongkor	জয়শঙ্কর	জয় শঙ্কর	জয় শঙ্কর|জয়শ্রী|জয়শ্রীর	False	False
+kathomandubhittik	কাঠমান্ডুভিত্তিক	কাঠমান্ডু ভিত্তিক	কাঠমান্ডু|কাঠমান্ডুতে|কাঠকচুর	False	False
+rosochithi	রসচিঠি	রস চিঠি	রস চিঠি|রসদ|রসবোধ	False	False
+charmilar	চার্মিলার	চার মিলার	চার মিলার|চার্ম|ছার মিলার	False	False
+chhadobhittik	ছাদভিত্তিক	ছাদ ভিত্তিক	ছাদ ভিত্তিক|ছাদবাগান	False	False
+jonoupatt	জনউপাত্ত	জন উপাত্ত	জন উপাত্ত|জনসংখ্যা|জনসংখ্যার	False	False
+grrihogonona	গৃহগণনা	গৃহ গণনা	গৃহ গণনা|গৃহযুদ্ধ|গৃহপালিত	False	False
+ronohat	রণহাট	রনহাত	রনহাত|রণক্ষেত্র|রণবীর|রণক্ষেত্রে	False	False
+zodupur	যদুপুর	জদুপুর	জদুপুর|যদুনাথ|যদু|যদুবংশ	False	False
+plaisotosin	প্লাইসটোসিন	প্লাইসতসিন	প্লাইসতসিন|পলাইল|পলাইয়া	False	False
+bihaidohor	বিহাইডহর	বিহাইদহর	বিহাইদহর|বিহাইন্ড	False	False
+kheora	খেওড়া	খেয়োরা	খেয়োরা|খেয়ো|খেয়ো রা|খেয়ো রা	False	False
+khondol	খন্ডল	খোঁদল	খোঁদল|খণ্ডই|খন্দকার|খোন্দকার	False	False
+arag	আরাগ	আরাগঁ	আরাগঁ|আরাক|আরাগচি|আরাগচির	False	False
+tunggiipara	টুংগীপাড়া	টুঙ্গিপাড়া	টুঙ্গিপাড়া|তুং|টুঙ্গিপাড়ার	False	False
+madaripur	মাদারিপুর	মাদারীপুর	মাদারীপুর|মাদারীপুরের|মাদারীপুরে	False	False
+raniirobondor	রাণীরবন্দর	রানীরবন্দর	রাণীর|রানীরহাট|রানীরহাটে	False	False
+gonggachora	গংগাচড়া	গঙ্গা চড়া	গঙ্গা চড়া|গংগাপুর|গোঙাইতেছিলাম	False	False
+bhuutta	ভূট্টা	ভূতটা	ভূতটা|ভূতকে|ভূতগণ|ভূতটাকে	False	False
+eksilaret	এক্সিলারেট	এক্সিলারেত	এক্সিলারেত|এক্সিলারেটর|এক্সিলেন্স	False	False
+daimenositi	ডাইমেনসিটি	দাড়িম এনসিটি	দাড়িম এনসিটি|দাইমেনসিতি	False	False
+hiumyanoyed	হিউম্যানয়েড	হিউম্যান ওয়েড	হিউম্যান ওয়েড|হিউম্যান	False	False
+mophokengyer	মোফোকেংয়ের	মফকেংয়ের	মফকেংয়ের|মফস্বল|মফস্বলে	False	False
+bioyaidir	বিওয়াইডির	বিওয়াইদির	বিওয়াইদির|বিওয়াইসি|বিওয়াইএলসির	False	False
+tasoriph	তাসরিফ	তাশরিফ	তাশরিফ|তাশরিক|তাশরিন	False	False
+piesoji	পিএসজি	পিএসজির	পিএসজির|পিএসসি|পিএসভি	False	False
+lyantarnos	ল্যান্টার্নস	ল্যান্ডমার্কস	ল্যান্ডমার্কস|ল্যান্ডমার্ক|ল্যান্ড	False	False
+enema	এনেমা	এনিমা	এনিমা|এনেক্স|এনিমিয়া|এনিমিয়ার	False	False
+myakaiye	ম্যাকাইয়ে	ম্যাকাইকে	ম্যাকাইকে|ম্যাকাইভার|ম্যাকাইয়ের	False	False
+binna	বিন্না	বিনয়না	বিনয়না|বীণা|বিন্যাস|বিঁধ	False	False
+phincarer	ফিঞ্চারের	ফিচারের	ফিচারের|ফিঞ্চ|ফিঞ্চেমও	False	False
+oyanda	অ্যান্ডা	ওয়ান্ডা	ওয়ান্ডা|অ্যান্ডারসন|ওয়ান্ডারার্স	False	False
+chyapo	চ্যাপো	চাপ	চাপ|চ্যাপলিন|চ্যাপটা|চ্যাপ্টা	False	False
+treitors	ট্রেইটর্স	ট্রেটারস	ট্রেটারস|ট্রেইল|ট্রেইনার|ট্রেইনিং	False	False
+ashita	আশিতা	আশিটা	আশিটা|অশীতিপর|অশীতি	False	False
+lila	লিলা	লীলা	লীলা|লীলাভূমি|লীলাবতী|লীলাখেলা	False	False
+krira	ক্রিড়া	ক্রীড়া	ক্রীড়া|ক্রিং|ক্রীড়াবিদ|ক্রীড়ার	False	False
+prachin	প্রাচিন	প্রাচীন	প্রাচীন|প্রাচীণ|প্রাচীনকাল|প্রাচীনত্ব	False	False
+muukhii	মূখী	মুখী	মুখী|মূখ্য|মূখ|মুখকে|মূখ্যমন্ত্রী	False	False
+boholobariiya	বহলবাড়ীয়া	বহলবাড়িয়া	বহলবাড়িয়া|বহন|বহর	False	False
+borni	বর্নি	বর্ণি	বর্ণি|বর্ণী|বর্ণিত|বোর্নিও|বর্ণকে	False	False
+mohishokundi	মহিষকুন্ডি	মহিষকুণ্ডি	মহিষকুণ্ডি|মহিষকে|মহিষখোচা	False	False
+tushobhandar	তুষভান্ডার	তুষভাণ্ডার	তুষভাণ্ডার|তুষখালী	False	False
+soya	সোয়া	সয়া	সয়া|সয়া|ছোঁয়া|ছোয়া|শোয়া	False	False
+mora	মোড়া	মরা	মরা|মরায়|মরো|মোয়রা|মোরা	False	False
+asok	আসক	অশোক	অশোক|অশক্য|আসক্ত|আসক্তি	False	False
+simel	সিমেল	শিমেল	শিমেল|সিমেট্রি|শিমের|সিমেন্ট	False	False
+oyant	ওয়ান্ট	অ্যান্ট	অ্যান্ট|অ্যান্টি|অ্যান্টেনা|অ্যান্থনি	False	False
+songshkrriti	সংষ্কৃতি	সংস্কৃতি	সংস্কৃতি|সংশ্লিষ্ট|সংশোধন	False	False
+prathimok	প্রাথিমক	প্রাথমিক	প্রাথমিক|প্রাথমিকে|প্রাথমিকের	False	False
+pakarasta	পাকারাস্তা	পাকারমাথা	পাকারমাথা|প্যাকার্ড|প্যাকার	False	False
+mujabornii	মুজাবর্ণী	মুজাবনীর	মুজাবনীর|মুজা|মুজারাবানি	False	False
+puurnomoti	পূর্ণমতি	পূর্ণমতী	পূর্ণমতী|পূর্ণমাত্রায়|পূর্ণমাত্রার	False	False
