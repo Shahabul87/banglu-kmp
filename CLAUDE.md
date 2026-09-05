@@ -69,8 +69,13 @@ cost, and privacy-promise reasons; see memory + git history).
   window (0 allowed when full: at limit 6 banglu keeps বাংলা, at the
   host's 8 the combos follow) and a displaced protected chip returns
   ABOVE the typed-literal slot; (4) hath → হ্যাথ (English-word law) →
-  "hath" shorthand → হাত. Pins S192ConfusingWordsJvmTest. Android 1.5.124
-  (2161).
+  "hath" shorthand → হাত. Pins S192ConfusingWordsJvmTest. Evidence: six
+  walls green (jvm 784); 133,562-key commit diff 129 changed (0.1%), all
+  synthetic suffix keys where the fuzzy layer returned an unrelated real
+  word, none in the real-usage top-1,000 lists; S22 re-run 69/81 commit /
+  78/81 strip. Android 1.5.124 (2161); propagated to every surface
+  (macOS runner 105/105, extension, bangluweb, desktop 1.3.17, Windows
+  টাইপার 1.0.22).
 - **S191 combination strip for unknown words (2026-09-05, user's hand
   note: "arpara → অর্পারা … since we only use lowercase we have to handle
   this word construction very carefully — where one letter represents two

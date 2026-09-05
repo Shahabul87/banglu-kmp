@@ -448,3 +448,11 @@ inherent vowel; lattice combination added), bhorbari (combinations were behind u
 completions; strip law refined: free slots are what validated words leave, completions
 do not block combinations), hath → হ্যাথ (shorthand → হাত).
 
+Re-run on the S22 with Android 1.5.124: 69/81 commit-exact, 78/81 on the strip. hath → হাত;
+chorpara → চরপাড়া (চর্চার demoted to a chip); nayanpur offers নয়নপুর at chip 2; bhorbari
+offers ভরবারি at chip 2. Commit-dump diff against the pre-S191 dump: 129 of 133,562 keys
+changed (0.1%), all in the synthetic suffix-attached set (pulisherte, andolonerta,
+australiante …) where the fuzzy layer used to return an unrelated real word — none of
+the changed keys occurs in the 1,736 romans of the real-usage top-1,000 lists
+(`docs/audits/s188-realworld-study/s192-dump-diff.tsv`).
+
