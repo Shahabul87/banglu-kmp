@@ -404,4 +404,8 @@ Coverage on the same 6,000-word slices (S188 harness, canonical roman):
 One pin flip, documented in `S189StripTwinsJvmTest`: `joyoshongkor` now commits জয়শঙ্কর
 (a tier-B name) instead of the split, with the split on the strip.
 
+Device confirmation (S22, Android 1.5.122, dictionary 3.9.8): all eight sampled new names
+commit exactly — রণহাট, যদুপুর, ক্রিপ্টন, দাওগাঁও, প্লাইসটোসিন, বিহাইডহর, লরেন্টজ, ইউটেকটিক —
+the two excluded controls still normalise (স্ট্রনশিয়াম → স্ট্রনসিয়াম, মহিষকুন্ডি → মহিষকুণ্ডি),
+and the invariant keys (kmon, kacci, name) are unchanged.
 

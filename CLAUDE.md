@@ -52,7 +52,11 @@ cost, and privacy-promise reasons; see memory + git history).
   name). Gate limitation recorded: a real loanword the engine normalises
   to an unrelated word is excluded too (শিকিমেট, নর্স) — s190-review.tsv.
   Walls --rerun (S156 gotcha), S181 before/after dumps, S188 before/after.
-  Android 1.5.122 (2159); `dictionary` release asset refreshed for CI.
+  S22: all eight sampled new names commit exactly; the two normalised
+  controls and kmon/kacci/name unchanged. Android 1.5.122 (2159);
+  `dictionary` release asset refreshed for CI; propagated to every surface
+  (macOS runner 105/105, extension, bangluweb + slim, desktop 1.3.15,
+  Windows টাইপার 1.0.20).
 - **S189 strip twins (2026-09-05, user "continue" after the S188 study;
   engine commit UNTOUCHED — every change is inside getSuggestions after
   the primary is fixed):** four twin families from the study, each an
