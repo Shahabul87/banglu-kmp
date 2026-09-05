@@ -2208,7 +2208,7 @@ private fun LetterRowsContent(
                 modifier = Modifier.weight(1f),
                 height = keyHeight,
                 bgColor = colors.keyBg,
-                longPressOptions = longPressAlternatives(key[0]),
+                longPressOptions = longPressAlternatives(key[0], useShiftedLetterInput),
                 onTextInput = onTextInput,
                 hitPaddingH = letterHitPad,
                 onReplaceLast = { alt -> onBackspace(); onTextInput(alt) },
@@ -2246,7 +2246,7 @@ private fun LetterRowsContent(
                     modifier = Modifier.weight(if (isFirst || isLast) edgeWeight else 1f),
                     height = keyHeight,
                     bgColor = colors.keyBg,
-                    longPressOptions = longPressAlternatives(key[0]),
+                    longPressOptions = longPressAlternatives(key[0], useShiftedLetterInput),
                     onTextInput = onTextInput,
                     hitPaddingH = letterHitPad,
                     hitPaddingStart = if (isFirst) letterHitPad + indent else null,
@@ -2296,7 +2296,7 @@ private fun LetterRowsContent(
                 modifier = Modifier.weight(1f),
                 height = keyHeight,
                 bgColor = colors.keyBg,
-                longPressOptions = longPressAlternatives(key[0]),
+                longPressOptions = longPressAlternatives(key[0], useShiftedLetterInput),
                 onTextInput = onTextInput,
                 hitPaddingH = letterHitPad,
                 onReplaceLast = { alt -> onBackspace(); onTextInput(alt) },
@@ -2322,6 +2322,11 @@ private fun LetterRowsContent(
 
 private val EMPTY_KEY_ALTERNATIVES = emptyList<KeyAlternative>()
 private val LONG_PRESS_ALTERNATIVES = mapOf(
+    // S184 (user: "press and hold c … they should get chandra bindu above that
+    // letter"): "^" is the engine's chandrabindu marker — it joins the roman
+    // buffer, so cha + hold-c + d previews and commits চাঁদ, and inside a
+    // committed word the S174 mid-word plan carries it (BackspaceResume).
+    'c' to listOf(KeyAlternative("ঁ", "^")),
     't' to listOf(KeyAlternative("ট", "ট")),
     'd' to listOf(KeyAlternative("ড", "ড")),
     'r' to listOf(KeyAlternative("ড়", "ড়")),
@@ -2330,8 +2335,10 @@ private val LONG_PRESS_ALTERNATIVES = mapOf(
     'u' to listOf(KeyAlternative("ঊ", "uu"))
 )
 
-private fun longPressAlternatives(char: Char): List<KeyAlternative> {
-    return LONG_PRESS_ALTERNATIVES[char.lowercaseChar()] ?: EMPTY_KEY_ALTERNATIVES
+private fun longPressAlternatives(char: Char, englishLayout: Boolean = false): List<KeyAlternative> {
+    val alts = LONG_PRESS_ALTERNATIVES[char.lowercaseChar()] ?: EMPTY_KEY_ALTERNATIVES
+    // S184: chandrabindu is a Bangla-only sign — the EN layout keeps c plain.
+    return if (englishLayout) alts.filter { it.input != "^" } else alts
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

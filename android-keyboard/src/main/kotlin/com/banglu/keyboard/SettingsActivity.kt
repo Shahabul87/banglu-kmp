@@ -188,11 +188,12 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
     var autoCapitalize by remember { mutableStateOf(prefs.getBoolean("auto_capitalize", true)) }
     var doubleSpacePeriod by remember { mutableStateOf(prefs.getBoolean("double_space_period", true)) }
     var englishAutoReplace by remember { mutableStateOf(prefs.getBoolean("english_auto_replace", false)) }
+    var englishSpellSuggest by remember { mutableStateOf(prefs.getBoolean("english_spell_suggest", true)) }
     var suggestions by remember { mutableStateOf(prefs.getBoolean("suggestions", true)) }
     var glideTyping by remember { mutableStateOf(prefs.getBoolean("glide_typing_enabled", true)) }
     var typingLearning by remember { mutableStateOf(prefs.getBoolean("typing_learning", true)) }
     var personalDictionary by remember { mutableStateOf(prefs.getBoolean("personal_dictionary", true)) }
-    var identityAssist by remember { mutableStateOf(prefs.getBoolean("identity_assist", false)) }
+    var identityAssist by remember { mutableStateOf(prefs.getBoolean("identity_assist", true)) }
     var clipboardHistory by remember { mutableStateOf(prefs.getBoolean(PrefsMigrations.CLIPBOARD_ENABLED_KEY, false)) }
     // Full dictionary by default: predictions, context reranking, and the strong
     // commit gate all need the full tables. Weak devices still auto-fall to lite
@@ -325,6 +326,11 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                 }
             }
             item {
+                BrandSwitch("ইংরেজি বানান সাজেশন", "ভুল বানানের পাশে সঠিক শব্দটি সাজেশনে দেখায় (ট্যাপ করলে বদলায়); স্পেসের পর → চিহ্নের চিপ", englishSpellSuggest) {
+                    englishSpellSuggest = it; saveBoolean("english_spell_suggest", it)
+                }
+            }
+            item {
                 BrandSwitch("ইংরেজি অটো-রিপ্লেস", "বন্ধ থাকলে আপনার লেখা শব্দই থাকে, সঠিক বানান সাজেশনে (Lal → all নিজে বদলাবে না)", englishAutoReplace) {
                     englishAutoReplace = it; saveBoolean("english_auto_replace", it)
                 }
@@ -356,7 +362,7 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
                 // process, see eraseLearningInKeyboardProcess).
                 BrandSwitch(
                     "ইমেইল ঠিকানা মনে রাখা",
-                    "চালু করলে ইমেইল ঘরে লেখা ঠিকানা শুধু এই ফোনেই থাকে, পরে এক ট্যাপে বসানোর জন্য; বন্ধ করলে সংরক্ষিত ঠিকানা মুছে যায়। ডিফল্ট: বন্ধ",
+                    "ইমেইল ঘরে লেখা ঠিকানা ও সাইটের নাম শুধু এই ফোনেই থাকে, পরে এক ট্যাপে বসানোর জন্য; বন্ধ করলে সংরক্ষিত ঠিকানা মুছে যায়। ডিফল্ট: চালু",
                     identityAssist
                 ) { enabled ->
                     if (enabled) {

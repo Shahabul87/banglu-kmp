@@ -942,3 +942,64 @@ above the pad, tools-row icon in the stroke grammar of its neighbours.
 **Walls.** android 229 (was 226), the other five walls up to date from the S182 run (no
 shared input changed).
 
+## S184 — chandrabindu, cultural phrases, pick queue, spell chip, identity default (2026-09-04/05)
+
+User batch: "for chandrabindu … move the cursor after ch or any letter and press and hold c";
+"assalamulaikum / walaikum … available to suggestions based on typing intent"; "it is not
+learning user selection from the suggestions"; "English needs settings like auto
+capitalisation, spelling check"; "keep identity memory default on".
+
+**Chandrabindu.** Engine probe on the real dictionary: `cha^d` committed চায়ঁদ (dictionary
+path) while the instant preview showed চাঁদ. Fix in `convertWordRaw` and the composing
+core: a key containing `^` is rendered by the rule transliterator (parity with the
+preview by construction), the dictionary's reading of the marker-less key rides as an
+alternative. Android: long-press c → `^` (Bangla layout only), `^` resumes/edits a
+committed word like a letter, `BackspaceResume.cleanRoman` maps the reverse map's "N" to
+`^`. Device (S22, 1.5.119): cha + hold-c + d → চাঁদ; committed বাদ with the caret after বা
+→ বাঁদ; বা| + hold-c + s → বাঁস. Harness gotcha: the popup needs > 1.5× the system
+long-press timeout — a 700 ms hold typed a plain c.
+
+**Phrases.** `CulturalPhrases` (24 phrases, 70 variants): exact key commits the phrase
+with spacing; a ≥4-letter prefix puts the phrase at strip[1]. Device: "assa" → [আচ্ছা,
+আসসালামু আলাইকুম, আশ্বাস]; "wala" chip tap → ওয়ালাইকুম আসসালাম; full key + space →
+আসসালামু আলাইকুম.
+
+**Learning.** Device reproduction: third-chip picks for s/kotha/ami/kal all commit on
+retype (ষ, কোথা, আমিই, ক্যাল) and survive a keyboard-process restart. The remaining hole
+is the S34 gate: a pick in the first seconds after the keyboard appears (dictionary still
+loading) was silently dropped. Explicit picks now queue (cap 32) and replay once the
+full engine is up, each re-validated against the full engine's own strip for that key.
+Private/incognito/URL fields still never learn (S168 policy).
+
+**English settings.** New switch "ইংরেজি বানান সাজেশন" (default ON) gates the S182 "→ all"
+offer and a new in-typing correction chip (letters that complete no known word → nearest
+known word, tap replaces): device "recieve" → [recieve, receive], tap → "receive ".
+
+**Identity assist default ON** (user decision). The absent-pref purge is retired; an
+existing decision is never overridden; "off ⇒ no saved addresses" still holds.
+Privacy policy and data-safety wording updated.
+
+## S185 — English typing round (2026-09-05, Android 1.5.119 / 2156)
+
+User: "when typing receive show them the variation like receiving, received"; "add
+context wording in English when they press spacebar"; "if they select English mode they
+have to be in English mode until change"; "I am seeing the Bengali দাঁড়ি after you you're".
+
+- Wordlist 15,026 → 30,000 (OpenSubtitles ranks ∩ CMU headwords; the raw list carries
+  helo/doesnt past the top ranks and broke the S97 autocorrect pins until filtered).
+- `EnglishBigramData` from Norvig's count_2w.txt: 8,655 previous words × top-5 followers.
+- Inflections and contractions of a fully typed word lead the completions.
+- Punctuation refreshes the English strip; sentence boundary drops the context; sentence-
+  start chips carry the capital; backspacing to a sentence start re-arms shift.
+- The globe toggle writes `default_mode`, so the chosen mode survives other apps and a
+  keyboard restart.
+
+Device (S22, 1.5.119): receive → [receive, receiving, receiveral*, received]; stop →
+[stop, stopped, stops, stopping]; can → [can, can't, cans, canned]; "thank " → [you, the,
+all]; "how " → [to, do, the]; "thank you. " → [You, You're, I]; EN mode held in the
+Messages composer and after `am force-stop`. (*receiveral is a personal word the harness
+taught the dev phone by accident.) The দাঁড়ি report did not reproduce in six EN strip
+states; every gap-punctuation call site is BN-gated.
+
+Walls: jvm 768, shared debug 440, android 229, js 456, desktop 41, windows 161 — green.
+

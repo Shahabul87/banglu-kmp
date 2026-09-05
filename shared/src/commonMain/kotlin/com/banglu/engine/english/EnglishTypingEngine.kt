@@ -42,12 +42,24 @@ class EnglishTypingEngine {
          * ~1400 — a rare word never replaces what the user typed.
          */
         const val MIN_AUTOCORRECT_SCORE = 3.2
+        /** S185: an inflection of the typed word outranks any plain prefix completion. */
+        const val INFLECTION_BASE = 5_000.0
     }
 
     private val ranks = HashMap<String, Int>(EnglishWordData.WORDS.size * 2)
     private val sorted: Array<String>
     private val userCounts = HashMap<String, Int>()
     private val bigrams = HashMap<String, HashMap<String, Int>>()
+
+    /** S185: corpus next-word context (EnglishBigramData), parsed on first use. */
+    private val corpusBigrams: HashMap<String, List<String>> by lazy {
+        HashMap<String, List<String>>(EnglishBigramData.ENTRIES.size * 2).also { m ->
+            for (e in EnglishBigramData.ENTRIES) {
+                val i = e.indexOf(':')
+                if (i > 0) m[e.substring(0, i)] = e.substring(i + 1).split(',')
+            }
+        }
+    }
 
     init {
         EnglishWordData.WORDS.forEachIndexed { i, w -> if (w !in ranks) ranks[w] = i }
@@ -78,10 +90,21 @@ class EnglishTypingEngine {
 
         // Wordlist range scan (lexicographic slice of the sorted array).
         var i = lowerBound(prefix)
+        val typedIsWord = prefix in ranks
         while (i < sorted.size && sorted[i].startsWith(prefix)) {
             val w = sorted[i]
-            offer(w, baseScore(w) + USER_COUNT_WEIGHT * (userCounts[w] ?: 0))
+            // S185: the typed word's own contractions (can → can't) are
+            // variations too and rank with the inflections.
+            val contraction = if (typedIsWord && w.length > prefix.length && w[prefix.length] == '\'') INFLECTION_BASE else 0.0
+            offer(w, contraction + baseScore(w) + USER_COUNT_WEIGHT * (userCounts[w] ?: 0))
             i++
+        }
+        // S185 (user: "when typing receive show the variations — receiving,
+        // received"): a fully typed known word offers its inflections first,
+        // including the forms a prefix scan cannot reach (e-drop receiving,
+        // y→i tries, doubled stopped). Each form must itself be a known word.
+        if (typedIsWord) {
+            for (form in inflections(prefix)) offer(form, INFLECTION_BASE + baseScore(form) + USER_COUNT_WEIGHT * (userCounts[form] ?: 0))
         }
         // Personal words the wordlist doesn't know (names, slang).
         for ((w, c) in userCounts) {
@@ -102,6 +125,9 @@ class EnglishTypingEngine {
             bigrams[prev]?.entries
                 ?.sortedByDescending { it.value }
                 ?.forEach { if (out.size < limit) out.add(it.key) }
+            // S185: corpus context after the personal pairs (thank → you,
+            // how → to/much, i → have/am).
+            corpusBigrams[prev]?.forEach { if (out.size < limit) out.add(it) }
         }
         // Fill with the most common sentence-position words.
         var i = 0
@@ -267,6 +293,34 @@ class EnglishTypingEngine {
         if (!t.all { it in 'a'..'z' || it == '\'' }) return null
         if (t.first() == '\'' || t.last() == '\'') return null
         return t
+    }
+
+    /**
+     * S185: candidate inflected forms of [word] that are themselves known words
+     * — plural/3rd person (-s/-es/-ies), past (-ed/-d/-ied/doubled), -ing
+     * (with e-drop, doubling, ie→ying), comparative (-er/-r/-ier) and adverb
+     * (-ly/-ily). Ordered by the form's own frequency rank.
+     */
+    internal fun inflections(word: String): List<String> {
+        if (word.length < 2 || !word.all { it in 'a'..'z' }) return emptyList()
+        val c = ArrayList<String>(12)
+        val last = word.last()
+        val vowels = "aeiou"
+        val endsCY = last == 'y' && word.length >= 2 && word[word.length - 2] !in vowels
+        val endsE = last == 'e'
+        val cvc = word.length >= 3 && last !in vowels && last !in "wxy" &&
+            word[word.length - 2] in vowels && word[word.length - 3] !in vowels
+        val stem = word.dropLast(1)
+        // -s
+        c += word + "s"; c += word + "es"; if (endsCY) c += stem + "ies"
+        // -ed
+        c += word + "ed"; if (endsE) c += word + "d"; if (endsCY) c += stem + "ied"; if (cvc) c += word + last + "ed"
+        // -ing
+        c += word + "ing"; if (endsE && !word.endsWith("ee")) c += stem + "ing"; if (cvc) c += word + last + "ing"; if (word.endsWith("ie")) c += word.dropLast(2) + "ying"
+        // -er / -ly
+        c += word + "er"; if (endsE) c += word + "r"; if (endsCY) c += stem + "ier"; if (cvc) c += word + last + "er"
+        c += word + "ly"; if (endsCY) c += stem + "ily"
+        return c.distinct().filter { it != word && it in ranks }.sortedBy { ranks[it] }
     }
 
     private fun baseScore(word: String): Double {

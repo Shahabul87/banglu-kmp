@@ -488,6 +488,16 @@ class BangluIMEService : InputMethodService(),
     val soundEnabled = mutableStateOf(true)
     val suggestionsEnabled = mutableStateOf(true)
     val autoCapitalizeEnabled = mutableStateOf(true)
+    /** S184: English spelling suggestions (the "→ all" offer and the in-typing correction chip). */
+    val englishSpellSuggestEnabled = mutableStateOf(true)
+    /**
+     * S184: explicit chip picks made while the dictionary is still loading.
+     * The S34 gate dropped them (a pick in the first seconds after the
+     * keyboard appeared was never learned — the tester's "it is not learning
+     * my selection"); they are replayed once the full engine is up, each one
+     * re-validated against the full engine's own strip for that key.
+     */
+    private val pendingExplicitPicks = ArrayDeque<Pair<String, String>>()
     val doubleSpacePeriodEnabled = mutableStateOf(true)
     val numberRowEnabled = mutableStateOf(true)
     val keyPreviewEnabled = mutableStateOf(true)
@@ -589,6 +599,7 @@ class BangluIMEService : InputMethodService(),
         /** S98: identity-assist chips (email fills / domain completions). */
         private const val IDENTITY_FILL_SOURCE = "identity_fill"
         /** S182: the typed English word itself, always the strip's first chip. */
+        private const val MAX_PENDING_EXPLICIT_PICKS = 32
         private const val ENGLISH_TYPED_SOURCE = "english_typed"
         /** S182: "did you mean" — tap replaces the word Space just kept. */
         private const val ENGLISH_CORRECTION_OFFER_SOURCE = "english_correction_offer"
@@ -1115,6 +1126,27 @@ class BangluIMEService : InputMethodService(),
         }
     }
 
+    /**
+     * S184: replay the picks queued during the dictionary load. A pick is
+     * learned only if the FULL engine also offers that word for the key —
+     * a seed-window chip the real engine would never show (S34's poisoned
+     * fallbacks) is dropped, a deliberate choice among real candidates is kept.
+     */
+    private fun replayPendingExplicitPicks() {
+        val picks = synchronized(pendingExplicitPicks) {
+            val copy = pendingExplicitPicks.toList(); pendingExplicitPicks.clear(); copy
+        }
+        if (picks.isEmpty()) return
+        serviceScope.launch {
+            withContext(engineLane) {
+                for ((key, bengali) in picks) {
+                    val offered = runCatching { SmartEngineAdapter.getSuggestions(key, 8).any { it.bengali == bengali } }.getOrDefault(false)
+                    if (offered) SmartEngineAdapter.onWordSelected(key, bengali, learnAsWord = false, explicitChoice = true)
+                }
+            }
+        }
+    }
+
     private fun learnCommittedWordAsync(
         phonetic: String,
         bengali: String,
@@ -1127,7 +1159,15 @@ class BangluIMEService : InputMethodService(),
         // seed engine's raw fallbacks (kmon -> ক্মন) were being learned as
         // personal words during the few-second load window and then shadowed
         // the store's resolution on that device forever.
-        if (!dictionaryReadyForLearning) return
+        if (!dictionaryReadyForLearning) {
+            if (explicitChoice && !learnAsWord && phonetic.isNotBlank() && bengali.isNotBlank()) {
+                synchronized(pendingExplicitPicks) {
+                    if (pendingExplicitPicks.size >= MAX_PENDING_EXPLICIT_PICKS) pendingExplicitPicks.removeFirst()
+                    pendingExplicitPicks.addLast(phonetic to bengali)
+                }
+            }
+            return
+        }
         serviceScope.launch {
             // S75: learning mutates the dictionary — same lane as conversions.
             withContext(engineLane) {
@@ -1154,8 +1194,9 @@ class BangluIMEService : InputMethodService(),
         keyPreviewEnabled.value = prefs.getBoolean("key_preview", true)
         typingLearningEnabled.value = prefs.getBoolean("typing_learning", true)
         personalDictionaryEnabled.value = prefs.getBoolean("personal_dictionary", true)
-        identityAssistEnabled.value = prefs.getBoolean("identity_assist", false)
+        identityAssistEnabled.value = prefs.getBoolean("identity_assist", true)
         englishAutoReplaceEnabled.value = prefs.getBoolean("english_auto_replace", false)
+        englishSpellSuggestEnabled.value = prefs.getBoolean("english_spell_suggest", true)
         clipboardHistoryEnabled.value = prefs.getBoolean(PrefsMigrations.CLIPBOARD_ENABLED_KEY, false)
         if (!clipboardHistoryEnabled.value) {
             // Switched off (or never on): nothing may remain in memory (now)
@@ -1223,25 +1264,18 @@ class BangluIMEService : InputMethodService(),
             if (boundary == android.icu.text.BreakIterator.DONE) 0 else boundary
         }
         serviceScope.launch(Dispatchers.IO) { recordProcessExitReasons() }
-        // S136 (F-004): identity assist is opt-in. A user who never chose
-        // (pref absent — every pre-1.5.83 install) is set to OFF and any
-        // addresses remembered under the old default are deleted, so nothing
-        // is retained without a decision.
+        // S184 (user decision 2026-09-04: "keep it default on, if someone
+        // wants they can turn it OFF from settings"): identity assist is ON
+        // by default; the S136 purge-on-absent-pref is retired. A user who
+        // already decided (pref present) is never overridden, and the
+        // "off ⇒ no saved addresses" invariant below still holds.
         if (!prefs.contains("identity_assist")) {
             serviceScope.launch(Dispatchers.IO) {
-                // S138: the preference is written only AFTER the purge is
-                // durable — a failed purge leaves it absent, so the next
-                // start retries instead of silently keeping old addresses.
-                val purged = runCatching { AndroidStorage(applicationContext).clearIdentityUserDataDurably() }
-                    .getOrDefault(false)
-                // S140: write the DEFAULT only if the user has not decided
-                // meanwhile (they may have switched it on in Settings during
-                // this purge) — a decision is never overwritten.
-                if (purged && !prefs.contains("identity_assist")) {
-                    prefs.edit().putBoolean("identity_assist", false).apply()
+                if (!prefs.contains("identity_assist")) {
+                    prefs.edit().putBoolean("identity_assist", true).apply()
                 }
             }
-        } else if (!prefs.getBoolean("identity_assist", false)) {
+        } else if (!prefs.getBoolean("identity_assist", true)) {
             // S139 (F-004): INVARIANT "identity off ⇒ no saved addresses" is
             // re-established at every start — covers a switch-off whose
             // purge failed, and "reset all settings".
@@ -1316,6 +1350,7 @@ class BangluIMEService : InputMethodService(),
                 if (!preAttached) attachPhoneticIndexStore(dictionaryLoader, preInitialize = false)
                 loadedDictionaryLiteMode = shouldUseLiteDictionary()
                 dictionaryReadyForLearning = true
+                replayPendingExplicitPicks()
                 warmGlideLexicons()
                 loadAndWarmPersonalHotSet()
                 log("onCreate: Learned words loaded")
@@ -2105,7 +2140,8 @@ class BangluIMEService : InputMethodService(),
         // shadow buffer (S28 law).
         if (buffer.isEmpty()) {
             midWordInsertAt = null
-            if (char.isLetter()) tryResumeComposingBeforeTyping(ic)
+            // S184: the chandrabindu marker edits the word like a letter.
+            if (char.isLetter() || char == '^') tryResumeComposingBeforeTyping(ic)
         }
         // S174/S175: after a mid-word resume the letter lands at the edit
         // point inside the word, not at its end.
@@ -2219,7 +2255,10 @@ class BangluIMEService : InputMethodService(),
         while (j > 0 && !isEnglishWordChar(before[j - 1])) j--
         var k = j
         while (k > 0 && isEnglishWordChar(before[k - 1])) k--
-        val prev = before.substring(k, j).takeIf { it.isNotBlank() }
+        // S185: a sentence boundary between the words means no context —
+        // "you. " predicts sentence starters, not the followers of "you".
+        val gap = before.substring(j, i)
+        val prev = before.substring(k, j).takeIf { it.isNotBlank() && gap.none { it == '.' || it == '!' || it == '?' || it == '\n' } }
         return prefix to prev
     }
 
@@ -2234,12 +2273,24 @@ class BangluIMEService : InputMethodService(),
         }
         val before = currentInputConnection?.getTextBeforeCursor(48, 0)?.toString().orEmpty()
         val (prefix, prev) = englishContextFrom(before)
+        // S185: next-word chips at a sentence start carry the capital the
+        // auto-capitalisation would have typed (a tapped chip commits as shown).
+        val capitalizeNext = prefix.isEmpty() && autoCapitalizeEnabled.value && shouldAutoCapitalize()
         suggestionJob = serviceScope.launch {
             val items = withContext(engineLane) {
                 SmartEngineAdapter.ensureEnglishLearningLoaded()
-                if (prefix.isEmpty()) SmartEngineAdapter.englishPredictions(prev, 3)
-                else SmartEngineAdapter.englishCompletions(prefix, 3)
+                if (prefix.isEmpty()) SmartEngineAdapter.englishPredictions(prev, 3).map { w ->
+                    if (capitalizeNext) w.replaceFirstChar { it.uppercaseChar() } else w
+                }
+                else SmartEngineAdapter.englishCompletions(prefix, 4)   // S185: inflections + completions
             }
+            // S184: Samsung-style in-typing spelling suggestion — when the
+            // typed letters complete NO known word (four or more letters) the
+            // nearest known word is offered as a chip; tapping it replaces the
+            // typed letters. Pure in-memory (englishAutocorrect), engine lane.
+            val spellFix = if (englishSpellSuggestEnabled.value && prefix.length >= 4 && items.isEmpty()) withContext(engineLane) {
+                SmartEngineAdapter.englishAutocorrect(prefix)?.takeIf { !it.equals(prefix, ignoreCase = true) }
+            } else null
             val identityFills = if (prefix.length >= 2 && identityMemoryAllowed()) withContext(engineLane) {
                 SmartEngineAdapter.ensureIdentityLoaded()
                 SmartEngineAdapter.identityPrefixCompletions(prefix, 2)
@@ -2253,7 +2304,7 @@ class BangluIMEService : InputMethodService(),
                 autoCorrectUndoSuggestion()?.let { suggestions.add(it) }
                 // S182: right after Space kept the typed word, the likely
                 // correction is offered as a tap chip ("→ all").
-                if (prefix.isEmpty()) pendingEnglishOffer?.let { (_, correction) ->
+                if (prefix.isEmpty() && englishSpellSuggestEnabled.value) pendingEnglishOffer?.let { (_, correction) ->
                     suggestions.add(SmartSuggestion("→ $correction", 0.95, ENGLISH_CORRECTION_OFFER_SOURCE, correction, "correction_offer"))
                 }
                 // S182: the typed word is ALWAYS the first chip while typing —
@@ -2267,6 +2318,9 @@ class BangluIMEService : InputMethodService(),
                             suggestions.add(SmartSuggestion(fill, 0.95, IDENTITY_FILL_SOURCE, prefix, "identity"))
                         }
                     }
+                }
+                spellFix?.let { fix ->
+                    suggestions.add(SmartSuggestion(fix, 0.92, ENGLISH_WORD_SOURCE, prefix, "en_spell"))
                 }
                 items.filter { it != prefix }.forEach { w ->
                     suggestions.add(SmartSuggestion(w, 0.9, ENGLISH_WORD_SOURCE, prefix, "en"))
@@ -2452,6 +2506,14 @@ class BangluIMEService : InputMethodService(),
         ) {
             if (maybeShowIdentityAssist()) return
         }
+        // S185: English punctuation ends the word — the strip must move on to
+        // next-word chips (it kept the finished word's completions: "You." still
+        // offered Yous / Yourself on the device).
+        if (keyboardMode.value == KeyboardMode.ENGLISH) {
+            englishWordPrefix = ""
+            refreshEnglishSuggestionsAsync()
+            return
+        }
         showGapPunctuationSuggestions()
     }
 
@@ -2497,6 +2559,12 @@ class BangluIMEService : InputMethodService(),
                 if (keyboardMode.value == KeyboardMode.ENGLISH) {
                     englishWordPrefix = englishWordPrefix.dropLast(1)   // S99
                     refreshEnglishSuggestionsAsync()
+                    // S185: deleting back to a sentence start re-arms the
+                    // capital, like the stock keyboards (auto-capitalisation
+                    // used to fire only on field start and after ". ").
+                    if (autoCapitalizeEnabled.value && shouldAutoCapitalize() && shiftState.value == ShiftState.OFF) {
+                        shiftState.value = ShiftState.ON
+                    }
                 } else if (rawCommitInputMode || emailInputMode) {
                     // S98: identity chips track deletions in raw/email fields.
                     suggestions.clear()
@@ -3118,6 +3186,15 @@ class BangluIMEService : InputMethodService(),
         val modeResult = LanguageModePolicy.globeToggle(keyboardMode.value, letterModeBeforeSymbols)
         letterModeBeforeSymbols = modeResult.letterMode
         keyboardMode.value = modeResult.mode
+        // S185 (user: "if they select English mode they have to be in English
+        // mode until changed"): the toggle IS the preference — it becomes the
+        // stored default, so a new app or a keyboard restart opens in the
+        // last-chosen mode (S67's "new app resets to the default" stays; the
+        // default now follows the user).
+        if (modeResult.letterMode != defaultLetterMode) {
+            defaultLetterMode = modeResult.letterMode
+            prefs.edit().putString("default_mode", if (modeResult.letterMode == KeyboardMode.ENGLISH) "english" else "banglu").apply()
+        }
         resetShiftState()
         englishWordPrefix = ""   // S99: mode change resets the word context
         suggestions.clear()

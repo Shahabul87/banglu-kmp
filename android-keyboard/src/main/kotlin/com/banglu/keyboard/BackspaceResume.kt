@@ -69,8 +69,10 @@ internal object BackspaceResume {
      */
     private fun cleanRoman(part: String, reverse: (String) -> String): String? {
         if (part.isEmpty()) return ""
-        val roman = runCatching { reverse(part).lowercase() }.getOrNull() ?: return null
-        if (roman.isEmpty() || roman.length > MAX_WORD_LENGTH || !roman.all { it in 'a'..'z' }) return null
+        // S184: the reverse map writes chandrabindu as "N"; the typing key for
+        // it is "^" (long-press c), and lowercasing "N" would read it as ন.
+        val roman = runCatching { reverse(part).replace("N", "^").lowercase() }.getOrNull() ?: return null
+        if (roman.isEmpty() || roman.length > MAX_WORD_LENGTH || !roman.all { it in 'a'..'z' || it == '^' }) return null
         return roman
     }
 

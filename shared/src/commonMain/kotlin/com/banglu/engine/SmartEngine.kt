@@ -8,6 +8,7 @@ import com.banglu.engine.ai.WordCandidate
 import com.banglu.engine.dictionary.ACRONYM_OVERRIDES
 import com.banglu.engine.dictionary.ACRONYM_SUGGESTIONS
 import com.banglu.engine.dictionary.BengaliWordValidator
+import com.banglu.engine.dictionary.CulturalPhrases
 import com.banglu.engine.dictionary.PhoneticOverlapScorer
 import com.banglu.engine.dictionary.ProgressiveNarrowingEngine
 import com.banglu.engine.dictionary.SectionNarrowingEngine
@@ -1729,6 +1730,20 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             return ConversionResult(acronym, 0.99, ResolutionSource.DICTIONARY, emptyList())
         }
 
+        // S184: an explicit chandrabindu marker ("^", the long-press-c key on
+        // Android and the Avro habit elsewhere) — the dictionary path mangled
+        // it (cha^d → চায়ঁদ while the preview showed চাঁদ).
+        if ('^' in key) return chandrabinduComposite(key)
+
+        // S184: everyday greetings/religious phrases commit with their spacing.
+        CulturalPhrases.EXACT[key]?.let { phrase ->
+            val literal = convertByPatterns(key)
+            val alternatives = if (literal.bengali.isNotEmpty() && literal.bengali != phrase) {
+                listOf(Alternative(literal.bengali, minOf(literal.confidence, 0.8)))
+            } else emptyList()
+            return ConversionResult(phrase, 0.99, ResolutionSource.DICTIONARY, alternatives)
+        }
+
         tryLowercaseV2ControlRule(key)?.let { return it }
 
         // Lowercase-only Bangla mode: uppercase letters are not semantic.
@@ -2087,6 +2102,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             return ConversionResult(acronym, 0.99, ResolutionSource.DICTIONARY, emptyList())
         }
 
+        // S184 mirrors (static data — lite-safe): chandrabindu marker, phrases.
+        if ('^' in key) return chandrabinduComposite(key).copy(alternatives = emptyList())
+        CulturalPhrases.EXACT[key]?.let { phrase ->
+            return ConversionResult(phrase, 0.99, ResolutionSource.DICTIONARY, emptyList())
+        }
+
         tryLowercaseV2ControlRule(key)?.let { return it }
 
         // S26 mirror: vetted English-intent keys always commit the loanword
@@ -2428,6 +2449,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                     "tier0"
                 )
             )
+        }
+
+        // S184: the phrase the typed prefix is heading for (assa → আসসালামু
+        // আলাইকুম) — the intent chip, pinned to strip[1] below.
+        CulturalPhrases.completion(key)?.let { phrase ->
+            if (seen.add(phrase)) suggestions.add(SmartSuggestion(phrase, 0.97, "phrase_completion", key, "tier1_phrase"))
         }
 
         if (ENGLISH_VARIANT_PRIMARY_BY_KEY[key] == primary.bengali && input.trim() != primary.bengali && seen.add(input.trim())) {
@@ -2814,6 +2841,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         val banded = boosted
             .filter {
                 it.bengali == primary.bengali ||
+                    it.source == "phrase_completion" ||   // S184: the intent chip is curated data
                     (!it.bengali.contains("-") && isCleanSuggestion(key, it, primary.bengali))
             }
             .map { s ->
@@ -2833,7 +2861,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
         val ordered = banded
             .filterNot { (s, band, _) ->
-                band == 2 && hasBandZeroBeyondPrimary &&
+                s.source != "phrase_completion" &&
+                    band == 2 && hasBandZeroBeyondPrimary &&
                     !hasStripBandTwoPhoneticFit(key, s.bengali, primary.bengali) &&
                     !isOpenSyllableTwin(key, s.bengali, primary.bengali) &&
                     !isLetterTwin(key, s.bengali, primary.bengali)
@@ -3026,6 +3055,15 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             if (idx >= limit) {
                 val chip = ordered.removeAt(idx)
                 ordered.add(minOf(limit - 1, ordered.size), chip)
+            }
+        }
+
+        // S184: the phrase intent chip holds strip[1] whenever present.
+        run {
+            val idx = ordered.indexOfFirst { it.source == "phrase_completion" }
+            if (idx > 1 && limit >= 2) {
+                val chip = ordered.removeAt(idx)
+                ordered.add(1, chip)
             }
         }
 
@@ -7812,6 +7850,24 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
         return bestResult
+    }
+
+    /**
+     * S184: a key carrying "^" (explicit chandrabindu) is rendered by the
+     * rule transliterator exactly as the instant preview shows it — WYSIWYG
+     * by construction (the marker sits where the user put the caret). The
+     * dictionary's own reading of the key without the marker rides along as
+     * an alternative (chad → চাঁদ, so cha^d offers the same word at most
+     * once more; keys the dictionary spells differently keep both).
+     */
+    private fun chandrabinduComposite(key: String): ConversionResult {
+        val rule = convertForInstantPreview(key)
+        val stripped = key.replace("^", "")
+        val alternatives = if (stripped.any { it in 'a'..'z' }) {
+            val dict = convertWordRaw(stripped)
+            if (dict.bengali.isNotEmpty() && dict.bengali != rule) listOf(Alternative(dict.bengali, minOf(dict.confidence, 0.85))) else emptyList()
+        } else emptyList()
+        return ConversionResult(rule, 0.9, ResolutionSource.RULE, alternatives)
     }
 
     private fun cacheResult(key: String, result: ConversionResult) {

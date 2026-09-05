@@ -79,3 +79,10 @@ N-gram counts derived from the Bengali gold sides of:
   — standard-Bangla portion only.
 Only aggregate trigram/bigram counts (n>=2) ship; no review or message
 text is redistributed. Attribution per CC BY 4.0 for Vashantor.
+
+## count_2w.txt — Peter Norvig's English bigram counts (NOT stored in this repo)
+
+Source: https://norvig.com/ngrams/count_2w.txt (Natural Language Corpus Data:
+Beautiful Data, derived from the Google Web Trillion Word Corpus). Downloaded at
+generation time by scripts/gen_english_data.py (S185, 2026-09-05); only the
+compiled follower table (shared/.../english/EnglishBigramData.kt) is committed.

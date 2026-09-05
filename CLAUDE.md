@@ -33,6 +33,63 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S185 English round (2026-09-05, user: "when typing receive show the
+  variations — receiving, received … make typing faster in English", "add
+  context wording in English when they press spacebar", "if they select
+  English mode they have to be in English mode until changed", "when I first
+  type English I see the Bengali দাঁড়ি after you you're"):** EnglishWordData
+  grown 15,026 → 30,000 (OpenSubtitles ranks that are also CMU headwords —
+  the raw list carries typos like helo/doesnt past the top ranks; the
+  generator scripts/gen_english_data.py reads the committed S96 base from
+  tag v1.5.118 so a regenerated file never feeds itself). NEW
+  EnglishBigramData: Norvig count_2w.txt (Google web bigrams, public) →
+  8,655 previous words × top-5 followers, both words in the list, case
+  variants merged, a short vulgarity blocklist on the follower side;
+  predictions = personal pairs → corpus pairs → starters (thank → you,
+  how → to/do/much, i → have/am). Completions of a fully typed known word
+  lead with its inflections (-s/-es/-ies, -ed/-d/-ied/doubled, -ing with
+  e-drop/doubling/ie→ying, -er/-ier, -ly/-ily) and contractions (can →
+  can't), each form itself a known word (`inflections`, INFLECTION_BASE);
+  strip takes 4 completions. English punctuation refreshes the strip to
+  next-word chips (it kept "Yous / Yourself" after "You."), a sentence
+  boundary drops the context, sentence-start chips carry the capital, and
+  backspacing to a sentence start re-arms shift. The globe toggle now
+  WRITES `default_mode` — the chosen letter mode survives other apps and a
+  keyboard restart (S67's new-app reset stays; the default follows the
+  user). The দাঁড়ি report could not be reproduced on 1.5.119 in six EN
+  strip states (BN-idle → toggle, fresh field, typing, after space, chip
+  tap, period); the gap-punctuation chips are BN-gated at every call site.
+  Pins S185EnglishInflectionsAndContextTest (commonTest → JVM + JS).
+- **S184 tester round (2026-09-04/05, user: chandrabindu by long-press c,
+  cultural phrases, "not learning my selection", English spell settings,
+  identity default ON):** (1) `^` is the engine's chandrabindu marker on
+  every surface — convertWordRaw/composing core render a key containing
+  `^` through the rule transliterator exactly as the instant preview
+  (WYSIWYG by construction; the dictionary path had mangled cha^d →
+  চায়ঁদ), the marker-less dictionary reading rides as an alternative;
+  Android long-press c inserts `^` (BN layout only), `^` resumes/edits a
+  committed word like a letter, and BackspaceResume.cleanRoman maps the
+  reverse map's "N" to `^` (lowercasing it read ঁ as ন). Device: cha +
+  hold-c + d → চাঁদ; বাদ with the caret after বা → বাঁদ; বা| + hold-c + s →
+  বাঁস. GOTCHA: the key popup opens at 1.5× the system long-press timeout
+  (~750 ms) — a 700 ms harness hold types a plain c. (2) shared
+  dictionary/CulturalPhrases: 24 greetings/religious phrases × 70 roman
+  variants commit with their spacing (assalamualaikum → আসসালামু আলাইকুম,
+  walaikum → ওয়ালাইকুম আসসালাম) and a ≥4-letter prefix surfaces the phrase
+  as the strip[1] intent chip (`phrase_completion`, exempt from the
+  clean-suggestion and band-2 drops — curated data). (3) Learning DOES
+  work (device: ষ/কোথা/আমিই/ক্যাল picks commit on retype and after a
+  process restart); the real hole was the S34 load-window gate dropping
+  picks made in the first seconds — explicit picks now queue (cap 32) and
+  replay once the full engine is up, each re-validated against the full
+  engine's own strip. (4) Settings: "ইংরেজি বানান সাজেশন" switch (default
+  ON) gates the S182 "→ all" offer and a NEW in-typing correction chip
+  (recieve → receive when the letters complete no known word, tap
+  replaces); auto-capitalise / double-space switches already existed. (5)
+  Identity assist default ON (user decision; S136 purge-on-absent-pref
+  retired, the off ⇒ purge invariant kept; privacy policy + data-safety
+  wording updated — the live GitHub Pages policy is republished by the
+  user). Pins S184ChandrabinduPhrasesJvmTest. Android 1.5.119 (2156).
 - **S183 cursor pad (2026-09-04, tester: "কার্সর ডানে বামে কাজ করে, কিন্তু
   একের অধিক লাইনের ক্ষেত্রে উপর নিচে?"; user chose mock variant খ with the
   rule "if it opens below then it's fine" — the pad must never cover the
