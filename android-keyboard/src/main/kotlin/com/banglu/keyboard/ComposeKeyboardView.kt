@@ -1279,11 +1279,13 @@ private fun KeyboardActionBar(
         // S160 (user-approved mock \u0995): the redundant \u09a6\u09be\u0981\u09dc\u09bf slot and the
         // sticker shortcut (still in the expanded toolbar) make way for
         // cursor arrows \u2014 tap steps one position, hold repeats.
-        // S183 (tester: up/down for multi-line text; user-approved mock খ,
-        // pad opens BELOW so the editor stays visible): tap steps, HOLD opens
-        // the 4-way cursor pad in place of the letter rows.
-        CursorArrowSlot(left = true, "Move cursor left, hold for the cursor pad", Modifier.weight(1f), onHold = onCursorPadOpen) { onCursorMove(-1) }
-        CursorArrowSlot(left = false, "Move cursor right, hold for the cursor pad", Modifier.weight(1f), onHold = onCursorPadOpen) { onCursorMove(1) }
+        // S186 (user: "place it after emoji … remove the other two left and
+        // right icons because we provide the same functionality on that
+        // panel, keep settings"): ONE cursor-pad slot opens the S183 4-way
+        // pad; the S160 ← → slots are retired (the pad has them, larger).
+        CompactIconSlot("Cursor pad", modifier = Modifier.weight(1f), onClick = onCursorPadOpen) {
+            IconCursorPad(Modifier.size(22.dp), it)
+        }
         CompactIconSlot("Clipboard", modifier = Modifier.weight(1f), onClick = onClipboardOpen) {
             IconClipboard(Modifier.size(21.dp), it)
         }
@@ -1301,68 +1303,6 @@ private fun KeyboardActionBar(
     }
 }
 
-@Composable
-private fun CursorArrowSlot(
-    left: Boolean,
-    accessibilityLabel: String,
-    modifier: Modifier = Modifier,
-    onHold: (() -> Unit)? = null,
-    onStep: () -> Unit
-) {
-    val colors = LocalKeyboardColors.current
-    val currentOnStep = rememberUpdatedState(onStep)
-    val currentOnHold = rememberUpdatedState(onHold)
-    val scope = rememberCoroutineScope()
-    Box(
-        modifier = modifier
-            .height(scaledDp(ToolbarCollapsedHeight))
-            .semantics {
-                role = Role.Button
-                contentDescription = accessibilityLabel
-                // S168 (audit P3-1): TalkBack/Switch Access step once per activation.
-                onClick { currentOnStep.value(); true }
-            }
-            .pointerInput(Unit) {
-                detectTapGestures(onPress = {
-                    currentOnStep.value()
-                    val holdJob = scope.launch {
-                        kotlinx.coroutines.delay(350)
-                        // S183: with a pad available, a hold OPENS it (the
-                        // repeat lives on the pad's own arrows); without one
-                        // the pre-S183 hold-repeat stays.
-                        val open = currentOnHold.value
-                        if (open != null) { open() } else {
-                            while (true) {
-                                currentOnStep.value()
-                                kotlinx.coroutines.delay(60)
-                            }
-                        }
-                    }
-                    tryAwaitRelease()
-                    holdJob.cancel()
-                })
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        // Drawn, not a font glyph: \u2190/\u2192 render at different widths in
-        // some system fonts (S160 report: "two arrow has different font and
-        // size") — a mirrored Canvas pair is pixel-identical by construction.
-        val tint = colors.subText
-        androidx.compose.foundation.Canvas(modifier = Modifier.size(20.dp)) {
-            val w = size.width
-            val h = size.height
-            val cy = h / 2f
-            val stroke = 2.2.dp.toPx()
-            val tipX = if (left) w * 0.16f else w * 0.84f
-            val tailX = if (left) w * 0.88f else w * 0.12f
-            val head = w * 0.30f
-            val headDir = if (left) 1f else -1f
-            drawLine(tint, androidx.compose.ui.geometry.Offset(tailX, cy), androidx.compose.ui.geometry.Offset(tipX, cy), stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-            drawLine(tint, androidx.compose.ui.geometry.Offset(tipX, cy), androidx.compose.ui.geometry.Offset(tipX + head * headDir, cy - head), stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-            drawLine(tint, androidx.compose.ui.geometry.Offset(tipX, cy), androidx.compose.ui.geometry.Offset(tipX + head * headDir, cy + head), stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-        }
-    }
-}
 @Composable
 private fun CompactToolbarIcon(
     label: String,

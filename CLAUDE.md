@@ -43,7 +43,11 @@ cost, and privacy-promise reasons; see memory + git history).
   key draws `IconSearch` (canvas magnifier, dead-centre) instead of the 🔍
   emoji. `appendGapPunctuationSuggestions` is hard-gated to BN at its own
   entry so a late BN prediction job can never append "।" to an English
-  strip. Android 1.5.120 (2157).
+  strip. Action bar (user: "place it after emoji … remove the other two
+  left and right icons because we provide the same functionality on that
+  panel, keep settings"): 😊 ✥ 📋 🎤 ⚙ ⋯ — ONE cursor-pad slot opens the
+  S183 four-way pad; the S160 ← → slots and CursorArrowSlot are retired.
+  Android 1.5.120 (2157).
 - **S185 English round (2026-09-05, user: "when typing receive show the
   variations — receiving, received … make typing faster in English", "add
   context wording in English when they press spacebar", "if they select

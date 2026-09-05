@@ -1012,3 +1012,8 @@ canvas magnifier (`IconSearch`); the "।" gap-punctuation bar is hard-gated to 
 append entry. Device: EN idle strip [you, you're, I] upright and unhighlighted, magnifier
 centred. Android unit 229 green.
 
+Action bar (user, after the S183 mock round: "not any design I prefer … place it after
+emoji in the tools section, remove the other two left and right icons because we provide
+the same functionality on that panel, keep settings"): 😊 ✥ 📋 🎤 ⚙ ⋯. The ✥ slot opens
+the four-way pad; the ← → slots are gone (the pad's arrows are larger and hold-repeat).
+
