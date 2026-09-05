@@ -9,6 +9,24 @@ propose fixes that do not disturb the engine people are testing right now."
 **Engine under test:** the shared engine at commit `24c5d8c` (Android 1.5.120, db 3.9.7),
 JVM full store on `dictionary.sqlite`. **No engine change was made in this round.**
 
+## 0. Summary
+
+- For words the dictionary knows — the overwhelming majority of what people read in
+  newspapers, Wikipedia and books — the engine commits the right word 94–98% of the time
+  and shows it on the strip 99.6–99.9% of the time, in every register tested.
+- What it cannot handle is vocabulary it has never seen: 1% of frequent news words, but
+  8% of place names, 17% of everyday object and food names, 22% of union and village
+  names and 25% of science terms. Those fall to the rule transliteration, which gets a
+  name's ট/ড/ণ/য/ঁ/ী wrong often enough to read as garbage, or to the compound splitter,
+  which cuts one typed word into two.
+- Users type one word many ways: the sibilant fold (`pulis`, `des`, `asa`) is the single
+  largest in-dictionary miss by use, and the omitted chandrabindu (`tara` for তাঁরা) the
+  single most frequent word — in both, the wanted spelling is missing from the strip.
+- All 76 sampled failures reproduce on the S22 exactly as on the JVM.
+- The fix path is strip-first (twin slots, joined-form chip), then data (a proper-noun and
+  science lexicon from the harvest, compiled below every common word), then one narrow
+  guard on the rescue layers. No change to the commit of known words is proposed.
+
 ## 1. Corpora (all real text, harvested 2026-09-05 unless noted)
 
 | category | source | tokens | unique words |
@@ -47,10 +65,9 @@ manufactured the largest "miss" class. Lesson kept in the harness comment.
 
 ## 3. Results
 
-_Status: the fresh-news corpus and the device pass are complete; the seven remaining
-corpora (places, unions, people, science, objects, literature ×2, Wikipedia general) are
-still scoring on the JVM (unknown proper nouns are slow: every one runs the rescue
-layers) and their tables are appended in section 3.2 as they finish._
+_Status: complete — nine corpora, 135,000 words, two typing variants each, plus the
+76-key device pass. Per-corpus summaries, the pattern totals and the 400 most frequent
+misses per corpus are archived in `docs/audits/s188-realworld-study/`._
 
 ### 3.1 Fresh news (Prothom Alo, 15,000 most frequent words)
 
@@ -63,6 +80,42 @@ layers) and their tables are appended in section 3.2 as they finish._
 
 Headline: **for words the dictionary knows, the engine is at ceiling** — under one word in
 a thousand is missing from the strip. Everything below is about the remaining classes.
+
+### 3.2 Per-corpus tables (canonical roman unless stated; "weighted" = by occurrence)
+
+| corpus | in-dictionary commit / strip | out-of-vocabulary words | OOV commit / strip | typist fold commit / strip |
+|---|---|---|---|---|
+| fresh news | 97.8% / 99.9% | 186 of 14,617 (1.3%) | 35.5% / 52.2% | 88.7% / 94.1% |
+| places (districts, upazilas, villages, rivers, towns) | 96.7% / 99.9% | 1,135 of 13,864 (8.2%) | 22.8% / 42.6% | 74.2% / 88.1% |
+| unions and villages (2,347 union names + village lists) | 96.0% / 99.6% | 1,401 of 6,248 (22.4%) | 15.8% / 33.9% | 60.8% / 71.2% |
+| people (politicians, cricketers, writers, actors, award winners) | 97.1% / 99.9% | 989 of 14,542 (6.8%) | 24.4% / 38.6% | 77.7% / 90.0% |
+| science (physics, chemistry, biology, maths, medicine, astronomy, computing) | 96.6% / 99.9% | 3,650 of 14,372 (25.4%) | 26.1% / 33.9% | 69.6% / 76.5% |
+| objects (food, cuisine, fruit, vegetables, clothing, vehicles, furniture, tools, birds, fish, plants, animals) | 95.5% / 99.6% | 2,486 of 14,571 (17.1%) | 29.2% / 40.1% | 74.1% / 83.6% |
+| literature, rendered Wikisource (30 novels and poetry collections) | 93.9% / 99.6% | 2,097 of 14,736 (14.2%) | 21.8% / 34.5% | 71.4% / 84.3% |
+| literature, whole Wikisource dump (July, 4.8M tokens) | 94.5% / 99.9% | 1,535 of 14,300 (10.7%) | 23.3% / 37.1% | 72.0% / 85.7% |
+| Wikipedia general (July dump, 5.8M tokens) | 97.6% / 99.9% | 381 of 14,177 (2.7%) | 33.6% / 47.5% | 85.4% / 94.9% |
+
+### 3.3 Cross-corpus totals (135,000 words studied, 9 corpora)
+
+- **Words the dictionary knows: 93.9–97.8% commit-exact, 99.6–99.9% on the strip in
+  every corpus.** The remaining in-dictionary misses are twins (chandrabindu, sibilant,
+  vowel-initial, long vowel) that the strip does not carry — not wrong conversions.
+- **Out-of-vocabulary share by register:** news 1.3%, Wikipedia general 2.7%, people
+  6.8%, places 8.2%, Wikisource 10.7%, rendered literature 14.2%, objects 17.1%, unions
+  and villages 22.4%, science 25.4%. Unknown words commit exactly 16–36% of the time and
+  reach the strip 34–52% of the time.
+- **Miss classes by occurrence, all corpora** (`patterns.tsv`, a word may carry several
+  tags): out-of-vocabulary 269,946 · split 87,010 · sibilant 79,749 · vowel length
+  67,878 · inflected 58,118 · conjunct shape 55,064 · vowel-initial 46,272 · long
+  compound 17,923 · dental/retroflex 10,121 · chandrabindu 5,448 · ন/ণ 5,007 · ৎ 3,660 ·
+  য/জ 3,645 · other ranking 2,942.
+
+Reading: two thirds of everything the engine gets wrong is a word it has never seen;
+of the rest, the three biggest shapes (split, sibilant, vowel length) are all
+strip-fixable without touching a commit.
+
+Places miss classes by occurrence: oov 5,700 · sibilant 3,066 · split 1,797 ·
+vowel-initial 1,615 · vowel length 1,066 · inflected 986 · conjunct shape 870.
 
 ## 4. Failure patterns (confirmed on the S22, Android 1.5.120, 2026-09-05)
 
@@ -167,6 +220,32 @@ on the strip.
 `lila` → লীলা (corpus had লিলা), `krira` → ক্রীড়া, `prachin` → প্রাচীন, `borni` → বর্ণি.
 The engine's answer is the standard spelling; the corpus word is the variant. Reported,
 not counted as failures.
+
+### P9 — Science and technical vocabulary is a quarter unknown
+
+The science corpus has the highest out-of-vocabulary rate of all (25.4% of its 15,000
+most frequent words), split between Greco-Latin loanwords the rule layer spells with the
+wrong stop or conjunct (`kripton` → ক্রিপটন for ক্রিপ্টন, `lorentoj` → লরেন্তজ for লরেন্টজ,
+`iutekotik` → ইউতেকতিক for ইউটেকটিক, `stronoshiyam` → স্ট্রনসিয়াম) and Sanskrit-built
+compounds the splitter breaks (`somosthanik` → সম স্থানিক, `toritochumbokiiy` → তড়িৎ
+চুম্বকীয়, `porigononamuulok` → পরিগণনা মূলক, `ghonomatra` → ঘন মাত্রা). A note on method:
+the reverse map writes অ্যা as `oya` (`oyasider` for অ্যাসিডের), which no typist writes —
+they type `asid`/`acid` — so the অ্যা-initial rows in this corpus overstate the failure;
+the loanword and compound rows above do not depend on it. Fix path: F3 with a science
+glossary (the harvested titles and page text are the source) and F2 for the compounds.
+
+### P10 — Literature: archaic orthography, character names, and OCR noise
+
+Of the 1,383 out-of-vocabulary literature misses, 128 (2,296 occurrences) are Wikisource
+OCR artefacts — a ো split into া + ে in the wrong order (হােসেন, তাে, তােমার, মতাে,
+ভালাে) — which no typist produces; they are excluded from the pattern counts. The real
+classes: **archaic doubled consonants after reph** (99 words: ধর্ম্ম, সর্ব্বজয়া,
+পুনর্ব্বার, সর্ব্বং — the engine gives the modern ধর্ম / সর্বজয়া, which is right for a
+modern typist and wrong for someone copying a 19th-century text), **character and
+place names split** (197 words: কৃষ্ণ দয়াল, জগৎ সিংহ, হরি মোহিনী, আনন্দ মঠ — P3), and
+**period spellings** (বল্লে → বললে, ওস্মান → অসমান, আয়েষা → আয়েশা, মাণিকলাল → মানিকলাল).
+Fix path: F2 for the split names; an optional "সাধু বানান" alias tier in F3 for the
+doubled-consonant forms (never the default); nothing for OCR noise.
 
 ### P8 — Loanwords typed with a long vowel the dictionary spells short
 

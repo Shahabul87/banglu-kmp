@@ -1,0 +1,21 @@
+S188 category=news_fresh file=/private/tmp/claude-501/-Users-mdshahabulalam-myprojects-banlgu-banglu-kmp/57510018-3fd2-44d0-ac21-53316c2f3e0b/scratchpad/realworld/news_counts.tsv tokens=1558632 unique=77222 studied=15000 unromanizable=383 rule_floor_misses=33
+== by variant ==
+canonical      n=14617  primary= 97.0% (weighted  97.8%)  top6= 99.3% (weighted  99.8%)
+typist         n=4570   primary= 89.3% (weighted  92.0%)  top6= 96.7% (weighted  97.3%)
+== by population (either variant) ==
+in_dictionary  n=14431  primary= 97.8% (weighted  98.0%)  top6= 99.9% (weighted  99.8%)
+oov            n=186    primary= 35.5% (weighted  35.6%)  top6= 52.2% (weighted  53.4%)
+== miss patterns (words / weight) ==
+sibilant                    108      8950
+inflected                    42      2936
+vowel_initial                41      2577
+chandrabindu_dropped          5      2113
+oov                         126      1797
+conjunct_shape               25       434
+split                        27       384
+ranking_other                 9       308
+long_compound                19       218
+dental_retroflex             11       147
+vowel_length                  8       100
+ya_ja                         2        20
+khanda_ta                     1        11

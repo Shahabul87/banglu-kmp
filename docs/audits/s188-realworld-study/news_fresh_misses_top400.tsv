@@ -1,0 +1,249 @@
+পুলিশ	1918	true	typist	pulis	পুলিস	DICTIONARY	পুলিস|পুলিশি|পুলিন|পুলিশের|পুলিশকে|পুলিশে	sibilant
+তাঁরা	1878	true	canonical	tara	তারা	DICTIONARY	তারা|টারা|টায়রা|তারায়|তাড়া|tara	chandrabindu_dropped,inflected
+অংশ	1317	true	typist	ongs	অংস	DICTIONARY	অংস|অংশে|অংশগ্রহণ|অংশের|অংশীদার|অংশটি	sibilant,vowel_initial
+বেশ	639	true	typist	bes	বেস	DICTIONARY	বেস|বয়েস|বেচছ|বেশি|বেশী|বেশিরভাগ	sibilant
+দেশ	514	true	typist	des	দেস	DICTIONARY	দেস|ডেস|দ্বেষ|দেছ|দেশের|des	sibilant
+আশা	367	true	typist	asa	আসা	DICTIONARY	আসা|আসায়|আচ্ছা|আস্হা|আসার|আসাম	sibilant,vowel_initial
+শনাক্ত	360	true	typist	sonakt	সনাক্ত	DICTIONARY	সনাক্ত|সনাক্তযোগ্য|সনাক্তকরণ|সনাকের|শনাক্তকরণ|শনাক্তকারী	sibilant
+শেখ	349	true	typist	sekh	সেখ	DICTIONARY	সেখ|সেখানে|সেখান|সেখানেই|সেখানকার|সেখানের	sibilant
+লাশ	232	true	typist	las	লাস	DICTIONARY	লাস|লাস্য|লস|লাস্ট|লাং|las	sibilant
+পরিষ্কার	202	true	typist	poriskar	পরিস্কার	DICTIONARY	পরিস্কার|পরিষ্কারক|পরিষ্কারভাবে|পরিষ্কারের|পরিষ্কারকরণ|পরিষ্কারে	sibilant
+পাশের	201	true	typist	paser	পাসের	DICTIONARY	পাসের|পাসেও|পেপার|পাঁকে|paser|পাছের	sibilant,inflected
+শাহ	158	true	typist	sah	সাহ	DICTIONARY	সাহ|সাহিত্য|সাহস|সাহিত্যিক|সাহেব|সাহিত্যের	sibilant
+যাঁদের	154	true	typist	jader	যাদের	DICTIONARY	যাদের|jader	chandrabindu_dropped,inflected
+ঘুষ	123	true	typist	ghus	ঘুস	DICTIONARY	ঘুস|ঘুষি|ঘুষের|ঘুসি|ঘুসির|ঘুষখোর	sibilant
+নোটিশ	114	true	typist	notis	নোটিস	DICTIONARY	নোটিস|নতিস্বীকার|নোটিশে|নোটিশের|নোটিশটি|নোটিং	sibilant
+ইংলিশ	105	true	typist	inglis	ইংলিস	DICTIONARY	ইংলিস|ইংলিশে|ইংলিশম্যান|ইংলিশম্যানের|ইংলিশই|ইংলিশও	sibilant,vowel_initial
+শোনা	99	true	typist	sona	সোনা	DICTIONARY	সোনা|ছোঁয়া|সোনার|সোনালী|সোনালি|সনাক্ত	sibilant
+বিকাশ	95	true	typist	bikas	বিকাস	DICTIONARY	বিকাস|বিকাশে|বিকাশকে|বিকাশশীল|বিকাশের|বিকাল	sibilant
+চাষ	94	true	typist	chas	চাস	DICTIONARY	চাস|চাচ্ছ|চাষের|চাষে|চাষী|chas	sibilant
+আই	91	true	canonical	ai	এই	DICTIONARY	এই|আইড়|আড়ি|আয়ই|অই|ai	vowel_initial
+পাশ	88	true	typist	pas	পাস	DICTIONARY	পাস|পায়স|পাচ্ছ|পাছ|পাশে|pas	sibilant
+বিন্না	81	false	canonical	binna	বিনয়না	DICTIONARY	বিনয়না|বীণা|বিন্যাস|বিন্যাসের|বিন্যাসে|বিন্নাকান্দি	oov,conjunct_shape
+রশিদ	74	true	typist	rosid	রসিদ	DICTIONARY	রসিদ|রশীদ|রসিক|রসিদের|রসিদে|রসিকতা	sibilant
+রুশ	74	true	typist	rus	রুস	DICTIONARY	রুস|রুশদ|রুশো|রুই|রুষ্ট|রু	sibilant
+মস্তিষ্কের	70	true	typist	mostisker	মস্তিস্কের	DICTIONARY	মস্তিস্কের	sibilant,inflected
+দিই	68	true	typist	di	ডি	DICTIONARY	ডি|ডী|দি|দিয়|দড়ি|দ্বি	ranking_other
+সোয়া	66	true	canonical	soya	সয়া	ENGLISH_LEXICON	সয়া|সয়া|ছোঁয়া|ছোয়া|শোয়া|soya	ranking_other
+আবিষ্কার	65	true	typist	abiskar	আবিস্কার	DICTIONARY	আবিস্কার|অবিষ্কার|আবিষ্কারক|আবিস্কারের|আবিষ্কারের|আবিষ্কারে	sibilant,vowel_initial
+বাঁ	59	true	canonical	ba	বা	DICTIONARY	বা|বাড়|বায়|বড়া|বয়া|বিএ	chandrabindu_dropped
+অভিযোগও	57	true	typist	ovijogoo	অভিযোগূ	DICTIONARY	অভিযোগূ	inflected,vowel_initial
+আশায়	55	true	typist	asay	আসায়	DICTIONARY	আসায়|আসাই|আসা|আসাকে|আঁইশ|আসাকির	sibilant,vowel_initial
+ম্যাকাইয়ে	55	false	canonical	myakaiye	ম্যাকাইকে	DICTIONARY	ম্যাকাইকে|ম্যাকাইভার|ম্যাকাইয়ের|ম্যাকাইয়ের|ম্যাকাইভারের|ম্যাকারেনহ্যাসের	oov,inflected
+হতাশ	51	true	typist	hotas	হটাস	DICTIONARY	হটাস|হতাশা|হতাশাজনক|হতাশার|হতাশায়|হতাশাগ্রস্ত	ranking_other
+বহিষ্কার	50	true	typist	bohiskar	বহিস্কার	DICTIONARY	বহিস্কার|বহিস্ত্বক|বহিষ্কারের|বহিষ্কারাদেশ|বহিস্কৃত|বোঁচকা	sibilant
+নিষ্পত্তি	47	true	typist	nispotti	নিস্পত্তি	DICTIONARY	নিস্পত্তি|নিস্পত্তির|নিষ্পত্তির|নিষ্পত্তিতে|নিষ্পত্তিই	sibilant
+স্প্যানিশ	47	true	typist	spyanis	স্প্যানিস	CLEAN_TRANSLITERATION	স্প্যানিস|স্প্যানিশদের|স্প্যানিশরা|স্প্যানিশে|স্প্যানিয়ার্ড|স্প্যানিক	sibilant
+পিএসজি	45	false	canonical	piesoji	পিএসজির	DICTIONARY	পিএসজির|পিএসসি|পিএসভি|পিএসসির|পিএসআইজি|পিএসবিজেসি	oov
+শামসুল	44	true	typist	samosul	সামসুল	DICTIONARY	সামসুল|শামছুল|সামছুল|সামসসহ|সামসুদ|সামসুকে	sibilant
+ইলিশ	42	true	typist	ilis	ইলিস	DICTIONARY	ইলিস|ইলিশা|ইলিং|ইলি|ইলিশের|ইলিশকে	sibilant,vowel_initial
+পেশার	42	true	typist	pesar	পেসার	DICTIONARY	পেসার|পেপার|পেসাব|পেসারই|পেসারও|পেসারকে	sibilant
+শো	42	true	typist	so	সো	DICTIONARY	সো|সঃ|শোঁ|সোঁ|স্বঃ|সোঁদা	sibilant
+শোনার	38	true	typist	sonar	সোনার	DICTIONARY	সোনার|সোনারগাঁও|সোনারগাঁ|সোনারপুর|সোনারগাঁয়ের|sonar	sibilant
+চেষ্টার	37	true	typist	chestar	চেস্টার	DICTIONARY	চেস্টার|চেস্টারটন	sibilant
+শাকিল	36	true	typist	sakil	সাকিল	DICTIONARY	সাকিল|সাকিন|সকাল|সকল|শাকিলের|সাকিনা	sibilant
+শাহে	36	true	typist	sahe	সাহে	DICTIONARY	সাহে|সাহেব|সাহেবের|সাহেবকে|সে|সাহ	sibilant,inflected
+গীতু	33	false	typist	gitu	গিট্টু	DICTIONARY	গিট্টু|গিট্টি|গিট্টুর|গিট্টুকে|গিট্টুটা|গিট্টুতে	oov,conjunct_shape
+বারী	30	true	typist	bari	বাড়ি	DICTIONARY	বাড়ি|বাড়ী|বারি|ব্যারি|বাড়িই|bari	ranking_other
+আশার	29	true	typist	asar	আসার	DICTIONARY	আসার|অসার|অসাড়|আছার|আছাড়|আষাঢ়	sibilant,vowel_initial
+নিই	29	true	typist	ni	নি	DICTIONARY	নি|নী|নিয়|নড়ি|নয়ই|নিঃ	ranking_other
+ফিঞ্চারের	29	false	canonical	phincarer	ফিচারের	DICTIONARY	ফিচারের|ফিঞ্চ	oov,conjunct_shape,inflected
+ফিঞ্চারের	29	false	typist	fincarer	ফিচারের	DICTIONARY	ফিচারের|ফিঞ্চ	oov,conjunct_shape,inflected
+বহিষ্কৃত	29	true	typist	bohiskrrit	বহিস্কৃত	DICTIONARY	বহিস্কৃত|বহিস্করণ	sibilant
+দাশ	27	true	typist	das	দাস	DICTIONARY	দাস|ডাস|দশ|ড্যাশ|ডাঁশ|das	sibilant
+ভোরের	27	true	typist	vorer	ভরের	DICTIONARY	ভরের	inflected
+আয়ুশ	26	true	canonical	ayush	আয়ুষ	DICTIONARY	আয়ুষ|আয়ুষ্কাল|আয়ুষ্মতী|আয়ুষ্মান|আয়ুষ্কালের|আয়ুষের	sibilant,vowel_initial
+ভোটেকোশি	26	false	canonical	bhotekoshi	ভোটে কোশি	DICTIONARY	ভোটে কোশি|ভোটে|ভোটের|ভোটেই|ভোটে কোশী|ভতেকশি	oov,split
+ভোটেকোশি	26	false	typist	votekosi	ভতেকসি	CLEAN_TRANSLITERATION	ভতেকসি	oov
+শান্তা	26	true	typist	santa	সান্তা	DICTIONARY	সান্তা|সান্টা|সাঁতার|সাঁতারে|সাঁতারু|santa	sibilant
+ক্যাশ	25	true	typist	kyas	ক্যাস	DICTIONARY	ক্যাস|ক্যাসেট|ক্যাসেল|কিয়াস|ক্যাসিনো|ক্যাসিয়াস	sibilant
+নিষ্পত্তির	25	true	typist	nispottir	নিস্পত্তির	DICTIONARY	নিস্পত্তির	sibilant
+মাছুয়াপাড়ায়	25	false	canonical	machhuyaparay	মাছুয়া পাড়ায়	DICTIONARY	মাছুয়া পাড়ায়|মাছুয়া|মাছুয়াখালী|মাছুয়া পাড়ায়|মাছুয়াপারায়	oov,split
+মাছুয়াপাড়ায়	25	false	typist	machuyaparay	মাছুয়া পাড়ায়	DICTIONARY	মাছুয়া পাড়ায়|মাছুয়া|মাছুয়াখালী|মাছুয়া পাড়ায়|মাচুয়াপারায়	oov,split
+এক্সিলারেট	24	false	canonical	eksilaret	এক্সিলারেত	CLEAN_TRANSLITERATION	এক্সিলারেত|এক্সিলারেটর|এক্সিলেন্স|এক্সিলেন্সি|এক্সিলেন্ট|একসিলারেশন	oov,dental_retroflex,vowel_initial
+বাশার	24	true	typist	basar	বাসার	DICTIONARY	বাসার|বাছার|ব্যাসার্ধ|বাসারের|বাজার|বাসায়ই	sibilant
+মশিউর	24	true	typist	mosiur	মসিউর	DICTIONARY	মসিউর|মসীউর|মশিয়ুর|মশিয়ূর|মশিয়ুর|মশিয়ূর	sibilant
+এনেমা	23	false	canonical	enema	এনিমা	ENGLISH_LEXICON	এনিমা|enema|এনেক্স|এনিমিয়া|এনিমিয়ার	oov,vowel_initial
+ছোড়া	23	true	typist	chora	চড়া	DICTIONARY	চড়া|ছড়া|চরায়|চোরা|চরা|ছোঁড়া	ranking_other
+ডাইমেনসিটি	23	false	canonical	daimenositi	দাড়িম এনসিটি	DICTIONARY	দাড়িম এনসিটি|দাইমেনসিতি	oov,split,inflected
+মাশিয়াত	23	false	typist	masiyat	মাসিয়া	DICTIONARY	মাসিয়া|মাসিক|মাসি|মাসী|মাছিয়াত|মাসিয়াত	oov
+শামিল	23	true	typist	samil	সামিল	DICTIONARY	সামিল|সামী|সমিল|স্বামীই|স্বামীও|স্বামীকে	sibilant
+শিশির	23	true	typist	sisir	সিসির	DICTIONARY	সিসির|শিশিরে|শিশিরের|সিইসির	sibilant
+সেশন	23	true	typist	seson	সেসন	DICTIONARY	সেসন|সেসনা|সেজন|সেশনে|সেশনের|সেসকে	sibilant
+শহিদুল	22	true	typist	sohidul	সহিদুল	DICTIONARY	সহিদুল|শহীদুল|শহীদুল্লাহ|শহীদুল্লা|শহিদুল্লাহ|শহিদুল্ল	sibilant
+ইশা	21	true	typist	isa	ইচ্ছা	DICTIONARY	ইচ্ছা|ইসা|ঈসা|ঈশা|ইছা|isa	conjunct_shape,vowel_initial
+তাসরিফ	21	false	canonical	tasoriph	তাশরিফ	DICTIONARY	তাশরিফ|তাশরিক	oov,sibilant
+তাসরিফ	21	false	typist	tasorif	তাশরিফ	DICTIONARY	তাশরিফ|তাশরিক	oov,sibilant
+বিষ	21	true	typist	bis	বিস	DICTIONARY	বিস|বিশ্ব|বিশ্বাস|বিশেষ|বিষয়ে|বিশ্বের	sibilant
+মস্তিষ্কে	21	true	typist	mostiske	মস্তিস্কে	DICTIONARY	মস্তিস্কে|মস্তিস্কের|মস্তিষ্কের|মস্তিস্ক	sibilant,inflected
+রাশোমন	21	true	typist	rasomon	রাসমণি	DICTIONARY	রাসমণি|রাসমনি|রাসমণী|রাসমেলা|রাশমিকা|রাসমন	ranking_other
+ল্যান্টার্নস	21	false	canonical	lyantarnos	ল্যান্ডমার্কস	DICTIONARY	ল্যান্ডমার্কস|ল্যান্ডমার্ক|ল্যান্ড|ল্যান্ডিং|ল্যাঙ্গুয়েজ|ল্যান্টার্নশার্ক	oov,long_compound
+জয়শঙ্কর	20	false	canonical	joyoshongkor	জয় শঙ্কর	DICTIONARY	জয় শঙ্কর|জয়শ্রী|জয়শ্রীর|জয় শঙ্কর|জয়শংকর	oov,split
+জয়শঙ্কর	20	false	typist	joyosongkor	জয় সংকর	DICTIONARY	জয় সংকর|জয়সোয়াল|জয় সংকর|জয়সংকর	oov,split,conjunct_shape
+পঙ	20	false	canonical	pong	পং	DICTIONARY	পং|পঙ্গু|পঙ্কজ|পংক্তি|পঙ্গপাল|pong	oov
+লিলা	20	true	canonical	lila	লীলা	DICTIONARY	লীলা|লীলাভূমি|লীলাবতী|লীলাখেলা|লীলার|lila	vowel_length
+শখ	20	true	typist	sokh	সখ	DICTIONARY	সখ|সখ্য|সখি|সখী|সখা|সখার	sibilant
+শনাক্তকরণ	20	true	typist	sonaktokoron	সনাক্তকরণ	DICTIONARY	সনাক্তকরণ|শনাক্তকরণের|শনাক্তকরণে|শণাক্তকরণ	sibilant
+শর	20	true	typist	sor	সর	DICTIONARY	সর|সৌর|সোর|স্বর|স্যর|শোর	sibilant
+হিউম্যানয়েড	20	false	canonical	hiumyanoyed	হিউম্যান ওয়েড	DICTIONARY	হিউম্যান ওয়েড|হিউম্যান|হিউম্যানিটি|হিউম্যানিটিজ|হিউম্যান ওয়েড|হিউম্যান অয়েড	oov,split
+ঘুষি	19	true	typist	ghusi	ঘুসি	DICTIONARY	ঘুসি|ঘুসির|ঘুষির|ঘুষিও|ঘুড়ী|ঘুষিতে	sibilant
+নিষ্ক্রিয়	19	true	typist	niskriy	নিস্ক্রিয়	DICTIONARY	নিস্ক্রিয়|নিষ্ক্রিয়তা|নিষ্ক্রিয়তার|নিষ্ক্রিয়করণ|নিষ্ক্রিয়তায়|নিস্ক্রিয়	sibilant
+শামা	19	true	typist	sama	সামা	DICTIONARY	সামা|শ্যামা|সামাজিক|সমা|সামান্য|sama	sibilant
+আশিতা	18	false	canonical	ashita	আশিটা	DICTIONARY	আশিটা|অশীতিপর|অশীতি|আশিটি|আশিতে	oov,dental_retroflex,vowel_initial
+আশিতা	18	false	typist	asita	অসিতা	DICTIONARY	অসিতা|আসিতাম|আশিটা	oov,vowel_initial
+আশির	18	true	typist	asir	আসির	DICTIONARY	আসির|অসির|আছির|আশীর্বাদ|আসিও|আসিরীয়	sibilant,vowel_initial
+এশার	18	true	typist	esar	এসার	DICTIONARY	এসার|এছাড়া|এসা|এবার|এছাড়াও|এসাইনমেন্ট	sibilant,vowel_initial
+খ্রিষ্টান	18	true	typist	khristan	খ্রিস্টান	DICTIONARY	খ্রিস্টান|খৃস্টান|খ্রীস্টান|খ্রীষ্টান|খৃষ্টান|খ্রিষ্টানদের	sibilant
+নেশা	18	true	typist	nesa	নেসা	DICTIONARY	নেসা|নেছা|নেশায়|নেশার|নেশাখোর|নেশাগ্রস্ত	sibilant
+বিশ	18	true	typist	bis	বিস	DICTIONARY	বিস|বিশ্ব|বিশ্বাস|বিশেষ|বিষয়ে|বিশ্বের	sibilant
+মুখোশ	18	true	typist	mukhos	মুখোস	DICTIONARY	মুখোস|মুখস্থ|মুখশশী|মুখোশের|মুখস্ত|মুখোশটা	sibilant
+শাহেদের	18	true	typist	saheder	সাহেদের	DICTIONARY	সাহেদের|সাহেবের|সাহেদা|শাহেদ|শাহেদা|সাহেদকে	sibilant,inflected
+শ্যাম্পু	18	true	typist	syampu	স্যাম্পু	DICTIONARY	স্যাম্পু|শ্যাম্পুর|স্যাম্পল|স্যাম্পলিং|স্যাম্পসন	sibilant
+সাহেদ	18	true	canonical	sahed	শাহেদ	DICTIONARY	শাহেদ|শাহে|সাহেদা|সাহেব|শাহেদা|শাহেদুল	sibilant
+এক্সিলারেটের	17	false	canonical	eksilareter	এক্সিলারেটর	DICTIONARY	এক্সিলারেটর|এক্সিলেন্স|এক্সিলেন্সি|এক্সিলেন্ট	oov,long_compound,inflected,vowel_initial
+পেশ	17	true	typist	pes	পেস	DICTIONARY	পেস|পেশাদার|পেশা|পেশায়|পেশার|পেশী	sibilant
+ভাতার	17	true	typist	vatar	ভাটার	DICTIONARY	ভাটার	dental_retroflex
+মোফোকেংয়ের	17	false	canonical	mophokengyer	মফকেংয়ের	CLEAN_TRANSLITERATION	মফকেংয়ের|মফস্বল|মফস্বলে|মফস্বলের	oov,inflected
+মোফোকেংয়ের	17	false	typist	mofokengyer	মফকেংয়ের	CLEAN_TRANSLITERATION	মফকেংয়ের|মফস্বল|মফস্বলে	oov,inflected
+রশি	17	true	typist	rosi	রসি	DICTIONARY	রসি|রোসি|রসিক|রসিকতা|রসিদ|রসও	sibilant
+অ্যান্ডা	16	false	canonical	oyanda	ওয়ান্ডা	DICTIONARY	ওয়ান্ডা|অ্যান্ডারসন|ওয়ান্ডারার্স|অ্যান্ডারসনের|অ্যান্ডার্স|ওয়ান্ডারল্যান্ড	oov,conjunct_shape,vowel_initial
+আবিষ্কারের	16	true	typist	abiskarer	আবিস্কারের	DICTIONARY	আবিস্কারের	sibilant,inflected,vowel_initial
+চ্যাপো	16	false	canonical	chyapo	চাপ	DICTIONARY	চাপ|চ্যাপলিন|চ্যাপটা|চ্যাপ্টা|চ্যাপ্টার|চ্যাপেল	oov,conjunct_shape
+ভূত	16	true	typist	vut	ভুত	DICTIONARY	ভুত	vowel_length
+শুভশ্রী	16	false	typist	suvosri	সুভদ্রকাটি	DICTIONARY	সুভদ্রকাটি|সুভদ্র	oov
+এক্সপালস	15	false	canonical	eksopalos	এক্স পালস	DICTIONARY	এক্স পালস|এক্সপার্ট|এক্সপাঞ্জ|এক্সপার্টের	oov,split,vowel_initial
+কাশেম	15	true	typist	kasem	কাসেম	DICTIONARY	কাসেম|কাসেমিরো|কাসেমী|কাসেমের|কাসেমিরোর|কাসেদ	sibilant
+ট্রেইটর্স	15	false	canonical	treitors	ট্রেটারস	ENGLISH_LEXICON	ট্রেটারস|ট্রেইল|ট্রেইনার|ট্রেইনিং|traitors|ত্রেইতর্স	oov,conjunct_shape
+দিনুশার	15	false	typist	dinusar	দিনুসার	CLEAN_TRANSLITERATION	দিনুসার|দিনকার|দিনু|দীনু|দিনুশা	oov,sibilant
+বিওয়াইডির	15	false	canonical	bioyaidir	বিওয়াইদির	CLEAN_TRANSLITERATION	বিওয়াইদির|বিওয়াইসি|বিওয়াইএলসির|বিওয়াইএলসির	oov,dental_retroflex
+শাকিব	15	true	typist	sakib	সাকিব	DICTIONARY	সাকিব|সাকিন|সাকিবুল|সাকিবের|শাঁই|সাকিনা	sibilant
+স্ক্যাম	15	false	canonical	skyam	স্যাম	DICTIONARY	স্যাম|স্ক্যান|স্ক্যানার|স্ক্যানিং|স্যাং	oov,conjunct_shape
+অঙ্কিতের	14	false	canonical	ongkiter	অংকিতের	DICTIONARY	অংকিতের|অংকিত|অঙ্কিত|অঙ্কিতা	oov,conjunct_shape,inflected,vowel_initial
+অভয়ার	14	false	canonical	obhoyar	অভয়া	DICTIONARY	অভয়া|অভয়ারণ্য|অভয়ারণ্যের|অভয়ারণ্যে|অভয়াশ্রম|অভয়ারণ্যটি	oov,vowel_initial
+অভয়ার	14	false	typist	ovoyar	অভয়া	DICTIONARY	অভয়া|অভয়া|ওভয়ার	oov,vowel_initial
+ইসিএইচ	14	false	canonical	isieich	সিএইচ	DICTIONARY	সিএইচ|ইসিএ|ইসিএইচও	oov,vowel_initial
+ওডিবিএল	14	false	canonical	odibiel	অদিবাসী	DICTIONARY	অদিবাসী	oov,vowel_initial
+কারুবাকী	14	false	typist	karubaki	কারুবাকি	CLEAN_TRANSLITERATION	কারুবাকি|কারুর|কারু|কারুশিল্প|কারুব্রিজ	oov,vowel_length
+গ্যোতের	14	false	canonical	gyoter	ঘটের	DICTIONARY	ঘটের|ঘটেই|ঘটেইনি|ঘটেও|ঘটেছ|ঘটেওনি	oov,conjunct_shape,inflected
+চার্মিলা	14	false	canonical	charmila	চার্মি	DICTIONARY	চার্মি|চার্ম|চার্চিল|চার্চিলের|চার্চিলকে	oov
+নুয়াকোট	14	false	canonical	nuyakot	নুয়াকত	CLEAN_TRANSLITERATION	নুয়াকত|নুয়ান|নুজহাত|নুযহাত	oov
+মাশা	14	true	typist	masa	মাসা	DICTIONARY	মাসা|মাশাআল্লাহ|মাসাই|মাসই|মাস|masa	sibilant
+রসচিঠি	14	false	canonical	rosochithi	রস চিঠি	DICTIONARY	রস চিঠি|রসদ|রসকে|রসগোল্লা|রসচিথি	oov,split
+শখের	14	true	typist	sokher	সখের	DICTIONARY	সখের|সখার|সখ্যের|সখেদ|সখেদে|সখির	sibilant
+শিডিউল	14	true	typist	sidiul	সিডিউল	DICTIONARY	সিডিউল|শিডিউলের|শিডিউলে|শিডিউলটা|সিদিকীর|সিডিউলড	sibilant
+সেতারুজ্জামান	14	false	canonical	setarujjaman	সেটার উজ্জামান	DICTIONARY	সেটার উজ্জামান|সেটার|সেতার|সেতারের	oov,split,long_compound
+হাশেম	14	true	typist	hasem	হাসেম	DICTIONARY	হাসেম|হাসেন|হাশেমী|হাশেমিয়া|হাশেমি|হাসেছি	sibilant
+কাশি	13	true	typist	kasi	কাসি	DICTIONARY	কাসি|কাশী|কাছি|কাঁসি|কাসিম|kasi	sibilant
+ফিডের	13	true	typist	fider	ফিদের	DICTIONARY	ফিদের|fider	dental_retroflex,inflected
+বিএফআইইউ	13	false	canonical	biephoaiiu	বিএফ আইইউ	DICTIONARY	বিএফ আইইউ|বিএফএ|বিএফডিসির|বিএফডিসি	oov,split
+বিএফআইইউ	13	false	typist	biefoaiu	বিএফইউজে	DICTIONARY	বিএফইউজে|বিএফএ|বিএফডিসির|বিএফডিসি|বিএফইউজের|বিএফআইওএ	oov
+শেল	13	true	typist	sel	সেল	DICTIONARY	সেল|সয়েল|সেলাই|সেলিম|সেলে|সেলফি	sibilant
+অ্যাভোকাডোর	12	false	typist	oyavokador	অ্যাভোকাডো	DICTIONARY	অ্যাভোকাডো|ওয়াভকাদর	oov,vowel_initial
+আবিষ্কৃত	12	true	typist	abiskrrit	আবিস্কৃত	DICTIONARY	আবিস্কৃত	sibilant,vowel_initial
+খ্রিষ্টাব্দে	12	true	typist	khristabde	খ্রিস্টাব্দে	DICTIONARY	খ্রিস্টাব্দে|খৃষ্টাব্দে|খ্রিস্টাব্দের|খ্রিষ্টাব্দের|খ্রীষ্টাব্দের|খ্রীস্টাব্দের	sibilant,long_compound,inflected
+খ্রিষ্টাব্দের	12	true	typist	khristabder	খ্রিস্টাব্দের	DICTIONARY	খ্রিস্টাব্দের|খ্রীস্টাব্দের|খ্রীষ্টাব্দের	sibilant,long_compound,inflected
+টার্নাস	12	false	canonical	tarnas	তাড়াশ	DICTIONARY	তাড়াশ|টার্নার|টার্নারের|তাড়াইও|তাড়াইত|তাড়াইচে	oov,conjunct_shape
+টিআরসি	12	false	canonical	tiarosi	টিয়ার্স	DICTIONARY	টিয়ার্স|টিআরটি|টিআরপি|টিয়ার্স|টিয়ারস|তিআরসি	oov,conjunct_shape
+নাসরের	12	false	canonical	nasorer	নাছোড়ের	DICTIONARY	নাছোড়ের|নাসর|নাসরিন|নাসরীন	oov,inflected
+মাট্টি	12	false	canonical	matti	ম্যাটি	ENGLISH_LEXICON	ম্যাটি|মাটী|mattie|matt|matti|মাটি	oov,inflected
+ল্যান্টার্ন	12	false	canonical	lyantarn	ল্যানটার্ন	DICTIONARY	ল্যানটার্ন|ল্যান্ড|ল্যান্ডিং|ল্যাঙ্গুয়েজ	oov,conjunct_shape
+শক	12	true	typist	sok	সক	DICTIONARY	সক|শোক|শোঁক|শক্য|সকল|সকাল	sibilant
+ইনফান্তিনোকে	11	false	typist	inofantinoke	ইনফান্তিনকে	CLEAN_TRANSLITERATION	ইনফান্তিনকে|ইনফ্যান্ট্রি|ইনফ্যান্ট	oov,long_compound,inflected,vowel_initial
+কাঠমান্ডুভিত্তিক	11	false	canonical	kathomandubhittik	কাঠমান্ডু ভিত্তিক	DICTIONARY	কাঠমান্ডু ভিত্তিক|কাঠমান্ডু|কাঠমান্ডুতে|কাঠমাণ্ডু	oov,split,long_compound
+কাঠমান্ডুভিত্তিক	11	false	typist	kathomanduvittik	কাঠমান্ডু ভিত্তিক	DICTIONARY	কাঠমান্ডু ভিত্তিক|কাঠমান্ডু|কাঠমান্ডুতে|কাঠমাণ্ডু	oov,split,long_compound
+কিয়োসাকির	11	false	canonical	kiyosakir	কিয়সাকির	CLEAN_TRANSLITERATION	কিয়সাকির|কিয়ৎ|কিয়দংশ|কিয়োটো|কিয়স্কটির|কিয়স্কটির	oov
+খ্রিষ্টীয়	11	true	typist	khristiy	খ্রিস্টীয়	DICTIONARY	খ্রিস্টীয়|খৃষ্টীয়|খ্রীষ্টীয়|খ্রিস্টিয়ান|খ্রিস্টীয়|খৃস্টীয়	sibilant
+চার্মিলার	11	false	canonical	charmilar	চার মিলার	DICTIONARY	চার মিলার|চার্ম|ছার মিলার|চাড় মিলার|ছাড় মিলার	oov,split,conjunct_shape
+ছাদভিত্তিক	11	false	canonical	chhadobhittik	ছাদ ভিত্তিক	DICTIONARY	ছাদ ভিত্তিক|ছাদবাগান	oov,split
+ছাদভিত্তিক	11	false	typist	chadovittik	চাঁদ ভিত্তিক	DICTIONARY	চাঁদ ভিত্তিক|চাদর|চাঁদকে|চাদরের	oov,split
+জলবিদ্যুৎকেন্দ্রের	11	false	canonical	jolobidyutokendrer	জলবিদ্যুৎ কেন্দ্রের	DICTIONARY	জলবিদ্যুৎ কেন্দ্রের|জলবিদ্যুৎ|জলবিদ্যুতের|জলবিদ্যুত	oov,split,khanda_ta,long_compound,inflected
+ন্যাশ	11	true	typist	nyas	ন্যাস	DICTIONARY	ন্যাস|ন্যাশনাল|ন্যাশভিলে|ন্যাংটা|ন্যাশভিলের|ন্যাংটো	sibilant
+পরিষেবা	11	true	typist	poriseba	পরিসেবা	DICTIONARY	পরিসেবা|পরিসংখ্যা|পরিষেবার|পরিষেবাটি|পরিষেবাও|পরিষেবাগুলো	sibilant
+বিদেশফেরতদের	11	false	typist	bidesoferotoder	বিদেসফেরতদের	CLEAN_TRANSLITERATION	বিদেসফেরতদের|বিদেশযাত্রা|বিদ্বেষমূলক|বিদেশমন্ত্রী	oov,sibilant,long_compound,inflected
+বোর্নমাউথ	11	false	canonical	bornomauth	বর্নমাউথ	DICTIONARY	বর্নমাউথ|বর্ণমালা|বর্ণমালার|বর্ণমালায়	oov
+ভাঁজযোগ্য	11	false	canonical	bhajozogy	ভাজা যোগ্য	DICTIONARY	ভাজা যোগ্য|ভাজক|ভাজন|ভাজছিলাম|ভায়া যোগ্য	oov,split,chandrabindu_dropped
+ভাঁজযোগ্য	11	false	typist	vajojogy	ভাজজগ্য	CLEAN_TRANSLITERATION	ভাজজগ্য	oov,chandrabindu_dropped
+ভীত	11	true	typist	vit	ভিত	DICTIONARY	ভিত	vowel_length
+ভেটিভার	11	false	canonical	bhetibhar	ভেট ইভার	DICTIONARY	ভেট ইভার|ভেতরে|ভেতর|ভেতরের|ভেত ইভার|ভেতিভার	oov,split
+ভেটিভার	11	false	typist	vetivar	ভেতিভার	CLEAN_TRANSLITERATION	ভেতিভার	oov,dental_retroflex
+ভোতেকোশি	11	false	canonical	bhotekoshi	ভোটে কোশি	DICTIONARY	ভোটে কোশি|ভোটে|ভোটের|ভোটেই|ভোটে কোশী|ভতেকশি	oov,split,dental_retroflex
+ভোতেকোশি	11	false	typist	votekosi	ভতেকসি	CLEAN_TRANSLITERATION	ভতেকসি	oov
+মশিউরের	11	true	typist	mosiurer	মসিউরের	DICTIONARY	মসিউরের|মসিউর|মশিউর	sibilant,inflected
+মোখলেছারের	11	false	canonical	mokholechharer	মখলেছারের	CLEAN_TRANSLITERATION	মখলেছারের|মোখলেছুর	oov,inflected
+মোখলেছারের	11	false	typist	mokholecharer	মখলেচারের	CLEAN_TRANSLITERATION	মখলেচারের|মোখলেছুর	oov,inflected
+রশিদের	11	true	typist	rosider	রসিদের	DICTIONARY	রসিদের|রশীদের|রসিদেই	sibilant,inflected
+লিলার	11	false	canonical	lilar	লীলার	DICTIONARY	লীলার|লীলা|লিটার|লিওলার|লিলাক|লিলাহি	oov,vowel_length
+শারা	11	false	canonical	shara	সারা	DICTIONARY	সারা|সারাদিন|শারাফ|শারাফত|শারাপোভা|শারার	oov,sibilant
+শারা	11	false	typist	sara	সারা	DICTIONARY	সারা|সাড়া|ছাড়া|ছারা|সাঁড়া|sara	oov,sibilant
+শাহানা	11	true	typist	sahana	সাহানা	DICTIONARY	সাহানা|সাজানো|শাহানাজ|সাহাকে|সাহাগকে|সাহাগোলা	sibilant
+শিকদার	11	true	typist	sikodar	সিকদার	DICTIONARY	সিকদার|শিকদারের|সিকদারের|সিকদারও|সিকদারকে|সিকদারকান্দি	sibilant
+শিট	11	true	typist	sit	সিট	DICTIONARY	সিট|সীট|শীত|সিটি|সিটে|sit	sibilant
+সেরোটাইপের	11	false	canonical	serotaiper	সের টাইপের	DICTIONARY	সের টাইপের|সেরকম|সেরকমই|সেরনিয়াবাত|সের তাইপের|সেরতাইপের	oov,split,inflected
+স্টেইনেম	11	false	canonical	steinem	স্টেইনের	ENGLISH_LEXICON	স্টেইনের|স্টেইন|স্টেইনলেস|স্টেইনকে|steiner|স্তেফানে	oov
+আইগামো	10	false	canonical	aigamo	আগাম	DICTIONARY	আগাম|আগাইতাম|আইগাম	oov,vowel_initial
+আউশ	10	true	typist	aus	আউস	DICTIONARY	আউস|আয়ুষ|আউশের|আউ|আউদ|aus	sibilant,vowel_initial
+আসক	10	true	canonical	asok	অশোক	DICTIONARY	অশোক|অশক্য|আসক্ত|আসক্তি|আসকার|আসক্তির	vowel_initial
+উত্তুরেল্যাঞ্জা	10	false	canonical	utturelyanja	উত্তুরে ল্যাঞ্জা	DICTIONARY	উত্তুরে ল্যাঞ্জা|উত্তুরে	oov,split,long_compound,vowel_initial
+এফএসআরইউ	10	false	canonical	ephoesoaroiu	এফএস আরইউ	DICTIONARY	এফএস আরইউ|এফএম|এফএ|এফএও|এফএসআরৈউ	oov,split,vowel_initial
+এফএসআরইউ	10	false	typist	efoesoaroiu	এফএসআরৈউ	CLEAN_TRANSLITERATION	এফএসআরৈউ|এফএম|এফএ|এফএও	oov,vowel_initial
+কুরোসাওয়ার	10	false	canonical	kurosaoyar	কুরোসাওয়া	DICTIONARY	কুরোসাওয়া|কুরসি|কুরস্ক|কুরোসাওয়া|কুরোশাওয়ার|কুরসাওয়ার	oov
+কুশ	10	true	typist	kus	কুস	DICTIONARY	কুস|কুছ|কুসুম|কুসংস্কার|কুস্তি|কুশল	sibilant
+গীতুর	10	false	typist	gitur	গিট্টুর	DICTIONARY	গিট্টুর|গিট্টু	oov,conjunct_shape
+গুমবিরোধী	10	false	canonical	gumobirodhii	গুম বিরোধী	DICTIONARY	গুম বিরোধী|গুমরি|গুমরিয়া|গুম বিরোধি|গুমবিরধী	oov,split
+গুমবিরোধী	10	false	typist	gumobirodhi	গুম বিরোধী	DICTIONARY	গুম বিরোধী|গুমরি|গুমরিয়া|গুম বিরোধি|গুমবিরধি	oov,split
+জোলিন	10	false	canonical	jolin	জয়েন	ENGLISH_LEXICON	জয়েন|জয়েন|জলিল|জলীয়|জলি|join	oov
+দাশের	10	true	typist	daser	দাসের	DICTIONARY	দাসের|daser|দ্যাশের|দাসেরক|দায়ের|দাসেরও	sibilant,inflected
+দেখভালকারীদের	10	false	typist	dekhovalokarider	দেখভালকারিদের	CLEAN_TRANSLITERATION	দেখভালকারিদের|দেখতে|দেখো|দেখছি	oov,vowel_length,long_compound,inflected
+নাজমুজ্জামান	10	false	canonical	najomujjaman	নাজম উজ্জামান	DICTIONARY	নাজম উজ্জামান|নাজমুল|নাজমুন|নাজমুলের	oov,split,long_compound
+পন্ত	10	false	canonical	pont	পন্ট	DICTIONARY	পন্ট|পন্থা|পোঁতা|পন্থী|পন্থ|pont	oov,dental_retroflex
+প্যাক্টে	10	false	canonical	pyakte	প্যাকেট	DICTIONARY	প্যাকেট|প্যাকেজ|প্যাক্ট|প্যাকোতে|প্যাকেজও|প্যাকেকটা	oov,conjunct_shape,inflected
+ফুজুল	10	false	canonical	phujul	ফুযুল	DICTIONARY	ফুযুল|ফুজি|ফুজাইরাহ|ফুজিমোরি|ফুযূল|ফুজুলের	oov,ya_ja
+ফুজুল	10	false	typist	fujul	ফুযুল	DICTIONARY	ফুযুল	oov,ya_ja
+বাইহাকি	10	false	canonical	baihaki	বায়হাকি	RULE	বায়হাকি|বায়হাকী|বায়হাকি|বাড়িঅলা|বাড়িআলা|বাড়িউলি	oov
+বার্তাসংক্ষেপ	10	false	canonical	bartasongkkhep	বার্তাসংস্থাকে	DICTIONARY	বার্তাসংস্থাকে|বার্তাসহ|বার্তাসংস্থার	oov,long_compound
+বায়োইকুইভ্যালেন্ট	10	false	canonical	bayoikuibhyalent	বায়ৈকুইভ্যালেন্ত	CLEAN_TRANSLITERATION	বায়ৈকুইভ্যালেন্ত|বায়রন|বায়তুল|বায়বীয়	oov,long_compound
+বায়োইকুইভ্যালেন্ট	10	false	typist	bayoikuivyalent	বায়ৈকুইভ্যালেন্ত	CLEAN_TRANSLITERATION	বায়ৈকুইভ্যালেন্ত|বায়রন|বায়তুল|বায়বীয়	oov,long_compound
+ভিশন	10	true	typist	vison	ভীষণ	DICTIONARY	ভীষণ	ranking_other
+ভয়ও	10	true	typist	voyoo	টোইয়ো	ENGLISH_LEXICON	টোইয়ো|toyo|yoyo|voyoo|ভয়ো|ভয়ো	ranking_other
+মোনাকোয়	10	false	canonical	monakoy	মোনাকো	DICTIONARY	মোনাকো|মোনাকোর|মোনাকোতে|মনাকয়	oov
+রাপ্তি	10	false	canonical	rapti	রাপটি	DICTIONARY	রাপটি|রাফি|রাপসোডি|রাপ্রু|রাপ্পা	oov,conjunct_shape
+শংকর	10	true	typist	songkor	সংকর	DICTIONARY	সংকর|সঙ্কর|শঙ্কর|সংকর্ষণ|সংকট|সংকরণ	sibilant
+সিমেল	10	true	canonical	simel	শিমেল	DICTIONARY	শিমেল|শিমুল|শিমের|সিমেন্ট|সিমেন্টের|সিমেট্রি	sibilant
+সুইডিশ	10	true	typist	suidis	সুইডিস	DICTIONARY	সুইডিস|সুইডিশরা	sibilant
+হিবার্টের	10	false	canonical	hibarter	হিবার্তের	CLEAN_TRANSLITERATION	হিবার্তের|হিব্বান|হোবার্টের	oov,dental_retroflex,inflected
+অ্যানথ্রোপিকের	9	false	canonical	oyanothropiker	অ্যানথ্রপিকের	DICTIONARY	অ্যানথ্রপিকের|অ্যানথ্রোপিক	oov,long_compound,inflected,vowel_initial
+আমরোহি	9	false	canonical	amorohi	আমরোহী	DICTIONARY	আমরোহী|আমরণ|আমরস|আমরপুর	oov,vowel_length,vowel_initial
+ইসাক	9	false	canonical	isak	ইশাক	DICTIONARY	ইশাক|ইচ্ছাকৃত|ইশা|ইচ্ছাকে|ইচ্ছাকেই|ইছাখালী	oov,sibilant,vowel_initial
+ঋতুপর্ণর	9	false	canonical	rritupornor	ঋতুপর্ণ	DICTIONARY	ঋতুপর্ণ|ঋতুপর্ণা	oov
+ওয়াইইএস	9	false	canonical	oyaiies	ওয়াইস	DICTIONARY	ওয়াইস|ওয়াইস|ওয়াইন|ওয়াই|ওয়াইড|ওয়াঈএস	oov,vowel_initial
+ওয়াইইএস	9	false	typist	oyaies	ওয়াইস	DICTIONARY	ওয়াইস|ওয়াইএমসিএ|ওয়াইস|ওয়াইএস	oov,vowel_initial
+ওয়ান্ট	9	true	canonical	oyant	অ্যান্ট	DICTIONARY	অ্যান্ট|অ্যান্টি|অ্যান্টিবায়োটিক|অ্যান্থনি|অ্যান্টার্কটিকা|অ্যান্টনি	conjunct_shape,vowel_initial
+ক্তি	9	false	canonical	kti	কয়টি	DICTIONARY	কয়টি|কয়টী|কয়টা|কয়টাই|কয়টায়|কয়টার	oov,conjunct_shape
+ঘটাংঘট	9	false	canonical	ghotangghot	ঘতাঙ্ঘত	CLEAN_TRANSLITERATION	ঘতাঙ্ঘত|ঘটান|ঘটানো|ঘটানোর|ঘটাংঘটাং	oov,conjunct_shape
+জ্যাভেলিন	9	false	canonical	jyabhelin	জ্যাভলিন	DICTIONARY	জ্যাভলিন|জ্যাকরীন|জ্যাভিয়ার|জ্যাভিয়ার|জ্যাকবসেন	oov
+জ্যাভেলিন	9	false	typist	jyavelin	জ্যাভিলেন	ENGLISH_LEXICON	জ্যাভিলেন|javelin|জ্যাভলিন|jyavelin	oov
+জয়সোয়ালও	9	false	canonical	joyosoyaloo	জয়সোয়াল	DICTIONARY	জয়সোয়াল|জয়সোয়াল|জয়সূচক|জয়শ্রী|জয়শ্রীর|জয়সয়ালু	oov,inflected
+ঝিকোভিচ	9	false	canonical	jhikobhich	ঝিকভিচ	CLEAN_TRANSLITERATION	ঝিকভিচ|ঝিকড়া|ঝিকরগাছা	oov
+ঝিকোভিচ	9	false	typist	jhikovich	ঝিকভিচ	CLEAN_TRANSLITERATION	ঝিকভিচ|ঝিকড়া|ঝিকরগাছা	oov
+টার্নাসের	9	false	canonical	tarnaser	তাড়াশের	DICTIONARY	তাড়াশের|টার্নার|টার্নারের	oov,conjunct_shape,inflected
+টুইংক	9	false	canonical	tuingk	টুইন	DICTIONARY	টুইন|টুইঙ্কল|টুইঙ্কলের|টুইংকল|টুইন্স|তুইংক	oov
+ডিওবির	9	false	canonical	diobir	ডিবির	DICTIONARY	ডিবির|দিওয়ালির|দিওয়ালির|দিওবির	oov
+ডিপজলকেও	9	false	canonical	dipojolokeo	ডিপজল ওকেও	DICTIONARY	ডিপজল ওকেও|ডিপজল|ডিপজলের|দীপজল ওকেও|দিপজলকেও	oov,split,inflected
+ডিসক্যালকুলিয়ার	9	false	canonical	disokyalokuliyar	দিসক্যালকুলিয়ার	CLEAN_TRANSLITERATION	দিসক্যালকুলিয়ার|ডিসকভারি|ডিসকাউন্ট|ডিসক্লোজার	oov,dental_retroflex,long_compound
+নিশাপুর	9	false	typist	nisapur	নিসাপুর	CLEAN_TRANSLITERATION	নিসাপুর|নিসা|নিসাব|নিঃশ্বাস|ইছাপুর|নিশাপুরে	oov,sibilant
+পার্টন	9	false	canonical	parton	পারতন	DICTIONARY	পারতন|পার্টনার|পার্টনারশিপ|পার্টনারের|পার্টনারও|parton	oov,conjunct_shape
+ফালানী	9	false	canonical	phalanii	ফেইল্যাংক্স	ENGLISH_LEXICON	ফেইল্যাংক্স|ফালানোর|phalanx|phalanii|ফালানি|ফালাই	oov,conjunct_shape
+ফালানী	9	false	typist	falani	ফালানি	DICTIONARY	ফালানি|ফালানোর	oov,vowel_length
+ফায়জা	9	false	canonical	phayoja	ফাইজা	RULE	ফাইজা|ফায়দা|ফায়দার	oov
+ফায়জা	9	false	typist	fayoja	ফাইজা	RULE	ফাইজা|ফায়দা|ফায়দার	oov
+বেশে	9	true	typist	bese	বেসে	DICTIONARY	বেসে|বয়েসে|বেছে|বেঁছে|বেচছে|বেসিন	sibilant,inflected
+রেডমি	9	false	canonical	redomi	রেদমি	CLEAN_TRANSLITERATION	রেদমি|রেশমী|রেশমি|রেডন|রেডক্রস|রেদওয়ান	oov,dental_retroflex
+রেশ	9	true	typist	res	রেস	DICTIONARY	রেস|রয়েস|রেস্তোরাঁ|রেজ|রেশম|res	sibilant
+শারার	9	true	typist	sarar	সারার	DICTIONARY	সারার|সাড়ার|সারারাত|সারাই|সারাংশ|সরকার	sibilant
+শেক	9	true	typist	sek	সেক	DICTIONARY	সেক|সেখানে|সেকেন্ড|সেখান|সেখানেই|সেক্টর	sibilant
+শেড	9	true	typist	sed	সেড	DICTIONARY	সেড|স্বেদ|সেদিন|সেদিকে|সেদ্ধ|সেদিনই	sibilant
+শেরকি	9	false	typist	seroki	সেরকি	CLEAN_TRANSLITERATION	সেরকি|সুরকি|সেরকম|লেড়কি|সেরকমই|সেরকমভাবে	oov,sibilant
+ষ্টার	9	true	typist	star	স্টার	DICTIONARY	স্টার|ছোটার|স্টার্ট|স্টার্টআপ|স্টার্ক|star	sibilant
+হিবার্ট	9	false	canonical	hibart	হোবার্ট	ENGLISH_LEXICON	হোবার্ট|hobart|hibart|হিব্বান|হোবার্টে|হিবোগার্ড	oov
+হুইসেলব্লোয়ারদের	9	false	canonical	huiselobloyaroder	হুইসেলব্লয়ারদের	CLEAN_TRANSLITERATION	হুইসেলব্লয়ারদের|হুইসেল|হুইসেলের	oov,long_compound,inflected
+expected	count	in_dict	variant	key	got	source	top6	tags

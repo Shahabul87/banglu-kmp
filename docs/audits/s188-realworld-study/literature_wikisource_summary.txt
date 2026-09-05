@@ -1,0 +1,24 @@
+S188 category=literature_wikisource file=/Users/mdshahabulalam/myprojects/banlgu/banglu-kmp/dictionary-compiler/data/corpus-2026-07/bnwikisource_counts.tsv tokens=4815066 unique=421466 studied=15000 unromanizable=700 rule_floor_misses=214
+== by variant ==
+canonical      n=14300  primary= 86.8% (weighted  94.5%)  top6= 93.1% (weighted  97.6%)
+typist         n=4450   primary= 72.0% (weighted  79.2%)  top6= 85.7% (weighted  92.2%)
+== by population (either variant) ==
+in_dictionary  n=12765  primary= 94.5% (weighted  97.4%)  top6= 99.9% (weighted 100.0%)
+oov            n=1535   primary= 23.3% (weighted  19.1%)  top6= 37.1% (weighted  33.7%)
+== miss patterns (words / weight) ==
+oov                        1465    133090
+conjunct_shape              338     40209
+inflected                   440     34682
+sibilant                    182     24911
+vowel_initial               219     19249
+split                       182     11440
+vowel_length                 97      6965
+dental_retroflex             36      6396
+na_nna                       45      3191
+long_compound                45      3158
+ya_ja                        44      3115
+khanda_ta                    31      1862
+chandrabindu_dropped         29      1534
+ranking_other                13      1195
+final_okar_dropped            1       109
+ba_bha                        1        45

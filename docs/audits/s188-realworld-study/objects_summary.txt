@@ -1,0 +1,25 @@
+S188 category=objects file=/private/tmp/claude-501/-Users-mdshahabulalam-myprojects-banlgu-banglu-kmp/57510018-3fd2-44d0-ac21-53316c2f3e0b/scratchpad/realworld/objects_counts.tsv tokens=263587 unique=33527 studied=15000 unromanizable=429 rule_floor_misses=633
+== by variant ==
+canonical      n=14571  primary= 84.0% (weighted  95.9%)  top6= 89.4% (weighted  98.0%)
+typist         n=4532   primary= 74.1% (weighted  86.1%)  top6= 83.6% (weighted  92.9%)
+== by population (either variant) ==
+in_dictionary  n=12085  primary= 95.5% (weighted  98.4%)  top6= 99.6% (weighted  99.9%)
+oov            n=2486   primary= 29.2% (weighted  30.9%)  top6= 40.1% (weighted  45.9%)
+== miss patterns (words / weight) ==
+oov                        2119      7090
+sibilant                    188      2330
+split                       435      1671
+inflected                   540      1615
+vowel_initial               322      1519
+conjunct_shape              306      1132
+long_compound               344      1044
+dental_retroflex            194       619
+vowel_length                126       377
+na_nna                       43       149
+chandrabindu_dropped         56       132
+ranking_other                20        77
+khanda_ta                    23        63
+ya_ja                        19        59
+final_okar_dropped           16        35
+final_okar_added              1         2
+ba_bha                        1         2

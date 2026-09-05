@@ -1,0 +1,23 @@
+S188 category=unions_villages file=/private/tmp/claude-501/-Users-mdshahabulalam-myprojects-banlgu-banglu-kmp/57510018-3fd2-44d0-ac21-53316c2f3e0b/scratchpad/realworld/unions_counts.tsv tokens=33931 unique=6854 studied=6854 unromanizable=606 rule_floor_misses=356
+== by variant ==
+canonical      n=6248   primary= 77.9% (weighted  92.3%)  top6= 84.8% (weighted  95.3%)
+typist         n=2222   primary= 60.8% (weighted  79.0%)  top6= 71.2% (weighted  86.2%)
+== by population (either variant) ==
+in_dictionary  n=4847   primary= 96.0% (weighted  97.9%)  top6= 99.6% (weighted  99.9%)
+oov            n=1401   primary= 15.8% (weighted  18.6%)  top6= 33.9% (weighted  35.0%)
+== miss patterns (words / weight) ==
+oov                        1524      2416
+split                       501       826
+vowel_length                270       649
+vowel_initial               139       517
+conjunct_shape              147       204
+long_compound               135       189
+sibilant                     99       187
+inflected                   131       165
+dental_retroflex             88       124
+na_nna                       50        72
+chandrabindu_dropped         50        59
+ranking_other                12        18
+khanda_ta                     4         8
+ya_ja                         6         6
+final_okar_dropped            2         2

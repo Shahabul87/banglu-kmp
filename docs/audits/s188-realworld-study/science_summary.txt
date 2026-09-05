@@ -1,0 +1,24 @@
+S188 category=science file=/private/tmp/claude-501/-Users-mdshahabulalam-myprojects-banlgu-banglu-kmp/57510018-3fd2-44d0-ac21-53316c2f3e0b/scratchpad/realworld/science_counts.tsv tokens=344620 unique=35636 studied=15000 unromanizable=628 rule_floor_misses=1169
+== by variant ==
+canonical      n=14372  primary= 78.6% (weighted  94.6%)  top6= 83.1% (weighted  96.2%)
+typist         n=4629   primary= 69.6% (weighted  85.9%)  top6= 76.5% (weighted  91.7%)
+== by population (either variant) ==
+in_dictionary  n=10722  primary= 96.6% (weighted  98.7%)  top6= 99.9% (weighted 100.0%)
+oov            n=3650   primary= 26.1% (weighted  27.7%)  top6= 33.9% (weighted  35.3%)
+== miss patterns (words / weight) ==
+oov                        3441     16913
+split                      1027      4851
+vowel_initial               715      4457
+long_compound               889      3795
+inflected                   841      3772
+conjunct_shape              533      2861
+sibilant                    149      1838
+dental_retroflex            310      1413
+vowel_length                155       772
+na_nna                       96       538
+khanda_ta                    66       415
+chandrabindu_dropped         19        87
+ranking_other                 7        65
+ya_ja                        13        63
+final_okar_dropped           11        33
+final_okar_added              1        14

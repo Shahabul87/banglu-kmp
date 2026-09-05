@@ -1,0 +1,400 @@
+আবিষ্কার	264	true	typist	abiskar	আবিস্কার	DICTIONARY	আবিস্কার|অবিষ্কার|আবিষ্কারক|আবিস্কারের|আবিষ্কারের|আবিষ্কারে	sibilant,vowel_initial
+অংশ	209	true	typist	ongs	অংস	DICTIONARY	অংস|অংশে|অংশগ্রহণ|অংশের|অংশীদার|অংশটি	sibilant,vowel_initial
+আর্কাইভকৃত	141	false	canonical	arkaibhokrrit	আর্কাইভকর্মী	DICTIONARY	আর্কাইভকর্মী|আর্কাইভস	oov,conjunct_shape,vowel_initial
+আর্কাইভকৃত	141	false	typist	arkaivokrrit	আর্কাইভকর্মী	DICTIONARY	আর্কাইভকর্মী|আর্কাইভ|আর্কাইভে|আর্কাইভস	oov,conjunct_shape,vowel_initial
+বেশ	128	true	typist	bes	বেস	DICTIONARY	বেস|বয়েস|বেচছ|বেশি|বেশী|বেশিরভাগ	sibilant
+শনাক্ত	94	true	typist	sonakt	সনাক্ত	DICTIONARY	সনাক্ত|সনাক্তযোগ্য|সনাক্তকরণ|সনাকের|শনাক্তকরণ|শনাক্তকারী	sibilant
+সমযোজী	94	false	canonical	somozojii	সময়েই	DICTIONARY	সময়েই|সমঝোতা|সময়েই|সমঝোতার|সমঝোতায়|সমজজী	oov
+সমযোজী	94	false	typist	somojoji	সমজজি	CLEAN_TRANSLITERATION	সমজজি|সমজদার|সমঝোতা|সমজাতীয়|সমঝোতার|সমজাতীয়	oov
+আবিষ্কৃত	90	true	typist	abiskrrit	আবিস্কৃত	DICTIONARY	আবিস্কৃত	sibilant,vowel_initial
+আবিষ্কারের	84	true	typist	abiskarer	আবিস্কারের	DICTIONARY	আবিস্কারের	sibilant,inflected,vowel_initial
+নিষ্ক্রিয়	81	true	typist	niskriy	নিস্ক্রিয়	DICTIONARY	নিস্ক্রিয়|নিষ্ক্রিয়তা|নিষ্ক্রিয়তার|নিষ্ক্রিয়করণ|নিষ্ক্রিয়তায়|নিস্ক্রিয়	sibilant
+তাপগতীয়	80	false	typist	tapogotiy	তাপ গতীয়	DICTIONARY	তাপ গতীয়|তাপগতিবিদ্যার|টাপ গতীয়|তাপ গতীয়|তাপগতিয়	oov,split
+আয়োডাইড	74	false	canonical	ayodaid	আয়দাইদ	CLEAN_TRANSLITERATION	আয়দাইদ|আজাদ|আয়দিন|আয়োডাইডের|আয়োডিন|আয়োডিনের	oov,vowel_initial
+ক্রিপ্টন	65	false	canonical	kripton	ক্রিপটন	ENGLISH_LEXICON	ক্রিপটন|ক্রিপ্টো|ক্রিপ্টোকারেন্সি|ক্রিপ্টোকারেন্সির|krypton|ক্রিপ্তন	oov,conjunct_shape
+বাষ্প	61	true	typist	basp	বাস্প	DICTIONARY	বাস্প|বাষ্পীভবন|বাস্ক|বাস|বাষ্পীয়|বাস্কেট	sibilant
+সমস্থানিক	59	false	canonical	somosthanik	সম স্থানিক	DICTIONARY	সম স্থানিক|সমস্থিতি	oov,split
+অস্তরক	58	false	canonical	ostorok	অসতর্ক	DICTIONARY	অসতর্ক|অস্তরবির	oov,vowel_initial
+অ্যান্থোসায়ানিন	54	false	canonical	oyanthosayanin	ওয়ান্থসায়ানিন	CLEAN_TRANSLITERATION	ওয়ান্থসায়ানিন|অ্যান্থনি|অ্যান্থনির	oov,conjunct_shape,long_compound,vowel_initial
+লরেন্টজ	54	false	canonical	lorentoj	লরেন্তজ	CLEAN_TRANSLITERATION	লরেন্তজ|লরেন্ট	oov,dental_retroflex
+তড়িৎচুম্বকীয়	53	false	canonical	toritochumbokiiy	তড়িৎ চুম্বকীয়	DICTIONARY	তড়িৎ চুম্বকীয়|তড়িৎচৌম্বক|তড়িৎ চুম্বকীয়|তরিতচুম্বকীয়	oov,split,khanda_ta,long_compound
+তড়িৎচুম্বকীয়	53	false	typist	toritochumbokiy	তড়িৎ চুম্বকীয়	DICTIONARY	তড়িৎ চুম্বকীয়|তড়িৎচৌম্বক|তড়িৎ চুম্বকীয়|তরিতচুম্বকিয়	oov,split,khanda_ta,long_compound
+ইউটেকটিক	52	false	canonical	iutekotik	ইউতেকতিক	CLEAN_TRANSLITERATION	ইউতেকতিক|ইইউতে|ইউটেরাইন	oov,dental_retroflex,vowel_initial
+অণুগুলির	50	false	canonical	onugulir	ওগুলির	DICTIONARY	ওগুলির|অণুগুলো|অণুগুলোর|অণু গুলির|ওনুগুলির	oov,vowel_initial
+পরিগণনামূলক	49	false	canonical	porigononamuulok	পরিগণনা মূলক	DICTIONARY	পরিগণনা মূলক|পরিগণনা|পরিগণনা মুলক|পরিগননামূলক	oov,split
+পরিগণনামূলক	49	false	typist	porigononamulok	পরিগণনা মুলক	DICTIONARY	পরিগণনা মুলক|পরিগণনা|পরিগণনা মূলক|পরিগননামুলক	oov,split,vowel_length
+বিকাশ	48	true	typist	bikas	বিকাস	DICTIONARY	বিকাস|বিকাশে|বিকাশকে|বিকাশশীল|বিকাশের|বিকাল	sibilant
+ঘনমাত্রা	46	false	canonical	ghonomatra	ঘন মাত্রা	DICTIONARY	ঘন মাত্রা|ঘনমিটার|ঘনমিটারে	oov,split,inflected
+তাপগতিবিদ্যা	45	false	canonical	tapogotibidya	তাপগতিবিদ্যার	DICTIONARY	তাপগতিবিদ্যার|তাপমাত্রা|তাপমাত্রার|তাপমাত্রায়|তাপনিয়ন্ত্রণব্যবস্থা	oov,long_compound
+পৃষ্ঠতলের	45	false	typist	prristhotoler	পৃষ্ঠতলে	DICTIONARY	পৃষ্ঠতলে|পৃষ্ঠটি|পৃষ্ঠটান	oov,inflected
+স্ট্রনশিয়াম	45	false	canonical	stronoshiyam	স্ট্রনসিয়াম	DICTIONARY	স্ট্রনসিয়াম|স্ট্রং|স্ট্রনসিয়াম	oov,sibilant
+স্ট্রনশিয়াম	45	false	typist	stronosiyam	স্ট্রনসিয়াম	DICTIONARY	স্ট্রনসিয়াম|স্ট্রং|স্ট্রনসিয়াম	oov,sibilant
+অ্যাসিডের	43	false	canonical	oyasider	ওয়াসিদের	DICTIONARY	ওয়াসিদের|অ্যাসিডে|ওয়াসি দের|ওয়াসি দের	oov,conjunct_shape,inflected,vowel_initial
+কেন্দ্রীণ	43	false	canonical	kendriin	কেন্দ্রীন	CLEAN_TRANSLITERATION	কেন্দ্রীন|কেন্দ্রীভূত|কেন্দ্রীভবন|কেন্দ্রীয়|কেন্দ্রীয়ভাবে|কেন্দ্রী	oov,na_nna
+কেন্দ্রীণ	43	false	typist	kendrin	কেন্দ্রিন	CLEAN_TRANSLITERATION	কেন্দ্রিন|কেন্দ্রিক|কেন্দ্রীভূত|কেন্দ্রীয়|কেন্দ্রী	oov
+ত্রৈধ	42	false	canonical	troidh	ট্রেড	DICTIONARY	ট্রেড|ত্রৈমাসিক|ত্রৈলোক্যনাথ|ত্রৈমাসিকে	oov
+জড়	41	true	canonical	jor	জোর	DICTIONARY	জোর|জ্বর|জোড়|যোড়|জর|ঝড়	ranking_other
+পরমাণুতে	38	false	canonical	poromanute	পরমানুতে	DICTIONARY	পরমানুতে|পরমাণু|পরমাণুর|পরমাণুকে	oov,na_nna,inflected
+আই	37	true	canonical	ai	এই	DICTIONARY	এই|আইড়|আড়ি|আয়ই|অই|ai	vowel_initial
+সমাণুতা	37	false	canonical	somanuta	সমানুতা	CLEAN_TRANSLITERATION	সমানুতা|সমানুপাত|সমানুভূতি|সমানুপাতিক|সম্মানটা	oov,na_nna
+ইট্রিয়াম	36	false	canonical	itriyam	ইত্রিয়াম	CLEAN_TRANSLITERATION	ইত্রিয়াম	oov,dental_retroflex,vowel_initial
+ফার্মিয়ন	35	false	canonical	pharmiyon	ফার্ম ইয়ন	DICTIONARY	ফার্ম ইয়ন|ফার্মি|ফার্মিং|ফার্ম ইয়ন	oov,split
+ফার্মিয়ন	35	false	typist	farmiyon	ফার্মি	DICTIONARY	ফার্মি|ফার্ম|ফার্মেসি|ফার্মাসিউটিক্যাল	oov
+ল্যান্থানাম	35	false	canonical	lyanthanam	ল্যান্থম্যান	DICTIONARY	ল্যান্থম্যান|ল্যান্ডলাইন|ল্যান্ড|ল্যান্ডিং|ল্যাঙ্গুয়েজ|ল্যান্টার্নশার্ক	oov,conjunct_shape
+ভরকে	33	false	canonical	bhoroke	ভড়কে	DICTIONARY	ভড়কে|ভরকেন্দ্র|ভরবে|ভড়কে|ভড়কা|ভড়কি	oov,inflected
+ভরকে	33	false	typist	voroke	ভড়কে	DICTIONARY	ভড়কে|ভড়কে	oov,inflected
+ঋণাত্মকতা	32	false	canonical	rrinatmokota	ঋণাত্মক ওটা	DICTIONARY	ঋণাত্মক ওটা|ঋণাত্মক|ঋনাত্মক ওটা|ঋণাত্মক অতা	oov,split
+দ্রাব্যতা	32	false	canonical	drabyota	দ্রাব্য	DICTIONARY	দ্রাব্য|দ্রাবক|দ্রাবিড়|দ্রাবিড়ীয়	oov
+যোজ্যতা	32	false	canonical	zojyota	যজ্ঞকর্তা	DICTIONARY	যজ্ঞকর্তা|যজ্ঞপতি|যজ্ঞকারী	oov,conjunct_shape
+যোজ্যতা	32	false	typist	jojyota	জয়টা	DICTIONARY	জয়টা|জয়টা	oov,conjunct_shape
+ইন্ডিয়াম	31	false	canonical	indiyam	ইন্ডিয়া	DICTIONARY	ইন্ডিয়া|ইন্ডিয়ান|ইন্ডিয়ার|ইন্ডিয়ানা|ইন্ডিয়া|ইন্দিয়াম	oov,vowel_initial
+ইলেক্ট্রোম্যাগনেটিক	31	false	canonical	ilektromyagonetik	ইলেক্ট্রো ম্যাগনেটিক	DICTIONARY	ইলেক্ট্রো ম্যাগনেটিক|ইলেক্ট্রনিক|ইলেক্ট্রনিক্স|ইলেক্ট্রনিকস	oov,split,long_compound,vowel_initial
+হাইপোক্লোরাইট	31	false	canonical	haipoklorait	হাইপক্লরাইত	CLEAN_TRANSLITERATION	হাইপক্লরাইত|হাইপোক্সিয়া	oov,long_compound
+ভ্যালেন্স	30	false	typist	vyalens	ভ্যালেনস	ENGLISH_LEXICON	ভ্যালেনস|valens|vyalens|ভায়োলেন্স|ভায়োলেন্স	oov,conjunct_shape
+জিরকোনিয়াম	29	false	canonical	jirokoniyam	জিরকন ইয়াম	DICTIONARY	জিরকন ইয়াম|জিরকন|জিরকন ইয়াম|জিরকনিয়াম	oov,split
+ভেক্টরকে	29	false	canonical	bhektoroke	হেক্টরকে	DICTIONARY	হেক্টরকে|ভেক্টর|ভেক্টরের|ভেক্তরকে	oov,inflected
+ভেক্টরকে	29	false	typist	vektoroke	ভেক্টর ওকে	DICTIONARY	ভেক্টর ওকে|ভেক্তরকে	oov,split,inflected
+স্পর্শকোণ	29	false	canonical	sporshokon	স্পর্শক	DICTIONARY	স্পর্শক|স্পর্শকাতর	oov
+স্পর্শকোণ	29	false	typist	sporsokon	স্পর্শক	DICTIONARY	স্পর্শক|স্পর্শকাতর	oov
+আয়নিকরণ	27	false	canonical	ayonikoron	আয়নীকরণ	DICTIONARY	আয়নীকরণ|আয়নীকরণ	oov,vowel_length,vowel_initial
+ক্যাটায়ন	27	false	canonical	kyatayon	কাত্যায়ন	DICTIONARY	কাত্যায়ন|ক্যাটাগরিতে|ক্যাটাগরি|ক্যাটাগরির|কাত্যায়ন	oov
+ট্রাইঅক্সাইড	27	false	canonical	traioksaid	ট্রাই অক্সাইড	DICTIONARY	ট্রাই অক্সাইড|ট্রাইওন্ডা|ট্রায় অক্সাইড	oov,split,long_compound
+পরিষ্কার	27	true	typist	poriskar	পরিস্কার	DICTIONARY	পরিস্কার|পরিষ্কারক|পরিষ্কারভাবে|পরিষ্কারের|পরিষ্কারকরণ|পরিষ্কারে	sibilant
+অ্যাক্টিনাইড	26	false	canonical	oyaktinaid	ওয়াক্তিনাইদ	CLEAN_TRANSLITERATION	ওয়াক্তিনাইদ|অ্যাক্টিং	oov,conjunct_shape,long_compound,vowel_initial
+পৃষ্ঠতল	26	false	canonical	prrishthotol	পৃষ্ঠতলে	DICTIONARY	পৃষ্ঠতলে|পৃষ্ঠপোষকতা|পৃষ্ঠপোষকতায়|পৃষ্ঠটি|পৃষ্ঠটান|পৃষ্ঠপোষকতায়	oov
+পৃষ্ঠতল	26	false	typist	prristhotol	পৃষ্ঠতলে	DICTIONARY	পৃষ্ঠতলে|পৃষ্ঠটি|পৃষ্ঠটান	oov
+শেল	26	true	typist	sel	সেল	DICTIONARY	সেল|সয়েল|সেলাই|সেলিম|সেলে|সেলফি	sibilant
+সিন্থেটিক	26	false	canonical	sinthetik	সিনথেটিক	DICTIONARY	সিনথেটিক|সিন্থেসাইজার|সিন্থেতিক	oov,conjunct_shape
+অন্তরজ	25	false	canonical	ontoroj	অন্তর	DICTIONARY	অন্তর|অন্তরঙ্গ|অন্তরযামী|অন্তরক|অন্তরতর|ওন্তরজ	oov,vowel_initial
+অর্ধপরিবাহী	25	false	canonical	ordhoporibahii	অর্ধ পরিবাহী	DICTIONARY	অর্ধ পরিবাহী|অর্ধচন্দ্র|অর্ধশতাধিক|অর্ধবার্ষিক	oov,split,vowel_initial
+অর্ধপরিবাহী	25	false	typist	ordhoporibahi	অর্ধ পরিবাহী	DICTIONARY	অর্ধ পরিবাহী|অর্ধচন্দ্র|অর্ধশতাধিক|অর্ধবার্ষিক	oov,split,vowel_initial
+অ্যাসিম্পটোটিক	25	false	canonical	oyasimpototik	ওয়াসিম্পততিক	CLEAN_TRANSLITERATION	ওয়াসিম্পততিক|ওয়াসিম	oov,conjunct_shape,long_compound,vowel_initial
+টেট্রাক্লোরাইড	25	false	canonical	tetrakloraid	টেট্রা ক্লোরাইড	DICTIONARY	টেট্রা ক্লোরাইড|টেট্রাসাইক্লিন|টেট্রা	oov,split,long_compound
+অ্যাভোগাড্রো	24	false	canonical	oyabhogadro	ওয়াভগাদ্র	CLEAN_TRANSLITERATION	ওয়াভগাদ্র|অ্যাভোকাডো	oov,conjunct_shape,long_compound,vowel_initial
+অ্যাভোগাড্রো	24	false	typist	oyavogadro	ওয়াভগাদ্র	CLEAN_TRANSLITERATION	ওয়াভগাদ্র	oov,conjunct_shape,long_compound,vowel_initial
+টেলুরিয়াম	24	false	canonical	teluriyam	তেলুরিয়াম	CLEAN_TRANSLITERATION	তেলুরিয়াম|তেলুগু	oov,dental_retroflex
+সমদৈশিক	24	false	typist	somodoisik	সম দৈশিক	DICTIONARY	সম দৈশিক|সমধিক|সমদ্বিবাহু|সমদ্বিখণ্ডক|শম দৈশিক|সমদৈসিক	oov,split
+সুইডিশ	24	true	typist	suidis	সুইডিস	DICTIONARY	সুইডিস|সুইডিশরা	sibilant
+ইউপ্যাক	23	false	canonical	iupyak	ইউপ্যাকের	DICTIONARY	ইউপ্যাকের|ইউপিআই|ইউপিআর	oov,vowel_initial
+ইলেক্ট্রনের	23	false	canonical	ilektroner	ইলেকট্রনের	DICTIONARY	ইলেকট্রনের|ইলেক্ট্রনিক|ইলেক্ট্রনিক্স|ইলেক্ট্রনিকস	oov,conjunct_shape,inflected,vowel_initial
+খ্রিস্টপূর্বাব্দ	23	false	canonical	khristopuurbabd	খ্রিষ্টপূর্বাব্দ	DICTIONARY	খ্রিষ্টপূর্বাব্দ|খৃষ্টপূর্বাব্দ|খ্রীষ্টপূর্বাব্দ|খ্রীস্টপূর্বাব্দ|খৃস্টপূর্বাব্দ|খ্রিষ্টপূর্বাব্দে	oov,sibilant,long_compound
+খ্রিস্টপূর্বাব্দ	23	false	typist	khristopurbabd	খ্রিষ্টপূর্বাব্দ	DICTIONARY	খ্রিষ্টপূর্বাব্দ|খৃষ্টপূর্বাব্দ|খ্রীষ্টপূর্বাব্দ|খ্রীস্টপূর্বাব্দ|খৃস্টপূর্বাব্দ|খ্রিষ্টপূর্বাব্দে	oov,sibilant,long_compound
+জার্মানিয়াম	23	false	canonical	jarmaniyam	জার্মান ইয়াম	DICTIONARY	জার্মান ইয়াম|জার্মানি|জার্মানির|জার্মানিতে|জার্মান ইয়াম	oov,split
+সারণীর	23	false	canonical	saroniir	সারণির	DICTIONARY	সারণির|সারণী|সারণীগুলি	oov,vowel_length
+সারণীর	23	false	typist	saronir	সারণির	DICTIONARY	সারণির	oov,vowel_length
+হাইড্রক্সাইড	23	false	canonical	haidroksaid	হাইড্রোক্সাইড	DICTIONARY	হাইড্রোক্সাইড	oov,long_compound
+ঘনমাত্রার	22	false	canonical	ghonomatrar	ঘন মাত্রার	DICTIONARY	ঘন মাত্রার|ঘনমিটার|ঘনমিটারে	oov,split
+টেট্রাফ্লোরাইড	22	false	canonical	tetrafloraid	টেট্রা ফ্লোরাইড	DICTIONARY	টেট্রা ফ্লোরাইড|টেট্রাসাইক্লিন|টেট্রা	oov,split,long_compound
+পরিবাহীতে	22	false	typist	poribahite	পরিবাহিতে	DICTIONARY	পরিবাহিতে|পরিবাহিত|পরিবাহিতা|পরিবাহিতার	oov,vowel_length,inflected
+বলবিজ্ঞানে	22	false	canonical	bolobigyane	বলবিজ্ঞানের	DICTIONARY	বলবিজ্ঞানের|বলবি|বলবিদ্যা|বলবিদ্যার	oov,inflected
+ম্যাক্রোস্কোপিক	22	false	canonical	myakroskopik	ম্যাক্রস্কপিক	CLEAN_TRANSLITERATION	ম্যাক্রস্কপিক|ম্যাক্রো|ম্যাক্রোমিডিয়া|ম্যাক্রোমলিকুলার	oov,long_compound
+শক্তিস্তর	22	false	canonical	shoktistor	শক্তিস্তরে	DICTIONARY	শক্তিস্তরে|শক্তিশালী|শক্তিশালি|শক্তিসম্পন্ন|শক্তিস্বল্পতার|শক্তিসাশ্রয়ী	oov
+শক্তিস্তর	22	false	typist	soktistor	শক্তিস্তরে	DICTIONARY	শক্তিস্তরে|শক্তিশালী|শক্তিশালি|শক্তিসম্পন্ন	oov
+তরঙ্গমুখ	21	false	canonical	torongoomukh	তরঙ্গ মুখ	DICTIONARY	তরঙ্গ মুখ|তরঙ্গমালা|তরঙ্গ মূখ|তরঙুমুখ	oov,split
+ভ্যানাডিয়াম	21	false	canonical	bhyanadiyam	ভ্যানাদিয়াম	CLEAN_TRANSLITERATION	ভ্যানাদিয়াম|ভ্যান|ভ্যান্স|ভ্যানে|ভ্যানগাড়িটায়|ভ্যানগাড়িটায়	oov,dental_retroflex
+ভ্যানাডিয়াম	21	false	typist	vyanadiyam	ভ্যানাদিয়াম	CLEAN_TRANSLITERATION	ভ্যানাদিয়াম|ভ্যানগাড়িটায়	oov,dental_retroflex
+যৌগসমূহ	21	false	canonical	zougosomuuh	যৌগ সমূহ	DICTIONARY	যৌগ সমূহ|যৌগ|যৌগিক|যৌগের|যৌগ সমুহ|জৌগসমূহ	oov,split
+যৌগসমূহ	21	false	typist	jougosomuh	যৌগ সমূহ	DICTIONARY	যৌগ সমূহ|যৌগ|যৌগিক|যৌগের|জোগ সমূহ|জৌগসমুহ	oov,split
+অ্যালকেন	20	false	canonical	oyaloken	ওয়ালকেন	CLEAN_TRANSLITERATION	ওয়ালকেন|অ্যালকোহল|অ্যালকোহলের|অ্যালকোহলযুক্ত	oov,conjunct_shape,vowel_initial
+ক্রিয়ারত	20	false	canonical	kriyarot	ক্রিয়ারই	DICTIONARY	ক্রিয়ারই|ক্রিয়ার|ক্রিয়ারূপ|ক্রিয়ারই	oov
+ডিওআই	20	false	canonical	dioai	ডিওয়াই	DICTIONARY	ডিওয়াই|দিওয়ানা|দিওয়ান|দিওয়ার|ডিওই|ডিওয়াই	oov,inflected
+তরঙ্গমুখের	20	false	canonical	torongoomukher	তরঙ্গ মুখের	DICTIONARY	তরঙ্গ মুখের|তরঙ্গমালা|তরঙ্গ মুখেড়|তরঙুমুখের	oov,split,inflected
+নিউটনীয়	20	false	canonical	niutoniiy	নিউট অনীয়	DICTIONARY	নিউট অনীয়|নিউটন|নিউটনের|নিউট অনীয়|নিউতনীয়	oov,split
+নিউটনীয়	20	false	typist	niutoniy	নিউতনিয়	CLEAN_TRANSLITERATION	নিউতনিয়|নিউটন|নিউটনের	oov
+পর্যবেক্ষণযোগ্য	20	false	canonical	poryobekkhonozogy	পর্যবেক্ষণযন্ত্র	DICTIONARY	পর্যবেক্ষণযন্ত্র|পর্যবেক্ষণকারী|পর্যবেক্ষণমূলক|পর্যবেক্ষণকে|পর্যবেক্ষণব্যবস্থা|পর্যবেক্ষণকক্ষ	oov,conjunct_shape,long_compound
+পর্যবেক্ষণযোগ্য	20	false	typist	poryobekkhonojogy	পর্যবেক্ষণ যোগ্য	DICTIONARY	পর্যবেক্ষণ যোগ্য|পর্যবেক্ষণকারী|পর্যবেক্ষণমূলক|পর্যবেক্ষণটি|পর্যবেক্ষন যোগ্য	oov,split,long_compound
+পৃষ্ঠটানের	20	false	typist	prristhotaner	পৃষ্ঠ টানের	DICTIONARY	পৃষ্ঠ টানের|পৃষ্ঠটান|পৃষ্ঠ তানের	oov,split,inflected
+ব্রনস্টেড	20	false	canonical	bronosted	ব্রণ স্টেড	DICTIONARY	ব্রণ স্টেড|ব্রনসন|ব্রন স্টেড	oov,split,na_nna
+হিলবার্ট	20	false	canonical	hilobart	গিলবার্ট	DICTIONARY	গিলবার্ট|হিলস|হিলসে|হিলসের|হিলব্রোতে|হিলব্রাউয়ের	oov
+অতিবেগুনী	19	false	canonical	otibegunii	অতিবেগুনি	DICTIONARY	অতিবেগুনি|অতিবাহিত|অতিবৃষ্টি|অতিভুজ|ওতিবেগুনী	oov,vowel_length,vowel_initial
+অতিবেগুনী	19	false	typist	otibeguni	অতিবেগুনি	DICTIONARY	অতিবেগুনি	oov,vowel_length,vowel_initial
+আয়নীয়	19	false	typist	ayoniy	ইনিই	DICTIONARY	ইনিই|আয়নিক|আয়নিত|আয়নীকরণ|আয়নিয়	oov,vowel_initial
+কণাসমূহের	19	false	canonical	konasomuuher	কনাসমূহের	CLEAN_TRANSLITERATION	কনাসমূহের|কন্যাসন্তান|কন্যাসন্তানের|কন্যাসহ	oov,na_nna,inflected
+কণাসমূহের	19	false	typist	konasomuher	কনাসমুহের	CLEAN_TRANSLITERATION	কনাসমুহের|কন্যাসন্তান|কন্যাসন্তানের|কন্যাসহ	oov,inflected
+টেলুরাইড	19	false	canonical	teluraid	তেলুরাইদ	CLEAN_TRANSLITERATION	তেলুরাইদ|তেলুগু	oov
+ট্রপোস্ফিয়ারের	19	false	canonical	troposphiyarer	ত্রপস্ফিয়ারের	CLEAN_TRANSLITERATION	ত্রপস্ফিয়ারের|ট্রপোমণ্ডল	oov,long_compound,inflected
+ট্রপোস্ফিয়ারের	19	false	typist	troposfiyarer	ত্রপস্ফিয়ারের	CLEAN_TRANSLITERATION	ত্রপস্ফিয়ারের|ট্রপোমণ্ডল	oov,long_compound,inflected
+তড়িৎকোষ	19	false	canonical	toritokosh	তড়িৎ কোষ	DICTIONARY	তড়িৎ কোষ|তড়িৎকৌশল|তড়িৎ কোশ|তরিতকশ	oov,split,khanda_ta
+তড়িৎকোষ	19	false	typist	toritokos	তড়িৎ কস	DICTIONARY	তড়িৎ কস|তড়িৎকৌশল|তরিতকস	oov,split,khanda_ta
+তড়িৎবিশ্লেষ্য	19	false	canonical	toritobishleshy	তরিতবিশ্লেশ্য	CLEAN_TRANSLITERATION	তরিতবিশ্লেশ্য|তড়িৎচৌম্বক|তড়িৎপ্রবাহ|তড়িৎক্ষেত্র	oov,khanda_ta,long_compound
+তড়িৎবিশ্লেষ্য	19	false	typist	toritobislesy	তরিতবিস্লেস্য	CLEAN_TRANSLITERATION	তরিতবিস্লেস্য|তড়িৎচৌম্বক|তড়িৎপ্রবাহ|তড়িৎক্ষেত্র	oov,khanda_ta,long_compound
+প্ল্যাংকের	19	false	canonical	plyangker	প্ল্যাঙ্কের	DICTIONARY	প্ল্যাঙ্কের|প্ল্যাঙ্ক|প্ল্যাংক	oov,conjunct_shape,inflected
+সক্রিয়ন	19	false	canonical	sokriyon	সৃজন	DICTIONARY	সৃজন|সক্রিয়ভাবে|সক্রিয়তা|সক্রিয়তার	oov,conjunct_shape
+সারণীতে	19	false	canonical	saroniite	সারণিতে	DICTIONARY	সারণিতে|সারণী|সারণীগুলি	oov,vowel_length,inflected
+সারণীতে	19	false	typist	saronite	সারণিতে	DICTIONARY	সারণিতে	oov,vowel_length,inflected
+অনুঘটন	18	false	canonical	onughoton	অণু ঘটন	DICTIONARY	অণু ঘটন|অনুঘটক|অনুঘটকের|অনু ঘটন|ওনুঘতন	oov,split,na_nna,vowel_initial
+অসমোলারিটি	18	false	canonical	osomolariti	ওসমলারিতি	CLEAN_TRANSLITERATION	ওসমলারিতি|অসমতা|অসময়ে|অসমর্থ	oov,inflected,vowel_initial
+সমূহের	18	false	typist	somuher	সমুহের	DICTIONARY	সমুহের|সমুচিত|সমূহ|সমুখে|সমুচা|সমূহকে	oov,vowel_length,inflected
+অতিপরিবাহী	17	false	canonical	otiporibahii	অতি পরিবাহী	DICTIONARY	অতি পরিবাহী|অতিপরিচিত|ওটি পরিবাহী|ওতিপরিবাহী	oov,split,vowel_initial
+অতিপরিবাহী	17	false	typist	otiporibahi	অতি পরিবাহী	DICTIONARY	অতি পরিবাহী|অতিপরিচিত|ওটি পরিবাহী|ওতিপরিবাহি	oov,split,vowel_initial
+কণাগুলিকে	17	false	canonical	konagulike	কোনগুলিকে	DICTIONARY	কোনগুলিকে|কণাগুলো|কণাগুলোর|কণা গুলিকে|কনাগুলিকে	oov,inflected
+টেন্সর	17	false	canonical	tensor	টেনসর	DICTIONARY	টেনসর|tensor	oov,conjunct_shape
+দ্বিতীয়ক	17	false	typist	dbitiyok	দ্বিতীয়	DICTIONARY	দ্বিতীয়|দ্বিতীয়|দ্বিতীয়কে|দ্বিতীয়ত|দ্বিতীয়বার|দ্বিতিয়ক	oov
+দ্রবের	17	false	canonical	drober	দ্রব্যের	DICTIONARY	দ্রব্যের	oov,conjunct_shape,inflected
+নিউক্লাইড	17	false	canonical	niuklaid	নিউক্লাইদ	CLEAN_TRANSLITERATION	নিউক্লাইদ|নিউক্লিওটাইড|নিউক্লিয়ার|নিউক্লিয়াস|নিউক্লিয়াসের	oov,dental_retroflex
+পেন্টাফ্লোরাইড	17	false	canonical	pentafloraid	পেন্তাফ্লরাইদ	CLEAN_TRANSLITERATION	পেন্তাফ্লরাইদ|পেন্টাগন|পেন্টাগনের|পেন্টাগনে	oov,long_compound
+বর্ণমিতিক	17	false	canonical	bornomitik	বর্ণমিছিল	DICTIONARY	বর্ণমিছিল|বর্ণমালা|বর্ণমালার|বর্ণমালায়|বর্ণমুক্তি|বর্ণমালাখচিত	oov
+বোসনের	17	false	canonical	bosoner	বসনের	DICTIONARY	বসনের|ব্যসনের	oov,inflected
+যৌগসমূহের	17	false	canonical	zougosomuuher	জৌগসমূহের	CLEAN_TRANSLITERATION	জৌগসমূহের|যৌগ|যৌগিক|যৌগের|যৌগমূলকের	oov,ya_ja,inflected
+যৌগসমূহের	17	false	typist	jougosomuher	জৌগসমুহের	CLEAN_TRANSLITERATION	জৌগসমুহের|যৌগ|যৌগিক|যৌগের	oov,inflected
+রেজোলিউশন	17	false	canonical	rejoliushon	রেইলি উচ্ছন্ন	DICTIONARY	রেইলি উচ্ছন্ন|রেজোল্যুশন|রেজোল্যুশনের|রেজলিউশন	oov,split,conjunct_shape
+রেজোলিউশন	17	false	typist	rejoliuson	রেইলি উচ্ছন্ন	DICTIONARY	রেইলি উচ্ছন্ন|রেজোল্যুশন|রেজোল্যুশনের|রেজলিউসন	oov,split,conjunct_shape
+শনাক্তকরণ	17	true	typist	sonaktokoron	সনাক্তকরণ	DICTIONARY	সনাক্তকরণ|শনাক্তকরণের|শনাক্তকরণে|শণাক্তকরণ	sibilant
+শব্দোচ্চতা	17	false	canonical	shobdoccota	শব্দচ্ছটা	DICTIONARY	শব্দচ্ছটা|শব্দচয়ন|শব্দচয়নে|শব্দচয়নের	oov
+শব্দোচ্চতা	17	false	typist	sobdoccota	শব্দচ্ছটা	DICTIONARY	শব্দচ্ছটা|শব্দচয়ন|শব্দচয়নে|শব্দচয়নের	oov
+সমবর্তিত	17	false	canonical	somobortit	সমবর্তিতা	DICTIONARY	সমবর্তিতা|সমবর্তন|সমবয়সী|সমবয়স্ক|সমবৈশিষ্ট্যসম্পন্ন|সমবর্তী	oov
+সমস্থানিকের	17	false	canonical	somosthaniker	সমসাময়িকদের	DICTIONARY	সমসাময়িকদের|সমসাময়িককালের|সমস্থিতি|সমসাময়িককালে|সমসাময়িকদের|সমসাময়িকেরা	oov,conjunct_shape,inflected
+অভিস্রবণিক	16	false	canonical	obhisrobonik	অভিস্রবনিক	DICTIONARY	অভিস্রবনিক|অভিস্রবণ	oov,na_nna,vowel_initial
+অভিস্রবণিক	16	false	typist	ovisrobonik	অভিস্রবনিক	DICTIONARY	অভিস্রবনিক	oov,na_nna,vowel_initial
+অ্যান্থোসায়ানিনের	16	false	canonical	oyanthosayaniner	ওয়ান্থসায়ানিনের	CLEAN_TRANSLITERATION	ওয়ান্থসায়ানিনের|অ্যান্থনি|অ্যান্থনির	oov,conjunct_shape,long_compound,inflected,vowel_initial
+আসন্নায়ন	16	false	canonical	asonnayon	আসন্নকাল	DICTIONARY	আসন্নকাল|আসন|আসনের|আসনে|আসনপ্রাপ্যতার	oov,vowel_initial
+ইনিশিও	16	false	typist	inisio	ইনিও	DICTIONARY	ইনিও|ইনিশিয়েটিভ|ইনিশিয়েটিভের|ইনিশিয়াল|ইনিংসটিও|ইনিসিও	oov,inflected,vowel_initial
+ঔষধবিজ্ঞান	16	false	canonical	oushodhobigyan	ঔষধ বিজ্ঞান	DICTIONARY	ঔষধ বিজ্ঞান|ঔষধশিল্প	oov,split,vowel_initial
+ঔষধবিজ্ঞান	16	false	typist	ousodhobigyan	ঔষধ বিজ্ঞান	DICTIONARY	ঔষধ বিজ্ঞান|ঔষধশিল্প	oov,split,vowel_initial
+ক্লেরো	16	false	canonical	klero	কলের	DICTIONARY	কলের|কোলের|কলেরা|কলেজ|কলেজও|কলেরার	oov,conjunct_shape
+নাইট্রাইড	16	false	canonical	naitraid	নাইওরযাত্রা	DICTIONARY	নাইওরযাত্রা|নাইট্রাস	oov
+নিওডিয়ামিয়াম	16	false	canonical	niodiyamiyam	নিওদিয়ামিয়াম	CLEAN_TRANSLITERATION	নিওদিয়ামিয়াম	oov,dental_retroflex,long_compound
+পদার্থগুলির	16	false	canonical	podarthogulir	পদার্থগুলোর	DICTIONARY	পদার্থগুলোর|পদার্থগুলো|পদার্থ গুলির	oov
+ফাইনম্যান	16	false	canonical	phainomyan	ফাইন ম্যান	DICTIONARY	ফাইন ম্যান|ফাইনাল|ফাইন|ফাইনালে	oov,split
+সংদীপ্ত	16	false	typist	songdipt	সন্দীপ্ত	DICTIONARY	সন্দীপ্ত|সঙ্গে|সংখ্যা|সংসদ|সংদিপ্ত	oov,conjunct_shape
+অক্সিডেশন	15	false	canonical	oksideshon	ওক্সিদেশন	CLEAN_TRANSLITERATION	ওক্সিদেশন|অক্সিডেন্ট|অক্সিডেটিভ|অক্সিডেন্টসমৃদ্ধ	oov,vowel_initial
+অক্সিডেশন	15	false	typist	oksideson	ওক্সিদেসন	CLEAN_TRANSLITERATION	ওক্সিদেসন|অক্সিডেন্ট|অক্সিডেটিভ|অক্সিডেন্টসমৃদ্ধ	oov,vowel_initial
+অ্যালকাইল	15	false	canonical	oyalokail	ওয়াল কাইল	DICTIONARY	ওয়াল কাইল|অ্যালকালয়েড|ওয়াল কাইল|ওয়ালকাইল	oov,split,conjunct_shape,vowel_initial
+ইউরোপিয়াম	15	false	canonical	iuropiyam	ইউরোপিয়	DICTIONARY	ইউরোপিয়|ইউরোপিয়|ইউরোপিয়ান|ইউরোপীয়ান|ইউরপিয়াম	oov,vowel_initial
+ইটারবিয়াম	15	false	canonical	itarobiyam	ইতারবিয়াম	CLEAN_TRANSLITERATION	ইতারবিয়াম|ইটার|টারবিয়াম	oov,dental_retroflex,vowel_initial
+উপাংশ	15	false	typist	upangs	উপাংস	CLEAN_TRANSLITERATION	উপাংস|উপাঙ্গ|উপাঙ্গটি|উপাংশু|উপাংশুবধ|উপায়জ্ঞ	oov,sibilant,vowel_initial
+কার্কেন্ডাল	15	false	canonical	karkendal	কার কেন্ডাল	DICTIONARY	কার কেন্ডাল|কার্ক|কার্কহ্যাম|কাড় কেন্ডাল	oov,split,conjunct_shape
+কোয়াণ্টাম	15	false	canonical	koyantam	কোয়ান্টাম	DICTIONARY	কোয়ান্টাম|কোয়ান্টাম|কয়াকুঞ্চি|কয়াগাড়ী|কয়ানিজপাড়া|কয়াপাড়া	oov,na_nna
+তড়িৎভেদ্যতা	15	false	canonical	toritobhedyota	তরিতভেদ্যতা	CLEAN_TRANSLITERATION	তরিতভেদ্যতা|তড়িৎচৌম্বক|তড়িৎপ্রবাহ|তড়িৎক্ষেত্র	oov,khanda_ta
+তড়িৎভেদ্যতা	15	false	typist	toritovedyota	তরিতভেদ্যতা	CLEAN_TRANSLITERATION	তরিতভেদ্যতা|তড়িৎচৌম্বক|তড়িৎপ্রবাহ|তড়িৎক্ষেত্র	oov,khanda_ta
+দেশ	15	true	typist	des	দেস	DICTIONARY	দেস|ডেস|দ্বেষ|দেছ|দেশের|des	sibilant
+পলিইথিলিন	15	false	canonical	poliithilin	পলিথিন	DICTIONARY	পলিথিন|পল্লীতে|পলীথিলিন	oov
+পলিইথিলিন	15	false	typist	polithilin	পল ইথিলিন	DICTIONARY	পল ইথিলিন|পলিথিন|পলিথিনের|পলিথিনে|পলিথিলিন	oov,split
+প্রমিথিয়াম	15	false	canonical	promithiyam	প্রমিত হিয়াম	DICTIONARY	প্রমিত হিয়াম|প্রমিথিউস|প্রমিথিউসের|প্রমিত হিয়াম	oov,split
+ফ্লোরিন	15	false	canonical	florin	ফ্লরিন	CLEAN_TRANSLITERATION	ফ্লরিন|ক্লোরিন|ফ্লোরিডা|ফ্লোরিয়ান|ফোলারিন|ফ্লোরিডার	oov
+বিষ	15	true	typist	bis	বিস	DICTIONARY	বিস|বিশ্ব|বিশ্বাস|বিশেষ|বিষয়ে|বিশ্বের	sibilant
+রুবিডিয়াম	15	false	canonical	rubidiyam	রুবিদিয়াম	CLEAN_TRANSLITERATION	রুবিদিয়াম|রুবি|রুবিও|রুবিনা	oov,dental_retroflex
+রেডিয়ান	15	false	canonical	rediyan	রেদিয়ান	CLEAN_TRANSLITERATION	রেদিয়ান|রেদোয়ান|রেদওয়ান|রেডিয়াম|রেডিয়ামের|রেডিয়াস	oov,dental_retroflex
+শাতলিয়ে	15	false	typist	satoliye	সাতলিয়ে	CLEAN_TRANSLITERATION	সাতলিয়ে|সামলিয়ে|সাঁটলিপিকার|সাঁতরিয়ে|সাতলাবাসীকে	oov,sibilant,inflected
+সংযুতি	15	false	canonical	songzuti	সংযুক্তি	DICTIONARY	সংযুক্তি|সংযুক্ত|সংযুক্তির|সংযুক্তকারী|সংজুতি	oov,conjunct_shape
+সংযুতি	15	false	typist	songjuti	সঙ্গতি	DICTIONARY	সঙ্গতি|সংযুক্ত|সংযুক্তি|সংযুক্তির|সংজুতি	oov,conjunct_shape
+অপবর্তন	14	false	canonical	opoborton	অপবর্জন	DICTIONARY	অপবর্জন|অপব্যবহার|অপবিত্রতা|অপব্যবহারের|অপব্যয়|অপকর্মন্	oov,vowel_initial
+অসমোটিক	14	false	canonical	osomotik	ওসমতিক	CLEAN_TRANSLITERATION	ওসমতিক|অসমতাকে|অসম্মতি|অসম্মতিতে|অসম্মতির	oov,vowel_initial
+অ্যামিন	14	false	canonical	oyamin	অ্যামিনো	DICTIONARY	অ্যামিনো|অ্যামিগো|অ্যামি|অ্যামিকাস|ওয়ামিন	oov,final_okar_added,vowel_initial
+ক্যালিফোর্নিয়াম	14	false	canonical	kyaliphorniyam	ক্যালিফোর্নিয়া	DICTIONARY	ক্যালিফোর্নিয়া|ক্যালিফোর্নিয়ার|ক্যালিফোর্নিয়ায়|ক্যালিফোর্নিয়াতে|ক্যালিফোর্নিয়া	oov,long_compound
+ক্যালিফোর্নিয়াম	14	false	typist	kyaliforniyam	ক্যালিফোর্নিয়া	DICTIONARY	ক্যালিফোর্নিয়া|ক্যালিফোর্নিয়ার|ক্যালিফোর্নিয়ায়|ক্যালিফোর্নিয়াতে|ক্যালিফোর্নিয়াকে|ক্যালিবান	oov,long_compound
+ক্রিপ্টনের	14	false	canonical	kriptoner	ক্রিপ্টো নের	DICTIONARY	ক্রিপ্টো নের|ক্রিপ্টো|ক্রিপ্টোকারেন্সি|ক্রিপ্টোকারেন্সির|ক্রিপ্টো নেড়	oov,split,inflected
+খ্রিষ্টাব্দ	14	true	typist	khristabd	খ্রিস্টাব্দ	DICTIONARY	খ্রিস্টাব্দ|খ্রীস্টাব্দ|খৃষ্টাব্দ|খ্রীষ্টাব্দ|খ্রিস্টাব্দে|খ্রিস্টাব্দের	sibilant
+গ্যাডোলিনিয়াম	14	false	canonical	gyadoliniyam	গ্যাদলিনিয়াম	CLEAN_TRANSLITERATION	গ্যাদলিনিয়াম|গ্যাডফ্লাই	oov,long_compound
+টাইটেনেট	14	false	canonical	taitenet	তাইতেনেত	CLEAN_TRANSLITERATION	তাইতেনেত|টাইটেনিয়াম	oov,dental_retroflex
+তাঁরা	14	true	canonical	tara	তারা	DICTIONARY	তারা|টারা|টায়রা|তারায়|তাড়া|tara	chandrabindu_dropped,inflected
+তাপগতিবিজ্ঞান	14	false	canonical	tapogotibigyan	তাপ গতিবিজ্ঞান	DICTIONARY	তাপ গতিবিজ্ঞান|তাপগতিবিদ্যার|টাপ গতিবিজ্ঞান	oov,split,long_compound
+তড়িৎদ্বার	14	false	canonical	toritodbar	তড়িৎ দ্বার	DICTIONARY	তড়িৎ দ্বার|তড়িৎচৌম্বক|তড়িৎপ্রবাহ|তড়িৎক্ষেত্র|তরিতদ্বার	oov,split,khanda_ta
+থার্মোডাইনামিক	14	false	canonical	tharmodainamik	থার্মদাইনামিক	CLEAN_TRANSLITERATION	থার্মদাইনামিক|থার্মোমিটার|থার্মোমিটারের|থার্মোমিটারে	oov,long_compound
+ন্যানোকণা	14	false	canonical	nyanokona	ন্যাকাপনা	DICTIONARY	ন্যাকাপনা|ন্যানোমিটার|ন্যানো|ন্যানোপ্রযুক্তি|ন্যানোকেলাস|ন্যানোকাঠামো	oov
+পর্যায়বৃত্ত	14	false	canonical	poryayobrritt	পর্যায় বৃত্ত	DICTIONARY	পর্যায় বৃত্ত|পর্যায়ভুক্ত|পর্যায় বৃত্ত	oov,split
+পানিবিকর্ষী	14	false	canonical	panibikorshii	পানিবর্ষণ	DICTIONARY	পানিবর্ষণ|পানিভর্তি|পানিবণ্টন|পানিবাহিত|পানিবিজ্ঞানীদের	oov
+পানিবিকর্ষী	14	false	typist	panibikorsi	পানিবিজ্ঞানী	DICTIONARY	পানিবিজ্ঞানী|পানিভর্তি|পানিবণ্টন|পানিবাহিত	oov
+পারক্সাইড	14	false	canonical	paroksaid	পারঅক্সাইড	DICTIONARY	পারঅক্সাইড|পারকিং|পারকিনসন|পারকার|প্যারোক্সাইড	oov
+পৃষ্ঠশক্তি	14	false	canonical	prrishthoshokti	পৃষ্ঠ শক্তি	DICTIONARY	পৃষ্ঠ শক্তি|পৃষ্ঠপোষক|পৃষ্ঠপোষকতা|পৃষ্ঠপোষকতায়	oov,split
+পৃষ্ঠশক্তি	14	false	typist	prristhosokti	পৃষ্ঠ শক্তি	DICTIONARY	পৃষ্ঠ শক্তি|পৃষ্ঠ|পৃষ্ঠপোষক|পৃষ্ঠপোষকতা|পৃষ্ঠ সক্তি	oov,split
+প্রয়োগকৃত	14	false	canonical	proyogokrrit	প্রয়োগ কৃত	DICTIONARY	প্রয়োগ কৃত|প্রয়োগকারী|প্রয়োগকে|প্রয়োগ ক্রিট|প্রয়োগ কৃত|প্রয়োগ ক্রীত	oov,split
+ফুকোর	14	false	canonical	phukor	ফুকর	DICTIONARY	ফুকর|ফুকরা|ফুকারা|ফুকন|ফুকস|ফুকার	oov
+ফুকোর	14	false	typist	fukor	ফুকর	DICTIONARY	ফুকর	oov
+মেন্ডেলিভ	14	false	canonical	mendelibh	মেন্ডেল ইভ	DICTIONARY	মেন্ডেল ইভ|মেন্ডেল|মেন্ডেলের|মেন্ডেল ঈভ|মেন্দেলিভ	oov,split
+মেন্ডেলিভ	14	false	typist	mendeliv	মেন্দেলিভ	CLEAN_TRANSLITERATION	মেন্দেলিভ|মেন্ডেল|মেন্ডেলের	oov,dental_retroflex
+যেকোনও	14	false	canonical	zekonoo	যেকোনূ	DICTIONARY	যেকোনূ|যেকোনো|যেকোনোভাবে|যেকোনোটি	oov,inflected
+যেকোনও	14	false	typist	jekonoo	জেকনু	CLEAN_TRANSLITERATION	জেকনু|যেকোনো|যেকোনোভাবে|যেকোনোটি	oov,inflected
+যৌগটি	14	false	canonical	zougoti	যোগটি	RULE	যোগটি|যৌগ|যৌগিক|যৌগের	oov,inflected
+যৌগটি	14	false	typist	jougoti	জগতি	DICTIONARY	জগতি|যৌগ|যৌগিক|যৌগের|জগতী|জৌগতি	oov,inflected
+রোডিয়াম	14	false	canonical	rodiyam	রদিয়াম	CLEAN_TRANSLITERATION	রদিয়াম|রডিন|রডিক|সোডিয়াম|রেডিয়াম|রডি	oov
+সাধারণীকৃত	14	false	canonical	sadharoniikrrit	সাধারণী কৃত	DICTIONARY	সাধারণী কৃত|সাধারণীকরণ|সাধারণী ক্রিট	oov,split
+সাধারণীকৃত	14	false	typist	sadharonikrrit	সাধারণী কৃত	DICTIONARY	সাধারণী কৃত|সাধারণীকরণ|সাধারণী ক্রিট	oov,split
+সাবস্ট্রেটের	14	false	canonical	sabostreter	সাব্যস্ত রেটের	DICTIONARY	সাব্যস্ত রেটের|সাবস্টিটিউট|সাবস্টেশন|সাবস্টেশনে|সাবস্ত্রেতের	oov,split,long_compound,inflected
+সেলেনাইড	14	false	canonical	selenaid	সেলেনাইদ	CLEAN_TRANSLITERATION	সেলেনাইদ|সেলে|সেলের|সেলেসাও	oov,dental_retroflex
+অম্লের	13	false	canonical	omler	অমলের	DICTIONARY	অমলের|অমলেট|অমলেশ|অমলেন্দু|অমলেটের	oov,conjunct_shape,inflected,vowel_initial
+আইনস্টাইনিয়াম	13	false	canonical	ainostainiyam	আইনস্টাইন ইয়াম	DICTIONARY	আইনস্টাইন ইয়াম|আইনস্টাইন|আইনস্টাইনের|আইনস্টাইনকে|আইনস্টাইন ইয়াম	oov,split,long_compound,vowel_initial
+আইসোটোপিক	13	false	canonical	aisotopik	আইসতপিক	CLEAN_TRANSLITERATION	আইসতপিক|আইসোটোপ|আইসোটোপের|আইসোটোপটি|আইসতিছে	oov,vowel_initial
+ইন্টারস্টেলার	13	false	canonical	intarostelar	ইন্টার স্টেলার	DICTIONARY	ইন্টার স্টেলার|ইন্টারসেপ্টর	oov,split,long_compound,vowel_initial
+ইলেকট্রনটি	13	false	canonical	ilekotronoti	ইলেকট্রন অতি	DICTIONARY	ইলেকট্রন অতি|ইলেকট্রনকে|ইলেকট্রনগুলো|ইলেকট্রন ওটি	oov,split,inflected,vowel_initial
+কিলোজুল	13	false	canonical	kilojul	কিলজুল	CLEAN_TRANSLITERATION	কিলজুল|কিলোমিটার|কিলোগ্রাম|কিলোমিটারে	oov
+ক্লাপেরোঁ	13	false	canonical	klapero	কলাপের	DICTIONARY	কলাপের|কলাপ|কলাপাড়া|ক্ল্যাপটন|ক্লাপফুট	oov,chandrabindu_dropped,conjunct_shape
+ক্ষেত্রগুলির	13	false	canonical	kkhetrogulir	ক্ষেত্রগুলোর	DICTIONARY	ক্ষেত্রগুলোর|ক্ষেত্রগুলো|ক্ষেত্রগুলোতে|ক্ষেত্রগুলোও|ক্ষেত্র গুলির	oov,long_compound
+খ্রিষ্টাব্দে	13	true	typist	khristabde	খ্রিস্টাব্দে	DICTIONARY	খ্রিস্টাব্দে|খৃষ্টাব্দে|খ্রিস্টাব্দের|খ্রিষ্টাব্দের|খ্রীষ্টাব্দের|খ্রীস্টাব্দের	sibilant,long_compound,inflected
+চাক্রিক	13	false	canonical	chakrik	চাকরি	DICTIONARY	চাকরি|চাকরী|চাকচিক্য|চাকমা|চাকরির|চাকা	oov,conjunct_shape
+ডিসক্লিনেশন	13	false	canonical	disoklineshon	দিসক্লিনেশন	CLEAN_TRANSLITERATION	দিসক্লিনেশন|ডিসক্লোজার	oov,dental_retroflex
+ডিসক্লিনেশন	13	false	typist	disoklineson	দিসক্লিনেসন	CLEAN_TRANSLITERATION	দিসক্লিনেসন|ডিসক্লোজার	oov
+ডেকাহেড্রাল	13	false	canonical	dekahedral	দেকাহেদ্রাল	CLEAN_TRANSLITERATION	দেকাহেদ্রাল|ডেকান|ডেকার|দেকার্ত	oov,dental_retroflex
+ত্রিবন্ধন	13	false	canonical	tribondhon	ত্রি বন্ধন	DICTIONARY	ত্রি বন্ধন|ত্রিভুজ|ত্রিবেদী|ত্রিভুজের|ট্রি বন্ধন	oov,split
+পরমাণুক	13	false	canonical	poromanuk	পরমাণুকে	DICTIONARY	পরমাণুকে|পরমাণু|পরমাণুকেন্দ্র|পরমাণুকেন্দ্রের|পরমাণুর|পরমানুক	oov
+পরমাণুবাদ	13	false	canonical	poromanubad	পরম অনুবাদ	DICTIONARY	পরম অনুবাদ|পরমাণুবিজ্ঞানী|পরমানুবাদ	oov,split
+পরমাণুসমূহের	13	false	canonical	poromanusomuuher	পরম অণুসমূহের	DICTIONARY	পরম অণুসমূহের|পরমাণু|পরমাণুর|পরমাণুকে|পরমানুসমূহের	oov,split,long_compound,inflected
+পরমাণুসমূহের	13	false	typist	poromanusomuher	পরম অণুসমূহের	DICTIONARY	পরম অণুসমূহের|পরমাণু|পরমাণুর|পরমাণুকে|পরমানুসমুহের	oov,split,long_compound,inflected
+পাশের	13	true	typist	paser	পাসের	DICTIONARY	পাসের|পাসেও|পেপার|পাঁকে|paser|পাছের	sibilant,inflected
+ফোটোনিক্স	13	false	canonical	photoniks	ফটো নিক্স	DICTIONARY	ফটো নিক্স|ফোটন|ফোটনের|ফতো নিক্স	oov,split
+ফোটোনিক্স	13	false	typist	fotoniks	ফতনিক্স	CLEAN_TRANSLITERATION	ফতনিক্স|ফোটন|ফোটনের	oov
+বিশতলীয়	13	false	typist	bisotoliy	বিসতলিয়	CLEAN_TRANSLITERATION	বিসতলিয়|বিশতম|বিশ্বতত্ত্ব|বিশ্বতত্ত্বের	oov
+ভালভাবে	13	true	typist	valovabe	ভালোভাবে	DICTIONARY	ভালোভাবে	inflected
+মৌলটির	13	false	canonical	moulotir	মৌলের	DICTIONARY	মৌলের|মৌলভীবাজার|মৌলভী|মৌলগুলোর|মৌলবীর|মৌলতির	oov
+রেডক্স	13	false	canonical	redoks	রেডস	DICTIONARY	রেডস|রেডক্রিসেন্ট|রেডক্রস|রেডক্রসের|রেদৌস	oov,conjunct_shape
+ল্যাটিস	13	false	canonical	lyatis	ল্যাতিন	DICTIONARY	ল্যাতিন|ল্যাটিন|ল্যাংলি|ল্যাটিনে|ল্যাটিনো|ল্যাংলির	oov
+ল্যান্থানাইড	13	false	canonical	lyanthanaid	ল্যান্থম্যান	DICTIONARY	ল্যান্থম্যান|ল্যান্ড|ল্যান্ডিং|ল্যাঙ্গুয়েজ|ল্যান্টার্নশার্ক|ল্যান্টার্নশার্কের	oov,conjunct_shape,long_compound
+সমীকরণকে	13	false	canonical	somiikoronoke	সমীকরণ ওকে	DICTIONARY	সমীকরণ ওকে|সমীকরণটি|সমীকরণটা|সমীকরণগুলো|সমীকরনকে	oov,split,inflected
+সমীকরণকে	13	false	typist	somikoronoke	সমীকরণ ওকে	DICTIONARY	সমীকরণ ওকে|সমীকরণটি|সমীকরণটা|সমীকরণগুলো|সমিকরনকে	oov,split,inflected
+স্পেসটাইমের	13	false	canonical	spesotaimer	স্পেকট্রামের	DICTIONARY	স্পেকট্রামের|স্পেসএক্স|স্পেসশিপ|স্পেসস্যুট	oov,conjunct_shape,inflected
+অদিক	12	false	canonical	odik	ওদিক	DICTIONARY	ওদিক|ওদিকে|অডিও|ওদিকেই|অধিক|অডি	oov,vowel_initial
+অনুপ্রস্থ	12	false	canonical	onuprosth	ওনুপ্রস্থ	CLEAN_TRANSLITERATION	ওনুপ্রস্থ|অনুপ্রবেশ|অনুপ্রবেশকারী|অনুপ্রবেশের	oov,vowel_initial
+অভিজ্ঞতামূলক	12	false	canonical	obhigyotamuulok	অভিজ্ঞতা মূলক	DICTIONARY	অভিজ্ঞতা মূলক|অভিজ্ঞতা|অভিজ্ঞতার|অভিজ্ঞতাকে|অভিজ্ঞতা মুলক	oov,split,long_compound,vowel_initial
+অভিজ্ঞতামূলক	12	false	typist	ovigyotamulok	অভিজ্ঞতা মুলক	DICTIONARY	অভিজ্ঞতা মুলক|অভিজ্ঞতা মূলক	oov,split,vowel_length,long_compound,vowel_initial
+অ্যাংস্ট্রম	12	false	canonical	oyangstrom	ওয়াং স্ট্রম	DICTIONARY	ওয়াং স্ট্রম|ওয়াং|অ্যাংলো|অ্যাঙ্গোলা|ওয়াং স্ট্রম|ওয়াংস্ত্রম	oov,split,conjunct_shape,vowel_initial
+অ্যাডএস	12	false	canonical	oyadoes	অ্যাডস	DICTIONARY	অ্যাডস|অ্যাডভান্সড|অ্যাডভেঞ্চার|অ্যাডমিরাল|ওয়াদএস	oov,vowel_initial
+অ্যানালাইটের	12	false	canonical	oyanalaiter	অ্যানা লাইটের	DICTIONARY	অ্যানা লাইটের|অ্যানালাইটিক্যাল|ওয়ানালাইতের	oov,split,long_compound,inflected,vowel_initial
+আশা	12	true	typist	asa	আসা	DICTIONARY	আসা|আসায়|আচ্ছা|আস্হা|আসার|আসাম	sibilant,vowel_initial
+কণাটি	12	false	canonical	konati	কন্যাটি	DICTIONARY	কন্যাটি|কোনাতি	oov,conjunct_shape,inflected
+কনভেক্টিভ	12	false	canonical	konobhektibh	কনভেক্তিভ	CLEAN_TRANSLITERATION	কনভেক্তিভ|কনভেনশন|কনভেনশনের|কনভেন্ট	oov,dental_retroflex
+কনভেক্টিভ	12	false	typist	konovektiv	কনভেক্তিভ	CLEAN_TRANSLITERATION	কনভেক্তিভ|কোনো|কোনও|কোনটা	oov,dental_retroflex
+কম্পনশীল	12	false	typist	komponosil	কম্পনসিল	CLEAN_TRANSLITERATION	কম্পনসিল|কম্পনজাত	oov
+কার্বক্সিলিক	12	false	canonical	karboksilik	কার্বলিক	DICTIONARY	কার্বলিক|কার্বন|কার্বোহাইড্রেট|কার্বনের|কার্বনকপি|কার্বনশক্তি	oov,conjunct_shape,long_compound
+কিউমুলোনিম্বাস	12	false	canonical	kiumulonimbas	কিউমুলনিম্বাস	CLEAN_TRANSLITERATION	কিউমুলনিম্বাস	oov,long_compound
+কোএ	12	false	canonical	koe	কয়ে	DICTIONARY	কয়ে|কোয়ে|কে|কয়েক|কয়েকটি|কয়েকজন	oov
+ক্লোরোফর্ম	12	false	canonical	klorophorm	ক্লরফর্ম	CLEAN_TRANSLITERATION	ক্লরফর্ম|ক্লোরোফিল	oov
+ক্লোরোফর্ম	12	false	typist	kloroform	ক্লরফর্ম	CLEAN_TRANSLITERATION	ক্লরফর্ম|ক্লোরোফিল	oov
+ট্রপোস্ফিয়ারে	12	false	canonical	troposphiyare	ত্রপস্ফিয়ারে	CLEAN_TRANSLITERATION	ত্রপস্ফিয়ারে|ট্রপোমণ্ডল	oov,long_compound,inflected
+ট্রপোস্ফিয়ারে	12	false	typist	troposfiyare	ত্রপস্ফিয়ারে	CLEAN_TRANSLITERATION	ত্রপস্ফিয়ারে|ট্রপোমণ্ডল	oov,long_compound,inflected
+ফটোইমিশন	12	false	canonical	photoimishon	ফটো ইমিশন	DICTIONARY	ফটো ইমিশন|ফটো|ফটক|ফটোগ্রাফার|ফতৈমিশন	oov,split
+ফটোইমিশন	12	false	typist	fotoimison	ফটো ইমিশন	DICTIONARY	ফটো ইমিশন|ফটো|ফটক|ফটোগ্রাফার|ফতৈমিসন	oov,split
+ফ্রান্সিয়াম	12	false	canonical	fransiyam	ফ্রান্স ইয়াম	DICTIONARY	ফ্রান্স ইয়াম|ফ্রান্সিসকো|ফ্রান্সিস|ফ্রান্সিসকোর|ফ্রান্স ইয়াম	oov,split
+বর্ণালির	12	false	canonical	bornalir	বর্ণালীর	DICTIONARY	বর্ণালীর	oov,vowel_length
+রুদ্ধতাপীয়	12	false	typist	ruddhotapiy	রুদ্ধ তাপীয়	DICTIONARY	রুদ্ধ তাপীয়|রুদ্ধশ্বাস|রুদ্ধদ্বার|রুদ্ধশ্বাসে|রুদ্ধ তাপীয়|রুদ্ধতাপিয়	oov,split
+সমাণু	12	false	canonical	somanu	সমানু	DICTIONARY	সমানু|সমানুপাত|সমানুভূতি|সমানুপাতিক|সমানই|সমানও	oov,na_nna
+সায়ানোজেন	12	false	canonical	sayanojen	সায়ান জেন	DICTIONARY	সায়ান জেন|সায়ানোব্যাকটেরিয়া|ছায়ানট|ছায়ানটের|সায়ান যেন|সায়ানজেন	oov,split
+সিরোকুমুলাস	12	false	canonical	sirokumulas	সিরকুমুলাস	CLEAN_TRANSLITERATION	সিরকুমুলাস|সিরকা|শিরক|শিরকা	oov
+সূত্রানুসারে	12	false	typist	sutranusare	সূত্র অনুসারে	DICTIONARY	সূত্র অনুসারে|সূত্রানুযায়ী|সুত্র অনুসারে	oov,split,long_compound,inflected
+স্ট্র্যাটিফর্ম	12	false	canonical	stryatiphorm	স্ত্রীজাতির	DICTIONARY	স্ত্রীজাতির|স্ট্র্যাটেজিক|স্ট্র্যাটেজি|স্ট্র্যাটোস্ফিয়ারে|স্ত্রীচরিত্র|স্ত্রীজাতীয়	oov,conjunct_shape,long_compound
+স্ট্র্যাটিফর্ম	12	false	typist	stryatiform	স্ত্রীজাতির	DICTIONARY	স্ত্রীজাতির|স্ট্র্যাটেজিক|স্ট্র্যাটেজি|স্ট্র্যাটোস্ফিয়ারে|স্ত্রীজাতীয়|স্ত্রীজাতীয়	oov,conjunct_shape,long_compound
+হাইড্রোফোবিক	12	false	canonical	haidrophobik	হাইদ্রফবিক	CLEAN_TRANSLITERATION	হাইদ্রফবিক|হাইড্রোফোন	oov,long_compound
+হাইড্রোফোবিক	12	false	typist	haidrofobik	হাইদ্রফবিক	CLEAN_TRANSLITERATION	হাইদ্রফবিক|হাইড্রোফোন	oov,long_compound
+অধাতব	11	false	canonical	odhatob	ধাতব	DICTIONARY	ধাতব|অধ্যাত্ম|অধাতুর|অধ্যাত্মতত্ত্ব|ওধাতব	oov,vowel_initial
+অরনিথিন	11	false	canonical	oronithin	অরণি থিন	DICTIONARY	অরণি থিন|অরণি|অরণী|অরণী থিন|অরনী থিন|ওরনিথিন	oov,split,na_nna,vowel_initial
+অ্যাক্টিনিয়াম	11	false	canonical	oyaktiniyam	ওয়াক্তিনিয়াম	CLEAN_TRANSLITERATION	ওয়াক্তিনিয়াম|অ্যাক্টিং	oov,conjunct_shape,long_compound,vowel_initial
+আইইউপিএসি	11	false	canonical	aiiupiesi	আইইউ পিএসি	DICTIONARY	আইইউ পিএসি|আইইউসিএন|আইইউ|আইইউবিএটি	oov,split,vowel_initial
+আইইউপিএসি	11	false	typist	aiupiesi	আইআইডিএফসি	DICTIONARY	আইআইডিএফসি|আইআইইউসি	oov,vowel_initial
+আলটোকুমুলাস	11	false	canonical	alotokumulas	আলতকুমুলাস	CLEAN_TRANSLITERATION	আলতকুমুলাস|আলতো|আলতোভাবে	oov,vowel_initial
+ঋণাত্মকতার	11	false	canonical	rrinatmokotar	র্রিনাত্মকতার	CLEAN_TRANSLITERATION	র্রিনাত্মকতার|ঋণাত্মক	oov,conjunct_shape
+কণাটির	11	false	canonical	konatir	কোনাতির	DICTIONARY	কোনাতির|কন্যাটি	oov
+কোয়াড্রপোল	11	false	canonical	koyadropol	কোয়াড্রপল	DICTIONARY	কোয়াড্রপল|কোয়াড|কোয়াড্রপল	oov
+ট্রাইক্লোরাইড	11	false	canonical	traikloraid	ট্রাই ক্লোরাইড	DICTIONARY	ট্রাই ক্লোরাইড|ট্রাই|ট্রাইব্যুনাল|ট্রাইব্যুনালে|ট্রায় ক্লোরাইড	oov,split,long_compound
+তড়িৎচুম্বকত্ব	11	false	canonical	toritochumbokotb	তড়িৎ চুম্বকত্ব	DICTIONARY	তড়িৎ চুম্বকত্ব|তড়িৎচৌম্বক|তরিতচুম্বকত্ব	oov,split,khanda_ta,long_compound
+ন্যানোরসায়ন	11	false	canonical	nyanorosayon	ন্যানো রসায়ন	DICTIONARY	ন্যানো রসায়ন|ন্যানোমিটার|ন্যানো|ন্যানোপ্রযুক্তি|ন্যানো রসায়ণ|ন্যানো রসায়ন	oov,split
+পদার্থবিজ্ঞানকে	11	false	canonical	podarthobigyanoke	পদার্থবিজ্ঞান ওকে	DICTIONARY	পদার্থবিজ্ঞান ওকে|পদার্থবিজ্ঞান|পদার্থবিজ্ঞানী|পদার্থবিজ্ঞানে	oov,split,long_compound,inflected
+প্রতিতুলনা	11	false	canonical	protitulona	প্রতিতুলনায়	DICTIONARY	প্রতিতুলনায়|প্রতিটি|প্রতিটা|প্রতিটিতে|প্রতীত্যসমুৎপাদ|প্রতিতুলনায়	oov
+প্রতিমান	11	false	canonical	protiman	প্রতীয়মান	DICTIONARY	প্রতীয়মান|প্রতিমা|প্রতিয়মান|প্রতিমার|প্রতিমাসে|প্রতীয়মান	oov
+প্রত্যয়নী	11	false	typist	protyoyoni	প্রত্যয়নি	DICTIONARY	প্রত্যয়নি|প্রত্যয়ন|প্রত্যয়নপত্র|প্রত্যয়নের	oov,vowel_length
+বর্ণালীবীক্ষণ	11	false	canonical	bornaliibiikkhon	বর্ণালিবীক্ষণ	DICTIONARY	বর্ণালিবীক্ষণ|বর্ণালী|বর্ণালীর|বর্ণালীকে	oov,vowel_length,long_compound
+বর্ণালীবীক্ষণ	11	false	typist	bornalibikkhon	বর্ণালিবীক্ষণ	DICTIONARY	বর্ণালিবীক্ষণ	oov,vowel_length,long_compound
+বায়ুমন্ডলীয়	11	false	canonical	bayumondoliiy	বায়ুমণ্ডলীয়	DICTIONARY	বায়ুমণ্ডলীয়|বায়ুমণ্ডলীয়	oov,na_nna
+বায়ুমন্ডলীয়	11	false	typist	bayumondoliy	বায়ুমণ্ডলীয়	DICTIONARY	বায়ুমণ্ডলীয়|বায়ুমণ্ডলীয়	oov,na_nna
+বিক্ষেপণ	11	false	canonical	bikkhepon	বিক্ষেপ	DICTIONARY	বিক্ষেপ|বিক্ষোভ|বিক্ষিপ্ত|বিক্ষোভের|বিক্ষেপন	oov
+বিশ	11	true	typist	bis	বিস	DICTIONARY	বিস|বিশ্ব|বিশ্বাস|বিশেষ|বিষয়ে|বিশ্বের	sibilant
+বোল্টজম্যান	11	false	canonical	boltojomyan	বল্তজম্যান	CLEAN_TRANSLITERATION	বল্তজম্যান|বলতো|বোল্টন|বোল্টনের	oov
+বোলৎসমান	11	false	canonical	bolotosoman	বলতো সমান	DICTIONARY	বলতো সমান|বলতো|বলোতো|বলতসমান	oov,split,khanda_ta
+ভরহীন	11	false	typist	vorohin	বরেন	DICTIONARY	বরেন|ভরহিন	oov
+লুটেটিয়াম	11	false	canonical	lutetiyam	লুতেতিয়াম	CLEAN_TRANSLITERATION	লুতেতিয়াম|লুটে|লুটের|লুটেরাদের	oov,dental_retroflex
+শ্রোডিঙার	11	false	canonical	shrodingar	শ্রদিঙার	CLEAN_TRANSLITERATION	শ্রদিঙার|শ্রদ্ধা|শ্রদ্ধার|শ্রদ্ধাঞ্জলি|শ্রডিঙ্গারের	oov
+শ্রোডিঙার	11	false	typist	srodingar	স্রদিঙার	CLEAN_TRANSLITERATION	স্রদিঙার|শ্রদ্ধা|শ্রদ্ধার|শ্রদ্ধাঞ্জলি	oov
+শ্রোডিঙ্গার	11	false	canonical	shrodingoar	শ্রদিঙআর	CLEAN_TRANSLITERATION	শ্রদিঙআর|শ্রদ্ধা|শ্রদ্ধার|শ্রদ্ধাঞ্জলি|শ্রডিঙ্গারের	oov,conjunct_shape
+শ্রোডিঙ্গার	11	false	typist	srodingoar	স্রদিঙআর	CLEAN_TRANSLITERATION	স্রদিঙআর|শ্রদ্ধা|শ্রদ্ধার|শ্রদ্ধাঞ্জলি	oov,conjunct_shape
+স্পেসটাইম	11	false	canonical	spesotaim	স্পেসফ্লাইট	DICTIONARY	স্পেসফ্লাইট|স্পেসএক্স|স্পেসএক্সের|স্পেসশিপ|স্পেকট্রাম	oov,conjunct_shape
+হিমাঙ্ক	11	false	canonical	himangk	হিমাংক	CLEAN_TRANSLITERATION	হিমাংক|হিমাংশু|হিমাংকের|হিমাঙ্কের|হিমাগার|হিমাংশুর	oov,conjunct_shape
+হ্যালাইড	11	false	canonical	hyalaid	অ্যালাইড	DICTIONARY	অ্যালাইড|হ্যাংলা|হ্যালো|হ্যাল|হ্যালোজেন|হ্যালপারদের	oov
+অ্যানায়ন	10	false	canonical	oyanayon	ওয়াইন	DICTIONARY	ওয়াইন|ওয়াইন|অ্যানা|অ্যানালগ|অ্যানাটমি|ওয়ানায়ন	oov,conjunct_shape,vowel_initial
+আইরিশ	10	true	typist	airis	আইরিস	DICTIONARY	আইরিস|ইরিস|আইরিশদের|আইরিন|আইরিসের|আইরিনের	sibilant,vowel_initial
+আইসোমার	10	false	canonical	aisomar	আসমার	DICTIONARY	আসমার|আইসম্যান|আসমাউল|আসমাকে|আসমাদের|আইসমার	oov,vowel_initial
+ইএএসটি	10	false	canonical	ieesoti	ইএসটি	DICTIONARY	ইএসটি|ইঈসতি	oov,inflected,vowel_initial
+ইলেক্ট্রনীয়	10	false	canonical	ilektroniiy	ইলেক্ত্রনীয়	CLEAN_TRANSLITERATION	ইলেক্ত্রনীয়|ইলেক্ট্রনিক|ইলেক্ট্রনিক্স|ইলেক্ট্রনিকস|ইলেকট্রনিকপণ্য	oov,dental_retroflex,vowel_initial
+ইলেক্ট্রনীয়	10	false	typist	ilektroniy	ইলেক্ট্রনিক	DICTIONARY	ইলেক্ট্রনিক|ইলেক্ট্রনিক্স|ইলেক্ট্রনিকস	oov,vowel_initial
+উপাদানসমূহের	10	false	typist	upadanosomuher	উপাদানসমুহের	CLEAN_TRANSLITERATION	উপাদানসমুহের|উপাদানসমূহকে|উপাদানসমূহ	oov,vowel_length,long_compound,inflected,vowel_initial
+কণাসমূহ	10	false	canonical	konasomuuh	কণা সমূহ	DICTIONARY	কণা সমূহ|কন্যাসন্তান|কন্যাসন্তানের|কন্যাসহ|কনা সমূহ|কনাসমূহ	oov,split
+কণাসমূহ	10	false	typist	konasomuh	কণা সমূহ	DICTIONARY	কণা সমূহ|কন্যাসন্তান|কন্যাসন্তানের|কন্যাসহ|কনা সমূহ|কনাসমুহ	oov,split
+গাউসীয়	10	false	typist	gausiy	গাউসিয়	DICTIONARY	গাউসিয়|গাউছিয়া	oov,vowel_length
+গোলকাকার	10	false	canonical	golokakar	গোলাকার	DICTIONARY	গোলাকার|গোলক|গোলকিপার|গোলকের|গোলোকধাম|গলকাকার	oov
+জিওস্মিন	10	false	canonical	jiosmin	যস্মিন	DICTIONARY	যস্মিন|জিওসি	oov
+ট্রাইফসফেট	10	false	canonical	traiphosophet	ট্রাই ফসফেট	DICTIONARY	ট্রাই ফসফেট|ট্রাই|ট্রাইব্যুনাল|ট্রাইব্যুনালে|ট্রায় ফসফেট	oov,split
+ট্রাইফসফেট	10	false	typist	traifosofet	ট্রাই ফসফেট	DICTIONARY	ট্রাই ফসফেট|ট্রাই|ট্রাইব্যুনাল|ট্রাইব্যুনালে	oov,split
+ডাইক্লোরিন	10	false	canonical	daiklorin	ডাই ক্লোরিন	DICTIONARY	ডাই ক্লোরিন|ডাইক্লোফেনাক|দাই ক্লোরিন|দায় ক্লোরিন|দাইক্লরিন	oov,split
+ডাইপোল	10	false	canonical	daipol	ডাইপল	DICTIONARY	ডাইপল	oov
+তড়িৎচুম্বকত্বের	10	false	canonical	toritochumbokotber	তরিতচুম্বকত্বের	CLEAN_TRANSLITERATION	তরিতচুম্বকত্বের|তড়িৎচৌম্বক	oov,khanda_ta,long_compound,inflected
+থায়োসায়ানেট	10	false	canonical	thayosayanet	থায়সায়ানেত	CLEAN_TRANSLITERATION	থায়সায়ানেত|ঠায়|থায়|থায়ামিন	oov
+দ্রবণকে	10	false	canonical	drobonoke	দ্রবণ ওকে	DICTIONARY	দ্রবণ ওকে|দ্রবণ|দ্রবণীয়|দ্রবণে	oov,split,inflected
+ধর্মাবলী	10	false	canonical	dhormabolii	ধর্মাবলি	DICTIONARY	ধর্মাবলি|ধর্মাবলম্বী|ধর্মাবলম্বীদের|ধর্মাবলম্বীরা	oov,vowel_length
+ধর্মাবলী	10	false	typist	dhormaboli	ধর্মাবলি	DICTIONARY	ধর্মাবলি	oov,vowel_length
+ন্যানোহীরক	10	false	canonical	nyanohiirok	ন্যানো হীরক	DICTIONARY	ন্যানো হীরক|ন্যানোমিটার|ন্যানো|ন্যানোপ্রযুক্তি|ন্যানো হিরক	oov,split
+ন্যানোহীরক	10	false	typist	nyanohirok	ন্যানো হীরক	DICTIONARY	ন্যানো হীরক|ন্যানোমিটার|ন্যানো|ন্যানোপ্রযুক্তি|ন্যানো হিরক	oov,split
+পরমানুর	10	false	canonical	poromanur	পরমাণুর	DICTIONARY	পরমাণুর	oov,na_nna
+পরিমাপকৃত	10	false	canonical	porimapokrrit	পরিমাপ কৃত	DICTIONARY	পরিমাপ কৃত|পরিমাপক|পরিমাপকারী|পরিমাপ ক্রিট|পরিমাপ ক্রীত	oov,split
+পাপাপেত্রু	10	false	canonical	papapetru	পাপানদ্রু	DICTIONARY	পাপানদ্রু|পাপা|পাপার|পাপাত্মা|পাপানদ্রুর|পাপান্দ্রুকে	oov
+পৃষ্ঠশক্তির	10	false	canonical	prrishthoshoktir	পৃষ্ঠপোষকতার	DICTIONARY	পৃষ্ঠপোষকতার|পৃষ্ঠপোষকতা|পৃষ্ঠপোষক|পৃষ্ঠপোষকের|পৃষ্ঠপোষকতায়|পৃষ্ঠতলে	oov,conjunct_shape
+পৃষ্ঠশক্তির	10	false	typist	prristhosoktir	পৃষ্ঠ শক্তির	DICTIONARY	পৃষ্ঠ শক্তির|পৃষ্ঠ|পৃষ্ঠপোষক|পৃষ্ঠপোষকতা	oov,split
+প্র্যাসিওডিয়ামিয়াম	10	false	canonical	pryasiodiyamiyam	প্র্যাসিওদিয়ামিয়াম	CLEAN_TRANSLITERATION	প্র্যাসিওদিয়ামিয়াম|প্র্যাকটিস|প্র্যাকটিসের|প্র্যাট	oov,dental_retroflex,long_compound
+ফসফাইড	10	false	canonical	phosophaid	ফসফাইদ	CLEAN_TRANSLITERATION	ফসফাইদ|ফসফরাস|ফসফেট|ফসফরাসের	oov,dental_retroflex
+ফসফাইড	10	false	typist	fosofaid	ফসফাইদ	CLEAN_TRANSLITERATION	ফসফাইদ|ফসফরাস|ফসফেট|ফসফরাসের	oov,dental_retroflex
+ফসফোলিপিড	10	false	canonical	phosopholipid	ফসফলিপিদ	CLEAN_TRANSLITERATION	ফসফলিপিদ|ফসফরাস|ফসফর|ফসফরাসের	oov
+ফসফোলিপিড	10	false	typist	fosofolipid	ফসফলিপিদ	CLEAN_TRANSLITERATION	ফসফলিপিদ|ফসফরাস|ফসফর|ফসফরাসের	oov
+বস্তুসমূহের	10	false	canonical	bostusomuuher	বস্তুসামগ্রী	DICTIONARY	বস্তুসামগ্রী|বস্তু|বস্তুত|বস্তুর	oov,conjunct_shape,inflected
+বস্তুসমূহের	10	false	typist	bostusomuher	বস্তুসামগ্রী	DICTIONARY	বস্তুসামগ্রী|বস্তু|বস্তুত|বস্তুর	oov,conjunct_shape,inflected
+বিবকোড	10	false	canonical	bibokod	বিবকদ	CLEAN_TRANSLITERATION	বিবকদ|বিবদমান|বিবরণ|বিবর্তন|বিবর্তনের|বিবক্ষা	oov
+মাইক্রোস্কোপিক	10	false	canonical	maikroskopik	মাইক্রোস্কপিক	DICTIONARY	মাইক্রোস্কপিক|মাইক্রোস্কোপ|মাইক্রোস্কোপের	oov,long_compound
+মিশ্রণকে	10	false	canonical	mishronoke	মিশনকে	DICTIONARY	মিশনকে|মিশ্রণটি|মিশ্রণও|মিশ্রনকে	oov,conjunct_shape,inflected
+মিশ্রণকে	10	false	typist	misronoke	মিশনকে	DICTIONARY	মিশনকে|মিশ্রণটি|মিশ্রণও	oov,conjunct_shape,inflected
+মোলীয়	10	false	canonical	moliiy	মলি	ENGLISH_LEXICON	মলি|মলিন|মলিনা|মলিবডেনাম|molly|অম্লীয়	oov
+মোলীয়	10	false	typist	moliy	মলিয়	DICTIONARY	মলিয়|মলিয়ের	oov
+মৌলে	10	false	canonical	moule	মউলে	DICTIONARY	মউলে|মৌলের|মলেছ|মৌলী|মৌকে|মৌউত	oov,inflected
+শক্তিস্তরের	10	false	typist	soktistorer	শক্তিস্তরে	DICTIONARY	শক্তিস্তরে|শক্তিশালী|শক্তিশালি|শক্তিসম্পন্ন	oov,inflected
+শব্দোচ্চতার	10	false	canonical	shobdoccotar	শব্দচ্চতার	CLEAN_TRANSLITERATION	শব্দচ্চতার|শব্দচয়ন|শব্দচয়নে|শব্দচয়নের	oov
+শব্দোচ্চতার	10	false	typist	sobdoccotar	সব্দচ্চতার	CLEAN_TRANSLITERATION	সব্দচ্চতার|শব্দচয়ন|শব্দচয়নে|শব্দচয়নের	oov
+শিলার	10	true	typist	silar	সিলার	DICTIONARY	সিলার|শীলার|সিলাই|সিলাম|সিলারের|সিলারচর	sibilant
+সমীকরণসমূহ	10	false	canonical	somiikoronosomuuh	সমীকরণ সমূহ	DICTIONARY	সমীকরণ সমূহ|সমীকরণটি|সমীকরণটা|সমীকরণগুলো|সমীকরণ সমুহ|সমীকরনসমূহ	oov,split
+সমীকরণসমূহ	10	false	typist	somikoronosomuh	সমীকরণ সমূহ	DICTIONARY	সমীকরণ সমূহ|সমীকরণটি|সমীকরণটা|সমীকরণগুলো|সমীকরণ সমুহ|সমিকরনসমুহ	oov,split
+সালফাইট	10	false	canonical	salophait	সাল ফাইট	DICTIONARY	সাল ফাইট|সালফাইড|সালফাইত	oov,split
+সালফাইট	10	false	typist	salofait	সালফাইত	CLEAN_TRANSLITERATION	সালফাইত|সালফাইড|সালফার|সালফারের|সালফারযুক্ত	oov,dental_retroflex
+সুপারহাইড্রোফোবিক	10	false	canonical	suparohaidrophobik	সুপারহাইদ্রফবিক	CLEAN_TRANSLITERATION	সুপারহাইদ্রফবিক|সুপারহিরো|সুপারহিট	oov,long_compound
+সুপারহাইড্রোফোবিক	10	false	typist	suparohaidrofobik	সুপারহাইদ্রফবিক	CLEAN_TRANSLITERATION	সুপারহাইদ্রফবিক|সুপারহিরো|সুপারহিট	oov,long_compound
+সূত্রটিকে	10	false	typist	sutrotike	সূত্র টিকে	DICTIONARY	সূত্র টিকে|সূত্রটি|সূত্রটির|সুত্র টিকে	oov,split,inflected
+স্ক্যান্ডিয়াম	10	false	canonical	skyandiyam	স্ক্যান্দিয়াম	CLEAN_TRANSLITERATION	স্ক্যান্দিয়াম|স্ক্যান্ডিনেভিয়া|স্ক্যান্ডিনেভিয়ান|স্ক্যান্ডিনেভীয়	oov,dental_retroflex,long_compound
+স্থানকাল	10	false	canonical	sthanokal	স্থানকালে	DICTIONARY	স্থানকালে|স্থানটি|স্থানসমূহ|স্থানগুলো|স্থানকালগত|স্থানকালভেদে	oov
+হাইড্রোনিয়াম	10	false	canonical	haidroniyam	হাইড্রো নিয়াম	DICTIONARY	হাইড্রো নিয়াম|হাইড্রোজেন|হাইড্রোজেনের|হাইড্রোক্লোরিক|হাইড্রো নিয়াম	oov,split,long_compound
+অরৈখিক	9	false	canonical	oroikhik	রৈখিক	DICTIONARY	রৈখিক|ওরই|ওরৈখিক	oov,vowel_initial
+অস্তরকের	9	false	canonical	ostoroker	অস্তপারের	DICTIONARY	অস্তপারের|অস্তর|অসতর্ক|অস্তরবির|অস্তাচলের|অসতর্কতার	oov,inflected,vowel_initial
+অ্যাডেনিন	9	false	canonical	oyadenin	ওয়াদেনিন	CLEAN_TRANSLITERATION	ওয়াদেনিন|অ্যাডেন	oov,conjunct_shape,vowel_initial
+অ্যালকাইন	9	false	canonical	oyalokain	ওয়াল কাইন	DICTIONARY	ওয়াল কাইন|অ্যালকালয়েড|ওয়াল কাইন|ওয়ালকাইন	oov,split,conjunct_shape,vowel_initial
+অ্যালিফ্যাটিক	9	false	canonical	oyaliphyatik	ওয়ালিফ্যাতিক	CLEAN_TRANSLITERATION	ওয়ালিফ্যাতিক|ওয়ালি|ওয়ালিদ|অ্যালিস	oov,conjunct_shape,long_compound,vowel_initial
+অ্যালিফ্যাটিক	9	false	typist	oyalifyatik	ওয়ালিফ্যাতিক	CLEAN_TRANSLITERATION	ওয়ালিফ্যাতিক|ওয়ালি|ওয়ালিদ|অ্যালিস	oov,conjunct_shape,long_compound,vowel_initial
+আর্সেনাইড	9	false	canonical	arsenaid	আর্সেনালই	DICTIONARY	আর্সেনালই|আর্সেনালের|আর্সেনিক|আর্সেনিকের|আর্সেনিও|আর্সেনালেই	oov,vowel_initial
+আয়নকে	9	false	canonical	ayonoke	অয়নকে	DICTIONARY	অয়নকে|অয়নকাল|অয়নকে	oov,inflected,vowel_initial
+ইন্যানশিওমার	9	false	typist	inyanosiomar	ইন্যানসিওমার	CLEAN_TRANSLITERATION	ইন্যানসিওমার	oov,sibilant,long_compound,vowel_initial
+ইলেকট্রনীয়	9	false	canonical	ilekotroniiy	ইলেকট্রনিকপণ্য	DICTIONARY	ইলেকট্রনিকপণ্য|ইলেকট্রনিক্স|ইলেকট্রনিকস|ইলেকট্রনিক্সের|ইলেকট্রনিকভাবে|ইলেকট্রনিক্সে	oov,conjunct_shape,vowel_initial
+ইলেকট্রনীয়	9	false	typist	ilekotroniy	ইলেকট্রনিক	DICTIONARY	ইলেকট্রনিক|ইলেকট্রনিক্স|ইলেকট্রনিকস|ইলেকট্রনিক্সের|ইলেকট্রনিক্যালি|ইলেকট্রনিকপণ্য	oov,vowel_initial
+এককটি	9	false	canonical	ekokoti	এককতি	CLEAN_TRANSLITERATION	এককতি|একশটি|এককটা|একেকটি|এককথায়|এককপি	oov,dental_retroflex,inflected,vowel_initial
+কোয়ান্টায়িত	9	false	canonical	koyantayit	কয়ান্তায়িত	CLEAN_TRANSLITERATION	কয়ান্তায়িত|কোয়ান্টাম	oov
+গ্লুওন	9	false	canonical	gluon	গ্লুয়ন	DICTIONARY	গ্লুয়ন|গ্লুকোজ|গ্লুকোজে|গ্লুকোজের|গ্লুকোমা|গ্লুয়ন	oov
+ট্রাইফ্লুরাইড	9	false	canonical	traifluraid	ত্রাইফ্লুরাইদ	CLEAN_TRANSLITERATION	ত্রাইফ্লুরাইদ|ট্রাই|ট্রাইব্যুনাল|ট্রাইব্যুনালে	oov,long_compound
+ডিফিউশন	9	false	canonical	diphiushon	দিফিউশন	CLEAN_TRANSLITERATION	দিফিউশন|ডিফল্ট|ডিফেন্স|ডিফেন্ডার|ইফিউশন	oov,dental_retroflex
+ডিফিউশন	9	false	typist	difiuson	দিফিউসন	CLEAN_TRANSLITERATION	দিফিউসন|ইফিউশন	oov
+তমোপদার্থ	9	false	canonical	tomopodarth	তম পদার্থ	DICTIONARY	তম পদার্থ|তোমরা|তোমরাই|তোমরাও|টম পদার্থ	oov,split
+ত্বরণকে	9	false	canonical	tboronoke	ত্বরণ ওকে	DICTIONARY	ত্বরণ ওকে|ত্বরণ|ত্বরণের|ত্বরণে|ত্বরনকে	oov,split,inflected
+ত্রিকোণিক	9	false	canonical	trikonik	ত্রিকনিক	CLEAN_TRANSLITERATION	ত্রিকনিক|ত্রিকোণমিতি|ত্রিকোণ|ত্রিকোণমিতির	oov
+দ্রবণটি	9	false	canonical	drobonoti	দ্রবণীয়	DICTIONARY	দ্রবণীয়|দ্রবণের|দ্রবণীয়|দ্রবণীয়আঁশ|দ্রবণীয়আঁশ|দ্রব্যগুণহীন	oov,inflected
+ন্যানোতার	9	false	canonical	nyanotar	ন্যানটার	RULE	ন্যানটার|ন্যানোটেকনোলজি|ন্যানোটিউব	oov
+পরিভাষাটি	9	false	typist	porivasati	পড়ি ভাষাটি	DICTIONARY	পড়ি ভাষাটি|পরিচিত|পরিবার|পরিবর্তন|পড়ি ভাসাটি|পরিভাসাতি	oov,split,inflected
+পুনর্স্বাভাবিকীকরণ	9	false	canonical	punorswabhabikiikoron	পুনর্সওয়াভাবিকীকরন	CLEAN_TRANSLITERATION	পুনর্সওয়াভাবিকীকরন|পুনর্স্থাপিত	oov,conjunct_shape,long_compound
+পুনর্স্বাভাবিকীকরণ	9	false	typist	punorswavabikikoron	পুনর্সওয়াভাবিকিকরন	CLEAN_TRANSLITERATION	পুনর্সওয়াভাবিকিকরন|পুনর্স্থাপিত	oov,conjunct_shape,long_compound
+প্রতিপ্রভ	9	false	canonical	protiprobh	প্রতিপক্ষের	DICTIONARY	প্রতিপক্ষের|প্রতিপক্ষ|প্রতিফলন|প্রতিফলিত|প্রতিপক্ষরা|প্রতিপক্ষদের	oov
+প্রতিপ্রভ	9	false	typist	protiprov	প্রতিপক্ষের	DICTIONARY	প্রতিপক্ষের|প্রতিপক্ষ|প্রতিফলন|প্রতিফলিত|প্রতিপক্ষরা|প্রতিপক্ষদের	oov
+প্রতিস্থাপক	9	false	canonical	protisthapok	প্রতিস্থাপনকে	DICTIONARY	প্রতিস্থাপনকে|প্রতিস্থাপন|প্রতিস্থাপিত|প্রতিস্থাপনে|প্রতিস্থাপনের|প্রতিস্থাপনযোগ্য	oov
+ফেরোইলেকট্রিক	9	false	canonical	pheroilekotrik	ফের ইলেকট্রিক	DICTIONARY	ফের ইলেকট্রিক|ফেরত|ফেরৎ|ফেরদৌস	oov,split,long_compound
+ফেরোইলেকট্রিক	9	false	typist	feroilekotrik	ফের ইলেকট্রিক	DICTIONARY	ফের ইলেকট্রিক|ফেরত|ফেরৎ|ফেরদৌস	oov,split,long_compound
+বাষ্পচাপ	9	false	canonical	bashpochap	বাষ্পচালিত	DICTIONARY	বাষ্পচালিত|বাষ্পপূর্ণ|বাষ্পকে|বাষ্পও|বাষ্পায়ন|বাষ্পকণা	oov
+বাষ্পচাপ	9	false	typist	baspochap	বাষ্প চাপ	DICTIONARY	বাষ্প চাপ|বাষ্পপূর্ণ|বাষ্পচালিত|বাষ্পপোত|বাষ্পযান|বাষ্পরথ	oov,split
+বৈদ্যুতিকভাবে	9	false	canonical	boidyutikobhabe	বৈদ্যুতিক ভাবে	DICTIONARY	বৈদ্যুতিক ভাবে|বৈদ্যুতিক	oov,split,long_compound,inflected
+বৈদ্যুতিকভাবে	9	false	typist	boidyutikovabe	বৈদ্যুতিক ভাবে	DICTIONARY	বৈদ্যুতিক ভাবে|বৈদ্যুতিক	oov,split,long_compound,inflected
+ব্যবকলনীয়	9	false	canonical	byobokoloniiy	ব্যবকলন	DICTIONARY	ব্যবকলন|ব্যবহার|ব্যবস্থা|ব্যবহৃত|ব্যবধানটিই	oov

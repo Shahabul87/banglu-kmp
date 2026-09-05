@@ -33,6 +33,31 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S188 real-world coverage study (2026-09-05, user: "newspapers, golpo/
+  uponnas, science, names, objects, districts, villages — find every word
+  the engine cannot handle, the failure pattern, test on real devices, one
+  word is typed many ways, propose fixes without disturbing the engine
+  people are testing"):** ENGINE UNTOUCHED. 15.3M tokens of real text (1.6M
+  fresh Prothom Alo via the story API; Wikisource novels rendered; bn.wiki
+  science/people/places/unions(2,347)/objects; the July dumps), 135,000
+  words × canonical roman + typist fold through S188RealWorldStudyJvm
+  (opt-in S188_STUDY=1; NFC-normalise both sides — news sites encode ো as
+  ে+া; never fold y→j or oo→u, the reverse map writes য় as y and the
+  vowel letter ও as oo). Result: known words 94–98% commit / 99.6–99.9%
+  strip in EVERY register; OOV share news 1.3% → places 8% → objects 17% →
+  villages 22% → science 25%, OOV commit 16–36%. Patterns P1–P10 (report
+  docs/engine-realworld-study-2026-09-05.md, archives docs/audits/
+  s188-realworld-study/): omitted chandrabindu twin absent (tara→তাঁরা,
+  the most frequent miss), sibilant fold twin absent (pulis→পুলিশ, largest
+  by use), compound splitter cutting names (জয় শঙ্কর), proper nouns at the
+  rule floor (ণ/ট/ড/য/ী), rescue over-reach garbage (khondol→খোঁদল,
+  pakarasta→পাকারমাথা), vowel-initial a→এ, science loanwords, archaic
+  reph-doubling in literature. 76/76 sampled keys reproduce on the S22.
+  Proposals F1–F5, strip-first: twin slots (S151 mechanism extended), a
+  joined-form chip when the splitter wins, a proper-noun + science lexicon
+  compiled at habit priority (data, next dictionary round), a
+  keyReadingDistance gate on the junk rescue, no rule-default change.
+  Blocked sources: Jugantor/Samakal/Kaler Kantho/bdnews24 (403).
 - **S187 Windows typer performance round (2026-09-05, user: "it's a little
   bit slow on my PC … this one is very important; if the engine anyhow
   cannot generate words how do we handle it"):** measured on a FRESH JVM

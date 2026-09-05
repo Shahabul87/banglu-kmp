@@ -1,0 +1,22 @@
+S188 category=places file=/private/tmp/claude-501/-Users-mdshahabulalam-myprojects-banlgu-banglu-kmp/57510018-3fd2-44d0-ac21-53316c2f3e0b/scratchpad/realworld/places_counts.tsv tokens=449538 unique=43169 studied=15000 unromanizable=1136 rule_floor_misses=205
+== by variant ==
+canonical      n=13864  primary= 90.6% (weighted  97.3%)  top6= 95.2% (weighted  99.2%)
+typist         n=4710   primary= 74.2% (weighted  85.5%)  top6= 88.1% (weighted  94.9%)
+== by population (either variant) ==
+in_dictionary  n=12729  primary= 96.7% (weighted  98.5%)  top6= 99.9% (weighted 100.0%)
+oov            n=1135   primary= 22.8% (weighted  19.2%)  top6= 42.6% (weighted  46.9%)
+== miss patterns (words / weight) ==
+oov                        1102      5700
+sibilant                    156      3066
+split                       275      1797
+vowel_initial               147      1615
+vowel_length                227      1066
+inflected                   198       986
+conjunct_shape              139       870
+long_compound                87       498
+na_nna                       46       254
+dental_retroflex             34       139
+ya_ja                        13       131
+chandrabindu_dropped         25       110
+ranking_other                 7        60
+khanda_ta                    12        38

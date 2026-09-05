@@ -1,0 +1,400 @@
+আদমশুমারীর	131	false	canonical	adomoshumariir	আদমশুমারির	DICTIONARY	আদমশুমারির|আদমশুমারি|আদমশুমারিতে	oov,vowel_length,vowel_initial
+আদমশুমারীর	131	false	typist	adomosumarir	আদমশুমারির	DICTIONARY	আদমশুমারির	oov,vowel_length,vowel_initial
+গ্রামসমূহ	66	false	canonical	gramosomuuh	গ্রাম সমূহ	DICTIONARY	গ্রাম সমূহ|গ্রামস্থ|গ্রামস|গ্রাম সমুহ	oov,split
+গ্রামসমূহ	66	false	typist	gramosomuh	গ্রাম সমূহ	DICTIONARY	গ্রাম সমূহ|গ্রামস্থ|গ্রামস|গ্রাম সমুহ	oov,split
+অংশ	42	true	typist	ongs	অংস	DICTIONARY	অংস|অংশে|অংশগ্রহণ|অংশের|অংশীদার|অংশটি	sibilant,vowel_initial
+গৃহগণনা	15	false	canonical	grrihogonona	গৃহ গণনা	DICTIONARY	গৃহ গণনা|গৃহযুদ্ধ|গৃহপালিত|গৃহযুদ্ধের|গৃহ গননা	oov,split
+জনশুমারি	15	false	typist	jonosumari	জন শুমারি	DICTIONARY	জন শুমারি|জনশূন্য|ঝন শুমারি|জনসুমারি	oov,split
+মান্ডা	14	true	canonical	manda	মান্দা	DICTIONARY	মান্দা|মান্দার|ম্যান্ডারিন|মান্দারতলা|মান্দারিন|manda	dental_retroflex
+গড়াইটুপি	12	false	canonical	goraitupi	গড়াই টুপি	DICTIONARY	গড়াই টুপি|গড়াইতে|গড়ায় টুপি|গড়াই টুপী|গড়ায় টুপী|গরাইতুপি	oov,split
+চাষ	12	true	typist	chas	চাস	DICTIONARY	চাস|চাচ্ছ|চাষের|চাষে|চাষী|chas	sibilant
+আন্দুলবাড়ীয়া	11	false	canonical	andulobariiya	আন্দুলবাড়িয়া	DICTIONARY	আন্দুলবাড়িয়া|আন্দুলিয়া|আন্দুলবাড়িয়া|আন্দুলবাড়িয়া|আন্দুলবারীয়া	oov,vowel_length,long_compound,vowel_initial
+আন্দুলবাড়ীয়া	11	false	typist	andulobariya	আন্দুলবাড়িয়া	DICTIONARY	আন্দুলবাড়িয়া|আন্দুলবাড়িয়া|আন্দুলবাড়িয়া	oov,vowel_length,long_compound,vowel_initial
+কাটেংগা	9	false	canonical	katengga	কাটেঙ্গা	DICTIONARY	কাটেঙ্গা|কাটেনি|কাটেন|কাটতেন|কাটেননা|কাটেননি	oov,conjunct_shape
+বাটাজোড়া	8	false	canonical	batajora	বাটাজোর	DICTIONARY	বাটাজোর|বাতাস|বাতাসের|বাতাসে|বাতাগ্রাম|বাতাজরা	oov
+শাহ	8	true	typist	sah	সাহ	DICTIONARY	সাহ|সাহিত্য|সাহস|সাহিত্যিক|সাহেব|সাহিত্যের	sibilant
+ইং	7	false	canonical	ing	ইয়ং	DICTIONARY	ইয়ং|ইংরেজি|ইংরেজ|ইংল্যান্ড|ইংলিশ|ing	oov,vowel_initial
+দীর্ঘাপাড়	7	false	canonical	diirghapar	দীর্ঘাকার	DICTIONARY	দীর্ঘাকার|দীর্ঘা|দীর্ঘকালের|দীর্ঘায়িত|দীর্ঘায়ু|দীর্ঘতপা	oov
+দীর্ঘাপাড়	7	false	typist	dirghapar	দীর্ঘাকার	DICTIONARY	দীর্ঘাকার|দীর্ঘা|দীর্ঘকালের|দীর্ঘায়িত|দীর্ঘায়ু|দীর্ঘাগ্র	oov
+হুদ্রাখালী	7	false	typist	hudrakhali	হুদ্রাখালি	CLEAN_TRANSLITERATION	হুদ্রাখালি	oov,vowel_length
+আর্কাইভকৃত	6	false	canonical	arkaibhokrrit	আর্কাইভকর্মী	DICTIONARY	আর্কাইভকর্মী|আর্কাইভস	oov,conjunct_shape,vowel_initial
+আর্কাইভকৃত	6	false	typist	arkaivokrrit	আর্কাইভকর্মী	DICTIONARY	আর্কাইভকর্মী|আর্কাইভ|আর্কাইভে|আর্কাইভস	oov,conjunct_shape,vowel_initial
+কামিনীবাসিয়া	6	false	typist	kaminibasiya	কামিনী বাছিয়া	DICTIONARY	কামিনী বাছিয়া|কামিনী|কামিনী বাছিয়া|কামিনি বাছিয়া|কামিনিবাসিয়া	oov,split,long_compound
+জিয়ারখি	6	false	canonical	jiyarokhi	জিয়ারখী	DICTIONARY	জিয়ারখী|জিয়ারত|জিয়ারতের|জিয়ারখী	oov,vowel_length
+নওলামারী	6	false	canonical	noolamarii	উলামার	DICTIONARY	উলামার|নুলামারী	oov
+নওলামারী	6	false	typist	noolamari	নুলামারি	CLEAN_TRANSLITERATION	নুলামারি	oov
+বেশ	6	true	typist	bes	বেস	DICTIONARY	বেস|বয়েস|বেচছ|বেশি|বেশী|বেশিরভাগ	sibilant
+মান্দারবাড়ীয়া	6	false	canonical	mandarobariiya	মান্দার বাড়ীয়া	DICTIONARY	মান্দার বাড়ীয়া|মান্দারতলা|মান্দারবাড়িয়া|মান্ডার বাড়ীয়া|মাণ্ডার বাড়ীয়া|মান্দারবারীয়া	oov,split,long_compound
+মান্দারবাড়ীয়া	6	false	typist	mandarobariya	মান্দারবাড়িয়া	DICTIONARY	মান্দারবাড়িয়া|মান্দারতলা|মান্দারবাড়িয়া|মান্দারবাড়িয়া	oov,vowel_length,long_compound
+সড়াবাড়ীয়া	6	false	canonical	sorabariiya	সরাবার ইয়া	DICTIONARY	সরাবার ইয়া|সরাবার|সরাবার ইয়া|সরাবার ইযা|সরাবারীয়া	oov,split
+সড়াবাড়ীয়া	6	false	typist	sorabariya	সরা বাড়িয়া	DICTIONARY	সরা বাড়িয়া|সরাবার|সরা বাড়িয়া|সড়া বাড়িয়া|সরা বাড়ীয়া|সরাবারিয়া	oov,split
+আইলহাঁস	5	false	canonical	ailohas	আইলহাস	DICTIONARY	আইলহাস|আইলো|আইলছে|আইলইনার|আইলচরা|আইলচারা	oov,chandrabindu_dropped,vowel_initial
+চিৎলা	5	false	canonical	chitola	চিতলা	DICTIONARY	চিতলা|চিতল|চিতলমারী|চিতলমাছ|চিতলাম|চিতলসহ	oov,khanda_ta
+পাঁচলিয়া	5	false	canonical	pacholiya	পাঁচ আলিয়া	DICTIONARY	পাঁচ আলিয়া|পাঁচলাইশ|পাঁচলা|পাঁচ আলিয়া|পাঁচ আলীয়া|পাচলিয়া	oov,split
+পাশ	5	true	typist	pas	পাস	DICTIONARY	পাস|পায়স|পাচ্ছ|পাছ|পাশে|pas	sibilant
+মহিষকুন্ডি	5	false	canonical	mohishokundi	মহিষকুণ্ডি	DICTIONARY	মহিষকুণ্ডি|মহিষকে|মহিষখোচা|মহিষখলা	oov,na_nna
+মহিষকুন্ডি	5	false	typist	mohisokundi	মহিষকুণ্ডি	DICTIONARY	মহিষকুণ্ডি|মহিষকে|মহিষখোচা|মহিষখলা	oov,na_nna
+আমদহ	4	false	canonical	amodoh	আমদাহ	DICTIONARY	আমদাহ|আমদানি|আমদের|আমোদ|আমসহ|আমদানিও	oov,vowel_initial
+আড়িয়া	4	true	canonical	ariya	আরিয়া	DICTIONARY	আরিয়া|আড়িয়াল|আরিয়ান|আরিয়াকে|আরিয়ানা|আরিয়ালুর	vowel_initial
+ইউনিয়নেটিতে	4	false	canonical	iuniyonetite	ইউনিয়ন এটিতে	DICTIONARY	ইউনিয়ন এটিতে|ইউনিয়নের|ইউনিয়নে|ইউনিয়নেই|ইউনিয়ন এটিতে|ইউনিয়নেতিতে	oov,split,inflected,vowel_initial
+ইখড়ি	4	false	canonical	ikhori	ইখড়ী	DICTIONARY	ইখড়ী|ইখলাস|ইখতিয়ার|ইখওয়ানুল|ইখড়ী	oov,vowel_length,vowel_initial
+কোটালী	4	false	typist	kotali	কোটালি	DICTIONARY	কোটালি|কোটালীপাড়া|কোটালিপাড়া|কোটালীপাড়ার|কোটালিপাড়ার|কোটালিপাড়ায়	oov,vowel_length
+গাড়াখোলা	4	false	canonical	garakhola	গাড়া খোলা	DICTIONARY	গাড়া খোলা|গ্যাঁড়াকলে|গারাঙ্গিয়া|গারাখলা	oov,split
+ঘোলদাড়ী	4	false	canonical	gholodarii	ঘোল দ্বারী	DICTIONARY	ঘোল দ্বারী|ঘোলপাশা|ঘলদারী	oov,split,conjunct_shape
+ঘোলদাড়ী	4	false	typist	gholodari	ঘোল দাড়ি	DICTIONARY	ঘোল দাড়ি|ঘোলপাশা|ঘলদারি	oov,split,vowel_length
+চাঁদগ্রাম	4	false	canonical	chadogram	চাঁদ গ্রাম	DICTIONARY	চাঁদ গ্রাম|চাদর|চাঁদকে|চাদরের|ছাঁদ গ্রাম	oov,split
+চাদপুর	4	false	canonical	chadopur	চাঁদপুর	DICTIONARY	চাঁদপুর|চাঁদপুরের|চাঁদপুরে|চাঁদপুরকে|চাঁদপুরগামী	oov
+ছাগলাদাহ	4	false	typist	chagoladah	ছাগলা দাহ	DICTIONARY	ছাগলা দাহ|ছাগলা|ছাগলামি|চাগলাদাহ	oov,split
+জামজামী	4	false	typist	jamojami	জামজামি	DICTIONARY	জামজামি|জামদানি|জামরুল|জামদানির	oov,vowel_length
+তামফাট	4	false	canonical	tamophat	তামফাত	CLEAN_TRANSLITERATION	তামফাত|তামস|টামটা|তামরা	oov,dental_retroflex
+তামফাট	4	false	typist	tamofat	তামফাত	CLEAN_TRANSLITERATION	তামফাত|তামস|টামটা|তামরা|তামাইয়ো|তামাউকে	oov,dental_retroflex
+পারলক্ষীপুর	4	false	typist	parolokkhipur	পারো লক্ষীপুর	DICTIONARY	পারো লক্ষীপুর|পারলো|পারলোনা|পারলক্ষিপুর	oov,split
+বাটিকাডাঙ্গা	4	false	canonical	batikadangoa	বাতিকাদাঙআ	CLEAN_TRANSLITERATION	বাতিকাদাঙআ|বাটিকামারী	oov,conjunct_shape,long_compound
+বেতবাড়ীয়া	4	false	canonical	betobariiya	বেত বাড়ীয়া	DICTIONARY	বেত বাড়ীয়া|বেতবুনিয়া|বেতবাড়িয়া|বেতবারিয়া|বেট বাড়ীয়া|বেতবারীয়া	oov,split
+বেতবাড়ীয়া	4	false	typist	betobariya	বেতবাড়িয়া	DICTIONARY	বেতবাড়িয়া|বেতবুনিয়া|বেতবারিয়া|বেতবাড়িয়া|বেতবাড়িয়া|বেতবারিয়া	oov,vowel_length
+বেড়েরমাঠ	4	false	canonical	bereromath	বেড়ের মাঠ	DICTIONARY	বেড়ের মাঠ|বেড়ের|বেরেরমাথ	oov,split
+মনোহরদিয়া	4	false	canonical	monohorodiya	মনোহর দিয়া	DICTIONARY	মনোহর দিয়া|মনোহরদী|মনোহর ডিয়া|মনোহর দিয়া|মনোহর দীয়া|মনহরদিয়া	oov,split
+যদুবয়রা	4	false	canonical	zoduboyora	যদু বয়রা	DICTIONARY	যদু বয়রা|যদুবংশ|যদু বয়রা|যদু বয়ড়া|জদুবয়রা	oov,split,inflected
+যদুবয়রা	4	false	typist	joduboyora	যদু বয়রা	DICTIONARY	যদু বয়রা|যদুবংশ|জদুবয়রা	oov,split,inflected
+লক্ষিপুর	4	false	canonical	lokkhipur	লক্ষীপুর	DICTIONARY	লক্ষীপুর|লক্ষীপুরের	oov,vowel_length
+শিমলা	4	true	typist	simola	সিমলা	DICTIONARY	সিমলা|সিমলার|সিমলায়|শিমলার|শিমলায়|সমলা	sibilant
+শেখ	4	true	typist	sekh	সেখ	DICTIONARY	সেখ|সেখানে|সেখান|সেখানেই|সেখানকার|সেখানের	sibilant
+শোন্দহ	4	false	canonical	shondoh	সন্ধ্য	DICTIONARY	সন্ধ্য|শোন|শোনো|শনিবার|ছোন্দহ|শন্দহ	oov,conjunct_shape
+শোন্দহ	4	false	typist	sondoh	সন্ধ্যা	DICTIONARY	সন্ধ্যা|সন্দর্শন|সন্দর্ভ|সোন্দর|সন্দহ	oov,conjunct_shape
+সাতারকূল	4	false	canonical	satarokuul	সাঁতারকূল	DICTIONARY	সাঁতারকূল|সাত্তারকে|সাঁতারকুল|সাতারকুল	oov
+সাতারকূল	4	false	typist	satarokul	সাতারকুল	DICTIONARY	সাতারকুল|সাত্তারকে|সাঁতারকুল|সাঁতারকূল	oov,vowel_length
+স্বরুপপুর	4	false	canonical	sworupopur	স্বরুপ পুর	DICTIONARY	স্বরুপ পুর|স্বরূপকাঠী|স্বরূপকাঠি|স্বরূপচন্দ্র|স্বরুপ পুড়|সওয়রুপপুর	oov,split
+হরণী	4	false	canonical	horonii	হরনী	DICTIONARY	হরনী|হরণ|হরনাথ|হরণের	oov,na_nna
+হরণী	4	false	typist	horoni	হরনী	DICTIONARY	হরনী|হরণ|হরনাথ|হরণের	oov,na_nna
+হরিঢালী	4	false	canonical	horidhalii	হরি ঢালী	DICTIONARY	হরি ঢালী|হরিধানের|হড়ি ঢালী|হরি ঢালি|হড়ি ঢালি|হরিধালী	oov,split
+হরিঢালী	4	false	typist	horidhali	হরি ঢালি	DICTIONARY	হরি ঢালি|হরিধানের|হড়ি ঢালি|হরি ঢালী|হড়ি ঢালী|হরিধালি	oov,split,vowel_length
+হাটবাড়ী	4	false	canonical	hatobarii	হাটবারী	DICTIONARY	হাটবারী|হাটবাড়িয়া|হাটবারের|হাটবারেঙ্গা	oov
+হাটবাড়ী	4	false	typist	hatobari	হাটবারি	DICTIONARY	হাটবারি|হাটবাড়িয়া|হাটবারে|হাটবারের|হাটবারেঙ্গা	oov
+আলোকদ্বীপ	3	false	canonical	alokodbiip	আলোক দ্বীপ	DICTIONARY	আলোক দ্বীপ|আলোকদিয়া|আলোক দ্বিপ|আলকদ্বীপ	oov,split,vowel_initial
+আলোকদ্বীপ	3	false	typist	alokodbip	আলোক দ্বীপ	DICTIONARY	আলোক দ্বীপ|আলোকদিয়া|আলোক দ্বিপ|আলকদ্বিপ	oov,split,vowel_initial
+ইশালমারী	3	false	typist	isalomari	ইসালমারি	CLEAN_TRANSLITERATION	ইসালমারি|ইছালী|শিয়ালমারী	oov,vowel_initial
+কালীচরণপুর	3	false	canonical	kaliichoronopur	কালীচরণ পুর	DICTIONARY	কালীচরণ পুর|কালীচরণ|কালিচরণপুর|কালীচরণ পুড়|কালীচরণ পূর|কালীচরনপুর	oov,split
+কালীচরণপুর	3	false	typist	kalichoronopur	কালিচরণপুর	DICTIONARY	কালিচরণপুর|কালীচরণ	oov,vowel_length
+কালুপোল	3	false	canonical	kalupol	কালুপল	CLEAN_TRANSLITERATION	কালুপল|কালু|কালুখালী|কালুরঘাট|কালুয়া|কালুকেও	oov
+কুমড়াবাড়ীয়া	3	false	canonical	kumorabariiya	কুমড়া বাড়ীয়া	DICTIONARY	কুমড়া বাড়ীয়া|কুমড়া|কুমড়ার|কুমড়া বাড়ীয়া|কুমড়া বাড়িয়া|কুমরাবারীয়া	oov,split
+কুমড়াবাড়ীয়া	3	false	typist	kumorabariya	কুমড়া বাড়িয়া	DICTIONARY	কুমড়া বাড়িয়া|কুমড়া|কুমড়ার|কুমড়া বাড়িয়া|কুমড়া বাড়ীয়া|কুমরাবারিয়া	oov,split,vowel_length
+কুলটি	3	false	canonical	kuloti	স্কুলটি	DICTIONARY	স্কুলটি|কুলটা|কুলটিয়া|কুলতি	oov,conjunct_shape,inflected
+কৃতিব্যক্তিত্ব	3	false	canonical	krritibyoktitb	কৃতি ব্যক্তিত্ব	DICTIONARY	কৃতি ব্যক্তিত্ব|কৃতিত্ব|কৃতি|কৃতিত্বের|কৃতী ব্যক্তিত্ব	oov,split,long_compound
+কৃষ্ণচন্দ্রপুর	3	false	canonical	krrishnochondropur	কৃষ্ণচন্দ্র পুর	DICTIONARY	কৃষ্ণচন্দ্র পুর|কৃষ্ণচন্দ্র|কৃষ্ণচন্দ্র পুড়|কৃষ্ণচন্দ্র পূর	oov,split,long_compound
+কৃষ্ণচন্দ্রপুর	3	false	typist	krrisnochondropur	কৃষ্ণচন্দ্র পুর	DICTIONARY	কৃষ্ণচন্দ্র পুর|কৃষ্ণচন্দ্র|কৃষ্ণচন্দ্র পুড়|কৃষ্ণচন্দ্র পূর	oov,split,long_compound
+খাড়াগোদা	3	false	canonical	kharagoda	খাড়া গদা	DICTIONARY	খাড়া গদা|খারাপ|খাড়া|খারাপকে|খারাপটা|খারাগদা	oov,split
+গবরগাড়া	3	false	canonical	goborogara	গোবরগাড়া	DICTIONARY	গোবরগাড়া|গোবর|গোবরা|গোবরে|গোবরগাড়া	oov
+গোষ্টবিহার	3	false	canonical	goshtobihar	গোশত বিহার	DICTIONARY	গোশত বিহার|গোশত	oov,split,conjunct_shape
+গোষ্টবিহার	3	false	typist	gostobihar	গোশত বিহার	DICTIONARY	গোশত বিহার|গোশত|গোস্ট|গোস্ত|গোসত বিহার	oov,split,conjunct_shape
+গোয়াড়া	3	false	canonical	goyara	গোয়ারা	DICTIONARY	গোয়ারা|গোয়ারের|গোয়ারিকর|গোয়ার্তুমি|গোঁয়ারা|গোয়ারা	oov
+জায়গীরমহল	3	false	typist	jayogiromohol	জায়গির মহল	DICTIONARY	জায়গির মহল|জায়গিরদার|জায়গীরদার|জায়গির মহল|জায়গীর মহল|জায়গিরমহল	oov,split,vowel_length
+ডাংগা	3	false	canonical	dangga	দাংগা	DICTIONARY	দাংগা|ডাংগুলি|ডাংকি|ডাংরা|ডাংগি|ডাংগির	oov,dental_retroflex
+তালবাড়ীয়া	3	false	canonical	talobariiya	তালবাড়িয়া	DICTIONARY	তালবাড়িয়া|টালবাহানা|টালবাহানার|তালবাড়িয়া|তালবাড়িয়া|তালবারীয়া	oov,vowel_length
+তালবাড়ীয়া	3	false	typist	talobariya	তালবাড়িয়া	DICTIONARY	তালবাড়িয়া|তালবাড়িয়া|তালবাড়িয়া	oov,vowel_length
+তিলডাংগা	3	false	canonical	tilodangga	তিল দাংগা	DICTIONARY	তিল দাংগা|তিলডাঙ্গা|তিলদাঙ্গা	oov,split,dental_retroflex
+দারুণমল্লিক	3	false	canonical	darunomollik	দারুণ মল্লিক	DICTIONARY	দারুণ মল্লিক|দারুণভাবে|দারুনভাবে	oov,split
+নৈহাটী	3	false	canonical	noihatii	নৈহাটি	RULE	নৈহাটি|নৈহাটিতে	oov,vowel_length
+নৈহাটী	3	false	typist	noihati	নৈহাটি	DICTIONARY	নৈহাটি|নৈহাটিতে	oov,vowel_length
+ন্যায়মস্তি	3	false	canonical	nyayomosti	ন্যায্যতাবিষয়ক	DICTIONARY	ন্যায্যতাবিষয়ক|ন্যায়বিচার|ন্যায়বিচারের|ন্যায়পরায়ণ|ন্যায্যতাবিষয়ক|ন্যায্যভিত্তিক	oov
+পিঠাভোগ	3	false	canonical	pithabhog	পিঠা ভোগ	DICTIONARY	পিঠা ভোগ|পিঠা|পিথাগোরাস|পিথাগোরাসের|পিথাভগ	oov,split
+পিঠাভোগ	3	false	typist	pithavog	পিথাভগ	CLEAN_TRANSLITERATION	পিথাভগ|পিঠা|পিঠার|পিথাগোরাস|পিথাগোরাসের|পিঠটাও	oov
+বটবুনিয়া	3	false	canonical	botobuniya	বোট বুনিয়া	DICTIONARY	বোট বুনিয়া|বটবৃক্ষ|বটবৃক্ষের|বোত বুনিয়া|বোট বুনিয়া|বতবুনিয়া	oov,split
+বরাহীপুর	3	false	typist	borahipur	বরাহিপুর	CLEAN_TRANSLITERATION	বরাহিপুর|বরাহ|বরাহমিহির|বরাহনগর|বরাহমিহিরের|বারাহিপুর	oov,vowel_length
+বহলবাড়ীয়া	3	false	canonical	boholobariiya	বহলবাড়িয়া	RULE	বহলবাড়িয়া|বহন|বহর|বহনকারী|বহলবাড়িয়া	oov,vowel_length
+বহলবাড়ীয়া	3	false	typist	boholobariya	বহলবাড়িয়া	DICTIONARY	বহলবাড়িয়া|বহন|বহর|বহনকারী|বহলবাড়িয়া|বহলবাড়িয়া	oov,vowel_length
+বাছাড়	3	true	canonical	bachhar	বাছার	DICTIONARY	বাছার|বাছাই|বাছারা|বাঁচাই|বাছাইকরণ|বাছাইকৃত	ranking_other
+বাছাড়	3	true	typist	bachar	বাঁচার	DICTIONARY	বাঁচার|বাচার|বাছার|বাচ্যার্থ|বাঁচা|বিচার	ranking_other
+বাঞ্চানগর	3	false	canonical	bancanogor	বাঞ্ছানগর	DICTIONARY	বাঞ্ছানগর|বাঞ্ছারামপুর|বাঞ্ছা|বাঞ্ছারামের	oov
+বাহিরমাদী	3	false	typist	bahiromadi	বাহির মাদি	DICTIONARY	বাহির মাদি|বাহিরগোলা|বাহিরচর|বাহির মাদী|বাহিরমাদি	oov,split,vowel_length
+ভাংবাড়ীয়া	3	false	canonical	bhangbariiya	ভাংবাড়িয়া	DICTIONARY	ভাংবাড়িয়া|ভাঙবার|ভাংবাড়িয়া|ভাংবাড়িয়া|ভাংবারীয়া	oov,vowel_length
+ভাংবাড়ীয়া	3	false	typist	vangbariya	ভাংবাড়িয়া	DICTIONARY	ভাংবাড়িয়া|ভাংবাড়িয়া|ভাংবাড়িয়া	oov,vowel_length
+ভাঙ্গনের	3	true	typist	vangooner	ভাঙনের	DICTIONARY	ভাঙনের|ভাঙুনের	conjunct_shape,inflected
+ভান্ডারপাড়া	3	false	canonical	bhandaropara	ভাণ্ডারপাড়া	DICTIONARY	ভাণ্ডারপাড়া|ভাণ্ডারদহ|ভান্ডারকর|ভ্যান্ডারবিল্ট	oov,na_nna
+ভান্ডারপাড়া	3	false	typist	vandaropara	ভাণ্ডারপাড়া	DICTIONARY	ভাণ্ডারপাড়া	oov,na_nna
+মধুহাটী	3	false	canonical	modhuhatii	মধু হাতী	DICTIONARY	মধু হাতী|মধু|মধুর|মধুপুর|মধুহাটি|মধুহাতী	oov,split,dental_retroflex
+মধুহাটী	3	false	typist	modhuhati	মধুহাটি	DICTIONARY	মধুহাটি|মধু|মধুর|মধুপুর	oov,vowel_length
+মসজিদকুড়	3	false	canonical	mosojidokur	মসজিদ কুর	DICTIONARY	মসজিদ কুর|মসজিদকে|মসজিদ কুড়|মসজিদকুর	oov,split
+মাখালডাঙ্গা	3	false	canonical	makhalodangoa	মাখালদাঙআ	CLEAN_TRANSLITERATION	মাখালদাঙআ|মাখা|মাখানো|মাখাইয়া	oov,conjunct_shape
+রাঙ্গিয়ারপোতা	3	false	canonical	rangoiyaropota	রাঙৈয়ারপতা	CLEAN_TRANSLITERATION	রাঙৈয়ারপতা|রাঙ্গিয়ে	oov,conjunct_shape,long_compound
+রামনৃসিংহ	3	false	canonical	ramonrrisingh	রাম নৃসিংহ	DICTIONARY	রাম নৃসিংহ|রামন|রামোন|রামনগর	oov,split
+রাড়ীপাড়া	3	false	canonical	rariipara	রাঢ়ী পাড়া	DICTIONARY	রাঢ়ী পাড়া|রাড়িখাল|রাঢ়ীকান্দি|রাঢ়ীখালে|রাঢ়ীপাড়ার|রারীপারা	oov,split
+রাড়ীপাড়া	3	false	typist	raripara	রারিপারা	CLEAN_TRANSLITERATION	রারিপারা|রাড়িখাল	oov
+শাহাপুর	3	true	typist	sahapur	সাহাপুর	DICTIONARY	সাহাপুর|সাহাজ্যের|সাহাজান|সাহাজুল|সাহাতন|সাহাদত	sibilant
+সমূহের	3	false	typist	somuher	সমুহের	DICTIONARY	সমুহের|সমুচিত|সমূহ|সমুখে|সমুচা|সমূহকে	oov,vowel_length,inflected
+সাঁওতা	3	true	canonical	saota	সাওতা	DICTIONARY	সাওতা|সাঁওতাল|সাওতাল|সাঁওতালি|সাঁওতালদের|সাঁওতালরা	chandrabindu_dropped
+হিজলগাড়ী	3	false	canonical	hijologarii	হিজল গাড়ী	DICTIONARY	হিজল গাড়ী|হিজল|হিজলা|হিজলী|হিজলগাড়ি|হিজলগারী	oov,split
+হিজলগাড়ী	3	false	typist	hijologari	হিজলগাড়ি	DICTIONARY	হিজলগাড়ি|হিজল|হিজলা|হিজলী|হিজলগাড়ি	oov,vowel_length
+অনুপনগর	2	false	canonical	onuponogor	অনুপ নগর	DICTIONARY	অনুপ নগর|অনুপস্থিত|অনুপম|অনুপস্থিতি|অনূপ নগর|ওনুপনগর	oov,split,vowel_initial
+আঠারখাদা	2	false	canonical	atharokhada	আঠারো খাদা	DICTIONARY	আঠারো খাদা|আঠারো|আঠারোটি|আঠারবাড়ী|আথারখাদা	oov,split,vowel_initial
+আদাবাড়ীয়া	2	false	canonical	adabariiya	আদাবাড়িয়া	DICTIONARY	আদাবাড়িয়া|আদাবাটা|আড্ডাবাজ|আড্ডাবাজি|আদাবাড়িয়া|আদাবারীয়া	oov,vowel_length,vowel_initial
+আদাবাড়ীয়া	2	false	typist	adabariya	আদাবাড়িয়া	DICTIONARY	আদাবাড়িয়া|আদাবাড়িয়া|আদাবাড়িয়া	oov,vowel_length,vowel_initial
+আন্দুলবাড়ীয়াতে	2	false	canonical	andulobariiyate	আন্দুলবারীয়াতে	CLEAN_TRANSLITERATION	আন্দুলবারীয়াতে|আন্দুলিয়া|আন্দুলবাড়িয়া	oov,long_compound,inflected,vowel_initial
+আন্দুলবাড়ীয়াতে	2	false	typist	andulobariyate	আন্দুলবাড়িয়াতে	DICTIONARY	আন্দুলবাড়িয়াতে|আন্দুলবাড়িয়া	oov,vowel_length,long_compound,inflected,vowel_initial
+আন্দুলবাড়ীয়ার	2	false	canonical	andulobariiyar	আন্দুলবাড়িয়া	DICTIONARY	আন্দুলবাড়িয়া|আন্দুলবাড়িয়া|আন্দুলবাড়িয়া|আন্দুলবারীয়ার	oov,long_compound,vowel_initial
+আন্দুলবাড়ীয়ার	2	false	typist	andulobariyar	আন্দুলবাড়িয়ার	DICTIONARY	আন্দুলবাড়িয়ার|আন্দুলবাড়িয়া	oov,vowel_length,long_compound,vowel_initial
+আমানউল্যা	2	false	canonical	amanoulya	আমানউল্যাহ	DICTIONARY	আমানউল্যাহ|আমানত|আমানতকারীদের|আমানতের|আমানউল্লাহ|আমানউল্লা	oov,vowel_initial
+আমড়বুনিয়া	2	false	canonical	amorobuniya	অমর বুনিয়া	DICTIONARY	অমর বুনিয়া|আমরণ|আমরস|আমরপুর|আমরবুনিয়া	oov,split,vowel_initial
+আমড়াগাছিয়া	2	false	canonical	amoragachhiya	আমরাগাছিয়া	CLEAN_TRANSLITERATION	আমরাগাছিয়া|আমরা|আমরাও|আমরাই	oov,vowel_initial
+আমড়াগাছিয়া	2	false	typist	amoragachiya	আমরাগাচিয়া	CLEAN_TRANSLITERATION	আমরাগাচিয়া|আমরা|আমরাও|আমরাই	oov,vowel_initial
+আলমশাহী	2	false	typist	alomosahi	আলমসাহি	CLEAN_TRANSLITERATION	আলমসাহি|আলমশাহপাড়া|আলমআতার|আলমকাঠি|আলমখান|আলমখালী	oov,vowel_initial
+আশা	2	true	typist	asa	আসা	DICTIONARY	আসা|আসায়|আচ্ছা|আস্হা|আসার|আসাম	sibilant,vowel_initial
+ইনিষ্টিটিউট	2	true	typist	inistitiut	ইনিস্টিটিউট	DICTIONARY	ইনিস্টিটিউট	sibilant,vowel_initial
+ইন্দুহাটী	2	false	canonical	induhatii	ইন্দু হাতী	DICTIONARY	ইন্দু হাতী|ইঁদুর|ইন্দুর|ইঁদুরের|ইন্দু হাতি|ইন্দুহাতী	oov,split,dental_retroflex,vowel_initial
+ইন্দুহাটী	2	false	typist	induhati	ইন্দুহাতি	CLEAN_TRANSLITERATION	ইন্দুহাতি|ইন্দুমতী|ইঁদুর|ইন্দুর|ইঁদুরের	oov,vowel_initial
+ইলিয়াছাবাদ	2	false	typist	iliyachabad	ইলিয়াছ আবাদ	DICTIONARY	ইলিয়াছ আবাদ|ইলিয়াছ|ইলিয়াছ আবাদ|ইলিয়াচাবাদ	oov,split,vowel_initial
+উপজেলাসমূহ	2	false	typist	upojelasomuh	উপজেলা সমূহ	DICTIONARY	উপজেলা সমূহ|উপজেলাসহ|উপজেলা সমুহ|উপজেলাসমুহ	oov,split,vowel_initial
+কর্চাডাংগার	2	false	canonical	korchadanggar	কর্চাদাঙ্গার	CLEAN_TRANSLITERATION	কর্চাদাঙ্গার|করছাড়|করছাড়ের	oov,conjunct_shape
+কাগদী	2	false	typist	kagodi	কাগদি	CLEAN_TRANSLITERATION	কাগদি|বাগদী|কাগজী|বাগদি|কাগজ|কাগজপত্র	oov,vowel_length
+কাগহাটি	2	false	canonical	kagohati	কাগহাতি	CLEAN_TRANSLITERATION	কাগহাতি|কাগজ|কাগজপত্র|কাগজে|কাগজজাত|কাগোশিমা	oov,dental_retroflex,inflected
+কাছারিবাড়ী	2	false	canonical	kachharibarii	কাছারিবাড়ি	DICTIONARY	কাছারিবাড়ি|কাছারি|কাছারী|কাছাড়ি|কাছারিবাড়ি|কাছারিবারী	oov,vowel_length
+কাছারিবাড়ী	2	false	typist	kacharibari	কাচারিবাড়ি	DICTIONARY	কাচারিবাড়ি|কাছারিবাড়ি|কাঁচারিবাড়ি|কাছারীবাড়ী|কাচারিবাড়ি|কাছারিবাড়ি	oov
+কাজলদিঘী	2	false	typist	kajolodighi	কাজলদীঘি	DICTIONARY	কাজলদীঘি|কাজলরেখা|কাজলকে|কাজলসার	oov,vowel_length
+কাটগড়া	2	false	canonical	katogora	কাটগড়রা	DICTIONARY	কাটগড়রা|কাটগড়|কাটগড় রা	oov
+কাঠমারচর	2	false	canonical	kathomarochor	কাথমারচর	CLEAN_TRANSLITERATION	কাথমারচর|কাঠমান্ডু|কাঠমান্ডুতে|কাঠমাণ্ডু	oov,dental_retroflex
+কাপাশহাটিয়া	2	false	canonical	kapashohatiya	কাপাসহাটিয়া	DICTIONARY	কাপাসহাটিয়া|কাপাশিয়া|কাপাসহাটিয়া	oov,sibilant
+কাপাশহাটিয়া	2	false	typist	kapasohatiya	কাপাসহাটিয়া	DICTIONARY	কাপাসহাটিয়া|কাপাসগোলা|কাপাসহাটিয়া	oov,sibilant
+কামারোল	2	false	canonical	kamarol	কাড়ল	DICTIONARY	কাড়ল|কামারখন্দ|কামারখালী|কামারপুকুর|কামানল|কামারল	oov
+কিশোরীনগর	2	false	canonical	kishoriinogor	কিশোরী নগর	DICTIONARY	কিশোরী নগর|কিশোরী|কিশোরীর|কিশোরীদের|কিশরীনগর	oov,split
+কিশোরীনগর	2	false	typist	kisorinogor	কিশোরী নগর	DICTIONARY	কিশোরী নগর|কিশোরী|কিশোরীর|কিশোরীদের|কিসরিনগর	oov,split
+কুন্টিয়ারচর	2	false	canonical	kuntiyarochor	কুন্তিয়ারচর	CLEAN_TRANSLITERATION	কুন্তিয়ারচর|কুন্তী|কুন্তি	oov,dental_retroflex
+কুলবাড়ীয়া	2	false	canonical	kulobariiya	কুল বাড়ীয়া	DICTIONARY	কুল বাড়ীয়া|কুলবতী|কুলবধু|কুলবাড়িয়া|কুল বাড়ীয়া|কুলবারীয়া	oov,split
+কুলবাড়ীয়া	2	false	typist	kulobariya	কুলবাড়িয়া	DICTIONARY	কুলবাড়িয়া|কুলবতী|কুলবধু|কুলবাড়িয়া|কুলবাড়িয়া	oov,vowel_length
+ক্লিনীক	2	false	canonical	kliniik	ক্লিনিক	RULE	ক্লিনিক|ক্লিনিং|ক্লিনিকে|ক্লিনিক্যাল|ক্লিনিকাল|ক্লিনিংয়ের	oov,vowel_length
+ক্লিনীক	2	false	typist	klinik	ক্লিনিক	DICTIONARY	ক্লিনিক|ক্লিনিকে|ক্লিনিক্যাল|ক্লিনিকাল|ক্লিনিকের|ক্লিনিক্যালি	oov,vowel_length
+খলিষাকুন্ডি	2	false	canonical	kholishakundi	খলিশাকুন্ডি	DICTIONARY	খলিশাকুন্ডি|খলিশাকুণ্ডি|খলিষাকুণ্ডি	oov,sibilant
+খলিষাকুন্ডি	2	false	typist	kholisakundi	খলিসাকুন্ডি	DICTIONARY	খলিসাকুন্ডি|খলিশাকুণ্ডি|খলিষাকুণ্ডি	oov,sibilant
+খাঁজা	2	false	canonical	khaja	খাজা	DICTIONARY	খাজা|খাজানা|খাজাঞ্চী|খাজার|খাজনা|খাওয়া	oov,chandrabindu_dropped
+খাজাডাংগা	2	false	canonical	khajadangga	খাজা দাংগা	DICTIONARY	খাজা দাংগা|খাজা|খাজানা|খাজাঞ্চী|খাজাঞ্চিখানা|খাজাদাঙ্গা	oov,split,dental_retroflex
+খামারবাটি	2	false	canonical	khamarobati	খামার বাতি	DICTIONARY	খামার বাতি|খামারবাড়ি|খামারবাড়িতে|খামারবাড়ির|খামার বাটি|খামারবাতি	oov,split,dental_retroflex,inflected
+খুলুমবাড়ীয়া	2	false	canonical	khulumobariiya	খুলুমবারীয়া	CLEAN_TRANSLITERATION	খুলুমবারীয়া|খুলুন	oov
+খুলুমবাড়ীয়া	2	false	typist	khulumobariya	খুলুমবারিয়া	CLEAN_TRANSLITERATION	খুলুমবারিয়া|খুলুন	oov
+গংগাচড়া	2	false	canonical	gonggachora	গঙ্গা চড়া	DICTIONARY	গঙ্গা চড়া|গংগাপুর|গঙ্গাচড়া|গঙ্গাচরা	oov,split,conjunct_shape
+গনেশপুর	2	false	canonical	goneshopur	গণেশপুর	DICTIONARY	গণেশপুর|গণেশকে|গণেশমূর্তি	oov,na_nna
+গনেশপুর	2	false	typist	gonesopur	গণেশপুর	DICTIONARY	গণেশপুর|গণেশকে|গণেশমূর্তি	oov,na_nna
+গোপিপাগলা	2	false	canonical	gopipagola	গোপী পাগলা	DICTIONARY	গোপী পাগলা|গোপী|গোপীনাথ|গোপীনাথপুর|গোপি পাগলা|গপিপাগলা	oov,split,vowel_length
+গ্রামসমুহ	2	false	canonical	gramosomuh	গ্রাম সমূহ	DICTIONARY	গ্রাম সমূহ|গ্রামস্থ|গ্রামস|গ্রাম সমুহ	oov,split,vowel_length
+গড়িয়ালা	2	false	canonical	goriyala	গড়িয়া	DICTIONARY	গড়িয়া|গড়িয়া|গড়িয়া|গরিয়ালা	oov
+ঘাটলাবাগ	2	false	canonical	ghatolabag	ঘাটলা বাগ	DICTIONARY	ঘাটলা বাগ|ঘাটলা|ঘাটলাগুলো|ঘাটলাটাও|ঘাটলাসহ|ঘাতলাবাগ	oov,split
+চটকাতলা	2	false	canonical	chotokatola	ছোট কাতলা	DICTIONARY	ছোট কাতলা|চটকানো|চটকা|চটকাচ্ছ|ছোট কাটলা|চতকাতলা	oov,split
+চন্টু	2	false	canonical	chontu	চতুঃ	DICTIONARY	চতুঃ|চন্দ্র|চঞ্চল|চন্ডিপুর|চন্দনাইশ|চন্তু	oov,conjunct_shape
+চরখাই	2	false	canonical	chorokhai	চোরখাই	DICTIONARY	চোরখাই	oov,inflected
+চাঁপাইগাছির	2	false	canonical	chapaigachhir	চাপাইগাছির	CLEAN_TRANSLITERATION	চাপাইগাছির|চাপাই|চাঁপাই|চাপাইয়া	oov,chandrabindu_dropped
+চাঁপাইগাছির	2	false	typist	chapaigachir	চাপাইগাচির	CLEAN_TRANSLITERATION	চাপাইগাচির|চাপাই|চাঁপাই|চাপাইয়া	oov,chandrabindu_dropped
+চাষীরহাট	2	false	canonical	chashiirohat	চাষীর হাত	DICTIONARY	চাষীর হাত|চাষীর|চাষীরা|চাষীর হাট|চাষির হাত|চাশীরহাত	oov,split,dental_retroflex
+চাষীরহাট	2	false	typist	chasirohat	চাষীর হাত	DICTIONARY	চাষীর হাত|চাষিরা|চাষীর|চাষীরা|চাষীর হাট|চাসিরহাত	oov,split,dental_retroflex
+চেয়ারম্যানবৃন্দ	2	false	canonical	cheyaromyanobrrind	চেয়ারম্যান বৃন্দ	DICTIONARY	চেয়ারম্যান বৃন্দ|চেয়ারম্যানকে|চেয়ারম্যানগণের|চেয়ারম্যানদের|চেয়ারম্যান বৃন্দ	oov,split,long_compound
+জোতাশাহী	2	false	canonical	jotashahii	জটা শাহী	DICTIONARY	জটা শাহী|জটা|জটায়ু|জটার|জটা শাহি|জতাশাহী	oov,split
+জোতাশাহী	2	false	typist	jotasahi	জতাসাহি	CLEAN_TRANSLITERATION	জতাসাহি|জটা|জটায়ু|জটার	oov
+জোড়াদহ	2	false	canonical	joradoh	জরাদহ	CLEAN_TRANSLITERATION	জরাদহ|পোড়াদহ|জোড়াদিঘির	oov
+জয়ন্তীহাজরা	2	false	typist	joyontihajora	জয়ন্তী হাজরা	DICTIONARY	জয়ন্তী হাজরা|জয়ন্তী|জয়ন্তিয়া|জয়ন্তিকা|জয়ন্তী হাজরা|জয়ন্তিহাজরা	oov,split,inflected
+ডাবিরাভিটা	2	false	canonical	dabirabhita	দাবিরাভিতা	CLEAN_TRANSLITERATION	দাবিরাভিতা|দাবির|দাবীর	oov,inflected
+ডাবিরাভিটা	2	false	typist	dabiravita	দাবিরাভিতা	CLEAN_TRANSLITERATION	দাবিরাভিতা|দাবির|দাবীর	oov,inflected
+তেলিগঙ্গা	2	false	canonical	teligongoa	তেলি গঙ্গা	DICTIONARY	তেলি গঙ্গা|টেলিগ্রাফ|টেলিগ্রাম|টেলিগ্রাফের|টেলি গঙ্গা|তেলিগঙআ	oov,split
+দেহাটি	2	true	canonical	dehati	দেহাতি	DICTIONARY	দেহাতি|দেহা|দেহাবসান|দেহটি|দেহাবশেষ|দেহাতী	dental_retroflex,inflected
+দোহাকুলা	2	false	canonical	dohakula	দহাকুলা	CLEAN_TRANSLITERATION	দহাকুলা|দোঁহাকার|দহকুলা|দোআঁসলা|দোঁআশলা|দোআঁশলা	oov
+দোড়া	2	false	canonical	dora	ডরা	ENGLISH_LEXICON	ডরা|ডোরা|ডোরাকাটা|ডরাই|দরাজ|dora	oov
+দৌলতদিয়াড়	2	false	canonical	doulotodiyar	দৌলতদিয়ার	DICTIONARY	দৌলতদিয়ার|দৌলতদিয়া|দৌলতদিয়ার	oov
+ধর্মপাড়া	2	false	canonical	dhormopara	ধর্মপাশা	DICTIONARY	ধর্মপাশা|ধর্মপাল|ধর্মপালের|ধর্মপরায়ণ|ধর্মপুরাণ|ধর্মপরায়ণ	oov
+ধুবইল	2	false	canonical	dhuboil	ধুবিল	DICTIONARY	ধুবিল|ধুবড়ী|ধুবৈল	oov
+নলকোলা	2	false	canonical	nolokola	নলকলা	CLEAN_TRANSLITERATION	নলকলা|ষোলকলা|নলকূপ|ষোলোকলা|নলকূপের|নলখাগড়া	oov
+নাটনাপাড়া	2	false	canonical	natonapara	নাতনাপারা	CLEAN_TRANSLITERATION	নাতনাপারা|নাতনী|নাতনি|নাতনিকে	oov
+নিধিকুন্ডু	2	false	canonical	nidhikundu	নিধিকুণ্ডু	DICTIONARY	নিধিকুণ্ডু|নিধি|নিধিরাম	oov,na_nna
+নিরালস	2	false	canonical	niralos	নিরালস্য	DICTIONARY	নিরালস্য|নিরালা|নিরালায়	oov,conjunct_shape
+নৃসিংহপুর	2	false	canonical	nrrisinghopur	নৃসিংহ পুর	DICTIONARY	নৃসিংহ পুর|নৃসিংহ|নৃসিংহ পুড়|নৃসিংহ পূর	oov,split
+পারেশ	2	false	canonical	paresh	পারেছ	DICTIONARY	পারেছ|পারেখ|পারে|পারেন|পারেনি|পারশ	oov
+পারেশ	2	false	typist	pares	পারেছ	DICTIONARY	পারেছ|পারেই|পারেও|পারেখ|পারে|পারেন	oov
+পার্শে	2	true	typist	parse	পারছে	DICTIONARY	পারছে|পার্সে|পার্শ্বে|পার্সেল|পার্সেন্ট|পার্সেন্টেজ	conjunct_shape,inflected
+পুলিশ	2	true	typist	pulis	পুলিস	DICTIONARY	পুলিস|পুলিশি|পুলিন|পুলিশের|পুলিশকে|পুলিশে	sibilant
+পোড়াহাটী	2	false	canonical	porahatii	পরাহত	DICTIONARY	পরাহত|পড়া|পরাজিত|পরামর্শ|পরাহাতী	oov
+পোড়াহাটী	2	false	typist	porahati	পরাহাতি	CLEAN_TRANSLITERATION	পরাহাতি|পড়া|পরাজিত|পরামর্শ|পোড়ামাটি	oov
+প্রতাপকাটী	2	false	canonical	protapokatii	প্রতাপকাটি	RULE	প্রতাপকাটি|প্রতাপশালী|প্রতাপগড়|প্রতাপচন্দ্র	oov,vowel_length
+প্রতাপকাটী	2	false	typist	protapokati	প্রতাপকাটি	DICTIONARY	প্রতাপকাটি|প্রতাপশালী|প্রতাপগড়|প্রতাপচন্দ্র	oov,vowel_length
+ফ্যাক্টারি	2	false	canonical	phyaktari	ফ্যাকটারি	DICTIONARY	ফ্যাকটারি|ফ্যাক্টরি|ফ্যাক্টর|ফ্যাক্টরিতে	oov,conjunct_shape
+ফ্যাক্টারি	2	false	typist	fyaktari	ফ্যাকটারি	DICTIONARY	ফ্যাকটারি|ফ্যাক্টরি|ফ্যাক্টর|ফ্যাক্টরিতে	oov,conjunct_shape
+বরইচারা	2	false	canonical	boroichara	বড়ই ছাড়া	DICTIONARY	বড়ই ছাড়া|বড়ইছড়ি|বড়ই চাড়া|বরৈচারা	oov,split,inflected
+বহুমুখি	2	false	canonical	bohumukhi	বহুমুখী	DICTIONARY	বহুমুখী|বহুমুখীকরণ|বহুমুখীকরণের|বহুমুখীকরণে|বহুমুখিতা|বহুমুখিতার	oov,vowel_length
+বাওড়ের	2	true	canonical	baorer	বাঁওড়ের	DICTIONARY	বাঁওড়ের|বাওড়|বাওর|ভরের|বাইরের|বাওরা	inflected
+বাগুন্দা	2	false	canonical	bagunda	বাগুনদা	DICTIONARY	বাগুনদা|বাঁইচা|বাঁইধা|বাঁইচ্চা	oov,conjunct_shape
+বামনগাড়ী	2	false	canonical	bamonogarii	বামন গাড়ী	DICTIONARY	বামন গাড়ী|বামনগ্রাম|বামণ গাড়ী|বামন গাড়ি|বামণ গাড়ি|বামনগারী	oov,split
+বামনগাড়ী	2	false	typist	bamonogari	বামন গাড়ি	DICTIONARY	বামন গাড়ি|বামনগ্রাম|বামণ গাড়ি|বামন গাড়ী|বামণ গাড়ী|বামনগারি	oov,split,vowel_length
+বারবাজার	2	false	canonical	barobajar	বারোবাজার	DICTIONARY	বারোবাজার	oov
+বাসুয়াখালী	2	false	typist	basuyakhali	বাসুয়াখালি	CLEAN_TRANSLITERATION	বাসুয়াখালি|বাসুদেব|বাসু|বাসুকি|মাছুয়াখালী|বারুয়াখালী	oov,vowel_length
+বাড়ান্দি	2	false	canonical	barandi	বারান্দী	DICTIONARY	বারান্দী|বারান্দা|বারান্দায়|বারান্দার|বারান্দাটা|বাঁইচা	oov
+বিরি	2	true	canonical	biri	বিড়ি	DICTIONARY	বিড়ি|বিড়ির|বিরিঞ্চি|বিরিয়ানি|বিরিয়ানির|বিড়	ranking_other
+বুড়াপাড়া	2	false	canonical	burapara	বুরাপারা	CLEAN_TRANSLITERATION	বুরাপারা|বুড়া|বুড়ার|মুড়াপাড়া|বুড়াবুড়ি|পুড়াপাড়া	oov
+বেগুনবাড়ীয়া	2	false	canonical	begunobariiya	বেগুনবাড়ী ইয়া	DICTIONARY	বেগুনবাড়ী ইয়া|বেগুনবাড়ী|বেগুনবারীয়া	oov,split
+বেগুনবাড়ীয়া	2	false	typist	begunobariya	বেগুন বাড়িয়া	DICTIONARY	বেগুন বাড়িয়া|বেগুনবাড়ী|বেগুণ বাড়িয়া|বেগুন বাড়িয়া|বেগুন বাড়ীয়া|বেগুনবারিয়া	oov,split,vowel_length
+বেশীনগর	2	false	typist	besinogor	বেশি নগর	DICTIONARY	বেশি নগর|বেসিন|বেসিনের|বেসিনে|বেসি নগর|বেসিনগর	oov,split,vowel_length
+বড়ভাকৈর	2	false	canonical	borobhakoir	বরভাকৈর	CLEAN_TRANSLITERATION	বরভাকৈর|বড়ভাই|বড়ভাগ	oov
+বড়ভাকৈর	2	false	typist	borovakoir	বরভাকৈর	CLEAN_TRANSLITERATION	বরভাকৈর|বরং|বড়ো|বরফ	oov
+ভূট্টা	2	false	canonical	bhuutta	ভূতটা	DICTIONARY	ভূতটা|ভূতকে|ভূতগণ|ভূতটাকে|ভূতই|ভূতকাল	oov,conjunct_shape,inflected
+ভূট্টা	2	false	typist	vutta	ভুট্টা	DICTIONARY	ভুট্টা	oov,vowel_length,inflected
+মধুগাড়ী	2	false	canonical	modhugarii	মধু গাড়ী	DICTIONARY	মধু গাড়ী|মধু|মধুর|মধুপুর|মধুগাড়ি|মধুগারী	oov,split
+মধুগাড়ী	2	false	typist	modhugari	মধুগাড়ি	DICTIONARY	মধুগাড়ি|মধু|মধুর|মধুপুর|মধুগাড়ি	oov,vowel_length
+মশিয়ালী	2	false	typist	mosiyali	মসিয়ালি	CLEAN_TRANSLITERATION	মসিয়ালি|মঁসিয়ে	oov
+মাধপখালী	2	false	typist	madhopokhali	মাধপখালি	CLEAN_TRANSLITERATION	মাধপখালি|মাধব|মাধবী|মাধবপুর	oov,vowel_length
+মালীখালী	2	false	typist	malikhali	মালিখালী	DICTIONARY	মালিখালী|মালিককল্যাণ|মালিককেই|মালিকচালিত|মালিকজাদা|মালিকদেরই	oov,vowel_length
+মাষ্ঠার	2	false	canonical	mashthar	মাষ্টার	DICTIONARY	মাষ্টার|মাশুল|মাষ্টারের|মাশরুম|মাশাআল্লাহ|মাষ্টারি	oov
+মাষ্ঠার	2	false	typist	masthar	মাস্টার	DICTIONARY	মাস্টার|মাস্টারের|মাস্টারকে|মাস্কাটের|মাস্টার্স|মাস্টারদা	oov
+মুজদখালী	2	false	typist	mujodokhali	মুজদখালি	CLEAN_TRANSLITERATION	মুজদখালি|মুজদালিফা|মুজদালিফার	oov,vowel_length
+মৌখালী	2	false	typist	moukhali	মৌখালি	DICTIONARY	মৌখালি|মৌচাষ|মৌখাড়া|মৌচাকে|মৌখিকও|মৌখিকভাবেই	oov,vowel_length
+মৌজাকে	2	false	canonical	moujake	মজাকে	DICTIONARY	মজাকে|মৌজা|মৌজার|মৌজায়|মউজদীনকে	oov,inflected
+মৌজাটি	2	false	canonical	moujati	মজাই	DICTIONARY	মজাই|মজায়|মৌজা|মৌজার|মৌজায়|মৌজাতি	oov,inflected
+যোগীহুদা	2	false	canonical	zogiihuda	যোগী হুদা	DICTIONARY	যোগী হুদা|যোগী|যোগীর|যোগীন্দ্রনাথ|যোগী হুডা|জগীহুদা	oov,split
+যোগীহুদা	2	false	typist	jogihuda	জগিহুদা	CLEAN_TRANSLITERATION	জগিহুদা|জগিং|যোগী|জগিংয়ে|জগিহাটি	oov
+রণিখাই	2	false	canonical	ronikhai	রনিখাই	DICTIONARY	রনিখাই	oov,na_nna,inflected
+রনগোহাইল	2	false	canonical	ronogohail	রন গোহাইল	DICTIONARY	রন গোহাইল|রণগোপালদী|রণ গোহাইল|রনগহাইল	oov,split
+রাখালভোগা	2	false	canonical	rakhalobhoga	রাখাল ভোগা	DICTIONARY	রাখাল ভোগা|রাখালগাছি|রাখালচন্দ্র|রাখালবালক|রাখালগাছী|রাখালভগা	oov,split
+রাখালভোগা	2	false	typist	rakhalovoga	রাখাল ভোগা	DICTIONARY	রাখাল ভোগা|রাখালচন্দ্র|রাখালদাস|রাখালগাছি|রাখালবালক|রাখালভগা	oov,split
+রায়লক্ষীপুর	2	false	typist	rayolokkhipur	রায় লক্ষীপুর	DICTIONARY	রায় লক্ষীপুর|রায়হান|রায়পুর|রায়গঞ্জ|রায় লক্ষীপুর|রায়লক্ষিপুর	oov,split
+লক্ষ্মীপ্রাসাদ	2	false	canonical	lokkhmiiprasad	লক্ষ্মী প্রাসাদ	DICTIONARY	লক্ষ্মী প্রাসাদ|লক্ষ্মীপুর|লক্ষ্মীপুরের|লক্ষ্মীপুরে	oov,split,long_compound
+লক্ষ্মীপ্রাসাদ	2	false	typist	lokkhmiprasad	লক্ষ্মী প্রাসাদ	DICTIONARY	লক্ষ্মী প্রাসাদ|লক্ষ্মীপুর|লক্ষ্মীপুরের|লক্ষ্মীপুরে	oov,split,long_compound
+শালতা	2	true	typist	salota	সালটা	DICTIONARY	সালটা|সালতামামি|সালতারিখ|সালটি|সালতানাত|সালতানাতের	ranking_other
+শাল্তা	2	false	canonical	shalta	শালতা	DICTIONARY	শালতা|শালা|শাল|শালার|শালটা|শালতি	oov,conjunct_shape
+শাল্তা	2	false	typist	salta	সালটা	DICTIONARY	সালটা|সালতামামি|সালতারিখ|সালটি|সালতানাত|সালতানাতের	oov,conjunct_shape
+শৈবভক্ত	2	false	typist	soibovokt	সৈব ভক্ত	DICTIONARY	সৈব ভক্ত|শৈবধর্মের|সইব ভক্ত|সৈবভক্ত	oov,split,sibilant
+শোনা	2	true	typist	sona	সোনা	DICTIONARY	সোনা|ছোঁয়া|সোনার|সোনালী|সোনালি|সনাক্ত	sibilant
+সাতশত	2	false	typist	satosot	সাতসত	CLEAN_TRANSLITERATION	সাতসত|আটশত|অতশত|শতশত|সাতছড়ি|সাতসতেরো	oov,sibilant
+সাফায়েতুল	2	false	canonical	saphayetul	শাফায়েতুল	DICTIONARY	শাফায়েতুল|শাফায়াত|শাফায়েতুল	oov,sibilant
+সাফায়েতুল	2	false	typist	safayetul	শাফায়েতুল	DICTIONARY	শাফায়েতুল|শাফায়াত|শাফায়েতুল	oov,sibilant
+সামন্তসেনা	2	false	canonical	samontosena	সামোন্তসেনা	DICTIONARY	সামোন্তসেনা|সামন্ততন্ত্র|সামন্ততান্ত্রিক|সামন্তদের	oov
+সিমান্ত	2	false	canonical	simant	সীমান্ত	DICTIONARY	সীমান্ত|সিমান্তের|সীমান্তে|সীমান্তের|সীমান্তই	oov,vowel_length
+সীমাস্মৃতি	2	false	canonical	siimasmrriti	সিমান্তবর্তী	DICTIONARY	সিমান্তবর্তী|সীমান্তবর্তী|সীমাছাড়া|সিমান্তর্বর্তী	oov,conjunct_shape
+সীমাস্মৃতি	2	false	typist	simasmrriti	সিমান্তবর্তী	DICTIONARY	সিমান্তবর্তী|সিমাস|সীমাছাড়া|সিমান্তর্বর্তী	oov,conjunct_shape
+সুরেন্দ্রমোহন	2	false	canonical	surendromohon	সুরেন্দ্র মোহন	DICTIONARY	সুরেন্দ্র মোহন|সুরেন্দ্র|সুরেন্দ্রনাথ|সুরেন্দ্রমহন	oov,split,long_compound
+সোনাতনপুর	2	false	canonical	sonatonopur	সনাতন পুর	DICTIONARY	সনাতন পুর|সনাতনপন্থী|সনাতন পুড়|সনাতন পূর|সনাতনপুর	oov,split
+হরিদাশবাটি	2	false	canonical	horidashobati	হরিদাশবাতি	CLEAN_TRANSLITERATION	হরিদাশবাতি|হরিদাস|হরিদাসকাটি|হরিদাসপুর	oov,dental_retroflex,inflected
+হরিদাশবাটি	2	false	typist	horidasobati	হরিদাস বাতি	DICTIONARY	হরিদাস বাতি|হরিদাসকাটি|হরিদাসপুর|হরিদাস বাটি|হরিদাস বাতী|হরিদাসবাতি	oov,split,inflected
+হরিশংকরপুর	2	false	canonical	horishongkoropur	হরিশঙ্করপুর	DICTIONARY	হরিশঙ্করপুর|হরিশচন্দ্র|হরিশপুর	oov,conjunct_shape
+হরিশংকরপুর	2	false	typist	horisongkoropur	হরিশঙ্করপুর	DICTIONARY	হরিশঙ্করপুর|হরিশচন্দ্র|হরিশপুর	oov,conjunct_shape
+হাটপুকুরিয়া	2	false	canonical	hatopukuriya	হাত পুকুরিয়া	DICTIONARY	হাত পুকুরিয়া|হাতপাখা|হাট পুকুরিয়া|হাত পুকুরিয়া|হাতপুকুরিয়া	oov,split,dental_retroflex
+হোগলবাড়ীয়া	2	false	canonical	hogolobariiya	হোগলা বাড়ীয়া	DICTIONARY	হোগলা বাড়ীয়া|হোগলা|হোগলার|হোগলবাড়িয়া|হোগলা বাড়ীয়া|হগলবারীয়া	oov,split
+হোগলবাড়ীয়া	2	false	typist	hogolobariya	হোগলবাড়িয়া	DICTIONARY	হোগলবাড়িয়া|হোগলা|হোগলার|হোগলবাড়িয়া|হোগলবাড়িয়া	oov,vowel_length
+অচিন্তপুর	1	false	canonical	ochintopur	অচিন্ত্যপুর	DICTIONARY	অচিন্ত্যপুর|অচিন্ত্য|অচিন্তনীয়|অচিন্ত	oov,conjunct_shape,vowel_initial
+অচিন্তানগর	1	false	canonical	ochintanogor	ওচিন্তানগর	CLEAN_TRANSLITERATION	ওচিন্তানগর|অচিন্ত্য|অচিন্তিত|অচিন্ত|অচিন্তনীয়	oov,vowel_initial
+অজ্ন	1	false	canonical	ojn	অজ্ঞ	RULE	অজ্ঞ|অজয়কে|অজয়ের|অন|ওঁ|অজ্ঞতাজনিত	oov,vowel_initial
+অন্তরগত	1	false	canonical	ontorogot	অন্তর্গত	DICTIONARY	অন্তর্গত|অন্তরঙ্গ|অন্তরক|অন্তরতর|ওন্তরগত	oov,conjunct_shape,vowel_initial
+অপরতীরে	1	false	canonical	oporotiire	অপরটিরে	DICTIONARY	অপরটিরে|অপরটি|অপরটির|অপরটিতে|অপরটি রে	oov,inflected,vowel_initial
+অপরতীরে	1	false	typist	oporotire	অপরটিরে	DICTIONARY	অপরটিরে|অপরটির|অপরটি রে	oov,inflected,vowel_initial
+অবিস্থিত	1	false	canonical	obisthit	অবিস্থত	DICTIONARY	অবিস্থত|অবিক্রীত|অবিশ্বাস্য|অবিশ্বাস|অবিস্ফোরিত|অবিস্মরণীয়	oov,vowel_initial
+অশ্বস্থলী	1	false	canonical	oshwostholii	আশ্বস্ত হলী	DICTIONARY	আশ্বস্ত হলী|অশ্বশালা|অশ্বশক্তির	oov,split,vowel_initial
+অশ্বস্থলী	1	false	typist	oswostholi	অশ্ব স্থলী	DICTIONARY	অশ্ব স্থলী|অস্বস্থি	oov,split,vowel_initial
+অষ্টধার	1	false	canonical	oshtodhar	অষ্টধর	DICTIONARY	অষ্টধর|অষ্টধাতুর	oov,vowel_initial
+অষ্টধার	1	false	typist	ostodhar	অস্তাচলের	DICTIONARY	অস্তাচলের|অষ্টধাতুর|অস্তসাগর|অস্তপারের	oov,vowel_initial
+আওরাবুনিয়া	1	false	canonical	aorabuniya	আওড়াবুনিয়া	DICTIONARY	আওড়াবুনিয়া|আওড়াল|আওড়াতে|আওড়াবুনিয়া|আওড়াবুনিয়া	oov,vowel_initial
+আওয়ামিলীগ	1	false	canonical	aoyamiliig	আওয়ামীলীগ	DICTIONARY	আওয়ামীলীগ|আওয়ামীলীগ|আওয়ামীলীগের	oov,vowel_length,vowel_initial
+আওয়ামিলীগ	1	false	typist	aoyamilig	আওয়ামীলীগ	DICTIONARY	আওয়ামীলীগ|আওয়ামীলীগের|আওয়ামীলীগ|আওয়ামীকরণের|আওয়ামীদের	oov,vowel_length,vowel_initial
+আকন্দবাড়ীয়া	1	false	canonical	akondobariiya	আকন্দ বাড়ীয়া	DICTIONARY	আকন্দ বাড়ীয়া|আকন্দ|আকন্দবাড়িয়া|আকন্দ বাড়ীয়া|আকন্দ বাড়িয়া|আকন্দবারীয়া	oov,split,vowel_initial
+আকন্দবাড়ীয়া	1	false	typist	akondobariya	আকন্দবাড়িয়া	DICTIONARY	আকন্দবাড়িয়া|আকন্দ|আকন্দবাড়িয়া|আকন্দবাড়িয়া	oov,vowel_length,vowel_initial
+আগ্রাদ্বিগুণ	1	false	canonical	agradbigun	আগ্রা দ্বিগুণ	DICTIONARY	আগ্রা দ্বিগুণ|অগ্রাধিকার|অগ্রাধিকারের|অগ্রাধিকারভিত্তিক|আগ্রা দ্বিগুন	oov,split,long_compound,vowel_initial
+আগড়ঘাটা	1	false	canonical	agoroghata	আগোরঘাটা	DICTIONARY	আগোরঘাটা|আগরবাতি|আগরতলা|আগরতলায়	oov,inflected,vowel_initial
+আছলামপুর	1	false	typist	acholamopur	আচ আলামপুর	DICTIONARY	আচ আলামপুর|অচলাবস্থা|অচলা|অচলাবস্থার|আছ আলামপুর|আচলামপুর	oov,split,vowel_initial
+আজইল	1	false	canonical	ajoil	আজই	DICTIONARY	আজই|অজৈব|আয়েল|আজৈল	oov,vowel_initial
+আটজুড়ী	1	false	canonical	atojurii	আতজুরী	CLEAN_TRANSLITERATION	আতজুরী|আটজন|আটজনকে|আটজনের	oov,vowel_initial
+আটজুড়ী	1	false	typist	atojuri	আতজুরি	CLEAN_TRANSLITERATION	আতজুরি|আটজন|আটজনকে|আটজনের	oov,vowel_initial
+আটারমাইল	1	false	canonical	ataromail	আটার মেইল	DICTIONARY	আটার মেইল|আটারকছড়া|আতারমাইল	oov,split,vowel_initial
+আঠারোবাকি	1	false	canonical	atharobaki	আঠারোবাঁকি	DICTIONARY	আঠারোবাঁকি	oov,vowel_initial
+আঠারোবাকী	1	false	canonical	atharobakii	আঠারো বাকী	DICTIONARY	আঠারো বাকী|আঠারোবাঁকি|আঠারো বাকি|আথারবাকী	oov,split,vowel_initial
+আঠারোবাকী	1	false	typist	atharobaki	আঠারোবাঁকি	DICTIONARY	আঠারোবাঁকি	oov,vowel_initial
+আঠারোোবাকি	1	false	canonical	atharoobaki	আঠারো বাকি	DICTIONARY	আঠারো বাকি|আঠারো|আঠারোটি|আঠারবাড়ী|আঠারো বাকী|আথারুবাকি	oov,split,vowel_initial
+আদারভিটা	1	false	canonical	adarobhita	আদার ভিটা	DICTIONARY	আদার ভিটা|আদার|আদার্স|আড্ডার|আদার ভিতা|আদারভিতা	oov,split,inflected,vowel_initial
+আদারভিটা	1	false	typist	adarovita	আদার ভিটা	DICTIONARY	আদার ভিটা|আদার|আদার্স|আড্ডার|আদার ভিতা|আদারভিতা	oov,split,inflected,vowel_initial
+আধাইপুর	1	false	canonical	adhaipur	আধায়পুর	RULE	আধায়পুর|আধা|আঁধার|আধান|আধায়পুর	oov,vowel_initial
+আন্দুলবাড়ীয়াকে	1	false	canonical	andulobariiyake	আন্দুলবারীয়াকে	CLEAN_TRANSLITERATION	আন্দুলবারীয়াকে|আন্দুলিয়া|আন্দুলবাড়িয়া	oov,long_compound,inflected,vowel_initial
+আন্দুলবাড়ীয়াকে	1	false	typist	andulobariyake	আন্দুলবাড়িয়াকে	DICTIONARY	আন্দুলবাড়িয়াকে|আন্দুলবাড়িয়া	oov,vowel_length,long_compound,inflected,vowel_initial
+আবনালী	1	false	typist	abonali	আবনালি	CLEAN_TRANSLITERATION	আবনালি|আবোলতাবোল|অবনতি|অবনত|অন্ননালী|অবন্তিকা	oov,vowel_length,vowel_initial
+আবিষ্কারের	1	true	typist	abiskarer	আবিস্কারের	DICTIONARY	আবিস্কারের	sibilant,inflected,vowel_initial
+আমদই	1	false	canonical	amodoi	আমোদই	DICTIONARY	আমোদই|আমদানি|আমদের|আমোদ	oov,inflected,vowel_initial
+আময	1	false	canonical	amoz	আমা	DICTIONARY	আমা|আমজাদ|আমাই|আমই|আমকে|আমজ	oov,vowel_initial
+আময	1	false	typist	amoj	মজ	DICTIONARY	মজ|আমজাদ|আমঝুপি|আমজাদহাট|আমজনতার|আমজ	oov,vowel_initial
+আমিনখালী	1	false	typist	aminokhali	আমিন খালি	DICTIONARY	আমিন খালি|আমিনকে|আমীন খালি|আমিন খালী|আমীন খালী|আমিনখালি	oov,split,vowel_length,vowel_initial
+আলাতুলী	1	false	typist	alatuli	আলাতুলি	CLEAN_TRANSLITERATION	আলাতুলি|অলাতচক্র|আলাতুন্নেসা	oov,vowel_length,vowel_initial
+আলিয়াটনগর	1	false	canonical	aliyatonogor	আলিয়াতনগর	CLEAN_TRANSLITERATION	আলিয়াতনগর|আলিয়া|আলিয়ার|আলিয়াকে	oov,dental_retroflex,vowel_initial
+আলীহিম	1	false	canonical	aliihim	আলিহীম	RULE	আলিহীম|আলী|আলীর|আলীকদম|আলীকদমে|আলীকেও	oov,vowel_length,vowel_initial
+আলীহিম	1	false	typist	alihim	আলিহীম	DICTIONARY	আলিহীম|আলীকে|আলীকদম|আলীগঞ্জ|আলীউর|আলীকদমে	oov,vowel_length,vowel_initial
+আশি	1	true	typist	asi	আসি	DICTIONARY	আসি|আসী|আছি|আসছি|আশী|অসি	sibilant,vowel_initial
+আশিদ্রোন	1	false	canonical	ashidron	আশিদ্রোণ	DICTIONARY	আশিদ্রোণ|আশীর্বাদ|আশির|আশি|আশীদ্রোণ|আশীদ্রোন	oov,na_nna,vowel_initial
+আশিদ্রোন	1	false	typist	asidron	আশিদ্রোণ	DICTIONARY	আশিদ্রোণ|অসিদ্ধ|আশীদ্রোণ|আশীদ্রোন	oov,na_nna,vowel_initial
+আষাড়িয়াদহ	1	false	canonical	ashariyadoh	আষাঢ়িয়াদহ	DICTIONARY	আষাঢ়িয়াদহ|আশার|আষাঢ়|আষাঢ়ে|আষাঢ়িয়াদহ	oov,vowel_initial
+আষাড়িয়াদহ	1	false	typist	asariyadoh	আসারিয়াদহ	CLEAN_TRANSLITERATION	আসারিয়াদহ|আছাড়ি	oov,vowel_initial
+আসমোততিয়া	1	false	canonical	asomototiya	আসমত আতিয়া	DICTIONARY	আসমত আতিয়া|অসমতল|আসমত আটিয়া|আসমত আতিয়া|আসমত আতীয়া|আসমততিয়া	oov,split,vowel_initial
+আড়ফাঙ্গাশিয়া	1	false	canonical	arophangoashiya	আড়পাঙ্গাশিয়া	DICTIONARY	আড়পাঙ্গাশিয়া|আরফান|অরফানেজ|আড়পাঙ্গাশিয়া|আরফাঙআশিয়া	oov,long_compound,vowel_initial
+আড়ফাঙ্গাশিয়া	1	false	typist	arofangoasiya	আরফাঙআসিয়া	CLEAN_TRANSLITERATION	আরফাঙআসিয়া|আরফান|আড়পাঙ্গাশিয়া|অরফানেজ	oov,conjunct_shape,long_compound,vowel_initial
+আড়মুখী	1	false	canonical	aromukhii	আরমুখী	CLEAN_TRANSLITERATION	আরমুখী|মারমুখী|আরম্ভ|আরমান|আড়ম্বরপূর্ণ	oov,vowel_initial
+আড়মুখী	1	false	typist	aromukhi	আরমুখি	CLEAN_TRANSLITERATION	আরমুখি|মারমুখী|আরম্ভ|আরমান|আড়ম্বরপূর্ণ|মারমুখি	oov,vowel_initial
+আড়াখালী	1	false	canonical	arakhalii	আরা খালী	DICTIONARY	আরা খালী|আরাকানকে|আরাকানিদের|আরাকান|আরাকানের|আরাখালী	oov,split,vowel_initial
+আড়াখালী	1	false	typist	arakhali	আরাখালি	CLEAN_TRANSLITERATION	আরাখালি|আরাকানকে|আরাকানিদের|আরাকান|আরাকানের|আরাকানে	oov,vowel_initial
+আড়ানগর	1	false	canonical	aranogor	তারানগর	DICTIONARY	তারানগর|আড়ানী|আড়ানা|আরান|আরাগচির|আরানগর	oov,vowel_initial
+আড়িয়ারচক	1	false	canonical	ariyarochok	আরিয়া রোচক	DICTIONARY	আরিয়া রোচক|আরিয়া|আড়িয়াল|আরিয়ান|আরিয়া রোচক|আরিয়ারচক	oov,split,vowel_initial
+আড়ুয়াবানধা	1	false	canonical	aruyabanodha	আরুয়াবানধা	CLEAN_TRANSLITERATION	আরুয়াবানধা|আড়ুয়াপাড়া|আড়ুয়াকান্দি|অরুয়াইল	oov,vowel_initial
+আয়তুননেছা	1	false	typist	ayotunonecha	আয়তুননেচা	CLEAN_TRANSLITERATION	আয়তুননেচা|আয়তন|আয়তনের|আয়ত্ত	oov,vowel_initial
+ইউনিয়টি	1	false	canonical	iuniyoti	ইউনিয়তি	CLEAN_TRANSLITERATION	ইউনিয়তি|ইউনিটটি|ইউনিয়ন|ইউনিয়নের|ইউনিয়নে|ইউনিয়নপ্রতি	oov,dental_retroflex,inflected,vowel_initial
+ইউনিয়নেওষ	1	false	canonical	iuniyoneosh	ইউনিয়নে অশ	DICTIONARY	ইউনিয়নে অশ|ইউনিয়নের|ইউনিয়নে|ইউনিয়নেই|ইউনিয়নে অশ|ইউনিয়নেওশ	oov,split,vowel_initial
+ইউনিয়নেওষ	1	false	typist	iuniyoneos	ইউনিয়নেোস	RULE	ইউনিয়নেোস|ইউনিয়নের|ইউনিয়নে|ইউনিয়নেই	oov,vowel_initial
+ইউনিয়নেে	1	false	canonical	iuniyonee	ইউনিয়নী	DICTIONARY	ইউনিয়নী|ইউনিয়নের|ইউনিয়নে|ইউনিয়নেই	oov,inflected,vowel_initial
+ইঊনুস	1	false	canonical	iuunus	ইউনুস	RULE	ইউনুস|ইউনূস	oov,vowel_initial
+ইঊনুস	1	false	typist	iunus	ইউনুস	DICTIONARY	ইউনুস|ইউনূস|ইউনুছ|ইউনুসের|ইউনূসের|ইউনূসকে	oov,vowel_initial
+ইকড়ী	1	false	canonical	ikorii	ইকরী	DICTIONARY	ইকরী|ইকরা|ইকরার|ইকরাকে|ইকড়ি|ইকরচালি	oov,vowel_initial
+ইকড়ী	1	false	typist	ikori	ইকরি	DICTIONARY	ইকরি|ইকরী|ইকড়ি|ইকড়ি|ইকরদিয়া|ইকরচালি	oov,vowel_initial
+ইছাকলস	1	false	typist	ichakolos	ইচ্ছা কলস	DICTIONARY	ইচ্ছা কলস|ইচ্ছাকৃত|ইচ্ছাকৃতভাবে|ইচ্ছাকে|ইচাকলস	oov,split,conjunct_shape,vowel_initial
+ইজিবাইকযোগে	1	false	canonical	ijibaikozoge	ইজিবাইক যোগে	DICTIONARY	ইজিবাইক যোগে|ইজিবাইক|ইজিবাইকের|ইজিবাইকে|ইজিবাইক যৌগে|ইজিবাইকজগে	oov,split,inflected,vowel_initial
+ইজিবাইকযোগে	1	false	typist	ijibaikojoge	ইজিবাইক যোগে	DICTIONARY	ইজিবাইক যোগে|ইজিবাইক|ইজিবাইকের|ইজিবাইকে|ইজিবাইক যৌগে|ইজিবাইকজগে	oov,split,inflected,vowel_initial
+ইটাইল	1	false	canonical	itail	টাইল	ENGLISH_LEXICON	টাইল|ইতালি|tail|itail	oov,vowel_initial
+ইনষ্টিটিউট	1	true	typist	inostitiut	ইনস্টিটিউট	DICTIONARY	ইনস্টিটিউট|ইনস্টিটিউটের|ইনস্টিটিউটে|ইনস্টিটিউটটি|ইনস্টিটিউটস|ইনস্টিটিউটসহ	sibilant,vowel_initial
+ইনষ্টিটিটিউট	1	false	canonical	inoshtititiut	ইনস্টিটিটিউট	DICTIONARY	ইনস্টিটিটিউট|ইনষ্টিটিউট	oov,sibilant,long_compound,vowel_initial
+ইনষ্টিটিটিউট	1	false	typist	inostititiut	ইনস্টিটিটিউট	DICTIONARY	ইনস্টিটিটিউট|ইনস্টিটিউট|ইনস্টিটিউটের|ইনস্টিটিউশন	oov,sibilant,long_compound,vowel_initial
+ইষ্টার্ন	1	false	canonical	ishtarn	ইস্টার্ন	DICTIONARY	ইস্টার্ন|ইষ্ট|ইষ্টক|ইষ্টদেবতা	oov,sibilant,vowel_initial
+ইষ্টার্ন	1	false	typist	istarn	ইস্টার্ন	DICTIONARY	ইস্টার্ন|ইস্টার্ণ	oov,sibilant,vowel_initial
+ইসবপুর	1	false	canonical	isobopur	ইছবপুর	DICTIONARY	ইছবপুর	oov,vowel_initial
+ইহারউত্তর	1	false	canonical	iharouttor	ইহার উত্তর	DICTIONARY	ইহার উত্তর|ইহার|ইহারা|ইহারে	oov,split,vowel_initial
+ঈশ্বরবা	1	false	canonical	iishworoba	ঈশ্বরবাদ	DICTIONARY	ঈশ্বরবাদ|ঈশ্বরবাদী|ঈশ্বরকে|ঈশ্বরচন্দ্র|ঈশ্বরদী|ঈশওয়রবা	oov,vowel_initial
+ঈশ্বরবা	1	false	typist	isworoba	ইস্ক্রা	DICTIONARY	ইস্ক্রা|ঈশ্বরবাদ|ঈশ্বরবাদী|ঈশ্বরকে|ঈশ্বরচন্দ্র|ইসওয়রবা	oov,conjunct_shape,vowel_initial
+উকতো	1	false	canonical	ukoto	কতো	DICTIONARY	কতো|কতক|উকত	oov,vowel_initial
+উত্তরঅংশে	1	false	canonical	uttoroongshe	উত্তরাংশে	DICTIONARY	উত্তরাংশে|উত্তরও	oov,inflected,vowel_initial
+উত্তরঅংশে	1	false	typist	uttoroongse	উত্তমরূপে	DICTIONARY	উত্তমরূপে|উত্তরও	oov,inflected,vowel_initial
+উত্তরগ্রাম	1	false	canonical	uttorogram	উত্তরক্রিয়া	DICTIONARY	উত্তরক্রিয়া|উত্তরগুলো|উত্তরক্রিয়া|উত্তরগাঁও|উত্তরগুলোর|উত্তরখণ্ডের	oov,vowel_initial
+উত্তরডিহি	1	false	canonical	uttorodihi	উত্তরদিকে	DICTIONARY	উত্তরদিকে|উত্তরদাতাদের|উত্তরদানকারী|উত্তরকান্দি	oov,vowel_initial
+উত্তরসমসপুর	1	false	canonical	uttorosomosopur	উত্তরসূরি	DICTIONARY	উত্তরসূরি|উত্তরসূরিদের|উত্তরসূরিরা	oov,vowel_initial
+উত্রেখান	1	false	canonical	utrekhan	উতক্রান্ত	DICTIONARY	উতক্রান্ত|উতক্রান্তি	oov,conjunct_shape,vowel_initial
+উথলীর	1	false	typist	utholir	উঠলির	DICTIONARY	উঠলির|উথলী|উঠলি|উথলিয়া	oov,vowel_initial
+উদয়কাঠী	1	false	canonical	udoyokathii	উদয়কাঠি	DICTIONARY	উদয়কাঠি|উদয়ন|উদয়পুর|উদয়গিরি|উদয়কাঠি	oov,vowel_length,vowel_initial
+উদয়কাঠী	1	false	typist	udoyokathi	উদয়কাঠি	DICTIONARY	উদয়কাঠি|উদয়ন|উদয়পুর|উদয়গিরি|উদয়কাঠি	oov,vowel_length,vowel_initial
+উপকন্ঠে	1	false	canonical	upokonthe	উপকণ্ঠে	DICTIONARY	উপকণ্ঠে|উপকণ্ঠেই|উপকণ্ঠেও	oov,na_nna,inflected,vowel_initial
+উবাহাটা	1	false	canonical	ubahata	উবাহাতা	CLEAN_TRANSLITERATION	উবাহাতা|উবায়দা	oov,dental_retroflex,inflected,vowel_initial
+উমাশংক্ষার	1	false	typist	umasongkkhar	উমাসংক্ষার	CLEAN_TRANSLITERATION	উমাসংক্ষার	oov,sibilant,vowel_initial
+উল্ল্যেখযোগ্য	1	false	canonical	ullyekhozogy	উল্লেখযোগ্য	DICTIONARY	উল্লেখযোগ্য|উল্ল্যাহ	oov,conjunct_shape,long_compound,vowel_initial
+উল্ল্যেখযোগ্য	1	false	typist	ullyekhojogy	উল্লেখযোগ্য	DICTIONARY	উল্লেখযোগ্য|উল্ল্যাহ	oov,conjunct_shape,long_compound,vowel_initial
+এরনশাহ	1	false	typist	eronosah	এরনসাহ	CLEAN_TRANSLITERATION	এরনসাহ|এরোনটিক্যাল	oov,sibilant,vowel_initial
+এলাহীনগর	1	false	typist	elahinogor	এলাহি নগর	DICTIONARY	এলাহি নগর|এলাহী|এলাহি|এলাহী নগর|এলাহিনগর	oov,split,vowel_length,vowel_initial
+এলেভেন্থ	1	false	typist	eleventh	ইলেভেন্থ	ENGLISH_LEXICON	ইলেভেন্থ|eleventh	oov,vowel_initial
+এ্যড	1	false	canonical	eyod	এইড	RULE	এইড|এই|এইদ	oov,conjunct_shape,vowel_initial
+এড়ান্দাহ	1	false	canonical	erandah	এরান্দাহ	CLEAN_TRANSLITERATION	এরান্দাহ|এড়ানো|এড়ানোর|এড়ানোটা|এড়ানোভাবে	oov,vowel_initial
+ওয়াটারপার্ক	1	false	canonical	oyataropark	ওয়াটার পার্ক	DICTIONARY	ওয়াটার পার্ক|ওয়াটারএইড|ওয়াটারগেট|ওয়াটারলু|ওয়াটার পার্ক	oov,split,vowel_initial
+ওয়াডিয়া	1	false	canonical	oyadiya	ওয়াদিয়া	DICTIONARY	ওয়াদিয়া|ওয়াদিয়ার|ওয়াদিয়া	oov,dental_retroflex,vowel_initial
+ওয়াব	1	true	canonical	oyab	অ্যাব	DICTIONARY	অ্যাব|অ্যাভেঞ্জার্স|অ্যাভিনিউ|অ্যাঁ|অ্যাভাটার|অ্যা	conjunct_shape,vowel_initial
+ওয়েষ্টার্ন	1	false	canonical	oyeshtarn	ওয়েস্টার্ন	DICTIONARY	ওয়েস্টার্ন|ওয়েষ্ট|ওয়েস্টার্ন	oov,sibilant,vowel_initial
+ওয়েষ্টার্ন	1	false	typist	oyestarn	ওয়েস্টার্ন	DICTIONARY	ওয়েস্টার্ন|ওয়েস্টার্ন	oov,sibilant,vowel_initial
+কওমীয়া	1	false	canonical	koomiiya	কওমিয়া	DICTIONARY	কওমিয়া|কওমী|কওমিয়া|কুমিয়া	oov,vowel_length
+কওমীয়া	1	false	typist	koomiya	কওমিয়া	DICTIONARY	কওমিয়া|কুমিয়া|কওমিয়া	oov,vowel_length
+কওয়ামী	1	false	canonical	kooyamii	কুয়াই	DICTIONARY	কুয়াই|কুয়ায়|কুয়াই|কওয়া|কুয়ামী	oov
+কওয়ামী	1	false	typist	kooyami	কুয়ামি	CLEAN_TRANSLITERATION	কুয়ামি|কওয়া	oov
+কছুন্দী	1	false	typist	kochundi	কচুন্দি	CLEAN_TRANSLITERATION	কচুন্দি|কচু|কচুয়া|কচুর	oov
+কন্যানগর	1	false	canonical	konyanogor	কন্যা নগর	DICTIONARY	কন্যা নগর|কন্যা|কন্যার|কন্যাকে|কণ্যা নগর	oov,split
+করপারেশনের	1	false	typist	koroparesoner	কর অপারেশনের	DICTIONARY	কর অপারেশনের|করপাড়া|কড় অপারেশনের|করপারেসনের	oov,split,inflected
+করপােরেশন	1	false	canonical	koropaereshon	করপোরেশনে	DICTIONARY	করপোরেশনে|করপাস|করপাড়া|করপোরেশনই|করপোরেটাইজেশনসহ	oov
+করপােরেশন	1	false	typist	koropaereson	করপোরেশনে	DICTIONARY	করপোরেশনে|করপোরেশন|করপাড়া|করপোরেশনই	oov
+করাতিপাড়া	1	false	canonical	koratipara	করাটি পাড়া	DICTIONARY	করাটি পাড়া|করাতে|করাটা|করাটাই|করাতি পাড়া|করাতিপারা	oov,split,dental_retroflex
+করুনাকান্ত	1	false	canonical	korunakant	করুণাকান্ত	DICTIONARY	করুণাকান্ত|করুণা|করুণাময়|করুণার	oov,na_nna
+কর্চাডাঙ্গা	1	false	canonical	korchadangoa	কর্চাদাঙআ	CLEAN_TRANSLITERATION	কর্চাদাঙআ|করছাড়|করছাড়ের	oov,conjunct_shape
+কর্ণিবাড়ী	1	false	canonical	kornibarii	কর্ণিকার	DICTIONARY	কর্ণিকার|কর্নিয়া|কর্নিয়ার|কর্নিয়াতে|কর্ণিপাড়ার|কর্ণিয়াজনিত	oov
+কর্ণিবাড়ী	1	false	typist	kornibari	কর্ণিয়া	DICTIONARY	কর্ণিয়া|কর্নিয়ার|কর্নিয়াতে|কর্নিয়াকে|কর্ণিয়া|কর্ণিপাড়া	oov
+কলাবাড়ীয়া	1	false	canonical	kolabariiya	কলাবাড়ী ইয়া	DICTIONARY	কলাবাড়ী ইয়া|কলাবাড়ী|কলাবাড়িয়া|কলাবারীয়া	oov,split
+কলাবাড়ীয়া	1	false	typist	kolabariya	কলাবাড়িয়া	DICTIONARY	কলাবাড়িয়া|কলাবাড়ী|কলাবাড়িয়া|কলাবাড়িয়া|কলাবাড়িয়ার	oov,vowel_length
+কলারদোয়ানিয়া	1	false	canonical	kolarodoyaniya	কলারদয়ানিয়া	CLEAN_TRANSLITERATION	কলারদয়ানিয়া|কলারোয়া	oov,long_compound
+কল্যানপুর	1	false	canonical	kolyanopur	কল্যাণপুর	DICTIONARY	কল্যাণপুর	oov,na_nna
+কাঁকড়াবুনিয়া	1	false	canonical	kakorabuniya	কাকড়াবুনিয়া	DICTIONARY	কাকড়াবুনিয়া|কাঁকড়াবিছে|কাকড়াবুনিয়া|কাকড়াবুনিয়া	oov,chandrabindu_dropped,long_compound
+কাঁটাভাঙ্গা	1	false	canonical	katabhangoa	কাটা ভাঙ্গা	DICTIONARY	কাটা ভাঙ্গা|কাটাবে|কাটাবো|কাটাবিল|কাটাবনিয়ার|কাতাভাঙআ	oov,split,chandrabindu_dropped
+কাঁটাভাঙ্গা	1	false	typist	katavangoa	কাটা ভাঙ্গা	DICTIONARY	কাটা ভাঙ্গা|কাটা|কাটার|কাটাতে|কাটাইখানা|কাতাভাঙআ	oov,split,chandrabindu_dropped
+কাঁঠালী	1	true	typist	kathali	কাঁঠালি	DICTIONARY	কাঁঠালি|কাঁঠাল|কাঠালিয়া|কাঠালিয়ার|কাঁঠালিয়া|কাঁঠালকে	vowel_length
+কাইটাইল	1	false	canonical	kaitail	কাইতাইল	CLEAN_TRANSLITERATION	কাইতাইল|কাইটা|কাইটটা|কাইট্টা|কাইতকাইয়ে|কাইতকাইয়ে	oov,dental_retroflex
+কাওয়াকোলা	1	false	canonical	kaoyakola	কাওয়া কলা	DICTIONARY	কাওয়া কলা|কাওয়া|কাওয়ালি|কাওয়ালী|কাওয়াখোলা|কাওয়াকলা	oov,split
