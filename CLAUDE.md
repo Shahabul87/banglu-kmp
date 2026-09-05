@@ -33,6 +33,32 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S187 Windows typer performance round (2026-09-05, user: "it's a little
+  bit slow on my PC … this one is very important; if the engine anyhow
+  cannot generate words how do we handle it"):** measured on a FRESH JVM
+  with the real sqlite (windows-ime S187WinLatencyStudy, opt-in
+  `WIN_LATENCY=1`): the synchronous per-key conversion is p50 0.2 ms but
+  p99 20–25 ms / max 70 ms for the first ~400 keystrokes and p99 0.3 ms
+  after; the suggestion query p50 0.6–1.8 ms, p99 11–23 ms; a C1-only JIT
+  (`-PwinLatencyC1=1`) changes nothing, so the cold cost is the store, not
+  the compiler. Host-side cost: 40% of keystrokes rewrite the echoed word
+  (≈3 injected events per key, worst assalamualaikum 45 backspaces);
+  echoing the rule-only preview would cut events 25% but adds a visible
+  rewrite at every pause, rejected. Shipped: a boot warm-up on the engine
+  lane (Controller.warmUp — 220 tutorial + phrase romans, every prefix
+  converted + one suggest per word, ONE word per queue turn so real keys
+  interleave), a 200-key latency ring with a readout line in the control
+  window footer ("টাইপিং: গড় … সর্বোচ্চ … ওয়ার্ম-আপ …" — the number to
+  quote from a slow PC), and the no-word ladder pinned in Composer.
+  liveConversion: full pipeline → rule layer → raw letters, never blank
+  (a blank would make the echo diff delete the word). Failure ladder
+  across surfaces: dictionary boot failed → keys pass through + tray
+  status + updater (Windows), seed/raw echo until the store lands
+  (Android/macOS); conversion throws → rule fallback + fault report;
+  unknown word → rule transliteration + raw-roman chip/Escape. The real
+  fix for host churn is a TSF input method (composition string, no
+  backspaces) — v2 scope. Pins S187WarmUpAndLatencyTest. Windows টাইপার
+  1.0.18 (CI builds MSI + MSIX; the workflow refreshes the website alias).
 - **S186 strip + search-key polish (2026-09-05, user screenshot of the EN
   idle strip in the WhatsApp search field: "remove", "the search icon is
   not at the centre of the key, use another one"):** prediction chips

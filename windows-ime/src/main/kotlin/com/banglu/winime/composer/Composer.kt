@@ -520,12 +520,15 @@ class Composer(private val engine: ComposerEngine, banglaDigits: Boolean = true)
      * store is mid-failure, and the letter they just typed still appears.
      */
     private fun liveConversion(raw: String): String = try {
-        engine.convert(raw, prev1, prev2)
+        // S187 ("if the engine anyhow cannot generate words"): a blank answer
+        // for a non-blank key would make the echo diff DELETE the word on
+        // screen. The ladder is full pipeline → rule layer → the raw letters.
+        engine.convert(raw, prev1, prev2).ifBlank { engine.instant(raw) }.ifBlank { raw }
     } catch (t: Throwable) {
         // If the rule layer is down too the engine is simply gone: let THAT
         // throwable out and leave the controller's reset path to handle it,
         // rather than reporting the same dead engine twice per keystroke.
-        val fallback = engine.instant(raw)
+        val fallback = engine.instant(raw).ifBlank { raw }
         onConversionFault?.invoke(t)
         fallback
     }

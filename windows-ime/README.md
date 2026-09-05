@@ -184,6 +184,35 @@ typed. Those two greps are the mechanism behind the privacy claim below —
 both directions are verified to actually fail the build, not merely
 registered. It also runs as part of `check`.
 
+## Performance (S187)
+
+The synchronous per-keystroke conversion is sub-millisecond once warm, but a
+fresh process pays the sqlite cold cost on its first few hundred keys
+(measured p99 20–70 ms). So `Controller.warmUp` runs right after the store
+attaches: 220 representative words (the tutorial curriculum plus the cultural
+phrases) are converted prefix by prefix on the engine lane, ONE word per queue
+turn, so a user's own keystrokes always run between warm-up words. The control
+window footer shows the live cost — `টাইপিং: গড় … ms · সর্বোচ্চ … ms (শেষ 200 কি)
+· ওয়ার্ম-আপ … শব্দ` — which is the number to ask for in a "feels slow" report.
+It measures the worker's work per key (composer + engine + SendInput call);
+the host application's own handling of injected keys is outside it, and that
+is the larger cost in MS Word: about 40% of keystrokes rewrite the echoed word
+(the dictionary's answer changes shape as letters arrive), roughly three
+injected events per key. Removing that needs a TSF input method with a
+composition string — v2 scope.
+
+`WIN_LATENCY=1 ./gradlew :windows-ime:test --tests '*S187WinLatencyStudy*'`
+reproduces the study on the real dictionary (add `-PwinLatencyC1=1` to try a
+C1-only JIT; it made no difference).
+
+**When the engine cannot produce a word.** `Composer.liveConversion` never
+shows a blank: full pipeline → rule-only transliteration → the raw letters. A
+conversion that throws falls back to the rule layer and reports the fault to
+the tray once; a dictionary that fails to boot keeps `engineReady` false so
+every key passes through untouched and the tray says so; an unknown word gets
+the rule transliteration on screen with the raw roman as the last chip (and on
+Escape).
+
 ## Build and test
 
 ```bash

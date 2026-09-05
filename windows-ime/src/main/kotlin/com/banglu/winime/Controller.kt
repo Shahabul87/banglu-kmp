@@ -81,6 +81,14 @@ class Controller(
          * dropped by the composer rather than shown.
          */
         class Refine(val generation: Long) : Job
+        /**
+         * S187: one boot warm-up step — converts every prefix of ONE word and
+         * asks for its suggestions, straight through the engine seam (never
+         * the composer), then enqueues the next word. One word per turn keeps
+         * the user's own keystrokes interleaved: a real key queued meanwhile
+         * runs before the next warm-up word.
+         */
+        class Warm(val index: Int) : Job
         data object Stop : Job
     }
 
@@ -126,6 +134,42 @@ class Controller(
 
     /** Test-only: awaitIdle is illegal once the worker has been told to stop. */
     internal val isStopped: Boolean get() = stopped
+
+    // ── S187: keystroke latency ring (worker writes, any thread reads) ──
+    private val latencyRing = LongArray(LATENCY_RING)
+    @Volatile private var latencyCount = 0L
+    /** Words handed to [warmUp]; read by the warm-up jobs on the worker. */
+    @Volatile private var warmKeys: List<String> = emptyList()
+    @Volatile var warmedWords: Int = 0
+        private set
+
+    /**
+     * S187: the cost of the last [LATENCY_RING] keystrokes as the worker saw
+     * them (composer + engine + injector call, NOT the host app's own
+     * processing of the injected keys). Shown in the control window so a
+     * "it feels slow" report can carry numbers.
+     */
+    fun latencySummary(): LatencySummary {
+        val n = minOf(latencyCount, LATENCY_RING.toLong()).toInt()
+        if (n == 0) return LatencySummary(0, 0.0, 0.0)
+        val copy = synchronized(latencyRing) { latencyRing.copyOf(n) }
+        copy.sort()
+        return LatencySummary(n, copy[(n - 1) / 2] / 1e6, copy[n - 1] / 1e6)
+    }
+
+    /**
+     * S187 (user: the typer "is a little bit slow on my PC"): a fresh process
+     * pays the sqlite/JIT cold cost on its first few hundred keystrokes
+     * (measured p99 20-70 ms per key on a warm Mac disk, worse behind an
+     * antivirus-hooked Windows disk). Feed representative words through the
+     * engine lane right after boot, one word per turn, so the user's first
+     * keys land on a warm store. Safe to call once; ignored when empty.
+     */
+    fun warmUp(words: List<String>) {
+        if (words.isEmpty() || stopped) return
+        warmKeys = words
+        queue.offer(Job.Warm(0))
+    }
 
     /** Last throwable a job threw; kept for diagnostics, never printed. */
     @Volatile
@@ -263,8 +307,10 @@ class Controller(
             try {
                 when (job) {
                     is Job.Key -> try {
+                        val t0 = System.nanoTime()
                         handle(job.key)
                         updateRefineSchedule()
+                        recordLatency(System.nanoTime() - t0)
                     } finally {
                         // Exactly one release per claim. An unclaimed signal
                         // (FocusChanged, the hotkey) never incremented, and
@@ -285,6 +331,7 @@ class Controller(
                     // filled, and asking again for the same generation would
                     // loop the engine forever on a word nobody is typing.
                     is Job.Refine -> dispatch(composer.refineCandidates(job.generation))
+                    is Job.Warm -> warmOne(job.index)
 
                     is Job.ModeSwitch -> switchMode(job.from, job.to)
                     is Job.Idle -> job.latch.countDown()
@@ -313,6 +360,25 @@ class Controller(
                 reportFault(t)
             }
         }
+    }
+
+    private fun recordLatency(nanos: Long) {
+        synchronized(latencyRing) {
+            latencyRing[(latencyCount % LATENCY_RING).toInt()] = nanos
+            latencyCount++
+        }
+    }
+
+    private fun warmOne(index: Int) {
+        val words = warmKeys
+        if (index >= words.size || stopped) return
+        val w = words[index]
+        runCatching {
+            for (i in 1..w.length) engine.convert(w.substring(0, i), null, null)
+            engine.suggest(w, Composer.MAX_CANDIDATES - 1, null, null)
+        }
+        warmedWords = index + 1
+        if (index + 1 < words.size) queue.offer(Job.Warm(index + 1))
     }
 
     private fun recoverFromFailedKey() {
@@ -522,7 +588,11 @@ class Controller(
         ComposerKey.Escape -> RawKey.Escape
     }
 
+    /** S187: keystroke cost summary — samples, median and worst, in ms. */
+    data class LatencySummary(val samples: Int, val medianMs: Double, val maxMs: Double)
+
     private companion object {
+        const val LATENCY_RING = 200
         const val SHUTDOWN_JOIN_MS = 2_000L
         const val AWAIT_IDLE_MS = 30_000L
 

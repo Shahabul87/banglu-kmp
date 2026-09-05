@@ -283,6 +283,17 @@ fun main() = application {
         }
     }
 
+    // S187: the latency readout — polled, not pushed, so the worker never
+    // touches Compose state on the keystroke path.
+    LaunchedEffect(ui.controlVisible, ui.engineReady) {
+        while (ui.controlVisible && ui.engineReady) {
+            val l = controller.latencySummary()
+            ui.latencyLine = if (l.samples == 0) "" else
+                "টাইপিং: গড় %.1f ms · সর্বোচ্চ %.0f ms (শেষ %d কি) · ওয়ার্ম-আপ %d শব্দ".format(l.medianMs, l.maxMs, l.samples, controller.warmedWords)
+            kotlinx.coroutines.delay(2_000)
+        }
+    }
+
     LaunchedEffect(Unit) {
         // Without a persistence scope the learned words are never written to
         // disk (the desktop editor shipped that bug once).
@@ -302,6 +313,10 @@ fun main() = application {
                 controller.engineReady = true
                 // Only now is there any reason to intercept keystrokes.
                 scope.launch(Dispatchers.Default) { startHook() }
+                // S187: warm the store and the JIT on the engine lane, one
+                // word per turn, so the first real keystrokes are not the
+                // ones paying the cold cost.
+                controller.warmUp(WarmUpWords.list)
             },
             onFailure = { error ->
                 System.err.println("Banglu dictionary boot failed: $error")
@@ -424,6 +439,7 @@ fun main() = application {
         // in ways (updater, start-on-login) that a bug report cannot be read
         // without knowing which one is installed.
         versionLine = EditionInfo.line,
+        latencyLine = ui.latencyLine,
         onUpdate = { installUpdate() },
         onMode = { controller.setModeExternal(it) },
         onHide = { hideControlWindow() },
@@ -449,6 +465,9 @@ private class UiState(initialMode: Mode = Mode.BANGLA) {
     var hookInstalled by mutableStateOf(false)
     var mode by mutableStateOf(initialMode)
     var candidates by mutableStateOf(emptyList<String>())
+
+    /** S187: "টাইপিং: গড় 0.4 ms · সর্বোচ্চ 12 ms" — refreshed while the control window is open. */
+    var latencyLine by mutableStateOf("")
 
     /** S130: true while [candidates] holds next-word predictions (click-only chips). */
     var predictions by mutableStateOf(false)

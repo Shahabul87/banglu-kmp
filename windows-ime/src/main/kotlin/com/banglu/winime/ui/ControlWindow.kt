@@ -94,6 +94,8 @@ fun ControlWindow(
      * say which one is installed cannot be acted on.
      */
     versionLine: String,
+    /** S187: keystroke cost readout, "" until the first key. */
+    latencyLine: String = "",
     onUpdate: () -> Unit,
     onMode: (Mode) -> Unit,
     onHide: () -> Unit,
@@ -166,7 +168,7 @@ fun ControlWindow(
                     UpdateRow(updateLine, updateActionable, updateBusy, onUpdate)
                 }
                 Spacer(Modifier.weight(1f))
-                Footer(versionLine = versionLine, onHide = onHide, onQuit = onQuit)
+                Footer(versionLine = versionLine, latencyLine = latencyLine, onHide = onHide, onQuit = onQuit)
             }
         }
     }
@@ -349,7 +351,7 @@ private fun UpdateRow(line: String, actionable: Boolean, busy: Boolean, onUpdate
 }
 
 @Composable
-private fun Footer(versionLine: String, onHide: () -> Unit, onQuit: () -> Unit) {
+private fun Footer(versionLine: String, latencyLine: String, onHide: () -> Unit, onQuit: () -> Unit) {
     Box(Modifier.fillMaxWidth().height(1.dp).background(Hairline))
     Spacer(Modifier.height(15.dp))
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -391,6 +393,15 @@ private fun Footer(versionLine: String, onHide: () -> Unit, onQuit: () -> Unit) 
         fontSize = 10.sp,
         fontFamily = BengaliFont,
     )
+    if (latencyLine.isNotEmpty()) {
+        // S187: the number to quote in a "feels slow" report.
+        Text(
+            latencyLine,
+            color = Muted.copy(alpha = 0.68f),
+            fontSize = 10.sp,
+            fontFamily = BengaliFont,
+        )
+    }
 }
 
 @Composable

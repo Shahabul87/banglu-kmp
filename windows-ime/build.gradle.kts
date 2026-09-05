@@ -23,7 +23,7 @@ plugins {
  * both Windows Installer and the in-app updater, so BUMP IT on every shippable
  * change (same discipline as android-keyboard's versionCode/versionName).
  */
-val bangluTyperVersion = "1.0.17"
+val bangluTyperVersion = "1.0.18"
 
 /**
  * THE edition switch. `-PbangluStore=true` builds the Microsoft Store variant.
@@ -627,4 +627,9 @@ val previewControlWindow by tasks.registering(JavaExec::class) {
     mainClass.set("com.banglu.winime.ui.DesignPreviewKt")
     classpath = sourceSets["test"].runtimeClasspath
     systemProperty("banglu.preview.mode", providers.systemProperty("banglu.preview.mode").getOrElse("bangla"))
+}
+
+// S187 study switch: run the latency study with the C1-only JIT the packaged app may use.
+tasks.withType<Test>().configureEach {
+    if (project.hasProperty("winLatencyC1")) jvmArgs("-XX:TieredStopAtLevel=1")
 }
