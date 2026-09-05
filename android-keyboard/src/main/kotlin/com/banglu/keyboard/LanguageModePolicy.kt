@@ -43,6 +43,8 @@ internal object LanguageModePolicy {
         KeyboardMode.CLIPBOARD -> Result(letterMode, letterMode)
         // S122: no globe key on the numpad; if it ever fires, exit to letters.
         KeyboardMode.NUMBER -> Result(letterMode, letterMode)
+        // S183: the cursor pad is a transient layer like the clipboard.
+        KeyboardMode.CURSOR -> Result(letterMode, letterMode)
     }
 
     /** Keyboard re-shown while a transient layer was up: fall back to letters. */

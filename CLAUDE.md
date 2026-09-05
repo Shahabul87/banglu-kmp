@@ -33,6 +33,25 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S183 cursor pad (2026-09-04, tester: "কার্সর ডানে বামে কাজ করে, কিন্তু
+  একের অধিক লাইনের ক্ষেত্রে উপর নিচে?"; user chose mock variant খ with the
+  rule "if it opens below then it's fine" — the pad must never cover the
+  editor):** new transient `KeyboardMode.CURSOR` (collapses like the
+  clipboard; S183CursorPadModeTest). Entry points: HOLD ← or → on the
+  empty-strip action bar (a tap still steps; the hold-repeat moved to the
+  pad's own arrows), and a "Cursor pad" slot in the ⋯ tools row — needed
+  because the action bar exists only while the strip is empty; after any
+  space the strip holds prediction chips (the first device run held a
+  stale coordinate and hit the দাঁড়ি chip). CursorPadPanel replaces the
+  letter rows at the panel height: ABC/"কার্সর সরান" header, ▲ ▼ ◀ ▶
+  canvas arrow heads (font arrows render unevenly on Samsung, S160), tap =
+  one step, hold = repeat, centre "শেষ" returns. Up/down are DPAD key
+  events (the host owns line geometry, onCursorMoveVertical); left/right
+  reuse the S168 cluster-step selection path. Verified on the S22 with
+  shifted-capital markers: three-line note, ▲ from line 3 landed the
+  marker in line 2, three ◀ taps put it before তুমি, a one-second ▶ hold
+  repeated to the end; all three entry routes open the pad. Engine
+  untouched. Android 1.5.118 (2155).
 - **S182 English mode never pushes a word (2026-09-04, tester screenshot:
   typed "Lal", Space auto-replaced it with "all"; user: "engine should not
   push anything, always user selection has to be on the top … make

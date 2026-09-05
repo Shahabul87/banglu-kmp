@@ -899,3 +899,46 @@ deliberately unchanged; the user decides whether to flip it. Unit: android 226, 
 **S181 device pass (S22, 1.5.117):** real-usage 1,000-word list 996/1000 dictionary-exact
 — the same four documented differences (shororipuke, darao → দাঁড়াও, kothai → কোথায়
 policy, chor → চর); frames p50 10.2 / p95 21.1 ms over 5,994 frames.
+
+## S183 — cursor pad: up/down for multi-line text (2026-09-04, Android 1.5.118 / 2155)
+
+Tester: "কার্সর ডানে বামে কাজ করে, কিন্তু একের অধিক লাইনের ক্ষেত্রে উপর নিচে?" Three
+designs were shown as a real HTML mock (scratchpad cursor-updown-mock.html): ক two new
+↑ ↓ action-bar slots, খ hold ← / → opens a four-way pad, গ swipe up/down on ← →. The
+user chose খ with one constraint — a pad floating ABOVE the strip would hide the text
+the caret moves through, "if it opens below then it's fine".
+
+**Built (Android module only, engine untouched).**
+- `KeyboardMode.CURSOR`, a transient layer like the clipboard: `LanguageModePolicy.
+  collapseTransient` returns the remembered letter mode, the globe toggle leaves it
+  alone (`S183CursorPadModeTest`, 3 pins).
+- Entry 1: hold ← or → on the empty-strip action bar (`CursorArrowSlot(onHold)`); a
+  tap still steps one cluster. Entry 2: a "Cursor pad" slot in the ⋯ tools row
+  (`IconCursorPad`). The second entry is not optional: the action bar renders only
+  while the strip is empty, and after any space the strip is full of prediction chips —
+  the first device run held a cached coordinate there and tapped the দাঁড়ি chip.
+- `CursorPadPanel` in place of the letter rows at the shared panel height (S168): an
+  ABC / "কার্সর সরান" / "ধরে রাখলে দ্রুত" header row, then ▲ ▼ ◀ ▶ as canvas arrow
+  heads (`IconArrowHead`; S160 found font arrows uneven on Samsung), 96 × 48–64 dp keys,
+  tap = one step, hold = 350 ms then 60 ms repeat, centre "শেষ" returns. Opening the pad
+  commits the pending buffer and collapses the tools row.
+- Vertical moves send DPAD_UP / DPAD_DOWN (`onCursorMoveVertical`) — the host editor
+  owns line geometry; horizontal moves reuse the S168 cluster-step `setSelection` path.
+
+**Device evidence (S22, release 1.5.118, shifted-capital caret markers, scratchpad
+cursorpad_device2.py / cursorpad_probe.py).**
+
+| flow | result |
+|---|---|
+| three-line note, ⋯ → Cursor pad, ▲, ABC, ⇧x | `তুমি কি Xআসবে` — marker moved from line 3 to line 2 |
+| hold ← on the action bar → pad, hold ◀ 1 s, ▼, ⇧y | `XYআসবে` — ▼ from line 1 lands at the same x on line 2 (host geometry) |
+| empty strip, hold ← | pad opens |
+| `আমি তুমি `, pad, ◀ ×3, ⇧x | `আমি Xতুমি ` |
+| pad, hold ▶ 1 s, ⇧y | `আমি Xতুমি Y` (repeat reached the end) |
+
+Screenshot review: header consistent with the clipboard panel, editor and caret visible
+above the pad, tools-row icon in the stroke grammar of its neighbours.
+
+**Walls.** android 229 (was 226), the other five walls up to date from the S182 run (no
+shared input changed).
+

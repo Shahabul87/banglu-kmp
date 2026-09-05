@@ -430,6 +430,8 @@ class BangluIMEService : InputMethodService(),
     private val kbOnNumberPress: (Char) -> Unit = { onNumberPress(it) }
     private val kbOnPunctuationPress: (Char) -> Unit = { onPunctuationPress(it) }
     private val kbOnCursorMove: (Int) -> Unit = { onCursorMove(it) }
+    private val kbOnCursorMoveVertical: (Int) -> Unit = { onCursorMoveVertical(it) }
+    private val kbOnCursorPadOpen: () -> Unit = { onCursorPadOpen() }
     private val kbOnDismiss: () -> Unit = { requestHideSelf(0) }
     private val kbOnSettingsClick: () -> Unit = { onSettingsClick() }
     private val kbOnToggleToolbar: () -> Unit = { isToolbarExpanded.value = !isToolbarExpanded.value }
@@ -1686,6 +1688,8 @@ class BangluIMEService : InputMethodService(),
                         onNumberPress = kbOnNumberPress,
                         onPunctuationPress = kbOnPunctuationPress,
                         onCursorMove = kbOnCursorMove,
+                        onCursorMoveVertical = kbOnCursorMoveVertical,
+                        onCursorPadOpen = kbOnCursorPadOpen,
                         onDismiss = kbOnDismiss,
                         onSettingsClick = kbOnSettingsClick,
                         onToggleToolbar = kbOnToggleToolbar,
@@ -4787,6 +4791,18 @@ class BangluIMEService : InputMethodService(),
         emojiInitialCategory.value = initialCategory
         keyboardMode.value = KeyboardMode.EMOJI
         resetShiftState()
+    }
+
+    /** S183: hold on ← / → — the cursor pad replaces the letter rows. */
+    private fun onCursorPadOpen() {
+        commitPendingBuffer()
+        if (keyboardMode.value == KeyboardMode.BANGLU || keyboardMode.value == KeyboardMode.ENGLISH) {
+            letterModeBeforeSymbols = keyboardMode.value
+        }
+        keyboardMode.value = KeyboardMode.CURSOR
+        isToolbarExpanded.value = false
+        resetShiftState()
+        recordImeEvent("cursor_pad_open")
     }
 
     private fun onClipboardOpen() {

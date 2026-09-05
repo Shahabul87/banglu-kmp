@@ -149,6 +149,43 @@ fun IconDots(modifier: Modifier = Modifier, color: Color) {
     }
 }
 
+/** S183: cursor pad — four arrow heads around a centre dot. */
+@Composable
+fun IconCursorPad(modifier: Modifier = Modifier, color: Color) {
+    Canvas(modifier) {
+        val s = pen()
+        val w = size.width; val h = size.height
+        drawCircle(color, w * 0.06f, Offset(w * 0.5f, h * 0.5f))
+        for (deg in listOf(0f, 90f, 180f, 270f)) {
+            rotate(deg, Offset(w * 0.5f, h * 0.5f)) {
+                val p = Path().apply {
+                    moveTo(w * 0.40f, h * 0.26f)
+                    lineTo(w * 0.50f, h * 0.14f)
+                    lineTo(w * 0.60f, h * 0.26f)
+                }
+                drawPath(p, color, style = s)
+            }
+        }
+    }
+}
+
+/** S183: one arrow head for the cursor pad keys; [degrees] 0 = up, 90 = right, 180 = down, 270 = left. */
+@Composable
+fun IconArrowHead(modifier: Modifier = Modifier, color: Color, degrees: Float) {
+    Canvas(modifier) {
+        val s = pen()
+        val w = size.width; val h = size.height
+        rotate(degrees, Offset(w * 0.5f, h * 0.5f)) {
+            val p = Path().apply {
+                moveTo(w * 0.30f, h * 0.60f)
+                lineTo(w * 0.50f, h * 0.38f)
+                lineTo(w * 0.70f, h * 0.60f)
+            }
+            drawPath(p, color, style = s)
+        }
+    }
+}
+
 /** Collapse: chevron pointing down into the keyboard. */
 @Composable
 fun IconChevronDown(modifier: Modifier = Modifier, color: Color) {

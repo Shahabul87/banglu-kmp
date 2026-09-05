@@ -328,6 +328,10 @@ fun BangluKeyboardLayout(
     onNumberPress: (Char) -> Unit,
     onPunctuationPress: (Char) -> Unit,
     onCursorMove: (Int) -> Unit = {},
+    /** S183: line moves (DPAD up/down) from the cursor pad. */
+    onCursorMoveVertical: (Int) -> Unit = {},
+    /** S183: hold on ← / → opens the cursor pad (KeyboardMode.CURSOR). */
+    onCursorPadOpen: () -> Unit = {},
     onDismiss: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onToggleToolbar: () -> Unit = {},
@@ -464,6 +468,7 @@ fun BangluKeyboardLayout(
                             onVoiceInput = onVoiceInput,
                             onPunctuationPress = onPunctuationPress,
                             onCursorMove = onCursorMove,
+                            onCursorPadOpen = onCursorPadOpen,
                             voiceInputState = voiceInputState,
                             onToggleToolbar = onToggleToolbar,
                             isToolbarExpanded = isToolbarExpanded
@@ -520,6 +525,7 @@ fun BangluKeyboardLayout(
                         onVoiceInput = onVoiceInput,
                         onPunctuationPress = onPunctuationPress,
                         onCursorMove = onCursorMove,
+                        onCursorPadOpen = onCursorPadOpen,
                         voiceInputState = voiceInputState,
                         onToggleToolbar = onToggleToolbar,
                         isToolbarExpanded = isToolbarExpanded
@@ -576,6 +582,7 @@ fun BangluKeyboardLayout(
                         onVoiceInput = onVoiceInput,
                         onPunctuationPress = onPunctuationPress,
                         onCursorMove = onCursorMove,
+                        onCursorPadOpen = onCursorPadOpen,
                         voiceInputState = voiceInputState,
                         onToggleToolbar = onToggleToolbar,
                         isToolbarExpanded = isToolbarExpanded
@@ -625,6 +632,7 @@ fun BangluKeyboardLayout(
                         onVoiceInput = onVoiceInput,
                         onPunctuationPress = onPunctuationPress,
                         onCursorMove = onCursorMove,
+                        onCursorPadOpen = onCursorPadOpen,
                         voiceInputState = voiceInputState,
                         onToggleToolbar = onToggleToolbar,
                         isToolbarExpanded = isToolbarExpanded
@@ -662,6 +670,17 @@ fun BangluKeyboardLayout(
                     )
                 }
 
+                KeyboardMode.CURSOR -> {
+                    CursorPadPanel(
+                        colors = colors,
+                        panelHeight = panelHeight,
+                        onLeft = { onCursorMove(-1) },
+                        onRight = { onCursorMove(1) },
+                        onUp = { onCursorMoveVertical(-1) },
+                        onDown = { onCursorMoveVertical(1) },
+                        onBackToLetters = onBackToLetters
+                    )
+                }
                 KeyboardMode.EMOJI -> {
                     EmojiPanel(
                         colors = colors,
@@ -742,6 +761,7 @@ private fun AdaptiveTopStrip(
     onVoiceInput: () -> Unit,
     onPunctuationPress: (Char) -> Unit,
     onCursorMove: (Int) -> Unit,
+    onCursorPadOpen: () -> Unit,
     voiceInputState: VoiceInputState,
     onToggleToolbar: () -> Unit,
     isToolbarExpanded: Boolean,
@@ -765,6 +785,7 @@ private fun AdaptiveTopStrip(
                 onStickerOpen = onStickerOpen,
                 onClipboardOpen = onClipboardOpen,
                 onVoiceInput = onVoiceInput,
+                onCursorPadOpen = onCursorPadOpen,
                 voiceInputState = voiceInputState,
                 onToggleToolbar = onToggleToolbar,
                 isExpanded = true
@@ -821,6 +842,7 @@ private fun AdaptiveTopStrip(
                 onClipboardOpen = onClipboardOpen,
                 onVoiceInput = onVoiceInput,
                 onCursorMove = onCursorMove,
+                onCursorPadOpen = onCursorPadOpen,
                 voiceInputState = voiceInputState,
                 onToggleToolbar = onToggleToolbar
             )
@@ -874,6 +896,7 @@ private fun ToolbarRow(
     onStickerOpen: () -> Unit,
     onClipboardOpen: () -> Unit,
     onVoiceInput: () -> Unit,
+    onCursorPadOpen: () -> Unit,
     voiceInputState: VoiceInputState,
     onToggleToolbar: () -> Unit,
     isExpanded: Boolean
@@ -898,6 +921,12 @@ private fun ToolbarRow(
             }
             ToolbarIconSlot("Stickers", modifier = Modifier.weight(1f), onClick = onStickerOpen) {
                 IconSticker(Modifier.size(22.dp), it)
+            }
+            // S183: the ← → slots exist only on the empty-strip action bar;
+            // after a space the strip holds prediction chips, so the pad must
+            // also be reachable from the tools row.
+            ToolbarIconSlot("Cursor pad", modifier = Modifier.weight(1f), onClick = onCursorPadOpen) {
+                IconCursorPad(Modifier.size(22.dp), it)
             }
             MicEmojiSlot(
                 active = voiceInputState == VoiceInputState.LISTENING || voiceInputState == VoiceInputState.PROCESSING,
@@ -1230,6 +1259,7 @@ private fun KeyboardActionBar(
     onClipboardOpen: () -> Unit,
     onVoiceInput: () -> Unit,
     onCursorMove: (Int) -> Unit,
+    onCursorPadOpen: () -> Unit,
     voiceInputState: VoiceInputState,
     onToggleToolbar: () -> Unit
 ) {
@@ -1249,8 +1279,11 @@ private fun KeyboardActionBar(
         // S160 (user-approved mock \u0995): the redundant \u09a6\u09be\u0981\u09dc\u09bf slot and the
         // sticker shortcut (still in the expanded toolbar) make way for
         // cursor arrows \u2014 tap steps one position, hold repeats.
-        CursorArrowSlot(left = true, "Move cursor left", Modifier.weight(1f)) { onCursorMove(-1) }
-        CursorArrowSlot(left = false, "Move cursor right", Modifier.weight(1f)) { onCursorMove(1) }
+        // S183 (tester: up/down for multi-line text; user-approved mock খ,
+        // pad opens BELOW so the editor stays visible): tap steps, HOLD opens
+        // the 4-way cursor pad in place of the letter rows.
+        CursorArrowSlot(left = true, "Move cursor left, hold for the cursor pad", Modifier.weight(1f), onHold = onCursorPadOpen) { onCursorMove(-1) }
+        CursorArrowSlot(left = false, "Move cursor right, hold for the cursor pad", Modifier.weight(1f), onHold = onCursorPadOpen) { onCursorMove(1) }
         CompactIconSlot("Clipboard", modifier = Modifier.weight(1f), onClick = onClipboardOpen) {
             IconClipboard(Modifier.size(21.dp), it)
         }
@@ -1273,10 +1306,12 @@ private fun CursorArrowSlot(
     left: Boolean,
     accessibilityLabel: String,
     modifier: Modifier = Modifier,
+    onHold: (() -> Unit)? = null,
     onStep: () -> Unit
 ) {
     val colors = LocalKeyboardColors.current
     val currentOnStep = rememberUpdatedState(onStep)
+    val currentOnHold = rememberUpdatedState(onHold)
     val scope = rememberCoroutineScope()
     Box(
         modifier = modifier
@@ -1292,9 +1327,15 @@ private fun CursorArrowSlot(
                     currentOnStep.value()
                     val holdJob = scope.launch {
                         kotlinx.coroutines.delay(350)
-                        while (true) {
-                            currentOnStep.value()
-                            kotlinx.coroutines.delay(60)
+                        // S183: with a pad available, a hold OPENS it (the
+                        // repeat lives on the pad's own arrows); without one
+                        // the pre-S183 hold-repeat stays.
+                        val open = currentOnHold.value
+                        if (open != null) { open() } else {
+                            while (true) {
+                                currentOnStep.value()
+                                kotlinx.coroutines.delay(60)
+                            }
                         }
                     }
                     tryAwaitRelease()
@@ -1430,6 +1471,120 @@ private fun CompactMicToolbarIcon(
             )
         }
     }
+}
+
+/**
+ * S183: the cursor-control pad — replaces the letter rows (never covers the
+ * editor) while the caret is moved. Header like the clipboard panel (ABC
+ * back + title), then a 3×3 pad: ▲ ▼ ◀ ▶ tap one step, hold repeats;
+ * the centre "শেষ" also returns to the letters. Sized like the other
+ * panels (S168) so the keyboard never jumps.
+ */
+@Composable
+private fun CursorPadPanel(
+    colors: KeyboardColors,
+    panelHeight: Dp?,
+    onLeft: () -> Unit,
+    onRight: () -> Unit,
+    onUp: () -> Unit,
+    onDown: () -> Unit,
+    onBackToLetters: () -> Unit
+) {
+    val total = panelHeight ?: 260.dp
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = total)
+            .background(colors.keyboardBg)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(42.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            KeyButton(
+                label = "ABC",
+                modifier = Modifier.width(74.dp),
+                height = 38.dp,
+                bgColor = colors.specialKeyBg,
+                fontSize = 15,
+                accessibilityLabel = "Back to keyboard",
+                onClick = onBackToLetters
+            )
+            Text(
+                text = "কার্সর সরান",
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp),
+                color = colors.keyText,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+            Text(
+                text = "ধরে রাখলে দ্রুত",
+                color = colors.subText,
+                fontSize = 12.sp,
+                maxLines = 1
+            )
+        }
+        val gap = 8.dp
+        val keyH = ((total - 42.dp - 16.dp - gap * 2) / 3).coerceIn(48.dp, 64.dp)
+        val keyW = 96.dp
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(total - 42.dp - 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(gap)) {
+                CursorPadKey(0f, "Move cursor up", colors, keyW, keyH, onUp)
+                Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
+                    CursorPadKey(270f, "Move cursor left", colors, keyW, keyH, onLeft)
+                    Box(
+                        modifier = Modifier
+                            .width(keyW)
+                            .height(keyH)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.specialKeyBg)
+                            .clickable(onClick = onBackToLetters)
+                            .semantics { role = Role.Button; contentDescription = "Done, back to keyboard" },
+                        contentAlignment = Alignment.Center
+                    ) { Text("শেষ", color = colors.keyText, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
+                    CursorPadKey(90f, "Move cursor right", colors, keyW, keyH, onRight)
+                }
+                CursorPadKey(180f, "Move cursor down", colors, keyW, keyH, onDown)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CursorPadKey(degrees: Float, label: String, colors: KeyboardColors, keyW: Dp, keyH: Dp, onStep: () -> Unit) {
+    val currentOnStep = rememberUpdatedState(onStep)
+    val scope = rememberCoroutineScope()
+    Box(
+        modifier = Modifier
+            .width(keyW)
+            .height(keyH)
+            .clip(RoundedCornerShape(12.dp))
+            .background(colors.keyBg)
+            .semantics { role = Role.Button; contentDescription = label; onClick { currentOnStep.value(); true } }
+            .pointerInput(Unit) {
+                detectTapGestures(onPress = {
+                    currentOnStep.value()
+                    val holdJob = scope.launch {
+                        kotlinx.coroutines.delay(350)
+                        while (true) { currentOnStep.value(); kotlinx.coroutines.delay(60) }
+                    }
+                    tryAwaitRelease()
+                    holdJob.cancel()
+                })
+            },
+        contentAlignment = Alignment.Center
+    ) { IconArrowHead(Modifier.size(28.dp), colors.keyText, degrees) }
 }
 
 @Composable
