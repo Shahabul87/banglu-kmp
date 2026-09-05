@@ -1,16 +1,16 @@
 # Banglu Engine — Architecture Reference
 
-**Status:** reference document, written 2026-08-26 against v1.5.87 and revised
-2026-09-03 against `main` at v1.5.113 (Android 2150, dictionary 3.9.7). Rounds S138–S177
-are folded in; the S-numbers in the text point at the commit messages that carry the
-evidence.
+**Status:** reference document, written 2026-08-26 against v1.5.87, revised
+2026-09-03 against v1.5.113 and again 2026-09-06 against `main` at v1.5.124 (Android
+2161, dictionary 3.9.8). Rounds S138–S192 are folded in; the S-numbers in the text point
+at the commit messages that carry the evidence.
 **Scope:** the shared conversion engine (`shared/`), how each surface hosts it, the
 Android keystroke path, the learning system, the voice pipeline and the dictionary
 build. Every box below names the real file or function so the diagram can be checked
 against the code.
 
 **One-sentence description you can use anywhere:** Banglu is an on-device Bangla
-phonetic engine — Avro-compatible phonetic rules, a compiled dictionary of ~476,000
+phonetic engine — Avro-compatible phonetic rules, a compiled dictionary of ~479,000
 words (1.8 M romanization rows), and a statistical (n-gram) context model that learns your spelling preferences
 on the phone; nothing you type leaves the device. It is a rule-based and statistical
 system, not a neural network and not "AI".
@@ -133,7 +133,9 @@ flowchart TD
     NORM --> RAW
 
     subgraph RAW["convertWordRaw — layered, first trusted result wins (per-key LRU cache)"]
-        L1["direct hits<br/>ACRONYM_OVERRIDES, DIRECT_WORD_OVERRIDES,<br/>MOBILE_SHORTHAND_OVERRIDES (kmon→কেমন, hm, ok …) conf 0.999"]
+        L1["direct hits<br/>ACRONYM_OVERRIDES, DIRECT_WORD_OVERRIDES,<br/>MOBILE_SHORTHAND_OVERRIDES (kmon→কেমন, hm, ok, hath …) conf 0.999"]
+        CH["S184: a key containing '^' (the chandrabindu marker —<br/>Android long-press c, the Avro habit elsewhere) is rendered<br/>by the RULE transliterator exactly as the instant preview<br/>(cha^d→চাঁদ); the marker-less dictionary reading is an alternative"]
+        PH["S184: CulturalPhrases.EXACT — 24 greetings/religious phrases ×<br/>70 romans commit WITH their spacing (assalamualaikum→আসসালামু আলাইকুম)"]
         NEG["tryNegationCompound<br/>attached না/নাই/তো/নে (bolbone→বলবোনে)"]
         EMO["tryEmphaticOCompound / tryEmphaticICompound<br/>ashiko→আশিকও, ekdomi→একদমই (S56/S150)"]
         PVS["tryProductiveVerbSuffixConversion<br/>root + verb suffix table"]
@@ -152,12 +154,13 @@ flowchart TD
         CS["tryCompoundSplit<br/>bujteparcina → বুঝতে পারছিনা"]
         TF["typo correction + fuzzy fallback<br/>(only when pattern confidence < 0.5)"]
         GATE["applyCandidateLatticeRanking → applyCommitGate<br/>(every composed form also passes applyCompositionCommitGate)"]
-        L1 --> NEG --> EMO --> PVS --> DICT --> EN --> ST --> LEX --> PS --> L12 --> L0 --> L15 --> L24 --> L5 --> L55 --> L6 --> CS --> TF --> GATE
+        L1 --> CH --> PH --> NEG --> EMO --> PVS --> DICT --> EN --> ST --> LEX --> PS --> L12 --> L0 --> L15 --> L24 --> L5 --> L55 --> L6 --> CS --> TF --> GATE
     end
 
     RAW --> WRAP
 
     subgraph WRAP["convertWord wrapper — the laws on top of the raw result"]
+        FLOOR["S192 honestFloorForFarOffFuzzy (shared with the preview):<br/>key ≥ 7, fuzzy DICTIONARY result < 0.9, no space, whose reading is<br/>≥ 2 away under a transposition-aware (OSA) distance over the typist<br/>folds AND differs from the literal floor in spelling skeleton →<br/>the clean Bengali-only literal floor commits (chorpara→চরপারা, not চর্চার);<br/>the far-off word rides as an alternative"]
         EPI["ENGLISH_PRIMARY_INTENT flips<br/>(vetted keys: line→লাইন) — preference-immune"]
         HON["tryEnglishHonestyFlip (S131)<br/>real→রিয়েল not রোল"]
         PRON["applyEnglishPronunciationLaw (S142)<br/>a correct English word renders its pronunciation<br/>when the Bengali reading sits below the everyday band (75)"]
@@ -165,7 +168,7 @@ flowchart TD
         ONSET["S113 onset-integrity floor (OOV honesty)"]
         JUNK["tryJunkLexiconRescue"]
         TYPO["tryStoreTypoCorrection — with the S141 typed-faithful law:<br/>a clean-reading literal keeps the commit; repairs only<br/>for unclean readings; recovery may change spelling, not the word"]
-        EPI --> HON --> PRON --> RESC --> ONSET --> JUNK --> TYPO
+        FLOOR --> EPI --> HON --> PRON --> RESC --> ONSET --> JUNK --> TYPO
     end
 
     WRAP --> CTX["context rerank<br/>rerankWithContext(prev2, prev1, result)"]
@@ -181,6 +184,10 @@ Notes that matter when reading the code:
   The compiler's canonical key for ৃ/ী/ূ is "rri"/"ii"/"uu" (হৃদ = "hrrid"); the typist's
   spelling ("hrid") is an alias row, which is why `romanReadsKey` folds those before
   deciding whether a row is "what the user spelled" (S177).
+- **S181 typo guard:** the wrapper's typo correction never replaces an EXACT dictionary
+  reading of the key (≥ 0.9, evidenced) with a correction two or more letters away or
+  with the same word minus a typed emphatic particle (hochcheo keeps হচ্ছেও); a
+  single-slip correction to a real word still wins (motamoto → মতামত).
 - **Typed-faithful law (S141, user law: "the engine must not ignore what I typed"):**
   a clean-reading literal keeps the commit; the typed reading always holds a strip
   slot; Layer-6 recovery and fuzzy stems are spelling normalisers, not word choosers.
@@ -215,11 +222,11 @@ flowchart TD
     K["key (lowercased buffer)"] --> IP["convertForInstantPreview<br/>shorthand/acronym maps + convertByPatterns — rule layer ONLY"]
     K --> CC
     subgraph CC["convertForComposingCore — deliberately conservative early layers"]
-        C1["overrides, negation, emphatic-o/ই, verb suffix<br/>(mirrors of the commit path's own functions)"]
+        C1["overrides, S184 chandrabindu marker + phrases,<br/>negation, emphatic-o/ই, verb suffix<br/>(mirrors of the commit path's own functions)"]
         C2["key < 4 letters: the V2 kar-composition contract<br/>(kri→কৃ, di→দি while typing) — pin-protected,<br/>the documented preview≠commit class"]
         C3["dictionary layer at ≥ 0.88 with storeBeatsDictionary<br/>(the SAME arbitration as the commit, S83)"]
         C4["English detector mirror, corpus hit ≥ 0.94,<br/>english lexicon, section ≥ 0.95"]
-        C5["S176 tail: a completed-looking key (≥ 4) previews<br/>convertWordRaw's OWN cached answer —<br/>parity by construction, zero extra cost<br/>(raw-Latin passthrough stays un-mirrored)"]
+        C5["S176 tail: a completed-looking key (≥ 4) previews<br/>convertWordRaw's OWN cached answer, then the SAME<br/>S192 honest-floor guard as the commit —<br/>parity by construction, zero extra cost<br/>(raw-Latin passthrough stays un-mirrored)"]
         C1 --> C2 --> C3 --> C4 --> C5
     end
     CC --> W["composing wrapper: the same S142/S143/junk laws<br/>as the commit wrapper, then context rerank"]
@@ -242,20 +249,44 @@ inflected keys 11,273 → 1,979, rule-floor garbage 9,302 → 912.
 ```mermaid
 flowchart LR
     IN["input + previous two committed words"] --> PRIM["primary = convertWord(input)"]
-    PRIM --> ALT["getAlternatives<br/>diphthong / initial-vowel / ambiguous-char variants,<br/>store hits (tier A), disambiguation swaps,<br/>guaranteed slots: typed_literal (S141), homograph_twin (S151),<br/>open-syllable vowel twins (kri→ক্রি/কৃ), roman_prefix completions,<br/>english_correction (S143), the English chip for every English key (S142)"]
-    ALT --> CTX["rerankWithContext<br/>(trigram_triples: observed (w1,w2,cand) triples;<br/>bigrams: corpus + chat + user pairs — db 3.9.7 carries the<br/>S156 chat n-grams mined from the Banglish gold corpora)"]
+    PRIM --> ALT["getAlternatives<br/>diphthong / initial-vowel / ambiguous-char variants,<br/>store hits (tier A), disambiguation swaps,<br/>guaranteed slots: typed_literal (S141), homograph_twin (S151),<br/>open-syllable vowel twins (kri→ক্রি/কৃ), roman_prefix completions,<br/>english_correction (S143), the English chip for every English key (S142),<br/>phrase_completion (S184: assa→আসসালামু আলাইকুম at slot 1)"]
+    ALT --> TW["S189 twins (attested words, freq ≥ 30, ≤ 2 per strip):<br/>chandrabindu (tara→তাঁরা), key-fold via exact store lookups<br/>(pulis→পুলিশ, bhuutta→ভুট্টা), vowel-initial (ai→আই),<br/>joined form when the splitter won (rosochithi→রসচিঠি);<br/>a twin more frequent than the primary sits beside it,<br/>a rarer one at the FOURTH chip (hosts show 5–6 of the 8 they ask for)"]
+    TW --> CB["S191 combinations — ONLY when the primary is not a validator word:<br/>the lattice's own letter combinations (r→র/ড়, t→ত/ট, n→ন/ণ,<br/>j→য, long vowels, r+consonant PLAIN; S192 name-style 'a' as inherent/অ)<br/>ranked by lattice priors + the user's ambiguity habit, ≤ 4,<br/>oracle-exempt (there is no real word to protect)"]
+    CB --> CTX["rerankWithContext<br/>(trigram_triples: observed (w1,w2,cand) triples;<br/>bigrams: corpus + chat + user pairs — db 3.9.7 carries the<br/>S156 chat n-grams mined from the Banglish gold corpora)"]
     CTX --> PREF["SmartEngineAdapter<br/>rerankSuggestionsByPreference + enforceCuratedLoanwordPrimary<br/>(user picks outrank corpus; loanword pins immune)"]
     PREF --> STRIP["suggestion strip"]
     PREV["getNextWordPredictions / getTrigramNextWordPredictions"] --> STRIP
     BM["BigramModel + ViterbiDecoder<br/>(ai/) — best whole-sequence reading<br/>when several words are ambiguous"] --> CTX
 ```
 
+### 4.1 The strip ranking law (user law, 2026-09-05)
+
+**Dictionary-validated words always come first; the user's remembered pick tops them;
+everything the engine generated comes after, and stays visible.** In code
+(`getSuggestions`, in this order): the banded ranking; the S151/S189 twins (attested
+words); the S191 combinations, which start BELOW the last validated chip inside the
+visible window, take only the free slots validated words leave (0 when the window is
+full — the host asks for 8 and scrolls), never displace an acronym, phrase or twin chip,
+and rank unrelated prefix COMPLETIONS of other words (ভরবেগ for bhorbari) below
+themselves; a displaced validated chip is moved back above the typed-literal slot. Pinned
+by `S191OovCombinationsJvmTest.validatedWordsAlwaysPrecedeCombinations` and the S79/S141
+walls that caught the first cut (পার্বণে, বাংলা behind guesses). A pick of a combination
+becomes that key's primary (S26 preference) and teaches the ambiguity habit (§7); it never
+lifts other combinations above validated words.
+
 **Strip contract on Android (S19, S162):** the typed roman leads the strip as an
 outlined GHOST chip (tap = keep the English literal; never learned); the blue commit
 highlight belongs to the first NON-ghost chip (`TypedChipPolicy`), and that blue word IS
 what space commits — invariant 5. A word that is a completion of the typed key
-(hrid → হৃদয়) rides the strip; the typed word (হৃদ) keeps the commit (S177). In EN mode
-a non-English token earns a Bangla ghost chip (real conversion, gated).
+(hrid → হৃদয়) rides the strip; the typed word (হৃদ) keeps the commit (S177). Prediction
+chips (BN and EN) carry no commit highlight and are upright (S186). In EN mode (S182/
+S185) the typed word is always the first chip, a saved address or site name follows
+after two letters, then the inflections and contractions of a fully typed word
+(receive → receiving, received; can → can't) ahead of prefix completions, a spelling
+chip when the letters complete no known word (recieve → receive), and after a space
+context predictions from `EnglishBigramData` (Norvig web bigrams, 8,655 previous words
+× 5) behind the user's own pairs; the English wordlist is 30,000 OpenSubtitles ranks
+filtered by the CMU dictionary (`scripts/gen_english_data.py`).
 
 **What the "statistical model" is, precisely.** An **n-gram model** is a table of
 how often words appear next to each other in real Bangla text: after আমি, "ভালো" has
@@ -353,16 +384,24 @@ lane after the dictionary publishes. No-confidence gestures commit nothing.
 ```mermaid
 flowchart LR
     SRC1["../banglu-web/public wordlists"] --> COMP
-    SRC2["dictionary-compiler/data<br/>corpus TSVs, chat_lexicon.tsv,<br/>book_lexicon.tsv, english_lexicon_overrides.tsv"] --> COMP
+    SRC2["dictionary-compiler/data<br/>corpus TSVs, chat_lexicon.tsv, book_lexicon.tsv,<br/>S190 proper_nouns.tsv + science_glossary.tsv (tier-B lexicons:<br/>freq ≤ 40, no usage injection — exact-key typeable, never a completion),<br/>english_lexicon_overrides.tsv"] --> COMP
     SRC3["SeedData*.kt (≈6.5K curated words + phonetics)"] --> COMP
     COMP["dictionary-compiler<br/>DictionaryCompiler + PhoneticIndexBuilder<br/>(HABIT_RULES alias chains, tiering,<br/>promoteModernChhOverArchaicCc)"]
-    COMP --> SQL["dictionary.sqlite 3.9.7 (177 MB)<br/>words 476K, phonetic_index 1.8M rows, extended_dictionary/<br/>extended_phonetics (web wordlists), english_lexicon 39K,<br/>trigram_triples 120K, bigram_pairs 150K, disambiguation<br/>metadata.version = DictionaryVersion.REQUIRED"]
+    COMP --> SQL["dictionary.sqlite 3.9.8 (177 MB)<br/>words 478,835, phonetic_index 1,810,468 rows, extended_dictionary/<br/>extended_phonetics (web wordlists), english_lexicon 39K,<br/>trigram_triples 120K, bigram_pairs 150K, disambiguation<br/>metadata.version = DictionaryVersion.REQUIRED"]
     SQL --> AND["android-keyboard/src/main/assets/<br/>(pinned: android-keyboard/dictionary.sha256)"]
     SQL --> ROOT["./dictionary.sqlite — JVM tests read THIS"]
     SQL --> DESK["desktop-app + windows-ime resources"]
-    SQL --> SLIM["--slim → shared/banglu-slim.json (33 MB; pruned words,<br/>n-grams bi/tri/uni) for every Kotlin/JS host —<br/>rare words (ষড়রিপু) are absent on this tier"]
+    SQL --> SLIM["--slim → shared/banglu-slim.json (31 MB; words at freq ≥ 35,<br/>n-grams bi/tri/uni) for every Kotlin/JS host —<br/>rare words (ষড়রিপু, most S190 names) are absent on this tier"]
     SQL --> REL["GitHub release 'dictionary' (CI download)"]
 ```
+
+**Adding words (S190 method):** harvested words are curated AGAINST THE REAL ENGINE
+(`S190LexiconCurationJvm`): a candidate the engine already resolves is dropped, and so
+is a spelling variant the engine normalises (উঠেচে → উঠেছে) — adding it would let the
+variant win its own exact key; what remains enters at tier B. Every dictionary rebuild
+re-runs the six walls with `--rerun` (gradle does not see the sqlite as a test input,
+S156) and is diffed on the 132K-key commit dump (`S181CommitDumpJvm`); 3.9.8 changed 26
+commits.
 
 The version gate (S108): `DictionaryVersion.REQUIRED` is the single bump point; the
 compiler stamps it, every store refuses a mismatch, and the release validator refuses
@@ -381,7 +420,7 @@ flowchart TD
         W1["onWordSelected (explicit tap only — S44)"]
         W2["recordNextWordUsage (user bigrams)"]
         W3["addCustomConversion (freq 120)"]
-        W4["recordIdentity (email fields only, switch default OFF)"]
+        W4["recordIdentity (emails + site names; switch default ON since S184,<br/>off ⇒ purge)"]
         W5["recordEnglishCommit"]
     end
     WRITES --> G["isPlausibleDynamicMapping<br/>(anti-poisoning: key must phonetically overlap<br/>the reverse-transliteration of the Bengali) — never bypassed"]
@@ -393,6 +432,19 @@ flowchart TD
     E2 --> E3["learning_erased_at stamp → IME rebuilds a clean engine<br/>(waits for the initial load job)"]
     INIT["initialize() build from a storage snapshot"] --> PUB["publish engine + maps + engineFullyLoaded<br/>ATOMICALLY under learningLock only if<br/>generation unchanged — else discard (S140)"]
 ```
+
+**Ambiguity habit (S191, shared):** every explicit pick is aligned to the lattice
+path that spells it (`latticeChoices`) and each (roman token → Bengali expansion)
+choice is counted (cap 10). The habit is DERIVED from the stored picks — rebuilt in
+`applyPreferenceMaps` whenever the maps are published, so it needs no storage of its own,
+is identical on every surface, and is erased with the picks. It only orders the S191
+combination chips of unknown words; it never moves a commit and never lifts a
+combination above a validated word.
+
+**Load-window picks (S184, Android):** an explicit pick made while the dictionary is
+still loading is queued (cap 32) and replayed once the full engine is up, each one
+re-validated against the full engine's own strip for that key — the S34 gate used to
+drop them silently.
 
 **Personal hot set (S172, Android):** per-user roman keys with a usage count and
 last-used day (`PersonalHotSet`, cap 500 / lite 200, count × 30-day-half-life recency),
