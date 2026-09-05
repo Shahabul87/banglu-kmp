@@ -108,6 +108,29 @@ fun main(args: Array<String>) {
             }
             println("  Supplemental lexicon $lexiconName: merged $count words")
         }
+        // S190 (real-world study 2026-09-05): proper nouns (unions, villages,
+        // upazilas, rivers, people) and a science glossary harvested from
+        // Bengali Wikipedia and curated against the real engine
+        // (S190LexiconCurationJvm). Deliberately NOT usage-injected: their
+        // frequencies are capped at 40 and they are absent from the usage
+        // corpus, so every row assigns tier B — typeable by its exact key,
+        // never a completion, never above a common word.
+        for (lexiconName in listOf("proper_nouns.tsv", "science_glossary.tsv")) {
+            val lexicon = sequenceOf(
+                File("data/$lexiconName"),
+                File("dictionary-compiler/data/$lexiconName")
+            ).firstOrNull { it.exists() } ?: continue
+            var count = 0
+            lexicon.readLines().forEach { line ->
+                val parts = line.trim().split("\t")
+                if (parts.size == 2 && parts[1].toIntOrNull() != null) {
+                    rawWordList.add(parts[0])
+                    freqMap.putIfAbsent(parts[0], minOf(parts[1].toInt(), 40))
+                    count++
+                }
+            }
+            println("  Tier-B lexicon $lexiconName: merged $count words")
+        }
         val foldResult = PhoneticIndexBuilder.foldAndDedupe(rawWordList, freqMap)
         println("  Nukta fold/dedupe removed ${foldResult.mergedCount} duplicate rows " +
             "(${rawWordList.size} -> ${foldResult.words.size} words)")

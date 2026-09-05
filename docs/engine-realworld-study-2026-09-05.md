@@ -364,3 +364,44 @@ compounds), so a twin placed at "limit minus two" was the invisible seventh chip
 phone; rarer twins are capped at the fourth chip and the joined form sits beside the
 primary.
 
+## 7. Implemented: F3 as S190 — dictionary 3.9.8 (data only)
+
+Curation (`S190LexiconCurationJvm`, opt-in) over the harvest: 6,147 candidates passed
+the static gates (Bengali-only, 2–18 chars, no OCR-split vowel signs, not in the words
+table; titles accepted as facts, body words at ≥ 5 occurrences). Against the real engine
+1,366 already resolved (dropped), 2,276 were spelling variants the engine already
+normalises (উঠেচে → উঠেছে; dropped — adding them would let the variant win its own exact
+key), leaving **1,576 proper nouns + 902 science terms**, written to
+`dictionary-compiler/data/proper_nouns.tsv` and `science_glossary.tsv` with frequencies
+capped at 40 and no usage injection, so they assign tier B (typeable by exact key, never a
+completion, never above a common word); the corpus-authority refresh lifts a few with real
+usage evidence (ক্রিপ্টন → 73) into tier A, which is correct. Known gate limitation: a real
+loanword whose canonical roman the engine happens to normalise to an unrelated dictionary
+word is excluded too (শিকিমেট → সিকিমে, নর্স → নড়ছ) — listed in `s190-review.tsv` for a
+manual pass.
+
+Compiled: 478,835 words (+2,478), 1,810,468 index rows, version 3.9.8
+(`DictionaryVersion.REQUIRED`), slim 31 MB (floor 35, so only the more frequent new names
+reach the JS surfaces).
+
+Commit-dump diff (S181CommitDumpJvm, 132,769 keys before, 133,562 after, 132,759 in
+common): **26 commits changed (0.02%)**, all rare or synthetic keys — most are
+improvements (zekonoo → যেকোনও, sthanangker → স্থানাঙ্কের, khristopuurbe → খ্রিস্টপূর্বে,
+tahaderi → তাহাদেরই, paromanobikta → পারমাণবিকতা, alternativeser → অল্টারনেটিভসের), a few
+junk-to-junk on synthetic keys (drawta, charitablete), three debatable (thekera → ঠেকেরা,
+zayte → জায়তে, shahta → সাহতা) where a new tier-B name owns a key that used to fall to a
+compound; none in the evidenced everyday set. List: `s190-dump-diff.tsv` (archived).
+
+Coverage on the same 6,000-word slices (S188 harness, canonical roman):
+
+| corpus | commit-exact S189 → S190 | on the strip | unknown words | unknown commit-exact |
+|---|---|---|---|---|
+| fresh news | 98.5% → 98.5% | 99.9% → 99.9% | 7 → 6 | 42.9% → 50.0% |
+| places | 96.3% → 96.8% | 99.1% → 99.4% | 97 → 70 | 19.6% → 27.1% |
+| science | 88.5% → 93.8% | 93.1% → 96.7% | 736 → 430 | 27.6% → 47.0% |
+| unions and villages (vs the full-run baseline) | 77.9% → 82.1% | 84.8% → 89.9% | 1,401 → 979 | 15.8% → 18.4% |
+
+One pin flip, documented in `S189StripTwinsJvmTest`: `joyoshongkor` now commits জয়শঙ্কর
+(a tier-B name) instead of the split, with the split on the strip.
+
+

@@ -33,6 +33,26 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S190 dictionary round (2026-09-05, user: "can we add all engine
+  failure words as a dictionary entry" → "start the dictionary round"):**
+  db 3.9.8, DATA ONLY. Curated from the S188 harvest by
+  S190LexiconCurationJvm (opt-in S190_CURATE=1) against the real engine:
+  6,147 static-gate candidates → 1,366 already resolve (dropped), 2,276
+  spelling variants the engine already normalises (dropped — a variant
+  must not win its own exact key), 1,576 proper nouns + 902 science
+  terms kept → dictionary-compiler/data/proper_nouns.tsv +
+  science_glossary.tsv, compiled as a NEW tier-B lexicon list (freq
+  capped at 40, no usage injection — never a completion, never above a
+  common word; corpus authority may still lift an evidenced one to tier
+  A, ক্রিপ্টন@73). Compiled 478,835 words (+2,478), 1,810,468 index rows,
+  slim 31 MB (floor 35). Evidence: 132,759-key commit diff 26 changed
+  (0.02%, rare/synthetic keys, mostly improvements); science commit-exact
+  88.5 → 93.8%, places 96.3 → 96.8%, unions/villages 77.9 → 82.1%, news
+  unchanged; one documented pin flip (joyoshongkor → জয়শঙ্কর, now a known
+  name). Gate limitation recorded: a real loanword the engine normalises
+  to an unrelated word is excluded too (শিকিমেট, নর্স) — s190-review.tsv.
+  Walls --rerun (S156 gotcha), S181 before/after dumps, S188 before/after.
+  Android 1.5.122 (2159); `dictionary` release asset refreshed for CI.
 - **S189 strip twins (2026-09-05, user "continue" after the S188 study;
   engine commit UNTOUCHED — every change is inside getSuggestions after
   the primary is fixed):** four twin families from the study, each an

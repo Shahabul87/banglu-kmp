@@ -50,10 +50,16 @@ class S189StripTwinsJvmTest {
 
     @Test
     fun joinedFormWhenTheSplitterWon() {
-        pin("joyoshongkor", "জয় শঙ্কর", "জয়শঙ্কর", besidePrimary = true)
-        pin("kathomandubhittik", "কাঠমান্ডু ভিত্তিক", "কাঠমান্ডুভিত্তিক", besidePrimary = true)
-        // the split that is wanted keeps its commit; the joined form is only a chip
-        assertEquals(fold("বুঝতে পারছিনা"), commit("bujteparcina"))
+        // S190 pin flip (documented): dictionary 3.9.8 carries জয়শঙ্কর as a
+        // tier-B proper noun (Wikipedia people titles), so the exact word now
+        // owns the commit and the SPLIT form is the strip alternative — the
+        // twin mechanism's job done by data. kathomandubhittik stays OOV and
+        // still exercises the joined twin.
+        assertEquals(fold("জয়শঙ্কর"), commit("joyoshongkor"))
+        assertEquals(fold("কাঠমান্ডুভিত্তিক"), commit("kathomandubhittik"))   // S190: news-harvest compound, now a word
+        // The mechanism itself is pinned on a split that is a deliberate engine
+        // decision and can never become a dictionary word (S-round law, invariant 6).
+        pin("bujteparcina", "বুঝতে পারছিনা", "বুঝতেপারছিনা", besidePrimary = true)
     }
 
     @Test
