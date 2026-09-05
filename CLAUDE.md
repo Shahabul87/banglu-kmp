@@ -33,6 +33,36 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S191 combination strip for unknown words (2026-09-05, user's hand
+  note: "arpara → অর্পারা … since we only use lowercase we have to handle
+  this word construction very carefully — where one letter represents two
+  or more, show the combo: আরপারা (editor), আড়পাড়া, অরপারা, আড়পারা,
+  অর্পারা … rank them based on user selection, keep them in the
+  suggestions"):** the engine's OWN lattice (generateCandidateLattice —
+  r → র/ড়, t → ত/ট, n → ন/ণ, j → য, i/u long, r+consonant PLAIN, no reph)
+  already enumerated those combinations; the S82 real-text oracle then
+  dropped every generated string, so an unknown word ended as one chip.
+  Now, when the primary is NOT a validator word (key 4–14 letters), up to
+  OOV_COMBO_SLOTS=4 clean lattice combinations ride the strip from slot 1
+  (source `oov_combo`, exempt from the oracle — there is no real word to
+  protect), ranked by the lattice's phonetic priors PLUS the user's
+  ambiguity habit: every explicit pick is aligned to its lattice path
+  (latticeChoices) and each (token → expansion) choice counted
+  (recordAmbiguityHabit, cap 10, HABIT_BONUS_PER_PICK 0.12); the habit
+  is DERIVED from the stored picks (rebuilt in applyPreferenceMaps — no
+  new storage, erased with the picks, identical on every surface). The
+  commit never moves (it stays the primary; a pick is learned as a
+  key-level preference by S26 as before). Verified on the JVM: korbone /
+  dekhbone / korbona already commit করবোনে / দেখবোনে / করবোনা — the reph
+  the user saw is the transient mid-word preview (dekhbon → দেখ্বন) before
+  the vowel lands. USER LAW (same day, memory strip-ranking-law):
+  validated words first, the user's picks among them, combinations only
+  BELOW the last validated chip — the first cut put them at slot 1 and the
+  S79/S141 walls caught পার্বণে/বাংলা pushed behind guesses; pinned in
+  validatedWordsAlwaysPrecedeCombinations. S22: arpara → [অর্পারা, আড়পাড়া,
+  আরপারা, আরপাড়া, আড়পারা]; a pick of আড়পাড়া leads and commits on retype and
+  survives a restart; borpara/sorpara/orpari keep their validated words
+  first. Pins S191OovCombinationsJvmTest. Android 1.5.123 (2160).
 - **S190 dictionary round (2026-09-05, user: "can we add all engine
   failure words as a dictionary entry" → "start the dictionary round"):**
   db 3.9.8, DATA ONLY. Curated from the S188 harvest by

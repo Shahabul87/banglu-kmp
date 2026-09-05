@@ -200,6 +200,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         private const val MAX_PRIMARY_STRIP_RANK = 1
         /** S189: a strip twin must be an attested word at least this frequent. */
         private const val TWIN_MIN_FREQUENCY = 30
+        /** S191: combination chips offered for a key whose primary is not a real word. */
+        private const val OOV_COMBO_SLOTS = 4
+        /** S191: strip bonus per remembered pick of the same letter choice (capped per choice). */
+        private const val HABIT_BONUS_PER_PICK = 0.12
+        private const val HABIT_PICK_CAP = 10
 
         /**
          * S8: log-scale frequency gap (~25x real usage on the 60-100 corpus
@@ -3078,6 +3083,64 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             }
         }
 
+        // S191 (user, 2026-09-05, arpara → অর্পারা with ONE chip: "we should
+        // not throw one word but a combination of words … rank them based on
+        // the user selection"): lowercase romans are ambiguous (r → র/ড়,
+        // t → ত/ট, n → ন/ণ, s → স/শ/ষ, r+consonant → reph or plain, initial
+        // a → আ/অ …). When the primary is NOT a real word the lattice's own
+        // combinations ride the strip — the S82 oracle that drops generated
+        // strings has nothing real to protect here — ranked by the lattice's
+        // phonetic priors plus this user's remembered letter choices
+        // (recordAmbiguityHabit, rebuilt from stored picks at load). The
+        // commit stays the primary; the habit only orders the chips.
+        if (limit >= 3 && key.length in 4..14 && key.all { it in 'a'..'z' } && validator.isLoaded() &&
+            !validator.isValid(primary.bengali) && ' ' !in primary.bengali
+        ) {
+            val primaryFolded = ReverseTransliterator.foldNukta(primary.bengali)
+            // Real words already on the visible strip (dictionary twins,
+            // acronym / phrase / twin chips) keep their reachability: the
+            // combinations take only the slots those do not need, and any
+            // real chip a combination displaced is moved back inside the
+            // window (S79 পার্বণে and S141 বাংলা pins).
+            val protectedChips = ordered.take(limit).drop(1).filter {
+                validator.isValid(it.bengali) || it.source == "acronym_suggestion" || it.source == "phrase_completion" ||
+                    it.source == "homograph_twin" || it.source == "fold_twin" || it.source == "chandrabindu_twin"
+            }
+            val allowed = (limit - 1 - protectedChips.size).coerceIn(1, OOV_COMBO_SLOTS)
+            val combos = generateCandidateLattice(key, 40)
+                .asSequence()
+                .filter { it.bengali.isNotEmpty() && ReverseTransliterator.foldNukta(it.bengali) != primaryFolded }
+                .filter { readsAsCleanBengali(it.bengali) && !hasImpossibleNukta(it.bengali) }
+                .map { it.bengali to (it.score + habitBonus(key, it.bengali)) }
+                .sortedByDescending { it.second }
+                .map { it.first }
+                .distinctBy { ReverseTransliterator.foldNukta(it) }
+                .take(allowed)
+                .toList()
+            // USER LAW (2026-09-05): "dictionary validated words must be on
+            // the top priority all time … and rank the others beside them" —
+            // the combinations start BELOW the last validated chip inside the
+            // window; they never sit above a real word.
+            var slot = 1
+            for (i in 0 until minOf(limit, ordered.size)) {
+                if (i > 0 && (ordered[i] in protectedChips || validator.isValid(ordered[i].bengali))) slot = i + 1
+            }
+            for (combo in combos) {
+                val folded = ReverseTransliterator.foldNukta(combo)
+                val idx = ordered.indexOfFirst { ReverseTransliterator.foldNukta(it.bengali) == folded }
+                if (idx >= 0) {
+                    if (idx > slot) { val p = ordered.removeAt(idx); ordered.add(minOf(slot, ordered.size), p) }
+                } else {
+                    ordered.add(minOf(slot, ordered.size), SmartSuggestion(combo, 0.80, "oov_combo", key, "tier1_combo"))
+                }
+                slot++
+            }
+            for (chip in protectedChips) {
+                val ci = ordered.indexOf(chip)
+                if (ci >= limit) { ordered.removeAt(ci); ordered.add(minOf(limit - 1, ordered.size), chip) }
+            }
+        }
+
         // S141 literal law (field report, generalised by the user: "the engine
         // must not ignore what I typed — at least show it in the
         // suggestions"): whenever the commit-path primary is NOT the
@@ -3348,6 +3411,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Generated substitution variants can invent such strings; no gate
         // below checks grapheme validity, so kill them here for every source.
         if (hasImpossibleNukta(suggestion.bengali)) return false
+        // S191: a combination chip exists precisely because NO real word owns
+        // the key — the S82 real-text oracle cannot apply to it.
+        if (suggestion.source == "oov_combo") return true
         if (!respectsSibilantKeyBoundary(key, suggestion.bengali, primary, suggestion.source)) return false
         // S82 (100K corpus study): 99.6% of strip garbage came from the
         // variant generators (ambiguous_variant 78%, candidate_lattice 21%)
@@ -5743,6 +5809,57 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         }
 
         return alternatives.take(config.maxSuggestions - 1)
+    }
+
+    // ── S191: ambiguity habit — which letter choices THIS user picks ──
+    private val ambiguityHabit = HashMap<String, Int>()
+
+    /**
+     * Learn from an explicit pick: align [bengali] to the lattice tokens of
+     * [key] and count each (token → expansion) choice. A pick that is not a
+     * lattice path (a dictionary word with its own spelling) teaches nothing.
+     */
+    fun recordAmbiguityHabit(key: String, bengali: String) {
+        val choices = latticeChoices(key.lowercase().trim(), bengali.trim()) ?: return
+        for ((token, out) in choices) {
+            val id = "$token\u0000$out"
+            ambiguityHabit[id] = minOf(HABIT_PICK_CAP, (ambiguityHabit[id] ?: 0) + 1)
+        }
+    }
+
+    fun clearAmbiguityHabit() { ambiguityHabit.clear() }
+
+    /** Test/diagnostics: is [bengali] a validator word (the "dictionary validated" of the strip law). */
+    fun isKnownWordForStrip(bengali: String): Boolean = validator.isLoaded() && validator.isValid(bengali)
+
+    /** Test/diagnostics: the remembered count for one (token, expansion) choice. */
+    fun ambiguityHabitCount(token: String, out: String): Int = ambiguityHabit["$token\u0000$out"] ?: 0
+
+    private fun habitBonus(key: String, bengali: String): Double {
+        if (ambiguityHabit.isEmpty()) return 0.0
+        val choices = latticeChoices(key, bengali) ?: return 0.0
+        var bonus = 0.0
+        for ((token, out) in choices) bonus += HABIT_BONUS_PER_PICK * (ambiguityHabit["$token\u0000$out"] ?: 0)
+        return bonus
+    }
+
+    /** The (token → expansion) path that spells [bengali] from [key], or null when it is not a lattice path. */
+    private fun latticeChoices(key: String, bengali: String): List<Pair<String, String>>? {
+        if (key.isEmpty() || key.length > 18 || key.any { it !in 'a'..'z' }) return null
+        val out = ArrayList<Pair<String, String>>()
+        var i = 0
+        var cur = ""
+        while (i < key.length) {
+            val token = nextLatticeToken(key, i) ?: return null
+            val rest = bengali.substring(cur.length)
+            val pick = expandLatticeToken(token, key, i, cur)
+                .filter { it.out.isNotEmpty() && rest.startsWith(it.out) }
+                .maxByOrNull { it.out.length } ?: return null
+            out += token to pick.out
+            cur += pick.out
+            i += token.length
+        }
+        return if (cur == bengali) out else null
     }
 
     private fun generateCandidateLattice(key: String, limit: Int = 20): List<CandidatePath> {

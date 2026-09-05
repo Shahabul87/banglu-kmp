@@ -409,3 +409,30 @@ commit exactly — রণহাট, যদুপুর, ক্রিপ্টন
 the two excluded controls still normalise (স্ট্রনশিয়াম → স্ট্রনসিয়াম, মহিষকুন্ডি → মহিষকুণ্ডি),
 and the invariant keys (kmon, kacci, name) are unchanged.
 
+## 8. Implemented: combination strip for unknown words (S191)
+
+User's hand note (arpara → অর্পারা, one chip): with lowercase romans one letter stands
+for two or more Bengali letters, so an unknown word must be offered as its combinations
+(আরপারা, আড়পাড়া, অরপারা, আড়পারা, অর্পারা …), ranked by what the user picks, and all kept on
+the strip. The engine's lattice already generated exactly those (r → র/ড়, t → ত/ট,
+n → ন/ণ, j → য, long vowels, r+consonant without reph); the S82 oracle then dropped every
+generated string as "not real text". S191: when the primary is not a validator word, up
+to four clean lattice combinations ride the strip from slot 1 (`oov_combo`), ranked by
+lattice priors plus a per-user ambiguity habit derived from the stored picks (rebuilt at
+load, erased with them). Commit unchanged. Measured separately: korbone / dekhbone /
+korbona already commit করবোনে / দেখবোনে / করবোনা on JVM and device; the reph the user saw is
+the transient mid-word preview before the vowel arrives.
+
+**Strip law (user, same day):** dictionary-validated words always rank first, the user's
+picks rank among them, and the unvalidated combinations come after them — pinned in
+`S191OovCombinationsJvmTest.validatedWordsAlwaysPrecedeCombinations` (the first cut put
+combinations at slot 1 and the S79 / S141 walls caught পার্বণে and বাংলা pushed behind
+guesses).
+
+Device confirmation (S22, Android 1.5.123): `arpara` → [অর্পারা, আড়পাড়া, আরপারা,
+আরপাড়া, আড়পারা]; picking আড়পাড়া makes it the first chip AND the commit on retype (the
+S26 key preference), and the order survives a keyboard-process restart; `borpara`,
+`sorpara`, `orpari` keep their validated words (বরফ, সর্পিল, অর্পা …) ahead of any
+combination; `korbone` / `dekhbone` commit করবোনে / দেখবোনে (the reph is only the
+transient preview before the vowel).
+

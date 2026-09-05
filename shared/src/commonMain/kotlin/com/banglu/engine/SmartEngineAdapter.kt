@@ -224,6 +224,13 @@ object SmartEngineAdapter {
             selectedPreferenceMap.clear()
             selectedPreferenceMap.putAll(maps.second)
         }
+        // S191: the ambiguity habit is DERIVED from the stored picks (no new
+        // storage, erased with them) — rebuild it whenever the maps are published.
+        engine?.let { e ->
+            e.clearAmbiguityHabit()
+            for ((k, v) in maps.second) e.recordAmbiguityHabit(k, v)
+            for ((k, v) in maps.first) e.recordAmbiguityHabit(k, v)
+        }
     }
 
     /** S139 (F-001): maps built from a storage snapshot are published under
@@ -550,6 +557,9 @@ object SmartEngineAdapter {
         com.banglu.engine.util.runSynchronized(preferenceLock) {
             selectedPreferenceMap[key] = cleanBengali
         }
+        // S191: the pick also teaches the letter-choice habit that ranks the
+        // combination chips of every unknown word from now on.
+        getEngine().recordAmbiguityHabit(key, cleanBengali)
         // Suggestion taps are preferences, not dictionary mutations. Explicit
         // user dictionary formulas still go through addCustomConversion().
         // S66: a preference affects only this key — evict it alone instead of
