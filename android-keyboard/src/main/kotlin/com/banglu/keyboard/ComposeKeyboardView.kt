@@ -1877,12 +1877,15 @@ private fun BangluSuggestionRow(
                 // Feature 4.4: Prediction chips use different styling
                 val isPrediction = suggestion.tier == "prediction"
                 val isPunctuation = suggestion.tier == "punctuation"
+                // S186 (user, screenshot of the EN idle strip): the blue
+                // highlight means "space commits this"; a next-word prediction
+                // is tap-only, so no prediction chip carries it (BN and EN).
                 val chipBg = if (isGhost) Color.Transparent
-                    else if (isFirst && !isPunctuation) colors.suggestionHighlight
+                    else if (isFirst && !isPunctuation && !isPrediction) colors.suggestionHighlight
                     else if (isPrediction) colors.keyBg
                     else colors.suggestionChipBg
                 val chipTextColor = if (isGhost) colors.keyText.copy(alpha = 0.92f)
-                    else if (isFirst && !isPunctuation) Color.White
+                    else if (isFirst && !isPunctuation && !isPrediction) Color.White
                     else colors.keyText
 
                 Box(
@@ -1920,7 +1923,8 @@ private fun BangluSuggestionRow(
                             else scaledSp(15),
                         fontFamily = if (suggestion.tier == TypedChipPolicy.TYPED_ROMAN_TIER) RomanMono else null,
                         fontWeight = if (isFirst) FontWeight.Medium else FontWeight.Normal,
-                        fontStyle = if (isPrediction) FontStyle.Italic else FontStyle.Normal,
+                        // S186: predictions are upright — the muted key background already marks them; italics read oddly on English words.
+                        fontStyle = FontStyle.Normal,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -2636,6 +2640,7 @@ private fun EnterActionKey(
     val keyShape = RoundedCornerShape(KeyCorner)
     val isHorizontalArrow = label == "\u2192" || label == "\u21E5"
     val isReturnArrow = label == "\u21B5"
+    val isSearch = label == "\uD83D\uDD0D"
 
     Box(
         modifier = modifier
@@ -2688,7 +2693,11 @@ private fun EnterActionKey(
             // Scale both by the ACTUAL key height so the glyph stays centered
             // at every row height (portrait normal keeps ratio = 1, unchanged).
             val heightRatio = height / BottomKeyRowHeight
-            Text(
+            // S186 (user: "the search icon is not at the centre of the key"):
+            // a canvas magnifier in the strip's stroke grammar, not the emoji.
+            if (isSearch) {
+                IconSearch(Modifier.size(30.dp * heightRatio), colors.keyText)
+            } else Text(
                 text = label,
                 color = colors.keyText,
                 fontSize = scaledSp(

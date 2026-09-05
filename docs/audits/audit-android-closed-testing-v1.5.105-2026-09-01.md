@@ -1003,3 +1003,12 @@ states; every gap-punctuation call site is BN-gated.
 
 Walls: jvm 768, shared debug 440, android 229, js 456, desktop 41, windows 161 — green.
 
+## S186 — prediction chips, search key (2026-09-05, Android 1.5.120 / 2157)
+
+User (screenshot, WhatsApp search field, EN mode): remove the highlight on the first
+prediction chip; the 🔍 action key sat off-centre. Prediction chips (BN and EN) no
+longer carry the blue commit highlight and are upright; the search action key is a
+canvas magnifier (`IconSearch`); the "।" gap-punctuation bar is hard-gated to BN at its
+append entry. Device: EN idle strip [you, you're, I] upright and unhighlighted, magnifier
+centred. Android unit 229 green.
+

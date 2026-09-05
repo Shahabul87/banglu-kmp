@@ -186,6 +186,20 @@ fun IconArrowHead(modifier: Modifier = Modifier, color: Color, degrees: Float) {
     }
 }
 
+/** S186: search action key — magnifier, drawn so it sits dead-centre (the emoji sat off-centre on Samsung). */
+@Composable
+fun IconSearch(modifier: Modifier = Modifier, color: Color) {
+    Canvas(modifier) {
+        val w = size.width; val h = size.height
+        val stroke = Stroke(width = w * 0.11f, cap = StrokeCap.Round)
+        val r = w * 0.22f
+        val c = Offset(w * 0.44f, h * 0.44f)
+        drawCircle(color, r, c, style = stroke)
+        val d = r * 0.7071f
+        drawLine(color, Offset(c.x + d, c.y + d), Offset(w * 0.82f, h * 0.82f), strokeWidth = w * 0.13f, cap = StrokeCap.Round)
+    }
+}
+
 /** Collapse: chevron pointing down into the keyboard. */
 @Composable
 fun IconChevronDown(modifier: Modifier = Modifier, color: Color) {

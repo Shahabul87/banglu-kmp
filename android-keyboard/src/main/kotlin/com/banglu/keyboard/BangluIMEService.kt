@@ -2322,8 +2322,11 @@ class BangluIMEService : InputMethodService(),
                 spellFix?.let { fix ->
                     suggestions.add(SmartSuggestion(fix, 0.92, ENGLISH_WORD_SOURCE, prefix, "en_spell"))
                 }
+                // S186: between words the chips are predictions (tap-only, no
+                // commit highlight — same tier the BN strip uses).
+                val tier = if (prefix.isEmpty()) "prediction" else "en"
                 items.filter { it != prefix }.forEach { w ->
-                    suggestions.add(SmartSuggestion(w, 0.9, ENGLISH_WORD_SOURCE, prefix, "en"))
+                    suggestions.add(SmartSuggestion(w, 0.9, ENGLISH_WORD_SOURCE, prefix, tier))
                 }
                 // S122: inline emoji suggestions — typed word matches an
                 // emoji keyword (love -> ❤️), Gboard/Samsung behavior. The
@@ -4721,6 +4724,10 @@ class BangluIMEService : InputMethodService(),
     }
 
     private fun appendGapPunctuationSuggestions() {
+        // S186: the দাঁড়ি bar is Bangla-only at every entry (user report of a
+        // "।" chip in English mode) — a late BN prediction job can never
+        // append it to an English strip.
+        if (keyboardMode.value != KeyboardMode.BANGLU) return
         val existing = suggestions.map { it.bengali }.toSet()
         suggestions.addAll(gapPunctuationSuggestions().filter { it.bengali !in existing })
     }

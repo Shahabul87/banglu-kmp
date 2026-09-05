@@ -33,6 +33,17 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S186 strip + search-key polish (2026-09-05, user screenshot of the EN
+  idle strip in the WhatsApp search field: "remove", "the search icon is
+  not at the centre of the key, use another one"):** prediction chips
+  (BN and EN, tier `prediction`) never carry the blue commit highlight —
+  the highlight means "space commits this" and a prediction is tap-only;
+  predictions are upright (the italic read oddly on English words); the
+  EN between-words chips now use the prediction tier. The IME_ACTION_SEARCH
+  key draws `IconSearch` (canvas magnifier, dead-centre) instead of the 🔍
+  emoji. `appendGapPunctuationSuggestions` is hard-gated to BN at its own
+  entry so a late BN prediction job can never append "।" to an English
+  strip. Android 1.5.120 (2157).
 - **S185 English round (2026-09-05, user: "when typing receive show the
   variations — receiving, received … make typing faster in English", "add
   context wording in English when they press spacebar", "if they select
