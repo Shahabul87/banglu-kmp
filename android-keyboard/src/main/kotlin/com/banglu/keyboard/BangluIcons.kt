@@ -200,6 +200,29 @@ fun IconSearch(modifier: Modifier = Modifier, color: Color) {
     }
 }
 
+/** S186: বাক্য (phrases) — a speech bubble with two text lines. */
+@Composable
+fun IconPhrases(modifier: Modifier = Modifier, color: Color) {
+    Canvas(modifier) {
+        val s = pen()
+        val w = size.width; val h = size.height
+        val p = Path().apply {
+            moveTo(w * 0.30f, h * 0.72f)
+            lineTo(w * 0.18f, h * 0.84f)
+            lineTo(w * 0.18f, h * 0.30f)
+            quadraticBezierTo(w * 0.18f, h * 0.18f, w * 0.30f, h * 0.18f)
+            lineTo(w * 0.70f, h * 0.18f)
+            quadraticBezierTo(w * 0.82f, h * 0.18f, w * 0.82f, h * 0.30f)
+            lineTo(w * 0.82f, h * 0.60f)
+            quadraticBezierTo(w * 0.82f, h * 0.72f, w * 0.70f, h * 0.72f)
+            close()
+        }
+        drawPath(p, color, style = s)
+        drawLine(color, Offset(w * 0.34f, h * 0.38f), Offset(w * 0.66f, h * 0.38f), strokeWidth = s.width, cap = StrokeCap.Round)
+        drawLine(color, Offset(w * 0.34f, h * 0.52f), Offset(w * 0.56f, h * 0.52f), strokeWidth = s.width, cap = StrokeCap.Round)
+    }
+}
+
 /** Collapse: chevron pointing down into the keyboard. */
 @Composable
 fun IconChevronDown(modifier: Modifier = Modifier, color: Color) {

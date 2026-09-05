@@ -839,6 +839,7 @@ private fun AdaptiveTopStrip(
             KeyboardActionBar(
                 onSettingsClick = onSettingsClick,
                 onEmojiOpen = onEmojiOpen,
+                onPhrasesOpen = onStickerOpen,
                 onClipboardOpen = onClipboardOpen,
                 onVoiceInput = onVoiceInput,
                 onCursorMove = onCursorMove,
@@ -919,8 +920,8 @@ private fun ToolbarRow(
             ToolbarIconSlot("Emoji", modifier = Modifier.weight(1f), onClick = onEmojiOpen) {
                 IconEmoji(Modifier.size(22.dp), it)
             }
-            ToolbarIconSlot("Stickers", modifier = Modifier.weight(1f), onClick = onStickerOpen) {
-                IconSticker(Modifier.size(22.dp), it)
+            ToolbarIconSlot("Phrases", modifier = Modifier.weight(1f), onClick = onStickerOpen) {
+                IconPhrases(Modifier.size(22.dp), it)
             }
             // S183: the ← → slots exist only on the empty-strip action bar;
             // after a space the strip holds prediction chips, so the pad must
@@ -1256,6 +1257,7 @@ private fun ToolbarIcon(
 private fun KeyboardActionBar(
     onSettingsClick: () -> Unit,
     onEmojiOpen: () -> Unit,
+    onPhrasesOpen: () -> Unit,
     onClipboardOpen: () -> Unit,
     onVoiceInput: () -> Unit,
     onCursorMove: (Int) -> Unit,
@@ -1285,6 +1287,12 @@ private fun KeyboardActionBar(
         // pad; the S160 ← → slots are retired (the pad has them, larger).
         CompactIconSlot("Cursor pad", modifier = Modifier.weight(1f), onClick = onCursorPadOpen) {
             IconCursorPad(Modifier.size(22.dp), it)
+        }
+        // S186 (user, on the বাক্য tab: "bring this section to the front tools
+        // bar, we have one space left"): the phrases tab of the emoji panel
+        // (সালাম ও শুভেচ্ছা …) opens in one tap.
+        CompactIconSlot("Phrases", modifier = Modifier.weight(1f), onClick = onPhrasesOpen) {
+            IconPhrases(Modifier.size(22.dp), it)
         }
         CompactIconSlot("Clipboard", modifier = Modifier.weight(1f), onClick = onClipboardOpen) {
             IconClipboard(Modifier.size(21.dp), it)

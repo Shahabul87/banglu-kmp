@@ -1016,4 +1016,8 @@ Action bar (user, after the S183 mock round: "not any design I prefer … place 
 emoji in the tools section, remove the other two left and right icons because we provide
 the same functionality on that panel, keep settings"): 😊 ✥ 📋 🎤 ⚙ ⋯. The ✥ slot opens
 the four-way pad; the ← → slots are gone (the pad's arrows are larger and hold-repeat).
+Then, from the বাক্য tab: "bring this section to the front tools bar, we have one space
+left" — a 💬 Phrases slot (IconPhrases) after ✥ opens the emoji panel on the phrases tab.
+Final bar: 😊 ✥ 💬 📋 🎤 ⚙ ⋯. Device: bar dump [Emoji, Cursor pad, Phrases, Clipboard,
+Bangla voice typing, Settings, More tools]; Phrases opens on সালাম ও শুভেচ্ছা.
 
