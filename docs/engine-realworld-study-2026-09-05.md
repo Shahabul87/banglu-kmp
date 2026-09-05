@@ -334,3 +334,33 @@ for the rare cases. No rule change proposed.
 - Any change for spelling-variant corpus words (P7): the engine's answer is the standard
   spelling.
 
+## 6. Implemented: F1 + F2 as S189 (strip-only)
+
+Shipped the day of the study, engine commit untouched: chandrabindu twin, key-fold twins
+(s→sh, ii→i, uu→u) via exact store lookups, vowel-initial twin from the primary, joined
+twin when the splitter wins; at most two twins per strip, a twin more frequent than the
+primary beside it, a rarer one above the typed-literal slot. Pins:
+`S189StripTwinsJvmTest`. Before/after on the same three corpora (6,000 words each,
+S188 harness, same code path for "before" — the compiled engine predates the edit):
+
+| corpus, variant | commit-exact before → after | on the strip before → after (weighted) |
+|---|---|---|
+| fresh news, canonical | 98.5% → 98.5% | 99.9% → 99.9% (99.8 → 100.0) |
+| fresh news, typist fold | 91.5% → 91.5% | 97.8% → 99.8% (97.4 → 99.9) |
+| places, canonical | 96.3% → 96.3% | 99.0% → 99.1% |
+| places, typist fold | 80.9% → 80.9% | 94.8% → 97.7% (95.9 → 99.2) |
+| science, canonical | 88.5% → 88.5% | 91.7% → 93.1% |
+| science, typist fold | 80.8% → 80.8% | 87.5% → 91.4% (94.3 → 96.9) |
+
+Commit drift on every key that missed before and after: **0** (news 7 of 7 common misses
+identical, places 90 of 90, science 556 of 556). Miss count on fresh news: 46 → 7. The
+one pin the walls caught on the way: the S52 acronym chip (ba → বিএ) must stay inside the
+visible strip, so a twin now never displaces an acronym or phrase chip.
+
+Device confirmation (S22, 1.5.121): তাঁরা and আই at chip 4, পুলিশ / দেশ / আশা / নোটিশ /
+ভুট্টা beside the primary, জয়শঙ্কর / কাঠমান্ডুভিত্তিক / রসচিঠি as the second chip. Lesson:
+the host asks for eight chips and shows five or six (three when the chips are wide
+compounds), so a twin placed at "limit minus two" was the invisible seventh chip on the
+phone; rarer twins are capped at the fourth chip and the joined form sits beside the
+primary.
+

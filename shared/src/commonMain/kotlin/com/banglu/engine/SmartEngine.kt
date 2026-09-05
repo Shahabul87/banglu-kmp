@@ -198,6 +198,8 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
          * tap away (ghoro: ঘর first, ঘরোয়া/ঘোরা behind it).
          */
         private const val MAX_PRIMARY_STRIP_RANK = 1
+        /** S189: a strip twin must be an attested word at least this frequent. */
+        private const val TWIN_MIN_FREQUENCY = 30
 
         /**
          * S8: log-scale frequency gap (~25x real usage on the 60-100 corpus
@@ -2984,6 +2986,95 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                         SmartSuggestion(twin, 0.9, "homograph_twin", key, "tier0")
                     )
                 }
+            }
+        }
+
+        // S189 (S188 real-world study, strip-only — the commit is never
+        // touched): the spellings a typist may have MEANT by this key, when
+        // the dictionary attests them. Four twin families, measured on 15M
+        // tokens: the omitted chandrabindu (tara → তাঁরা, the most frequent
+        // miss), the s-for-শ/ষ fold (pulis → পুলিশ, the largest by use), the
+        // long-vowel fold (bhuutta → ভুট্টা), the vowel-initial a → আ (ai → আই),
+        // and the joined form when the compound splitter won (joyoshongkor →
+        // জয়শঙ্কর). Key-variant twins are exact store lookups (memoized, one
+        // query each); a twin more frequent than the primary sits beside it,
+        // a rarer one holds the last visible slot. At most two twins per strip.
+        if (limit >= 2 && key.length >= 2 && key.all { it in 'a'..'z' } && validator.isLoaded()) {
+            val primaryFolded = ReverseTransliterator.foldNukta(primary.bengali)
+            val primaryFreq = validator.getFrequency(primary.bengali)
+            var twinsAdded = 0
+            // A rarer twin must still be ON SCREEN: hosts ask for 8 chips
+            // (Android safeSuggestions) but a phone shows five or six before
+            // the strip scrolls, so the slot is capped at the fourth chip
+            // (device check: with limit-2 the twin was the invisible seventh).
+            val lastTwinSlot = maxOf(1, minOf(3, limit - 2))
+            // S52 guarantees an acronym chip (ba → বিএ) within the visible strip;
+            // a twin may never push it out (pin caught by the wall).
+            val protectedChips = ordered.take(limit).filter { it.source == "acronym_suggestion" || it.source == "phrase_completion" }
+            fun offerTwin(word: String, source: String, beside: Boolean) {
+                if (twinsAdded >= 2 || word.isEmpty()) return
+                val folded = ReverseTransliterator.foldNukta(word)
+                if (folded == primaryFolded) return
+                val target = if (beside) 1 else lastTwinSlot
+                val idx = ordered.indexOfFirst { ReverseTransliterator.foldNukta(it.bengali) == folded }
+                if (idx in 0..target) return
+                if (idx > target) {
+                    val promoted = ordered.removeAt(idx)
+                    ordered.add(minOf(target, ordered.size), promoted)
+                } else {
+                    ordered.add(minOf(target, ordered.size), SmartSuggestion(word, 0.85, source, key, "tier1_twin"))
+                }
+                for (chip in protectedChips) {
+                    val ci = ordered.indexOf(chip)
+                    if (ci >= limit) { ordered.removeAt(ci); ordered.add(minOf(limit - 1, ordered.size), chip) }
+                }
+                twinsAdded++
+            }
+            // (a) chandrabindu the typist cannot type: insert ঁ after each base
+            // cluster of the primary, keep the most frequent attested form.
+            val pb = primary.bengali
+            if ('ঁ' !in pb && ' ' !in pb && pb.length <= 12) {
+                var best = ""; var bestF = 0
+                for (i in 1..pb.length) {
+                    val prev = pb[i - 1]
+                    if (prev == '্' || prev == 'ঁ' || prev == 'ং' || prev == 'ঃ') continue
+                    val cand = pb.substring(0, i) + "ঁ" + pb.substring(i)
+                    val f = validator.getFrequency(cand)
+                    if (f > bestF) { bestF = f; best = cand }
+                }
+                if (bestF >= TWIN_MIN_FREQUENCY) offerTwin(best, "chandrabindu_twin", beside = bestF >= primaryFreq)
+            }
+            // (b) key-fold twins through the store: s → sh, ii → i, uu → u, a → aa.
+            val variants = LinkedHashSet<String>()
+            for (i in key.indices) {
+                if (key[i] == 's' && (i + 1 >= key.length || key[i + 1] != 'h') && (i == 0 || key[i - 1] != 's')) {
+                    variants += key.substring(0, i) + "sh" + key.substring(i + 1)
+                }
+            }
+            if ("ii" in key) variants += key.replace("ii", "i")
+            if ("uu" in key) variants += key.replace("uu", "u")
+            // (b2) vowel-initial a → আ / এ: the store's canonical for "aai"/"aata"
+            // is unreliable (aata → আয়াটা), so the twin is the primary itself with
+            // the other initial vowel (এই → আই, এটা → আটা), attested.
+            if (key.startsWith("a") && pb.isNotEmpty() && ' ' !in pb) {
+                val swapped = when (pb.first()) { 'এ' -> "আ" + pb.drop(1); 'আ' -> "এ" + pb.drop(1); else -> null }
+                if (swapped != null) {
+                    val f = validator.getFrequency(swapped)
+                    if (f >= TWIN_MIN_FREQUENCY) offerTwin(swapped, "vowel_initial_twin", beside = f > primaryFreq)
+                }
+            }
+            for (v in variants.take(4)) {
+                if (twinsAdded >= 2) break
+                val hit = storeLookup(v).firstOrNull { it.tier == PhoneticIndexHit.TIER_A } ?: continue
+                val f = validator.getFrequency(hit.bengali)
+                if (f < TWIN_MIN_FREQUENCY) continue
+                offerTwin(hit.bengali, "fold_twin", beside = f > primaryFreq)
+            }
+            // (c) the joined form when the splitter won — what the user typed, as
+            // one word. Beside the primary: split chips are wide, and on the
+            // device the fourth chip was already off-screen for these keys.
+            if (' ' in pb && pb.count { it == ' ' } == 1) {
+                offerTwin(pb.replace(" ", ""), "joined_twin", beside = true)
             }
         }
 

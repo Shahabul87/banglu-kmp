@@ -33,6 +33,33 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S189 strip twins (2026-09-05, user "continue" after the S188 study;
+  engine commit UNTOUCHED — every change is inside getSuggestions after
+  the primary is fixed):** four twin families from the study, each an
+  attested word (validator frequency ≥ 30, TWIN_MIN_FREQUENCY), at most
+  two per strip, a twin more frequent than the primary sits at slot 1,
+  a rarer one at the slot ABOVE the S141 typed-literal (that rule runs
+  later and used to push তাঁরা off the strip): (a) chandrabindu twin —
+  ঁ inserted after each base cluster of the primary (tara → তারা + তাঁরা,
+  the most frequent S188 miss); (b) key-fold twins through memoized exact
+  store lookups — s → sh at each bare s, ii → i, uu → u (pulis → পুলিস +
+  পুলিশ beside, des → দেশ, asa → আশা, bhuutta → ভূতটা + ভুট্টা); (c)
+  vowel-initial twin from the primary itself (এই → আই, এটা → আটা; the
+  store's canonical for "aai"/"aata" is unreliable — aata → আয়াটা); (d)
+  joined twin when the compound splitter won (joyoshongkor → জয় শঙ্কর +
+  জয়শঙ্কর; bujteparcina keeps its split commit). Pins
+  S189StripTwinsJvmTest (commit-unchanged asserted per key). Measured
+  with the S188 harness before/after on fresh news, places, science
+  (6,000 words each): commit-exact identical, 0 commit drift on 653
+  common miss keys, strip coverage typist news 97.8 → 99.8%, places 94.8
+  → 97.7%, science 87.5 → 91.4%, news misses 46 → 7. Walls caught the
+  S52 ba → বিএ acronym pin (a twin now never displaces an acronym or
+  phrase chip). DEVICE LAW learned: Android asks for 8 chips and shows
+  five or six (three for wide compound chips) — a "last slot" twin at
+  limit-2 was the invisible seventh; rarer twins are capped at the fourth
+  chip and the joined twin sits beside the primary. S22: তাঁরা/আই at chip
+  4, পুলিশ/দেশ/আশা/নোটিশ/ভুট্টা beside, জয়শঙ্কর second. Android 1.5.121
+  (2158); engine propagated to every surface.
 - **S188 real-world coverage study (2026-09-05, user: "newspapers, golpo/
   uponnas, science, names, objects, districts, villages — find every word
   the engine cannot handle, the failure pattern, test on real devices, one
