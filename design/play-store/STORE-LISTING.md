@@ -30,7 +30,7 @@ TYPE THE WAY YOU ALREADY TYPE
 • Understands real chat spellings, not just textbook ones: issa → ইচ্ছা, korsi → করছি, somossa → সমস্যা, hosse → হচ্ছে
 • Shorthand that just works: kmon → কেমন, bujteparcina → বুঝতে পারছিনা
 • No shift key, ever: hold c for a chandrabindu (cha + hold c + d → চাঁদ), and ৎ ঁ ঃ ক্ষ জ্ঞ all come from plain lowercase letters
-• Type z and you get য, type j and you get জ — names come out the way you spell them (aziz → আযিয), with the dictionary spelling one tap away
+• Type z and you get য, type j and you get জ — names come out the way you spell them (aziz → আযিয), with the standard spelling one tap away
 • Mixed Bangla-English in the same sentence: names, brands and English words like time, line, online come out right
 • Glide typing: slide through the letters, lift, done
 
@@ -46,12 +46,12 @@ PRIVATE BY DEFAULT
 • The keyboard works 100% offline — your keystrokes never leave your device
 • No ads. Ever. Not in the typing surface, not anywhere
 • The typing engine has no network access — enforced by the app's architecture, not just policy
-• Your personal dictionary stays on your phone; learning can be switched off and erased any time
+• What the keyboard learns from you stays on your phone; learning can be switched off and erased any time
 • Voice typing is optional and clearly disclosed before first use
 
 FAST ON EVERY PHONE
-• The full 480,000-word dictionary runs on every phone; a lighter mode is there as a switch if you ever want it
-• Key presses never wait on the dictionary — conversion runs off the typing thread
+• Full power on every phone; a lighter mode is there as a switch if you ever want it
+• Key presses never wait on the engine — conversion runs off the typing thread
 • Nothing runs while the keyboard is hidden
 
 MADE FOR BANGLA
@@ -82,7 +82,7 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 • Smooth deleting: one letter per backspace, no re-guessing
 • z is য, j is জ — names come out as you spell them
 • Faster two-thumb typing: a space never lands late
-• Lower memory while typing; the full dictionary on every phone
+• Lower memory while typing; full power on every phone
 • New guide card: চন্দ্রবিন্দু
 ```
 (~420 chars)
@@ -111,7 +111,7 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 • শর্টহ্যান্ড: kmon → কেমন, bujteparcina → বুঝতে পারছিনা
 • একই বাক্যে বাংলা-ইংরেজি মিলিয়ে লিখুন — time, line, online ঠিকঠাক আসবে
 • শিফট লাগে না: c চেপে ধরলেই চন্দ্রবিন্দু (cha + c চেপে ধরুন + d → চাঁদ); ৎ ঁ ঃ ক্ষ জ্ঞ সব ছোট হাতের অক্ষরে
-• z লিখলে য, j লিখলে জ — নাম যেভাবে লেখেন সেভাবেই আসে, অভিধানের বানান এক ট্যাপ দূরে
+• z লিখলে য, j লিখলে জ — নাম যেভাবে লেখেন সেভাবেই আসে, প্রচলিত বানান এক ট্যাপ দূরে
 • গ্লাইড টাইপিং: অক্ষরের ওপর দিয়ে আঙুল টানুন, ছাড়ুন, শব্দ হয়ে গেল
 
 যা দেখবেন, তা-ই লেখা হবে
@@ -123,10 +123,10 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 সম্পূর্ণ প্রাইভেট
 • কীবোর্ড ১০০% অফলাইনে চলে — আপনার লেখা ফোনের বাইরে যায় না
 • কোনো বিজ্ঞাপন নেই
-• ব্যক্তিগত অভিধান আপনার ফোনেই থাকে; শেখা বন্ধ করার সুইচ আছে
+• কীবোর্ড আপনার থেকে যা শেখে তা ফোনেই থাকে; শেখা বন্ধ ও মুছে ফেলার সুইচ আছে
 
 সব ফোনে দ্রুত
-• ৪,৮০,০০০ শব্দের পুরো অভিধান সব ফোনেই চলে; হালকা মোড চাইলে সেটিংসে সুইচ আছে
+• সব ফোনেই পুরো ক্ষমতায় চলে; হালকা মোড চাইলে সেটিংসে সুইচ আছে
 • বাজেট ফোনেও তাৎক্ষণিক সাড়া — ২ জিবি র‍্যামেও মসৃণ
 • কীবোর্ড লুকানো থাকলে কিছুই চলে না — পর্দার বাইরে গেলে থেমে যায়
 

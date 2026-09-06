@@ -12,7 +12,7 @@ Gate: certified on the S22 (activation 240 ms, Dalvik+native heap 113 MB, frames
 • Smooth deleting: one letter per backspace, no re-guessing
 • z is য, j is জ — names come out as you spell them
 • Faster two-thumb typing: a space never lands late
-• Lower memory while typing; the full dictionary on every phone
+• Lower memory while typing; full power on every phone
 • New guide card: চন্দ্রবিন্দু
 
 ## Rounds included since the last notes
