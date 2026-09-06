@@ -133,7 +133,8 @@ object BangluWebEngine {
         val ranked = engine.rerankWithContext(
             prev2Bengali = prev2.trim().ifEmpty { null },
             prev1Bengali = prev1.trim().ifEmpty { null },
-            result = base
+            result = base,
+            key = trimmed   // S198: an explicit ^ is never reranked away
         )
         return ranked.bengali
     }

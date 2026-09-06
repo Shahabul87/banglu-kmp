@@ -7814,8 +7814,13 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     fun rerankWithContext(
         prev2Bengali: String?,
         prev1Bengali: String?,
-        result: ConversionResult
+        result: ConversionResult,
+        /** S198: the typed key. An explicit chandrabindu marker (^) is a
+         *  decision, never a candidate — the S22 showed "bad ami", caret after
+         *  বা, hold c → বাঁদ on screen, then the bigram after আমি committed বাদ. */
+        key: String = ""
     ): ConversionResult {
+        if ('^' in key) return result
         // S78: the user's own repeated pairs outrank corpus evidence — and
         // work even when the corpus model is absent (lite mode).
         promoteByUserBigram(prev1Bengali, result)?.let { return it }

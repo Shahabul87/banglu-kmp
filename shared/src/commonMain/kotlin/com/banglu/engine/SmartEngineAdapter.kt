@@ -290,7 +290,8 @@ object SmartEngineAdapter {
         val contextRanked = eng.rerankWithContext(
             prev2Bengali = recent.getOrNull(1),
             prev1Bengali = recent.getOrNull(0),
-            result = result
+            result = result,
+            key = word   // S198: an explicit ^ is never reranked away
         )
         return applyUserPreference(word, contextRanked)
     }

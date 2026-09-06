@@ -33,6 +33,25 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S198 explicit chandrabindu is never reranked (2026-09-06, user: "when
+  I am moving cursor in other words to place chandra bindu … cursor
+  suddenly moved to the last and chandrabindu is popping up on the top of
+  the last words. do test in real phone"):** reproduced on the S22 —
+  "bad ami", caret after বা (arrows OR a tap into the word), hold c → বাঁদ
+  on screen, but the next commit wrote বাদ and the caret sat at the word
+  end: the commit runs through `convertWordWithContext`, and with আমি as
+  the previous word the bigram rerank preferred বাদ over বাঁদ, discarding
+  an explicit marker. Fix at the one choke point every surface uses:
+  `SmartEngine.rerankWithContext(…, key)` returns the result untouched
+  when the key carries `^` (adapter + JS facade pass the key). Two more
+  from the same session: the mid-word caret restore now anchors on the
+  COMMITTED text (a reranked/reconciled commit could be shorter than the
+  preview and the restore bailed), and a hold-c with nothing to sit on
+  (word start, empty field) is ignored instead of inserting a lone ঁ.
+  Device (S22 + emulator, 1.5.131): বাঁKদ আমি (arrows), বাঁKদ আমি (tap),
+  আমি বাঁKদ আমি (middle word), বাদঁK (word end), বামঁKদ (letter then
+  sign), word start unchanged. Pins S198ExplicitMarkerContextJvmTest.
+  Android 1.5.131 (2168).
 - **S197 full mode is the default (2026-09-06, user: "lite mode triggering
   might cause words accuracy issue, so check so that it is not automatically
   happen. make the full mode default because phone is good configuration in

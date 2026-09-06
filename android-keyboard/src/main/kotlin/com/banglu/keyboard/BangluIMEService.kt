@@ -2066,6 +2066,9 @@ class BangluIMEService : InputMethodService(),
             midWordSuffixVisible = null
             // S184: the chandrabindu marker edits the word like a letter.
             if (char.isLetter() || char == '^') tryResumeComposingBeforeTyping(ic)
+            // S198: a chandrabindu with no letter to sit on (word start, empty
+            // field) used to insert a lone ঁ — there is nothing to mark; ignore.
+            if (char == '^' && buffer.isEmpty()) return
         }
         // S174/S175: after a mid-word resume the letter lands at the edit
         // point inside the word, not at its end.
@@ -5099,7 +5102,7 @@ class BangluIMEService : InputMethodService(),
             if (run.visible.isNotEmpty() && composingVisibleText == run.visible) {
                 log("commitBufferedWordFast: deletion run commits visible '${run.visible}'")
                 ic.commitText(run.visible + appendText, 1)
-                if (appendText.isEmpty()) restoreMidWordCaretAfterCommit(ic, run.visible.length)
+                if (appendText.isEmpty()) restoreMidWordCaretAfterCommit(ic, run.visible)
                 midWordComposingStart = null
                 midWordSuffixVisible = null
                 lastCommittedTextLength = run.visible.length + appendText.length
@@ -5118,7 +5121,7 @@ class BangluIMEService : InputMethodService(),
         if (cached != null) {
             log("commitBufferedWordFast: committing '${cached.bengali}' cached=true")
             ic.commitText(cached.bengali + appendText, 1)
-            if (appendText.isEmpty()) restoreMidWordCaretAfterCommit(ic, cached.bengali.length)
+            if (appendText.isEmpty()) restoreMidWordCaretAfterCommit(ic, cached.bengali)
             midWordComposingStart = null
             midWordSuffixVisible = null
             lastCommittedTextLength = cached.bengali.length + appendText.length
@@ -5149,7 +5152,7 @@ class BangluIMEService : InputMethodService(),
             ?: runCatching { SmartEngineAdapter.convertForInstantPreview(phonetic) }.getOrDefault(phonetic)
         log("commitBufferedWordFast: fast-committing visible '$committedNow', reconcile pending")
         ic.commitText(committedNow + appendText, 1)
-        if (appendText.isEmpty()) restoreMidWordCaretAfterCommit(ic, committedNow.length)
+        if (appendText.isEmpty()) restoreMidWordCaretAfterCommit(ic, committedNow)
         midWordComposingStart = null
         midWordSuffixVisible = null
         lastCommittedTextLength = committedNow.length + appendText.length
@@ -5531,10 +5534,12 @@ class BangluIMEService : InputMethodService(),
      * edit point are cleared; the committed text starts where the composing
      * span started.
      */
-    private fun restoreMidWordCaretAfterCommit(ic: InputConnection, committedLength: Int) {
+    private fun restoreMidWordCaretAfterCommit(ic: InputConnection, committed: String) {
         val start = midWordComposingStart ?: return
-        val offset = deletionRun?.prefixVisibleLength ?: midWordCaretOffset(composingVisibleText) ?: return
-        if (offset < 0 || offset >= committedLength) return
+        // S198: the committed text can differ from the preview (a rerank, a
+        // reconcile) — anchor on the committed text itself.
+        val offset = deletionRun?.prefixVisibleLength ?: midWordCaretOffset(committed) ?: return
+        if (offset < 0 || offset >= committed.length) return
         ic.setSelection(start + offset, start + offset)
     }
 
