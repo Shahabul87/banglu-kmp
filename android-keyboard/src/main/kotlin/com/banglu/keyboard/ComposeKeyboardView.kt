@@ -188,7 +188,9 @@ private fun middleLetterRowIndent(): Dp {
     else (config.screenWidthDp * 0.058f).dp
 }
 
-private data class KeyAlternative(val label: String, val input: String)
+/** [direct]: the hold inserts this alternative itself (replacing the pressed
+ *  letter) instead of opening a popup — S194d, chandrabindu on hold-c. */
+private data class KeyAlternative(val label: String, val input: String, val direct: Boolean = false)
 
 // ── Dimensions ───────────────────────────────────────────────────────────────────
 // S21 seam fix: KeyGapV folded INTO each row's touch cell (row heights +3dp,
@@ -2301,7 +2303,10 @@ private val LONG_PRESS_ALTERNATIVES = mapOf(
     // letter"): "^" is the engine's chandrabindu marker — it joins the roman
     // buffer, so cha + hold-c + d previews and commits চাঁদ, and inside a
     // committed word the S174 mid-word plan carries it (BackspaceResume).
-    'c' to listOf(KeyAlternative("ঁ", "^")),
+    // S194d (user: "after ch if I press c and hold, chandrabindu should
+    // appear on top of the letter, not a popup I have to press again"): the
+    // hold itself replaces the c with the marker — no second tap.
+    'c' to listOf(KeyAlternative("ঁ", "^", direct = true)),
     't' to listOf(KeyAlternative("ট", "ট")),
     'd' to listOf(KeyAlternative("ড", "ড")),
     'r' to listOf(KeyAlternative("ড়", "ড়")),
@@ -2841,7 +2846,14 @@ private fun KeyButton(
                             // popup itself is suppressed (finger is travelling).
                             longPressed = true
                             if (!glideActiveNow()) {
-                                showAlternatives = true
+                                val direct = longPressOptions.singleOrNull()?.takeIf { it.direct }
+                                if (direct != null) {
+                                    // S194d: the pressed letter went out on DOWN (S11);
+                                    // the hold swaps it for the sign, no popup.
+                                    (onReplaceLast ?: onTextInput)(direct.input)
+                                } else {
+                                    showAlternatives = true
+                                }
                                 if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             }
                         }

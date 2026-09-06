@@ -64,7 +64,12 @@ cost, and privacy-promise reasons; see memory + git history).
   day: "you have to mention it in the tutorial because our keyboard do
   not press shift key at all"): the cap is titled "c চেপে ধরুন" and every
   note leads with the gesture and "শিফট লাগে না"; the computer form (^)
-  is the aside. The sign itself lives only on the keycap — an isolated ঁ inside
+  is the aside. S194d (user: "if I press and hold c it shows chandrabindu
+  and I need to click on that … should appear on top of the letter, not a
+  popup, I want to bypass that"): the hold on c REPLACES the c with the
+  marker itself at the long-press timeout (KeyAlternative.direct) — no
+  popup, no second tap; other hold keys (t/d/r/s/i/u) keep their popup.
+  The sign itself lives only on the keycap — an isolated ঁ inside
   prose renders as a dotted-circle placeholder (screenshot), so the prose
   says চন্দ্রবিন্দু. Android 1.5.127 (2164; 1.5.126 was the same round
   before the wording pass); web tutorial-words.json regenerated.
