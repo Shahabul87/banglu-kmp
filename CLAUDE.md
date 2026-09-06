@@ -33,6 +33,21 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S197 full mode is the default (2026-09-06, user: "lite mode triggering
+  might cause words accuracy issue, so check so that it is not automatically
+  happen. make the full mode default because phone is good configuration in
+  almost all people"):** found while verifying S196 on the S22 — the phone
+  answered like the lite profile (amdaer → আময়দাের, motamoto uncorrected,
+  the z-law standing down) because the S195 memory study's synthetic
+  `send-trim-memory` signals had armed the S72 forced-lite counter (5 cold
+  starts). Retired every automatic lite path: `memoryClass < 256`, the trim
+  DEGRADE_TO_LITE (every pressure level now sheds caches only), the S76
+  exit-history arming, the S72/S101 post-load heap guard and the launch
+  counter (an old counter is zeroed once). Lite runs ONLY on the user's
+  switch or an OS-declared low-RAM device (`isLowRamDevice`, Android Go).
+  Trade-off recorded: a capable phone under real memory pressure now keeps
+  the full profile and relies on cache shedding + the OS. Pin flip
+  documented in MemoryPressurePolicyTest. Android 1.5.130 (2167).
 - **S196 overnight round (2026-09-06, user's list: "bad deleting
   experience … horrified words", "cursor movement during chandrabindu",
   the j/z hand note "z maps to য, j maps to জ … aziz → আযিয with আজিজ
@@ -1240,7 +1255,10 @@ never re-triggers an earlier one (order bugs are silent — S27 lesson).
 
 ### 3.6 Lite mode (low-RAM phones)
 
-`liteModeEnabled || isLowRamDevice || memoryClass < 256` → loader skips the
+`liteModeEnabled || isLowRamDevice` (S197: the manual switch or an OS-declared
+low-RAM device ONLY — the memoryClass < 256 heuristic, the S72 trim degrade,
+the S76 exit-history arming and the post-load guard are retired; full mode is
+the default and never flips by itself) → loader skips the
 476K validator list, extended dict, freq scores, disambiguation, bigrams.
 Sqlite store + seeds remain → conversions stay store-backed. Any convertWord-
 wrapper feature must either work without the validator or NOT be mirrored

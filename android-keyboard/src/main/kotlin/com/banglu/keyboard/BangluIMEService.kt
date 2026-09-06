@@ -583,9 +583,7 @@ class BangluIMEService : InputMethodService(),
         private const val PREF_VOICE_TYPING_ENABLED = "voice_typing_enabled"
         /** S72: >0 forces lite dictionary for that many more cold starts. */
         private const val PREF_FORCED_LITE_LAUNCHES = "forced_lite_launches"
-        private const val PREF_FORCED_LITE_VERSION = "forced_lite_version"
         /** S76: timestamp of the newest LOW_MEMORY exit already reacted to. */
-        private const val PREF_LAST_LOW_MEMORY_EXIT_TS = "last_low_memory_exit_ts"
         private const val PREF_VOICE_OFFLINE_PREFERRED = "voice_offline_preferred"
         private const val PREF_RECENT_EMOJIS = "recent_emojis"
         /** S139: separate from the Boolean switch key — see PrefsMigrations. */
@@ -1297,30 +1295,12 @@ class BangluIMEService : InputMethodService(),
         // S76: Android 14+ no longer delivers the imminent-kill trim levels
         // (deprecated, not sent since API 34), so onTrimMemory alone can
         // never degrade on modern devices. The reliable signal is the
-        // PREVIOUS death: if the OS recently killed this process for
-        // memory while in full mode, come up lite.
-        // S101: a new build changes the memory envelope the forced-lite state
-        // was measured against — stale counters from an older build must not
-        // keep a capable device lite (the 1.5.58 guard bug left flagships
-        // stuck in a lite loop; installing the fixed build heals immediately).
-        if (MemoryPressurePolicy.shouldResetForcedLiteState(
-                prefs.getInt(PREF_FORCED_LITE_VERSION, 0), BuildConfig.VERSION_CODE
-            )
-        ) {
-            prefs.edit()
-                .putInt(PREF_FORCED_LITE_VERSION, BuildConfig.VERSION_CODE)
-                .putInt(PREF_FORCED_LITE_LAUNCHES, 0)
-                .apply()
+        // S197: the S72/S76/S101 forced-lite counter is retired — full mode is
+        // the default on every launch. A counter left by an older build is
+        // cleared once so it can never be honoured again.
+        if (prefs.getInt(PREF_FORCED_LITE_LAUNCHES, 0) != 0) {
+            prefs.edit().putInt(PREF_FORCED_LITE_LAUNCHES, 0).apply()
         }
-        maybeArmForcedLiteFromExitHistory()
-        // S72/S76: consume one forced-lite launch per cold start — after
-        // FORCED_LITE_LAUNCHES starts, full mode is retried automatically.
-        // The value is captured BEFORE the decrement (the old order made a
-        // 5-launch grant behave as 4) and served from a field for the rest
-        // of this launch.
-        val forcedLite = prefs.getInt(PREF_FORCED_LITE_LAUNCHES, 0)
-        forcedLiteActiveThisLaunch = forcedLite > 0
-        if (forcedLite > 0) prefs.edit().putInt(PREF_FORCED_LITE_LAUNCHES, forcedLite - 1).apply()
         installCrashDiagnostics()
         installImeRuntimePolicy()
         prefs.registerOnSharedPreferenceChangeListener(preferenceListener)
@@ -1362,7 +1342,6 @@ class BangluIMEService : InputMethodService(),
                 warmGlideLexicons()
                 loadAndWarmPersonalHotSet()
                 log("onCreate: Learned words loaded")
-                degradeIfNoHeapHeadroom()
             } catch (t: Throwable) {
                 if (BuildConfig.DEBUG) Log.e(TAG, "onCreate: Failed to load learned words", t)
             }
@@ -1588,47 +1567,17 @@ class BangluIMEService : InputMethodService(),
     private fun shouldUseLiteDictionary(): Boolean {
         val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
         val lowRamDevice = activityManager?.isLowRamDevice == true
-        val memoryClass = activityManager?.memoryClass ?: Int.MAX_VALUE
-        // < 256 (not <=): modern flagships (S22/Pixel class) report exactly 256m
-        // heapgrowthlimit and must qualify for full mode.
-        // S72/S76: a recent memory-pressure degrade (trim signal, exit
-        // history, or post-load guard) forces lite for this launch. Served
-        // from a field captured at onCreate so the launch counter's
-        // decrement can't race the reads. The tester Samsung's exit history
-        // showed repeated OS LOW_MEMORY kills of the full-mode process
-        // (~172MB heap on a 256m limit).
-        if (forcedLiteActiveThisLaunch) return true
-        return liteModeEnabled.value || lowRamDevice || memoryClass < 256
-    }
-
-    /** S72/S76: true while this launch must run the lite profile. */
-    private var forcedLiteActiveThisLaunch = false
-
-    /** S76: check ApplicationExitInfo (API 30+) for a recent LOW_MEMORY kill
-     *  of the IME process that we have not reacted to yet. */
-    private fun maybeArmForcedLiteFromExitHistory() {
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) return
-        if (prefs.getInt(PREF_FORCED_LITE_LAUNCHES, 0) > 0) return
-        try {
-            val am = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return
-            val lastHandled = prefs.getLong(PREF_LAST_LOW_MEMORY_EXIT_TS, 0L)
-            val kill = am.getHistoricalProcessExitReasons(packageName, 0, 8).firstOrNull { exit ->
-                exit.processName == packageName && // IME process, not :ui
-                    MemoryPressurePolicy.isRecentLowMemoryExit(
-                        exit.reason, exit.timestamp, lastHandled, System.currentTimeMillis()
-                    )
-            } ?: return
-            // commit(), not apply(): this is the exact state that must
-            // survive the next kill.
-            prefs.edit()
-                .putInt(PREF_FORCED_LITE_LAUNCHES, MemoryPressurePolicy.FORCED_LITE_LAUNCHES)
-                .putLong(PREF_LAST_LOW_MEMORY_EXIT_TS, kill.timestamp)
-                .commit()
-            recordImeEvent("memory_degrade_from_exit_history")
-            Log.w(TAG, "Previous process death was LOW_MEMORY — starting in lite mode")
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "exit-history check failed", e)
-        }
+        // S197 (user: "lite mode triggering might cause words accuracy issue …
+        // make the full mode default because phone is good configuration in
+        // almost all people"): FULL is the default. Only the user's own switch
+        // or an OS-declared low-RAM device (Android Go, isLowRamDevice) runs
+        // lite. Retired here: the memoryClass < 256 heuristic, the S72 trim
+        // degrade, the S76 exit-history arming and the S72 post-load guard —
+        // every automatic path that could flip a capable phone into the
+        // weaker profile (the S195 memory study had armed exactly that on the
+        // S22 with synthetic trim signals, and lite answers looked like
+        // engine regressions: amdaer → আময়দাের, motamoto uncorrected).
+        return liteModeEnabled.value || lowRamDevice
     }
 
     /** S72: react to real OS memory pressure instead of waiting to be
@@ -1638,8 +1587,10 @@ class BangluIMEService : InputMethodService(),
         super.onTrimMemory(level)
         val alreadyLite = shouldUseLiteDictionary()
         when (MemoryPressurePolicy.onTrim(level, alreadyLite)) {
-            MemoryPressurePolicy.Action.DEGRADE_TO_LITE -> degradeToLiteForMemoryPressure("trim_level_$level")
-            MemoryPressurePolicy.Action.CLEAR_CACHES -> SmartEngineAdapter.clearTransientCaches()
+            // S197: DEGRADE_TO_LITE is no longer produced; if it ever were, it
+            // sheds caches like any other pressure signal — never the profile.
+            MemoryPressurePolicy.Action.CLEAR_CACHES,
+            MemoryPressurePolicy.Action.DEGRADE_TO_LITE -> SmartEngineAdapter.clearTransientCaches()
             MemoryPressurePolicy.Action.NONE -> return
         }
         // S163: the glide templates (~3.6MB) are droppable — cache files
@@ -1648,44 +1599,6 @@ class BangluIMEService : InputMethodService(),
         glideDecoderBn = null
         glideDecoderEn = null
         hotSetWarmJob?.cancel()
-    }
-
-    /** S72: shed the full dictionary under genuine kill pressure — rebuilds
-     *  the engine in lite mode (store-backed conversions keep working) and
-     *  arms the forced-lite counter so the next cold starts come up lite. */
-    private fun degradeToLiteForMemoryPressure(reason: String) {
-        if (!::prefs.isInitialized) return
-        if (forcedLiteActiveThisLaunch) return // already degraded
-        forcedLiteActiveThisLaunch = true
-        // S76: commit(), not apply() — this write races an imminent kill.
-        prefs.edit().putInt(PREF_FORCED_LITE_LAUNCHES, MemoryPressurePolicy.FORCED_LITE_LAUNCHES).commit()
-        recordImeEvent("memory_degrade_to_lite_$reason")
-        Log.w(TAG, "Memory pressure ($reason): degrading dictionary profile to lite")
-        SmartEngineAdapter.clearTransientCaches()
-        reloadUserLearningAsync()
-    }
-
-    /** S72: adaptive post-load guard — full profile just loaded; if the heap
-     *  is already nearly exhausted, this device cannot sustain it.
-     *
-     *  S101: the naive reading right after a bulk load counts 50-80MB of
-     *  un-collected load debris (cursor strings, staging maps, the raw word
-     *  list) — on 256MB flagships that pushed a healthy ~150MB retained
-     *  profile past the 80% line and armed a forced-lite loop users saw as
-     *  wrong conversions. The guard now confirms with a GC before degrading:
-     *  a cheap pre-check keeps healthy launches GC-free, and only a reading
-     *  that stays high AFTER collection (genuine retention) degrades. */
-    private suspend fun degradeIfNoHeapHeadroom() {
-        val runtime = Runtime.getRuntime()
-        val preUsed = runtime.totalMemory() - runtime.freeMemory()
-        if (!MemoryPressurePolicy.shouldDegradeAfterLoad(preUsed, runtime.maxMemory(), shouldUseLiteDictionary())) {
-            return
-        }
-        withContext(Dispatchers.Default) { runtime.gc() }
-        val used = runtime.totalMemory() - runtime.freeMemory()
-        if (MemoryPressurePolicy.shouldDegradeAfterLoad(used, runtime.maxMemory(), shouldUseLiteDictionary())) {
-            degradeToLiteForMemoryPressure("post_load_headroom")
-        }
     }
 
     override fun onCreateInputView(): View {

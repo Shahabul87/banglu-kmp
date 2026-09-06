@@ -196,8 +196,8 @@ fun BangluSettingsScreen(onBack: () -> Unit) {
     var identityAssist by remember { mutableStateOf(prefs.getBoolean("identity_assist", true)) }
     var clipboardHistory by remember { mutableStateOf(prefs.getBoolean(PrefsMigrations.CLIPBOARD_ENABLED_KEY, false)) }
     // Full dictionary by default: predictions, context reranking, and the strong
-    // commit gate all need the full tables. Weak devices still auto-fall to lite
-    // via the IME's device check (isLowRamDevice / memoryClass < 256).
+    // commit gate all need the full tables. S197: only this switch or an
+    // OS-declared low-RAM device (isLowRamDevice) runs lite — nothing automatic.
     var liteMode by remember { mutableStateOf(prefs.getBoolean("lite_mode", false)) }
     var voiceTypingEnabled by remember { mutableStateOf(prefs.getBoolean("voice_typing_enabled", true)) }
     var voiceOfflinePreferred by remember { mutableStateOf(prefs.getBoolean("voice_offline_preferred", false)) }

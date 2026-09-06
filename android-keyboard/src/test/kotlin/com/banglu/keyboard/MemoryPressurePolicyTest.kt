@@ -15,14 +15,14 @@ import kotlin.test.assertTrue
 class MemoryPressurePolicyTest {
 
     @Test
-    fun `imminent-kill signals degrade full mode to lite`() {
+    fun `S197 - imminent-kill signals shed caches, never degrade to lite`() {
         for (level in listOf(
             MemoryPressurePolicy.TRIM_MEMORY_RUNNING_LOW,
             MemoryPressurePolicy.TRIM_MEMORY_RUNNING_CRITICAL,
             MemoryPressurePolicy.TRIM_MEMORY_COMPLETE
         )) {
             assertEquals(
-                MemoryPressurePolicy.Action.DEGRADE_TO_LITE,
+                MemoryPressurePolicy.Action.CLEAR_CACHES,
                 MemoryPressurePolicy.onTrim(level, alreadyLite = false),
                 "level=$level"
             )
@@ -63,11 +63,11 @@ class MemoryPressurePolicyTest {
         // Platform guidance: new levels may be added — 12 sits between
         // RUNNING_LOW and RUNNING_CRITICAL, 90 above COMPLETE.
         assertEquals(
-            MemoryPressurePolicy.Action.DEGRADE_TO_LITE,
+            MemoryPressurePolicy.Action.CLEAR_CACHES,
             MemoryPressurePolicy.onTrim(12, alreadyLite = false)
         )
         assertEquals(
-            MemoryPressurePolicy.Action.DEGRADE_TO_LITE,
+            MemoryPressurePolicy.Action.CLEAR_CACHES,
             MemoryPressurePolicy.onTrim(90, alreadyLite = false)
         )
         assertEquals(

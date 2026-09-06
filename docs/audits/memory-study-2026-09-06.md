@@ -65,7 +65,16 @@ libc.malloc: ~900 MB allocated and ~900 MB freed per window. Top callsites:
 
 Files: `s195-memory-study/` (timelines, harness, heapprofd config and analyser).
 
-## 5. Not verified here
+## 5. Correction (S197)
+
+The `send-trim-memory RUNNING_CRITICAL/COMPLETE` step at the end of every timeline armed
+the S72 forced-lite counter on the phone, so every WARM run after the first clean run
+measured the **lite** profile (validator and extended tables not loaded). Before/after
+pairs are still like for like (both lite), and the churn sources are profile-independent,
+but the absolute numbers in §4 are lite-profile numbers; the release gate's 198 MB is a
+clean-install full-profile reading. S197 retired the automatic lite paths.
+
+## 6. Not verified here
 
 - The 2 GB low-RAM profile (S171 protocol on the emulator) was not re-run in this
   round; the change reduces churn and adds 6 MB of Dalvik for the filters.

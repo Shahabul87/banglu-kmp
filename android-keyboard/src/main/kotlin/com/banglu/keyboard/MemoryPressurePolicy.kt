@@ -52,9 +52,10 @@ object MemoryPressurePolicy {
      * that intermediate levels may be added.
      */
     fun onTrim(level: Int, alreadyLite: Boolean): Action = when {
-        level >= TRIM_MEMORY_COMPLETE ||
-            (level in TRIM_MEMORY_RUNNING_LOW until TRIM_MEMORY_UI_HIDDEN) ->
-            if (alreadyLite) Action.CLEAR_CACHES else Action.DEGRADE_TO_LITE
+        // S197 (user law: full mode is the default, lite never triggers by
+        // itself): every pressure signal sheds caches; none changes the
+        // profile. DEGRADE_TO_LITE is kept in the enum for the S72 history
+        // and is no longer produced.
         level >= TRIM_MEMORY_RUNNING_MODERATE -> Action.CLEAR_CACHES
         else -> Action.NONE
     }
