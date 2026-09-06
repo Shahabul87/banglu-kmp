@@ -62,7 +62,10 @@ cost, and privacy-promise reasons; see memory + git history).
   and the "n" habit tnar/bansh/shankh…), every pair verified on the real
   engine first and pinned by S157TutorialWordsJvmTest; wording is
   surface-neutral ("^ লিখুন — ফোনে c চেপে ধরুন") because only Android has
-  hold-c. Android 1.5.126 (2163); web tutorial-words.json regenerated.
+  hold-c; the sign itself lives only on the keycap — an isolated ঁ inside
+  prose renders as a dotted-circle placeholder (screenshot), so the prose
+  says চন্দ্রবিন্দু. Android 1.5.127 (2164; 1.5.126 was the same round
+  before the wording pass); web tutorial-words.json regenerated.
 - **S193 no untyped letters (2026-09-06, user screenshot: typed boddhota,
   got অবদ্ধতা; "this kind of engine behaviour might frustrate user
   inserting new letter while he did not type … we have to dig dive"):**
