@@ -1,0 +1,15 @@
+key	expected	device_commit	device_strip	match	in_strip
+boddhota	বদ্ধতা	বদ্ধতা	বদ্ধতা|বদ্ধপরিকর|বদ্ধমূল	True	True
+boddhotar	বদ্ধতার	বদ্ধটার	বদ্ধটার|বদ্ধপরিকর|বদ্ধমূল	False	False
+phiser	ফিসের	ফিসের	ফিসের|ফিশের|অফিসের|ফিসহ	True	True
+boitonik	বৈতনিক	বৈতনিক	বৈতনিক|অবৈতনিক	True	True
+bostha	অবস্থা	অবস্থা	অবস্থা|অবস্থান|অবস্থার|অবস্থায়	True	True
+obostha	অবস্থা	অবস্থা	অবস্থা|অবস্থান|অবস্থার|অবস্থানের	True	True
+shikha	শিক্ষা	শিক্ষা	শিক্ষা|শেখা|শিখা|শিখাও	True	True
+dhonobad	ধন্যবাদ	ধন্যবাদ	ধন্যবাদ|ধনবাদ|ধন্যবাদের	True	True
+modhe	মধ্যে	মধ্যে	মধ্যে|মধে|মধ্যেই|মধ্যই|মধ্যক	True	True
+chhatr	ছাত্র	ছাত্র	ছাত্র|ছাত্রদের|ছাত্রী|ছাত্ররা	True	True
+bangldesh	বাংলাদেশ	বাংলাদেশ	বাংলাদেশ|বাংলাদেশের|বাংলা	True	True
+amdaer	আমাদের	আমাদের	আমাদের|আমাদেরই|আমাদেরও	True	True
+kmon	কেমন	কেমন	কেমন|কোন|কেমতে|কেম	True	True
+motamoto	মতামত	মতামত	মতামত|মতামতকে|মতামতের	True	True

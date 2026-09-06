@@ -143,6 +143,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         return result
     }
 
+    /** S193: abstract-noun suffixes the validator list does not enumerate per stem. */
+    private val DERIVATIONAL_SUFFIXES = listOf("ta" to "তা", "tto" to "ত্ব")
+
     private data class InflectionalSuffix(val phonetic: String, val bengali: String)
 
     private data class CandidatePath(
@@ -1245,8 +1248,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (inTypoCorrection || inCompoundSplit || inNegationCompound || inEmphaticOCompound || inEmphaticICompound) return raw0
         val key = input.trim().lowercase()
         // S192: a far-off fuzzy real word never replaces a clean reading of a
-        // long key (chorpara → চর্চার). Shared with the composing preview.
-        val raw = honestFloorForFarOffFuzzy(key, raw0) ?: raw0
+        // long key (chorpara → চর্চার). S193: an alias row must not add a letter
+        // the user never typed (boddhota → অবদ্ধতা). Both shared with the preview.
+        val honestFloor = honestFloorForFarOffFuzzy(key, raw0)
+        val typedFloor = if (honestFloor == null) typedReadingOverAddedLetters(key, raw0) else null
+        val raw = honestFloor ?: typedFloor ?: raw0
         if (key.length < 4 || !key.all { it in 'a'..'z' }) return raw
         // S24/S26: English-intent arbitration. When an English key collides
         // with an EVIDENCED Bengali inflection (time -> টিমে, printer ->
@@ -1404,7 +1410,17 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 val cleanFloor = (raw.source == ResolutionSource.CLEAN_TRANSLITERATION || raw.source == ResolutionSource.RULE) &&
                     key.length >= 7 && readsAsCleanBengali(raw.bengali)
                 val farOff = cleanFloor && keyReadingDistance(c.bengali, key) >= 3
-                !farOff && (!exactRaw || !(particleKept || keyReadingDistance(c.bengali, key) >= 2))
+                // S193 (device: boddhota → অবদ্ধতা): the typed reading was just
+                // restored because the store's alias row ADDS a letter the user
+                // never typed; a "correction" that adds one again (আবদ্ধতা, the
+                // canonical owner of aboddhota) is the same defect one layer
+                // later. Only the S193 floor is protected — dropped-letter
+                // repairs of an unclean floor (bangldesh) still win.
+                val addsUntypedLetter = typedFloor != null &&
+                    distanceRoman(c.bengali).length > distanceRoman(key).length &&
+                    keyReadingDistance(c.bengali, key) >= 1
+                !farOff && !addsUntypedLetter &&
+                    (!exactRaw || !(particleKept || keyReadingDistance(c.bengali, key) >= 2))
             }?.let { c ->
             c.copy(
                 alternatives = listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.7))) +
@@ -2247,7 +2263,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // documented cost of mid-word kar stability (S83 study: 531 keys).
         val corpusResult = if (key.length >= 4) tryCorpusPhoneticLookup(key) else null
         if (corpusResult != null && corpusResult.confidence >= 0.94) {
-            return corpusResult.copy(alternatives = emptyList())
+            // S193: the store's alias row is gated here exactly as in the
+            // commit wrapper (boddhota → বদ্ধতা, not the alias অবদ্ধতা).
+            return (typedReadingOverAddedLetters(key, corpusResult) ?: corpusResult).copy(alternatives = emptyList())
         }
 
         // S55 mirror (I2 precedence fix): convertWordRaw resolves lexicon-
@@ -2290,7 +2308,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // is Bangla for lexicon-miss English). Study: 41,190 inflected keys,
         // 9,302 rule-floor previews before the fix (docs/audits, S176 section).
         if (key.length >= 4) {
-            val committed = convertWordRaw(key).let { honestFloorForFarOffFuzzy(key, it) ?: it }
+            val committed = convertWordRaw(key).let { honestFloorForFarOffFuzzy(key, it) ?: typedReadingOverAddedLetters(key, it) ?: it }
             if (committed.source != ResolutionSource.ENGLISH_PASSTHROUGH) {
                 return committed.copy(alternatives = emptyList())
             }
@@ -3130,6 +3148,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             val combos = generateCandidateLattice(key, 40, nameStyle = true)
                 .asSequence()
                 .filter { it.bengali.isNotEmpty() && ReverseTransliterator.foldNukta(it.bengali) != primaryFolded }
+                // Bengali script only: the rule layer leaves an unmapped cluster
+                // in place (boddhotar → বোddhঅতার) and readsAsCleanBengali does
+                // not reject Latin (S193 device probe).
+                .filter { c -> c.bengali.all { it in '\u0980'..'\u09FF' } }
                 .filter { readsAsCleanBengali(it.bengali) && !hasImpossibleNukta(it.bengali) }
                 .map { it.bengali to (it.score + habitBonus(key, it.bengali)) }
                 .sortedByDescending { it.second }
@@ -3173,7 +3195,18 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // Applies in the fuzzy band only (< 0.9, the S113 definition): a
         // confident owner of the key (valobashi -> ভালোবাসি, kmon -> কেমন)
         // read the key by the product's own aliases, it did not ignore it.
-        if (limit >= 2 && key.length >= 3 && primary.confidence < 0.9 && key.all { it in 'a'..'z' }) {
+        // S193 (device: boddhota → অবদ্ধতা with no বদ্ধতা anywhere): an alias
+        // row can hand a HIGH-confidence word whose reading carries letters the
+        // user never typed (oboddhota for boddhota). The typed reading then
+        // holds its slot regardless of confidence — the S141 law is about what
+        // was typed, not about how sure the dictionary is.
+        // Shorthand / curated owners (kmon → কেমন at 0.999) are what the user
+        // MEANT — no literal chip for them; the rule targets dictionary alias
+        // rows below that band on keys of five letters or more.
+        val primaryAddsLetters = key.length >= 5 && primary.confidence < 0.99 && key.all { it in 'a'..'z' } &&
+            distanceRoman(primary.bengali).length > distanceRoman(key).length &&
+            keyReadingDistance(primary.bengali, key) >= 1
+        if (limit >= 2 && key.length >= 3 && (primary.confidence < 0.9 || primaryAddsLetters) && key.all { it in 'a'..'z' }) {
             val literal = typedReading(key)
             val literalFolded = ReverseTransliterator.foldNukta(literal)
             if (literal.isNotEmpty() && literalFolded != ReverseTransliterator.foldNukta(primary.bengali) &&
@@ -8152,6 +8185,63 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             floor, 0.62, ResolutionSource.CLEAN_TRANSLITERATION,
             listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.8))) + raw.alternatives.filter { it.bengali != floor }.take(2)
         )
+    }
+
+    /**
+     * S193 (user: "inserting a new letter while he did not type it frustrates
+     * the user"): a dictionary ALIAS row (priority ≥ 1, never the key's
+     * canonical owner) that hands back a word whose reading carries letters the
+     * key does not have (boddhota → অবদ্ধতা, reading "oboddhota") loses the
+     * commit to the clean typed reading (বদ্ধতা); the dictionary word rides as
+     * the first alternative. Shorthand / curated owners (≥ 0.99: kmon → কেমন,
+     * vlo → ভালো) are what the user meant and stay. Keys of five letters or
+     * more only. Shared by the commit wrapper and the composing preview.
+     */
+    private fun typedReadingOverAddedLetters(key: String, raw: ConversionResult): ConversionResult? {
+        if (raw.source != ResolutionSource.DICTIONARY || raw.confidence >= 0.99) return null
+        if (key.length < 5 || !key.all { it in 'a'..'z' } || ' ' in raw.bengali) return null
+        // Only the observed shape: the alias reads as ONE leading vowel plus
+        // the typed key (oboddhota = o + boddhota). Habit aliases that fold a
+        // conjunct INSIDE the word (shikha → শিক্ষা, dhonobad → ধন্যবাদ, modhe →
+        // মধ্যে) are the chat register itself — the 132K-key diff of a wider
+        // "reads longer than the key" gate flipped 386 of them and was rejected.
+        val rawRoman = distanceRoman(raw.bengali)
+        val keyRoman = distanceRoman(key)
+        if (rawRoman.length != keyRoman.length + 1 || rawRoman.substring(1) != keyRoman || rawRoman[0] !in "aeiou") return null
+        val top = storeLookup(key).firstOrNull() ?: return null
+        if (ReverseTransliterator.foldNukta(top.bengali) != ReverseTransliterator.foldNukta(raw.bengali)) return null
+        if (top.priority == PhoneticIndexHit.PRIORITY_CANONICAL) return null
+        val literal = typedReading(key)
+        if (literal.isEmpty() || !literal.all { it in '\u0980'..'\u09FF' } || !readsAsCleanBengali(literal)) return null
+        if (keyReadingDistance(literal, key) != 0) return null
+        // The typed reading must be EVIDENCED: a validated word (phiser →
+        // ফিসের), or an attested stem carrying a productive derivational
+        // suffix that the validator list lacks (boddhota = বদ্ধ + তা). A clean
+        // but unevidenced reading (bostha → বস্থা) is a slip, and the attested
+        // অবস্থা one letter away stays the commit — S181's single-slip law.
+        // Probe over all 1,718 leading-vowel alias keys: 12 validated, 1,083
+        // clean-but-unevidenced left alone.
+        if (!validator.isValid(literal) && !isDerivedFromAttestedStem(key, literal)) return null
+        return ConversionResult(
+            literal, 0.9, ResolutionSource.CLEAN_TRANSLITERATION,
+            listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.85))) + raw.alternatives.filter { it.bengali != literal }.take(2)
+        )
+    }
+
+    /** S193: বদ্ধ + তা — the stem is attested and the engine itself reads the stem's key as it. */
+    private fun isDerivedFromAttestedStem(key: String, literal: String): Boolean {
+        for ((phonetic, bengali) in DERIVATIONAL_SUFFIXES) {
+            if (!key.endsWith(phonetic) || !literal.endsWith(bengali)) continue
+            val stemKey = key.dropLast(phonetic.length)
+            val stemBengali = literal.dropLast(bengali.length)
+            if (stemKey.length < 3 || stemBengali.length < 2) continue
+            if (!isEvidencedWord(stemBengali)) continue
+            val stem = convertWordRaw(stemKey)
+            if (stem.confidence >= 0.9 &&
+                ReverseTransliterator.foldNukta(stem.bengali) == ReverseTransliterator.foldNukta(stemBengali)
+            ) return true
+        }
+        return false
     }
 
     /** Optimal string alignment distance (Levenshtein + adjacent transposition as one edit). */

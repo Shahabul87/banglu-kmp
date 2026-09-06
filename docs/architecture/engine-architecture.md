@@ -1,8 +1,8 @@
 # Banglu Engine — Architecture Reference
 
 **Status:** reference document, written 2026-08-26 against v1.5.87, revised
-2026-09-03 against v1.5.113 and again 2026-09-06 against `main` at v1.5.124 (Android
-2161, dictionary 3.9.8). Rounds S138–S192 are folded in; the S-numbers in the text point
+2026-09-03 against v1.5.113 and again 2026-09-06 against `main` at v1.5.125 (Android
+2162, dictionary 3.9.8). Rounds S138–S193 are folded in; the S-numbers in the text point
 at the commit messages that carry the evidence.
 **Scope:** the shared conversion engine (`shared/`), how each surface hosts it, the
 Android keystroke path, the learning system, the voice pipeline and the dictionary
@@ -161,6 +161,7 @@ flowchart TD
 
     subgraph WRAP["convertWord wrapper — the laws on top of the raw result"]
         FLOOR["S192 honestFloorForFarOffFuzzy (shared with the preview):<br/>key ≥ 7, fuzzy DICTIONARY result < 0.9, no space, whose reading is<br/>≥ 2 away under a transposition-aware (OSA) distance over the typist<br/>folds AND differs from the literal floor in spelling skeleton →<br/>the clean Bengali-only literal floor commits (chorpara→চরপারা, not চর্চার);<br/>the far-off word rides as an alternative"]
+        TYPED["S193 typedReadingOverAddedLetters (shared with the preview):<br/>the store's TOP row is a habit alias whose reading is ONE leading vowel<br/>plus the typed key (oboddhota = o + boddhota — the verb rules obo→bo /<br/>oph→ph leak onto অ-initial nouns, 1,333 such keys) AND the typed reading is<br/>evidenced (validator word, or attested stem + তা/ত্ব) → the typed reading<br/>commits (boddhota→বদ্ধতা, phiser→ফিসের); the alias rides as a chip.<br/>Internal conjunct folds (shikha→শিক্ষা) are NOT letter additions — a wider<br/>gate flipped 386 chat keys and was rejected. A later typo correction<br/>that re-adds the letter is blocked for this floor only."]
         EPI["ENGLISH_PRIMARY_INTENT flips<br/>(vetted keys: line→লাইন) — preference-immune"]
         HON["tryEnglishHonestyFlip (S131)<br/>real→রিয়েল not রোল"]
         PRON["applyEnglishPronunciationLaw (S142)<br/>a correct English word renders its pronunciation<br/>when the Bengali reading sits below the everyday band (75)"]
@@ -168,7 +169,7 @@ flowchart TD
         ONSET["S113 onset-integrity floor (OOV honesty)"]
         JUNK["tryJunkLexiconRescue"]
         TYPO["tryStoreTypoCorrection — with the S141 typed-faithful law:<br/>a clean-reading literal keeps the commit; repairs only<br/>for unclean readings; recovery may change spelling, not the word"]
-        FLOOR --> EPI --> HON --> PRON --> RESC --> ONSET --> JUNK --> TYPO
+        FLOOR --> TYPED --> EPI --> HON --> PRON --> RESC --> ONSET --> JUNK --> TYPO
     end
 
     WRAP --> CTX["context rerank<br/>rerankWithContext(prev2, prev1, result)"]
@@ -226,7 +227,7 @@ flowchart TD
         C2["key < 4 letters: the V2 kar-composition contract<br/>(kri→কৃ, di→দি while typing) — pin-protected,<br/>the documented preview≠commit class"]
         C3["dictionary layer at ≥ 0.88 with storeBeatsDictionary<br/>(the SAME arbitration as the commit, S83)"]
         C4["English detector mirror, corpus hit ≥ 0.94,<br/>english lexicon, section ≥ 0.95"]
-        C5["S176 tail: a completed-looking key (≥ 4) previews<br/>convertWordRaw's OWN cached answer, then the SAME<br/>S192 honest-floor guard as the commit —<br/>parity by construction, zero extra cost<br/>(raw-Latin passthrough stays un-mirrored)"]
+        C5["S176 tail: a completed-looking key (≥ 4) previews<br/>convertWordRaw's OWN cached answer, then the SAME<br/>S192 honest-floor + S193 typed-reading guards as the commit<br/>(S193 also gates the corpus-hit mirror at ≥ 0.94) —<br/>parity by construction, zero extra cost<br/>(raw-Latin passthrough stays un-mirrored)"]
         C1 --> C2 --> C3 --> C4 --> C5
     end
     CC --> W["composing wrapper: the same S142/S143/junk laws<br/>as the commit wrapper, then context rerank"]

@@ -456,3 +456,44 @@ australiante …) where the fuzzy layer used to return an unrelated real word �
 the changed keys occurs in the 1,736 romans of the real-usage top-1,000 lists
 (`docs/audits/s188-realworld-study/s192-dump-diff.tsv`).
 
+## 10. No untyped letters — the leading-vowel alias family (S193)
+
+User screenshot (2026-09-06): typed `boddhota`, got অবদ্ধতা. The user's law: the engine
+must not insert a letter that was not typed.
+
+**Root cause (store probe):** the index's top row for `boddhota` is a habit alias of
+অবদ্ধতা whose canonical key is `oboddhota`. The compiler's verb rule `verb_o_drop_b`
+(obo→bo, built for করব "korobo"→"korbo") and its siblings (oph→ph, ote→te) also rewrite the
+word-initial অ of nouns. Index census: 2,416 alias rows are "the canonical key minus its
+leading vowel"; 1,722 of them (≥ 5 letters) sit at the TOP of their key with no owner —
+1,333 are the `o` family (the leak), 385 are ঈ/ঊ typist folds (`ii`→`i`, `uu`→`u`) that the
+reading distance already treats as equal length and that never trigger anything.
+
+**Fix (shared by commit and preview):** `typedReadingOverAddedLetters` — when the store's
+top row is an alias whose reading is exactly one leading vowel plus the typed key, and the
+typed reading is EVIDENCED (a validator word, or an attested stem plus a productive
+derivational suffix তা/ত্ব: বদ্ধ + তা), the typed reading commits and the alias rides as a
+chip. The S181 typo stage may not re-add the letter for that floor (first cut: আবদ্ধতা,
+the canonical owner of `aboddhota`, won the second time). The composing corpus-hit mirror
+(≥ 0.94) carries the same gate, so preview = commit.
+
+**Rejected by the 132K-key dump (s193-dump-diff.tsv):**
+- "alias reads longer than the key" → 386 keys flipped, the chat register itself
+  (shikha→শিখা, dhonobad→ধনবাদ, modhe→মধে, oboshoi→ওবশৈ). Internal conjunct folds are
+  habit aliases, not letter additions.
+- "a clean reading is enough" → 1,083 of the 1,718 candidates would flip to unevidenced
+  slips (bostha→বস্থা, phise→ফিসে) against S181's single-slip law.
+
+**Measured (s193-leading-vowel-alias-probe.tsv, all 1,718 candidates on the real engine):**
+22 readings validated (12 fire: phiser→ফিসের, boitonik→বৈতনিক, longghoniiy→লঙ্ঘনীয়…; the
+other 10 are unclean or ঈ-folds), 1,083 clean-but-unevidenced left alone, 609 unclean.
+Final dump diff vs S192: **1 key** (phisar → ফিসার, validated; অফিসার stays a chip).
+
+**Device (S22, 1.5.125, s193-device-pass.tsv):** 13/14 — boddhota → বদ্ধতা, phiser → ফিসের,
+boitonik → বৈতনিক, bostha/obostha → অবস্থা, shikha/dhonobad/modhe/chhatr/bangldesh/amdaer/
+kmon/motamoto unchanged. The one "miss" is the checklist's own guess: boddhotar commits
+বদ্ধটার because the S150 law gives the definite article টা ownership of "ta" (no untyped
+letter; বদ্ধতার is a derivational reading the engine does not compose yet).
+
+**Next dictionary round:** anchor obo/oph/ote away from position 0 in the compiler so the
+1,333 aliases disappear at the source; the engine gate then becomes a no-op for them.

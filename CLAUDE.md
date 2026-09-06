@@ -33,6 +33,37 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S193 no untyped letters (2026-09-06, user screenshot: typed boddhota,
+  got অবদ্ধতা; "this kind of engine behaviour might frustrate user
+  inserting new letter while he did not type … we have to dig dive"):**
+  root cause traced with a store probe — the index's TOP row for
+  "boddhota" is a HABIT alias of অবদ্ধতা (canonical key oboddhota): the
+  compiler's verb rule `verb_o_drop_b` (obo→bo, built for korobo→korbo)
+  and its siblings (oph→ph, ote→te) rewrite the word-INITIAL অ of nouns
+  too — 1,333 keys of the shape "canonical minus its leading o" sit at the
+  top of their key with no owner. Two layers had to change, both shared by
+  commit and preview: `typedReadingOverAddedLetters` (store top row is an
+  alias whose reading is exactly one leading vowel + the key, and the typed
+  reading is EVIDENCED — validator word, or attested stem + তা/ত্ব via
+  `isDerivedFromAttestedStem`: বদ্ধ + তা) commits the typed reading with
+  the alias as a chip; and the S181 typo stage may not re-add the letter
+  for that floor (আবদ্ধতা, the canonical owner of aboddhota, was winning
+  the second time). The composing corpus-hit mirror (≥ 0.94) carries the
+  same gate. REJECTED by the 132K-key dump: a wider "alias reads longer
+  than the key" gate flipped 386 keys — the chat register (shikha→শিখা,
+  dhonobad→ধনবাদ, modhe→মধে); and "clean reading is enough" would flip
+  1,083 unevidenced slips (bostha→বস্থা) against S181's single-slip law.
+  Final dump diff vs S192: 1 key (phisar → ফিসার, validated; অফিসার
+  chips). Probe of all 1,718 leading-vowel alias keys archived
+  (docs/audits/s188-realworld-study/s193-leading-vowel-alias-probe.tsv):
+  12 validated readings now commit, 1,083 clean-but-unevidenced stay.
+  Strip: the typed literal also holds a slot whenever the primary's
+  reading is longer than the key (`primaryAddsLetters`, keys ≥ 5, < 0.99);
+  combination chips are Bengali-script-only (boddhotar → বোddhঅতার had
+  Latin). NEXT DICTIONARY ROUND: anchor obo/oph/ote away from position 0
+  so the 1,333 aliases vanish at the source. Pins
+  S193TypedReadingSlotJvmTest (incl. the rejected-gate decisions).
+  Android 1.5.125 (2162).
 - **S192 confusing-word device pass (2026-09-05, user: "do see the
   suggestion by real typing such a lot of confusing words"):** 80 keys
   typed on the S22 (homographs, র/ড়, dental/retroflex, sibilants,
