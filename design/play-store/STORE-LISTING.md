@@ -1,4 +1,4 @@
-# Banglu — Play Store Listing (ready to paste, v1.5.86 / 2123)
+# Banglu — Play Store Listing (ready to paste, v1.5.131 / 2168)
 
 Positioning per market research 2026-07-12: "Avro-compatible but smarter,
 private by default, stable low-surprise typing." All fields respect Play
@@ -23,38 +23,44 @@ Avro-style Bangla typing that is fast, private and fully offline. No ads.
 ## Full description (4000 chars max)
 
 ```
-Type Bangla the way you already type — with English letters, Avro style — and get the word you actually meant. Banglu is built around one promise: predictable, stable, low-surprise typing.
+Type Bangla the way you already type — with English letters, Avro style — and get the word you actually meant. Banglu is built around one promise: predictable, stable, low-surprise typing. Tested word by word with real users; every fix is checked against the top thousand words people actually type.
 
 TYPE THE WAY YOU ALREADY TYPE
 • Avro-compatible phonetic typing: ami → আমি, kemon acho → কেমন আছো
 • Understands real chat spellings, not just textbook ones: issa → ইচ্ছা, korsi → করছি, somossa → সমস্যা, hosse → হচ্ছে
 • Shorthand that just works: kmon → কেমন, bujteparcina → বুঝতে পারছিনা
+• No shift key, ever: hold c for a chandrabindu (cha + hold c + d → চাঁদ), and ৎ ঁ ঃ ক্ষ জ্ঞ all come from plain lowercase letters
+• Type z and you get য, type j and you get জ — names come out the way you spell them (aziz → আযিয), with the dictionary spelling one tap away
 • Mixed Bangla-English in the same sentence: names, brands and English words like time, line, online come out right
-• English loanwords in Bangla script: interesting → ইন্টারেস্টিং
+• Glide typing: slide through the letters, lift, done
 
 WHAT YOU SEE IS WHAT YOU GET
-• The preview above the keyboard is what commits when you press space — and if an autocorrect ever surprises you, one tap on the ↶ chip brings your spelling back
-• Accidental autocorrect? One tap undoes it
+• The preview above the keyboard is exactly what commits when you press space
+• Made a typo in the middle of a word? Tap into it and fix the letter — the whole word re-forms, the cursor stays where you were
+• Deleting is smooth: backspace removes one letter at a time, never re-guesses the word, hold to delete faster
+• Unknown word? The strip shows every spelling that could match (আরপারা, আড়পাড়া, অরপারা…) and remembers the one you choose
+• English mode never replaces the word you typed; a correction is a chip you can tap
 • Smart suggestions and next-word prediction that learn from YOUR writing, on your phone
 
 PRIVATE BY DEFAULT
 • The keyboard works 100% offline — your keystrokes never leave your device
 • No ads. Ever. Not in the typing surface, not anywhere
 • The typing engine has no network access — enforced by the app's architecture, not just policy
-• Your personal dictionary stays on your phone; learning can be switched off any time
+• Your personal dictionary stays on your phone; learning can be switched off and erased any time
 • Voice typing is optional and clearly disclosed before first use
 
 FAST ON EVERY PHONE
-• A lighter dictionary mode switches on automatically on low-memory phones
+• The full 480,000-word dictionary runs on every phone; a lighter mode is there as a switch if you ever want it
 • Key presses never wait on the dictionary — conversion runs off the typing thread
-• Nothing runs while the keyboard is hidden — its lifecycle pauses off screen
+• Nothing runs while the keyboard is hidden
 
 MADE FOR BANGLA
-• Bengali punctuation done right: dari (।) on double space, tight commas, Bangla digits ০-৯
-• Number row, comma key beside the space bar, cursor control by sliding on the space bar
+• Bengali punctuation done right: দাঁড়ি (।) on double space, tight commas, Bangla digits ০-৯
+• Number row, comma key beside the space bar, a four-way cursor pad that never covers your text
 • Full conjunct support: golp → গল্প, shobd → শব্দ, obisasso → অবিশ্বাস্য
+• A built-in guide with letter cards: hundreds of hard words, each shown as the letters you type
 • Light, dark and AMOLED themes, adjustable keyboard height and font size
-• Emoji search, stickers, clipboard history
+• Emoji search, everyday Bangla phrases, clipboard history
 
 VOICE TYPING
 • Speak Bangla, get Bangla — inline, without leaving the keyboard
@@ -66,17 +72,20 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 
 আপনার ভাষা, আপনার কীবোর্ড — বাংলু।
 ```
-(~2,400 chars — well under the 4000 limit)
+(~3,150 chars — under the 4000 limit; re-count after any edit)
 
-## Release notes for 1.5.86 (500 chars max)
+## Release notes for 1.5.131 (500 chars max)
 
 ```
-• Voice typing rebuilt: no dropped speech after pauses, no repeated sentences, automatic commas and দাঁড়ি
-• Clipboard history is now opt-in (off by default); private fields get a one-tap paste of the current clip only
-• Saved email addresses are off by default; "Clear learned data" now really deletes everything
-• Every key works with TalkBack and Switch Access
+• Hold c for a chandrabindu — no shift key, no popup (cha + hold c + d → চাঁদ), also in the middle of a word
+• Fix a letter inside a word and the cursor stays where you were
+• Smooth deleting: one letter per backspace, no re-guessing
+• z is য, j is জ — names come out as you spell them
+• Faster two-thumb typing: a space never lands late
+• Lower memory while typing; the full dictionary on every phone
+• New guide card: চন্দ্রবিন্দু
 ```
-(~330 chars)
+(~420 chars)
 
 ---
 
@@ -101,10 +110,15 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 • চ্যাটের বানানও বোঝে: issa → ইচ্ছা, korsi → করছি, somossa → সমস্যা
 • শর্টহ্যান্ড: kmon → কেমন, bujteparcina → বুঝতে পারছিনা
 • একই বাক্যে বাংলা-ইংরেজি মিলিয়ে লিখুন — time, line, online ঠিকঠাক আসবে
+• শিফট লাগে না: c চেপে ধরলেই চন্দ্রবিন্দু (cha + c চেপে ধরুন + d → চাঁদ); ৎ ঁ ঃ ক্ষ জ্ঞ সব ছোট হাতের অক্ষরে
+• z লিখলে য, j লিখলে জ — নাম যেভাবে লেখেন সেভাবেই আসে, অভিধানের বানান এক ট্যাপ দূরে
+• গ্লাইড টাইপিং: অক্ষরের ওপর দিয়ে আঙুল টানুন, ছাড়ুন, শব্দ হয়ে গেল
 
 যা দেখবেন, তা-ই লেখা হবে
-• স্পেস চাপলে প্রিভিউর লেখাই বসে — আর অটোকারেক্ট অবাক করলে ↶ চিপে এক ট্যাপেই আগেরটা ফেরত
-• ভুল অটোকারেক্ট? এক ট্যাপে আগেরটা ফেরত
+• স্পেস চাপলে প্রিভিউর লেখাই বসে
+• শব্দের মাঝে ভুল অক্ষর? ট্যাপ করে ঠিক করুন — পুরো শব্দ নতুন করে গড়ে ওঠে, কার্সর যেখানে ছিল সেখানেই থাকে
+• মোছা মসৃণ: প্রতি ব্যাকস্পেসে এক অক্ষর, শব্দ আর নতুন করে অনুমান করে না
+• ইংরেজি মোডে আপনার লেখা শব্দ কখনো বদলে দেয় না — সংশোধন একটা চিপ, চাইলে ট্যাপ করুন
 
 সম্পূর্ণ প্রাইভেট
 • কীবোর্ড ১০০% অফলাইনে চলে — আপনার লেখা ফোনের বাইরে যায় না
@@ -112,12 +126,15 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 • ব্যক্তিগত অভিধান আপনার ফোনেই থাকে; শেখা বন্ধ করার সুইচ আছে
 
 সব ফোনে দ্রুত
+• ৪,৮০,০০০ শব্দের পুরো অভিধান সব ফোনেই চলে; হালকা মোড চাইলে সেটিংসে সুইচ আছে
 • বাজেট ফোনেও তাৎক্ষণিক সাড়া — ২ জিবি র‍্যামেও মসৃণ
 • কীবোর্ড লুকানো থাকলে কিছুই চলে না — পর্দার বাইরে গেলে থেমে যায়
 
 বাংলার জন্য তৈরি
 • ডাবল স্পেসে দাঁড়ি (।), বাংলা সংখ্যা ০-৯, স্পেসবারের পাশে কমা
 • যুক্তাক্ষর নিখুঁত: golp → গল্প, shobd → শব্দ
+• চার দিকের কার্সর প্যাড — লেখা ঢাকে না
+• অ্যাপের ভেতরেই গাইড: শত শত কঠিন শব্দের অক্ষর-কার্ড, প্রতিটি যেভাবে টাইপ করবেন সেভাবে দেখানো
 • লাইট, ডার্ক ও AMOLED থিম
 • ইমোজি সার্চ, ক্লিপবোর্ড, ভয়েস টাইপিং — কীবোর্ড না ছেড়েই
 
@@ -131,14 +148,17 @@ Banglu is developed with love for the Bangla-typing community. Found a word that
 ## Console checklist (in order)
 
 1. Play Console → Create app → "Banglu: Bangla Keyboard", App (not game), Free.
-2. Upload `releases/banglu-1.5.86-2123.aab` to **Closed testing** first.
-   - Personal dev accounts created after Nov 2023: 12+ testers opted in for
-     14 continuous days required before production access can be requested.
+2. Upload `releases/banglu-1.5.131-2168.aab` to **Closed testing** first.
+   - Personal dev accounts created after Nov 2023: 20 testers opted in for
+     14 continuous days are required before production access can be
+     requested (the ~50 current testers qualify — keep them on ONE track and
+     do not reset the clock with a new track).
 3. Store listing: paste texts above (en-US default + bn-BD localization).
 4. Graphics: 512×512 icon ✓ (app-icon-512.png), feature-graphic.png ✓ (review
-   whether it reflects current UI), screenshots/ exists — RESHOOT on the S22
-   with the current build (comma key + flush bottom row visible): typing demo,
-   suggestions strip, chat spellings, themes, voice, settings.
+   whether it reflects current UI), screenshots — use `screenshots-1.5.131/`
+   (shot on the 1.5.131 build: home, guide letter card, typing with the strip,
+   English mode, settings, cursor pad, emoji); reshoot whenever the keyboard UI
+   changes.
 5. Privacy policy URL: https://shahabul87.github.io/banglu-privacy-policy/
 6. Data safety: answers in design/play-store/DATA-SAFETY-FORM.md
 7. Content rating questionnaire: Utility → no shared UGC, no ads → "Everyone".
