@@ -33,6 +33,30 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S195 IME memory study (2026-09-06, user: "make sure app performance
+  remains best always" after the smoke heap drifted 228 → 323 MB across
+  clean installs):** measured, not guessed — a 5 s meminfo timeline
+  (docs/audits/s195-memory-study/memstudy.py) proved the dictionary copy
+  innocent and TYPING guilty: ~900 MB of native malloc churn per 4 s while
+  typing, the allocator retaining the arena (306 MB "free") and the smoke
+  sampling right after its own burst. heapprofd (manifest is profileable;
+  perfetto trace processor) named four causes: `Regex(...)` built INSIDE
+  hot-path engine functions (~500 MB of ICU compiles — isCleanSuggestion,
+  vowelPath ×4, hasSuspiciousGeneratedConjunct, lowercaseV2AlignmentScore
+  ×3), sqlite point queries by the hundred per keystroke (2 MB cursor
+  window each + an ephemeral sort table per ORDER BY), and
+  `detectLeakedClosableObjects` in the RELEASE StrictMode VM policy
+  (CloseGuard → a Java stack trace per cursor, ~110 MB). Fixes: ten
+  regexes hoisted to file-level vals (shared, every surface, behaviour
+  identical); CloseGuard debug-only; 64 KB windows for point queries
+  (API 28+); the S144 negative index ported to SqlitePhoneticIndexStore
+  (3 Blooms 6 MB, built < 5 s at MIN_PRIORITY on a daemon thread over
+  plain scans — never DISTINCT, S169b; reverse-lookup memo; english-key
+  short circuit). Result (warm protocol, 2 runs each): native size while
+  typing 216/294 → 139/136 MB, PSS 2 min idle 200/187 → 130/128 MB,
+  churn ~900 → ~150 MB per 4 s, cursor windows ≈ 11× fewer. Report
+  docs/audits/memory-study-2026-09-06.md. Not re-run: the 2 GB low-RAM
+  emulator protocol. Android 1.5.128 (2165).
 - **S194 spacebar rollover + chandrabindu card (2026-09-06, tester via
   Messenger: "sensitivity same as my phone keyboard (Samsung keyboard)…
   English mode typing accuracy degraded"; user: "do investigate"):**

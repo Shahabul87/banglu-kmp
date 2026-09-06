@@ -800,9 +800,14 @@ class BangluIMEService : InputMethodService(),
         }
         val vmPolicyBuilder = StrictMode.VmPolicy.Builder()
             .detectActivityLeaks()
-            .detectLeakedClosableObjects()
             .detectLeakedRegistrationObjects()
             .penaltyLog()
+        // S195 (heapprofd on the S22): detectLeakedClosableObjects switches
+        // CloseGuard on, and CloseGuard captures a Java stack trace for EVERY
+        // cursor and cursor window the store opens — thousands per typing
+        // burst, ~110 MB of native churn per 4 s in the release build.
+        // Debug builds keep the leak detector; release pays nothing for it.
+        if (BuildConfig.DEBUG) vmPolicyBuilder.detectLeakedClosableObjects()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             threadPolicyBuilder.penaltyListener(strictModePenaltyExecutor) { violation ->
@@ -5009,11 +5014,14 @@ class BangluIMEService : InputMethodService(),
             || before.endsWith("\n ")
     }
 
+    /** S195: compiled once — this ran a fresh regex compile on every commit. */
+    private val WHITESPACE_RUN = Regex("\\s+")
+
     private fun lastBengaliWordBeforeCursor(ic: InputConnection): String {
         val before = ic.getTextBeforeCursor(64, 0)?.toString().orEmpty().trimEnd()
         if (before.isEmpty()) return ""
         val token = before
-            .split(Regex("\\s+"))
+            .split(WHITESPACE_RUN)
             .lastOrNull()
             .orEmpty()
             .trim { ch -> !isBengaliChar(ch) }

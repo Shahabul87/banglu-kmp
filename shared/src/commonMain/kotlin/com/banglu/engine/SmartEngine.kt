@@ -61,6 +61,20 @@ data class SmartEngineConfig(
     val neuralConfidenceThreshold: Double = 0.70
 )
 
+// S195 (heapprofd on the S22: ~500 MB of ICU regex COMPILES per 4 s of typing —
+// these patterns used to be built inside per-candidate hot-path functions).
+// Compiled once per process; identical behaviour.
+private val LATIN_LETTER = Regex("[A-Za-z]")
+private val DOUBLED_CONSONANT_CONJUNCT = Regex("([কখগঘঙচছজঝঞটঠডঢণতথদধনপফবভমযরলশষসহড়ঢ়য়])্\\1")
+private val SIBILANT_SIBILANT_CONJUNCT = Regex("[সশষ]্[সশষ]")
+private val LONG_I_DIGRAPH = Regex("ee|ii")
+private val LONG_U_DIGRAPH = Regex("oo|uu")
+private val OI_DIPHTHONG = Regex("oi|oy")
+private val NON_VOWEL = Regex("[^aeiou]")
+private val BARE_S = Regex("s(?!h)")
+private val CONSONANT_FINAL_O = Regex("[bcdfghjklmnpqrstvwxyz]o$")
+private val CONSONANT_FINAL_IU = Regex("[bcdfghjklmnpqrstvwxyz][iu]$")
+
 class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     // ======================== Components ========================
@@ -3460,7 +3474,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (suggestion.source == "roman_prefix") return true
         if (suggestion.source == "english_passthrough") return suggestion.bengali.lowercase() == key
         if (suggestion.source == "english_correction") return true
-        if (Regex("[A-Za-z]").containsMatchIn(suggestion.bengali)) return false
+        if (LATIN_LETTER.containsMatchIn(suggestion.bengali)) return false
         // S80 (tester screenshot: পাদ়লে on the strip): nukta composes only
         // ড়/ঢ়/য় — any other base carrying U+09BC is not Bengali orthography.
         // Generated substitution variants can invent such strings; no gate
@@ -3705,8 +3719,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
     }
 
     private fun hasSuspiciousGeneratedConjunct(bengali: String): Boolean =
-        Regex("([কখগঘঙচছজঝঞটঠডঢণতথদধনপফবভমযরলশষসহড়ঢ়য়])্\\1").containsMatchIn(bengali) ||
-            Regex("[সশষ]্[সশষ]").containsMatchIn(bengali)
+        DOUBLED_CONSONANT_CONJUNCT.containsMatchIn(bengali) || SIBILANT_SIBILANT_CONJUNCT.containsMatchIn(bengali)
 
     private fun hasCompatibleVowelPath(key: String, phonetic: String): Boolean {
         if (key.length < 5) return true
@@ -3723,11 +3736,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
 
     private fun vowelPath(value: String): String = value
         .lowercase()
-        .replace(Regex("ee|ii"), "i")
-        .replace(Regex("oo|uu"), "u")
+        .replace(LONG_I_DIGRAPH, "i")
+        .replace(LONG_U_DIGRAPH, "u")
         .replace("ou", "o")
-        .replace(Regex("oi|oy"), "i")
-        .replace(Regex("[^aeiou]"), "")
+        .replace(OI_DIPHTHONG, "i")
+        .replace(NON_VOWEL, "")
 
     private fun vowelPathLcs(a: String, b: String): Int {
         val dp = Array(a.length + 1) { IntArray(b.length + 1) }
@@ -6227,7 +6240,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             score += bengali.count { it == 'শ' } * 1.4
             score += bengali.count { it == 'ষ' } * 0.8
             score -= bengali.count { it == 'স' } * 1.4
-        } else if (Regex("s(?!h)").containsMatchIn(key)) {
+        } else if (BARE_S.containsMatchIn(key)) {
             score += bengali.count { it == 'স' } * 1.0
             score -= bengali.count { it == 'শ' || it == 'ষ' } * 1.4
         }
@@ -6258,12 +6271,12 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             score -= 8.0
         }
 
-        if (Regex("[bcdfghjklmnpqrstvwxyz]o$").containsMatchIn(key)) {
+        if (CONSONANT_FINAL_O.containsMatchIn(key)) {
             if (bengali.endsWith("ো")) score += 0.5
             if (bengali.endsWith("ও")) score -= 0.8
         }
 
-        if (Regex("[bcdfghjklmnpqrstvwxyz][iu]$").containsMatchIn(key)) {
+        if (CONSONANT_FINAL_IU.containsMatchIn(key)) {
             if (bengali.endsWith("ি") || bengali.endsWith("ী") || bengali.endsWith("ু") || bengali.endsWith("ূ")) score += 0.7
             if (bengali.endsWith("ই") || bengali.endsWith("ঈ") || bengali.endsWith("উ") || bengali.endsWith("ঊ")) score -= 0.8
         }
