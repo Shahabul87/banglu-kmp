@@ -60,9 +60,11 @@ cost, and privacy-promise reasons; see memory + git history).
   "চন্দ্রবিন্দু ঁ" (3 caps: dictionary-known chad/has/kacha…, "^" —
   ta^r → তাঁর vs tar → তার, ka^pa vs kapa, ga^ vs gan, pe^cha, ra^dha…,
   and the "n" habit tnar/bansh/shankh…), every pair verified on the real
-  engine first and pinned by S157TutorialWordsJvmTest; wording is
-  surface-neutral ("^ লিখুন — ফোনে c চেপে ধরুন") because only Android has
-  hold-c; the sign itself lives only on the keycap — an isolated ঁ inside
+  engine first and pinned by S157TutorialWordsJvmTest. USER LAW (same
+  day: "you have to mention it in the tutorial because our keyboard do
+  not press shift key at all"): the cap is titled "c চেপে ধরুন" and every
+  note leads with the gesture and "শিফট লাগে না"; the computer form (^)
+  is the aside. The sign itself lives only on the keycap — an isolated ঁ inside
   prose renders as a dotted-circle placeholder (screenshot), so the prose
   says চন্দ্রবিন্দু. Android 1.5.127 (2164; 1.5.126 was the same round
   before the wording pass); web tutorial-words.json regenerated.

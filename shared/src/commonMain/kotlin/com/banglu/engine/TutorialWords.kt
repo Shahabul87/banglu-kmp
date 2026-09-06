@@ -73,7 +73,7 @@ object TutorialWords {
                 Word("ইনশাআল্লাহ", "inshallah", listOf("in", "shal", "lah"), listOf("insaallah", "inshaallah"), "")
             ))
         )),
-        Family("চন্দ্রবিন্দু", "চাঁদ, হাঁস, তাঁর — ডিকশনারি চেনে; না চিনলে ^ লিখুন (ফোনে c চেপে ধরুন)", listOf(
+        Family("চন্দ্রবিন্দু", "চাঁদ, হাঁস, তাঁর — ডিকশনারি চেনে; না চিনলে c চেপে ধরুন — শিফট বা আলাদা কি লাগে না (কম্পিউটারে ^)", listOf(
             CapWords("ঁ", listOf(
                 Word("চাঁদ", "chad", listOf("chad"), listOf("chand", "cha^d"), "ঁ", "", "", "কিছু লিখতে হয় না — বাংলু নিজেই চন্দ্রবিন্দু চেনে"),
                 Word("হাঁস", "has", listOf("has"), listOf("hans", "ha^s"), "ঁ", "", "", "কিছু লিখতে হয় না — বাংলু নিজেই চন্দ্রবিন্দু চেনে"),
@@ -85,17 +85,17 @@ object TutorialWords {
                 Word("সাঁতার", "santar", listOf("san", "tar"), listOf("sa^tar"), "ঁ", "", "", "কিছু লিখতে হয় না — বাংলু নিজেই চন্দ্রবিন্দু চেনে"),
                 Word("হাঁটা", "hata", listOf("ha", "ta"), listOf("hanta"), "ঁ", "", "", "কিছু লিখতে হয় না — বাংলু নিজেই চন্দ্রবিন্দু চেনে")
             )),
-            CapWords("^", listOf(
-                Word("তাঁর", "ta^r", listOf("ta^", "r"), listOf("tnar"), "ঁ", "", "", "tar = তার; ^ দিলে (ফোনে c চেপে ধরুন) তাঁর"),
-                Word("তাঁদের", "ta^der", listOf("ta^", "der"), emptyList(), "ঁ", "", "", "tader = তাদের; ^ দিলে তাঁদের"),
-                Word("কাঁপা", "ka^pa", listOf("ka^", "pa"), emptyList(), "ঁ", "", "", "kapa = কাপা; ^ দিলে কাঁপা"),
-                Word("গাঁ", "ga^", listOf("ga^"), emptyList(), "ঁ", "", "", "ga = গা, gan = গান; ^ দিলে গাঁ"),
-                Word("বাঁকা", "ba^ka", listOf("ba^", "ka"), listOf("banka"), "ঁ", "", "", "^ লিখুন (ফোনে c চেপে ধরুন) — চন্দ্রবিন্দু আসে"),
-                Word("পেঁচা", "pe^cha", listOf("pe^", "cha"), emptyList(), "ঁ", "", "", "^ লিখুন (ফোনে c চেপে ধরুন) — চন্দ্রবিন্দু আসে"),
-                Word("খাঁচা", "kha^cha", listOf("kha^", "cha"), listOf("khancha"), "ঁ", "", "", "^ লিখুন (ফোনে c চেপে ধরুন) — চন্দ্রবিন্দু আসে"),
-                Word("রাঁধা", "ra^dha", listOf("ra^", "dha"), listOf("randha"), "ঁ", "", "", "^ লিখুন (ফোনে c চেপে ধরুন) — চন্দ্রবিন্দু আসে"),
-                Word("ফাঁক", "fa^k", listOf("fa^", "k"), listOf("fank"), "ঁ", "", "", "^ লিখুন (ফোনে c চেপে ধরুন) — চন্দ্রবিন্দু আসে"),
-                Word("ওঁ", "o^", listOf("o^"), emptyList(), "ঁ", "", "", "^ লিখুন (ফোনে c চেপে ধরুন) — চন্দ্রবিন্দু আসে")
+            CapWords("c চেপে ধরুন", listOf(
+                Word("তাঁর", "ta^r", listOf("ta^", "r"), listOf("tnar"), "ঁ", "", "", "tar = তার; c চেপে ধরুন, শিফট ছাড়াই তাঁর"),
+                Word("তাঁদের", "ta^der", listOf("ta^", "der"), emptyList(), "ঁ", "", "", "tader = তাদের; c চেপে ধরুন → তাঁদের"),
+                Word("কাঁপা", "ka^pa", listOf("ka^", "pa"), emptyList(), "ঁ", "", "", "kapa = কাপা; c চেপে ধরুন → কাঁপা"),
+                Word("গাঁ", "ga^", listOf("ga^"), emptyList(), "ঁ", "", "", "ga = গা, gan = গান; c চেপে ধরুন → গাঁ"),
+                Word("বাঁকা", "ba^ka", listOf("ba^", "ka"), listOf("banka"), "ঁ", "", "", "c চেপে ধরুন — শিফট লাগে না; কম্পিউটারে ^ লিখুন"),
+                Word("পেঁচা", "pe^cha", listOf("pe^", "cha"), emptyList(), "ঁ", "", "", "c চেপে ধরুন — শিফট লাগে না; কম্পিউটারে ^ লিখুন"),
+                Word("খাঁচা", "kha^cha", listOf("kha^", "cha"), listOf("khancha"), "ঁ", "", "", "c চেপে ধরুন — শিফট লাগে না; কম্পিউটারে ^ লিখুন"),
+                Word("রাঁধা", "ra^dha", listOf("ra^", "dha"), listOf("randha"), "ঁ", "", "", "c চেপে ধরুন — শিফট লাগে না; কম্পিউটারে ^ লিখুন"),
+                Word("ফাঁক", "fa^k", listOf("fa^", "k"), listOf("fank"), "ঁ", "", "", "c চেপে ধরুন — শিফট লাগে না; কম্পিউটারে ^ লিখুন"),
+                Word("ওঁ", "o^", listOf("o^"), emptyList(), "ঁ", "", "", "c চেপে ধরুন — শিফট লাগে না; কম্পিউটারে ^ লিখুন")
             )),
             CapWords("n", listOf(
                 Word("তাঁর", "tnar", listOf("tnar"), listOf("ta^r"), "ঁ", "", "", "n লিখলেও চলে — বাংলু চন্দ্রবিন্দু বোঝে"),
