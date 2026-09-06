@@ -1,8 +1,8 @@
 # Banglu Engine — Architecture Reference
 
 **Status:** reference document, written 2026-08-26 against v1.5.87, revised
-2026-09-03 against v1.5.113 and again 2026-09-06 against `main` at v1.5.125 (Android
-2162, dictionary 3.9.8). Rounds S138–S193 are folded in; the S-numbers in the text point
+2026-09-03 against v1.5.113 and again 2026-09-06 against `main` at v1.5.131 (Android
+2168, dictionary 3.9.8). Rounds S138–S198 are folded in; the S-numbers in the text point
 at the commit messages that carry the evidence.
 **Scope:** the shared conversion engine (`shared/`), how each surface hosts it, the
 Android keystroke path, the learning system, the voice pipeline and the dictionary
@@ -33,7 +33,7 @@ flowchart LR
 
     subgraph ANDROID["Android IME (JVM/ART)"]
         A1["BangluIMEService<br/>default process — offline"]
-        A2["SqlitePhoneticIndexStore<br/>dictionary.sqlite (176 MB)"]
+        A2["SqlitePhoneticIndexStore<br/>dictionary.sqlite (177 MB)"]
     end
     subgraph DESKTOP["বাংলু এডিটর (Compose Desktop)"]
         D1["EditorState / EngineFacade"]
@@ -162,17 +162,18 @@ flowchart TD
     subgraph WRAP["convertWord wrapper — the laws on top of the raw result"]
         FLOOR["S192 honestFloorForFarOffFuzzy (shared with the preview):<br/>key ≥ 7, fuzzy DICTIONARY result < 0.9, no space, whose reading is<br/>≥ 2 away under a transposition-aware (OSA) distance over the typist<br/>folds AND differs from the literal floor in spelling skeleton →<br/>the clean Bengali-only literal floor commits (chorpara→চরপারা, not চর্চার);<br/>the far-off word rides as an alternative"]
         TYPED["S193 typedReadingOverAddedLetters (shared with the preview):<br/>the store's TOP row is a habit alias whose reading is ONE leading vowel<br/>plus the typed key (oboddhota = o + boddhota — the verb rules obo→bo /<br/>oph→ph leak onto অ-initial nouns, 1,333 such keys) AND the typed reading is<br/>evidenced (validator word, or attested stem + তা/ত্ব) → the typed reading<br/>commits (boddhota→বদ্ধতা, phiser→ফিসের); the alias rides as a chip.<br/>Internal conjunct folds (shikha→শিক্ষা) are NOT letter additions — a wider<br/>gate flipped 386 chat keys and was rejected. A later typo correction<br/>that re-adds the letter is blocked for this floor only."]
+        ZF["S196 zFaithfulReading (shared with the preview): the key carries a z and the<br/>answer differs from the INSTANT-PREVIEW reading (the rule layer is where 'z is য'<br/>lives) only in য↔জ, or lost the z → the instant reading commits, the dictionary word<br/>rides as a chip (aziz→আযিয + আজিজ, ajiz→আজিয, zakir→যাকির) — unless the word is everyday<br/>(validator freq ≥ 80: names 72–79 flip, chat words জেনে 81 / নিজে 84 / কাজ 92 stay),<br/>the key looks English, or the validator is absent (lite: both halves stand down).<br/>A replaced rule floor keeps floor confidence 0.62 so the S143 rescue still claims<br/>glued English keys; j for য stays the chat habit (jodi→যদি)"]
         EPI["ENGLISH_PRIMARY_INTENT flips<br/>(vetted keys: line→লাইন) — preference-immune"]
         HON["tryEnglishHonestyFlip (S131)<br/>real→রিয়েল not রোল"]
         PRON["applyEnglishPronunciationLaw (S142)<br/>a correct English word renders its pronunciation<br/>when the Bengali reading sits below the everyday band (75)"]
         RESC["applyEnglishSpellingRescue (S143)<br/>one-slip English spellings → the engine's own rendering<br/>of the correct word (suggention → সাজেশন)"]
         ONSET["S113 onset-integrity floor (OOV honesty)"]
         JUNK["tryJunkLexiconRescue"]
-        TYPO["tryStoreTypoCorrection — with the S141 typed-faithful law:<br/>a clean-reading literal keeps the commit; repairs only<br/>for unclean readings; recovery may change spelling, not the word"]
-        FLOOR --> TYPED --> EPI --> HON --> PRON --> RESC --> ONSET --> JUNK --> TYPO
+        TYPO["tryStoreTypoCorrection — with the S141 typed-faithful law:<br/>a clean-reading literal keeps the commit; repairs only<br/>for unclean readings; recovery may change spelling, not the word.<br/>Never touches a wrapper floor that would re-add (S193) or change (S196) a typed letter"]
+        FLOOR --> TYPED --> ZF --> EPI --> HON --> PRON --> RESC --> ONSET --> JUNK --> TYPO
     end
 
-    WRAP --> CTX["context rerank<br/>rerankWithContext(prev2, prev1, result)"]
+    WRAP --> CTX["context rerank<br/>rerankWithContext(prev2, prev1, result, key)<br/>S198: a key carrying the explicit ^ marker is returned untouched —<br/>the bigram after আমি had turned বাঁদ into বাদ on the phone"]
     CTX --> OUT["ConversionResult<br/>bengali, confidence, source, alternatives"]
 ```
 
@@ -202,11 +203,22 @@ Notes that matter when reading the code:
   stems (zati→যাতি) from composing inflections, and a store-only stem may compose only
   when it is the canonical owner the engine itself commits for the bare key
   (`isCanonicalOwnerStem`, S173).
-- **Lite mode** (`liteModeEnabled || isLowRamDevice || memoryClass < 256`): the
+- **Lite mode** (`liteModeEnabled || isLowRamDevice` — S197: the user's switch or an
+  OS-declared low-RAM device ONLY; the `memoryClass < 256` heuristic, the trim-signal
+  degrade, the exit-history arming and the post-load heap guard are retired, full mode
+  is the default and never flips by itself; the full profile was verified to fit a
+  128 MB heap limit on the 2 GB emulator, top-1,000 pass, PSS median 131 MB): the
   loader skips the 480K validator, frequency scores, disambiguation map and bigram
   model. Layers 0/1.5/5.5/5.7/6 need the validator and simply do not run; the store
   and seeds still serve conversions. Any wrapper feature must either work without the
-  validator or stay out of the composing preview (S26b law).
+  validator or stay out of the composing preview (S26b law) — the S196 z-law returns
+  null in both halves without the validator, so lite preview = lite commit.
+- **Wrapper floors and what may undo them (S192/S193/S196/S198):** a floor produced by
+  a wrapper law is a decision about the typed letters; the later typo stage may not
+  add (S193) or change (S196) a typed letter on it, and the context rerank may not
+  discard an explicit marker (S198). Each law is diffed on the 132K commit dump before
+  it ships — that diff, not the walls, rejected the wider gates (386 chat keys for a
+  "reads longer" gate, 1,083 unevidenced slips for "clean reading is enough").
 - **Invariants pinned by tests** (never "fix" them by editing a pin):
   kacci→কাচ্চি, jos→জোস, kassi→কাচছি, name→নামে, real→রিয়েল, roll→রোল, and the
   S150–S177 pin walls (chat register, English register, inflections, preview parity,
@@ -225,9 +237,9 @@ flowchart TD
     subgraph CC["convertForComposingCore — deliberately conservative early layers"]
         C1["overrides, S184 chandrabindu marker + phrases,<br/>negation, emphatic-o/ই, verb suffix<br/>(mirrors of the commit path's own functions)"]
         C2["key < 4 letters: the V2 kar-composition contract<br/>(kri→কৃ, di→দি while typing) — pin-protected,<br/>the documented preview≠commit class"]
-        C3["dictionary layer at ≥ 0.88 with storeBeatsDictionary<br/>(the SAME arbitration as the commit, S83)"]
+        C3["dictionary layer at ≥ 0.88 with storeBeatsDictionary<br/>(the SAME arbitration as the commit, S83) — its three returns carry<br/>the S196 z-law mirror: seed words (aziz) return HERE, before the mirrors below"]
         C4["English detector mirror, corpus hit ≥ 0.94,<br/>english lexicon, section ≥ 0.95"]
-        C5["S176 tail: a completed-looking key (≥ 4) previews<br/>convertWordRaw's OWN cached answer, then the SAME<br/>S192 honest-floor + S193 typed-reading guards as the commit<br/>(S193 also gates the corpus-hit mirror at ≥ 0.94) —<br/>parity by construction, zero extra cost<br/>(raw-Latin passthrough stays un-mirrored)"]
+        C5["S176 tail: a completed-looking key (≥ 4) previews<br/>convertWordRaw's OWN cached answer, then the SAME<br/>S192 honest-floor + S193 typed-reading + S196 z-law guards as the commit<br/>(S193/S196 also gate the corpus-hit mirror at ≥ 0.94) —<br/>parity by construction, zero extra cost<br/>(raw-Latin passthrough stays un-mirrored)"]
         C1 --> C2 --> C3 --> C4 --> C5
     end
     CC --> W["composing wrapper: the same S142/S143/junk laws<br/>as the commit wrapper, then context rerank"]
@@ -253,7 +265,7 @@ flowchart LR
     PRIM --> ALT["getAlternatives<br/>diphthong / initial-vowel / ambiguous-char variants,<br/>store hits (tier A), disambiguation swaps,<br/>guaranteed slots: typed_literal (S141), homograph_twin (S151),<br/>open-syllable vowel twins (kri→ক্রি/কৃ), roman_prefix completions,<br/>english_correction (S143), the English chip for every English key (S142),<br/>phrase_completion (S184: assa→আসসালামু আলাইকুম at slot 1)"]
     ALT --> TW["S189 twins (attested words, freq ≥ 30, ≤ 2 per strip):<br/>chandrabindu (tara→তাঁরা), key-fold via exact store lookups<br/>(pulis→পুলিশ, bhuutta→ভুট্টা), vowel-initial (ai→আই),<br/>joined form when the splitter won (rosochithi→রসচিঠি);<br/>a twin more frequent than the primary sits beside it,<br/>a rarer one at the FOURTH chip (hosts show 5–6 of the 8 they ask for)"]
     TW --> CB["S191 combinations — ONLY when the primary is not a validator word:<br/>the lattice's own letter combinations (r→র/ড়, t→ত/ট, n→ন/ণ,<br/>j→য, long vowels, r+consonant PLAIN; S192 name-style 'a' as inherent/অ)<br/>ranked by lattice priors + the user's ambiguity habit, ≤ 4,<br/>oracle-exempt (there is no real word to protect)"]
-    CB --> CTX["rerankWithContext<br/>(trigram_triples: observed (w1,w2,cand) triples;<br/>bigrams: corpus + chat + user pairs — db 3.9.7 carries the<br/>S156 chat n-grams mined from the Banglish gold corpora)"]
+    CB --> CTX["rerankWithContext(prev2, prev1, result, key)<br/>(trigram_triples: observed (w1,w2,cand) triples;<br/>bigrams: corpus + chat + user pairs — db 3.9.7 carries the<br/>S156 chat n-grams mined from the Banglish gold corpora;<br/>S198: an explicit ^ in the key is never reranked away —<br/>the adapter and the JS facade both pass the key)"]
     CTX --> PREF["SmartEngineAdapter<br/>rerankSuggestionsByPreference + enforceCuratedLoanwordPrimary<br/>(user picks outrank corpus; loanword pins immune)"]
     PREF --> STRIP["suggestion strip"]
     PREV["getNextWordPredictions / getTrigramNextWordPredictions"] --> STRIP
@@ -313,6 +325,8 @@ sequenceDiagram
     participant IC as InputConnection (host app)
 
     U->>IME: key press (commit on pointer DOWN)
+    Note over U,IME: S194 — the keyboard root watches every pointer at the Initial pass:<br/>a pointer landing while the SPACEBAR is held commits the space right then<br/>(SpaceRolloverPolicy), before the letter's own down handler; the rest of that<br/>hold is inert (no second commit, no cursor drag). Measured with an injector<br/>against the Samsung keyboard: rollover 17 → 0 errors per phrase.
+    Note over U,IME: S194d — a held c replaces itself with the ^ marker at the long-press<br/>timeout (KeyAlternative.direct); other hold keys keep their popup.
     IME->>IME: buffer.insert(char) at the edit point (MidWordCaret, S175)
     IME->>IME: convertForInstantPreview(buffer)<br/>rule-only, zero I/O, sub-ms
     IME->>IC: setComposingText(instant preview)
@@ -330,7 +344,9 @@ sequenceDiagram
     IME->>IME: PersonalHotSet.record(key) (S172, behind the learning gates)
 ```
 
-Rules enforced by tests and StrictMode (debug builds flag any main-thread disk I/O):
+Rules enforced by tests and StrictMode (debug builds flag any main-thread disk I/O;
+the release VM policy sheds `detectLeakedClosableObjects` — S195: CloseGuard captured a
+Java stack trace per cursor, ~110 MB of native churn per 4 s of typing):
 no synchronous dictionary/SQLite/disk work on the main thread; WYSIWYG — the
 composing preview and the space commit must agree (full and lite); cold start builds
 the seed engine off-main and the instant preview returns raw input until seeds land
@@ -339,6 +355,22 @@ profile (`android-keyboard/src/main/baseline-prof.txt`, every engine and keyboar
 plus the observed androidx hot set) so day-one keystroke frames run compiled
 (p50 8–9 ms vs 15–16 ms interpreted); the strip's items are slot-keyed so a keystroke
 does not rebuild every chip.
+
+**Memory budget of a keystroke (S195, heapprofd on the S22):** before the round a
+typing burst churned ~900 MB of native malloc per 4 s — hundreds of sqlite point
+queries per key (a 2 MB cursor window and an ephemeral sort table each), `Regex(...)`
+objects built inside per-candidate engine functions (~500 MB of ICU compiles per
+30 s), and CloseGuard. Now: ten regexes are file-level `val`s (every surface),
+`SqlitePhoneticIndexStore` carries the S144 negative index (three Bloom filters, 6 MB,
+built within 5 s of boot on a MIN_PRIORITY daemon thread over plain scans, a reverse-
+lookup memo, the english-key short circuit) and 64 KB windows for point queries.
+Measured with the same warm protocol: native heap while typing 216/294 → 139/136 MB,
+PSS two minutes idle 200/187 → 130/128 MB, churn ~900 → ~150 MB per 4 s. The release
+smoke's single heap reading samples right after its own typing burst and drifts with
+the sampling moment; the timeline (`docs/audits/s195-memory-study/`) is the
+instrument. Full profile is the default (S197); a phone that answers like lite
+(no typo repair, the z-law standing down) has the manual switch on, is an Android Go
+device, or — before 1.5.130 — had been forced lite by synthetic trim signals.
 
 ### 5.1 Editing inside a committed word (S88/S109/S174/S175)
 
@@ -356,13 +388,20 @@ flowchart TD
     subgraph D["delete paths — keep the whole-word echo gate, else plain grapheme deletion"]
         D1["backspace at the end of a word<br/>plan (S88): drop the last cluster, resume roman composition"]
         D2["backspace INSIDE a word<br/>planForMidWordBackspace: prefix roman from the WHOLE original<br/>word minus the deleted tail (keeps the inherent vowel:<br/>তমাদের − মা → 'to', S175c)"]
+        D3["S196 DELETION RUN — every FURTHER backspace inside the re-opened word<br/>shows the visible text minus ONE user-visible cluster<br/>(planForDeletionStep re-derives the roman from what remains);<br/>Space commits exactly the visible text (no reconcile, nothing learned);<br/>a letter ends the run. Before: each backspace re-converted a shorter roman<br/>the user never typed (বিশ্ববিদ্যা → বিশওয়বিদ্য)"]
+        D1 & D2 --> D3
     end
-    T1 & T2 & D1 & D2 --> MC["MidWordCaret — the roman edit point:<br/>insert there, backspace before it, hold-repeat walks it,<br/>dropped at the end of the word or on a new word"]
+    T1 & T2 & D3 --> MC["MidWordCaret — the roman edit point:<br/>insert there, backspace before it, hold-repeat walks it,<br/>dropped at the end of the word or on a new word.<br/>S196/S198: the EDITOR caret follows it — every composing repaint and every<br/>non-Space commit put the caret after the visible prefix, anchored on the plan's<br/>untouched suffix text (the rule preview of the prefix renders 'toma' as তমা and<br/>was one off); a commit shorter than the preview anchors on the committed text"]
 ```
 
 The rule-only echo gate was removed from the typing paths because every word with an
 internal ো fails it (তোমা → "toma" → তমা) — the S174 fix had shipped without ever
-firing. Other Android editing policies, each JUnit-pinned: `SelectionEditPolicy` (a
+firing. Chandrabindu inside a word (S184/S194d/S198): a held c inserts the `^` marker
+at the edit point like a letter; the commit is the rule reading (বাঁদ), the context
+rerank may not replace it, and a `^` with no letter to sit on (word start, empty field)
+is ignored rather than inserted as a lone ঁ. Every case was verified on the S22 with a
+shifted-capital marker after the edit (বাঁKদ আমি by arrows and by a tap into the word,
+আমি বাঁKদ আমি in a middle word, বাদঁK at a word end). Other Android editing policies, each JUnit-pinned: `SelectionEditPolicy` (a
 range selection is deleted as a range), `CursorStepPolicy` (cluster steps from a
 32-char window), `DoubleSpacePolicy` (দাঁড়ি), `InputPrivacyPolicy` (URL/incognito fields
 keep chips + glide + voice, never learn), `GlideCommitPolicy` (a stale glide result is
@@ -409,7 +448,10 @@ compiler stamps it, every store refuses a mismatch, and the release validator re
 an asset whose SHA-256/size/version differ from the pin. Keystroke budget on the JVM
 store (S144): `JvmSqlitePhoneticIndexStore` keeps three Bloom negative indexes and a
 2048-entry memo so an unknown-word keystroke costs ≤ 40 sqlite queries (pinned) —
-the Windows "space lags" report came from thousands of point queries per key.
+the Windows "space lags" report came from thousands of point queries per key. The
+Android `SqlitePhoneticIndexStore` carries the same negative index since S195 (it
+had been left out because its conversions are async; the churn still cost memory
+and CPU — heapprofd counted ~8,000 point queries for 52 keystrokes).
 
 ---
 
@@ -510,6 +552,20 @@ Pure, unit-pinned policies: `VoiceCarryPolicy`, `VoicePartialDiff`, `VoiceWordMa
 | Voice policies | `android-keyboard/.../Voice*.kt` |
 | Compiler | `dictionary-compiler/` (DictionaryCompiler, PhoneticIndexBuilder) |
 | Release gate | `scripts/validate_android_release.sh`, `scripts/android_device_smoke.py`, `scripts/verify_dictionary_pin.sh` |
+
+### 9.1 Added in S194–S198 (where to look)
+
+| Concern | Code | Evidence |
+|---|---|---|
+| Spacebar rollover | `SpaceRolloverPolicy.kt`, root pointer observer in `ComposeKeyboardView.kt` | `docs/audits/touch-sensitivity-study-2026-09-06.md`, injector `s194-Inject.java` |
+| Hold-c direct marker | `KeyAlternative.direct` in `ComposeKeyboardView.kt` | S194d device pass |
+| Keystroke memory | `SqlitePhoneticIndexStore.kt` (Blooms, 64 KB windows), hoisted regexes at the top of `SmartEngine.kt`, `installImeRuntimePolicy` | `docs/audits/memory-study-2026-09-06.md`, `s195-memory-study/` |
+| Deletion run | `BackspaceResume.planForDeletionStep`, `DeletionRun` + `stepDeletionRun` in `BangluIMEService.kt` | `docs/audits/s196-editing-round/`, S196DeletionRunTest |
+| Mid-word caret | `placeMidWordCaret`, `restoreMidWordCaretAfterCommit`, `midWordCaretOffset` | same folder (cb_multiword*.py) |
+| z-faithful law | `zFaithfulReading`, `Z_EVERYDAY_BAND`, `keepsTypedZ` | S196ZFaithfulJvmTest, `s196-dump-diff.tsv` |
+| Profile policy | `shouldUseLiteDictionary`, `MemoryPressurePolicy.onTrim` | closed-testing audit §S197 (low-RAM run) |
+| Explicit marker vs context | `rerankWithContext(…, key)`, adapter `convertWordWithContext`, JS `convertWithContext` | S198ExplicitMarkerContextJvmTest |
+| Tutorial | `TutorialWords` family "চন্দ্রবিন্দু" | S157TutorialWordsJvmTest, web `tutorial-words.json` |
 
 ## 10. Glossary
 
