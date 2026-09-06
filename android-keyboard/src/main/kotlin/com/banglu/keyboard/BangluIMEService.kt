@@ -997,6 +997,7 @@ class BangluIMEService : InputMethodService(),
         composingResult = null
         composingVisibleText = instant
         ic.setComposingText(instant, 1)
+        if (midWordInsertAt != null) midWordCaretOffset(instant)?.let { placeMidWordCaret(ic, instant, it) }
 
         composingJob?.cancel()
         composingJob = serviceScope.launch {
@@ -1006,7 +1007,9 @@ class BangluIMEService : InputMethodService(),
                 composingInput = snapshot
                 composingResult = result
                 composingVisibleText = result.bengali
-                currentInputConnection?.setComposingText(result.bengali, 1)
+                val icNow = currentInputConnection ?: return@launch
+                icNow.setComposingText(result.bengali, 1)
+                if (midWordInsertAt != null) midWordCaretOffset(result.bengali)?.let { placeMidWordCaret(icNow, result.bengali, it) }
             }
         }
     }
@@ -2143,8 +2146,11 @@ class BangluIMEService : InputMethodService(),
         // re-converts (dobaa class: দ|বা + 'a' -> দাবা, not দআবা). One
         // IC read per word START only — the per-keystroke path stays on the
         // shadow buffer (S28 law).
+        deletionRun = null   // S196: a letter ends the deletion run
         if (buffer.isEmpty()) {
             midWordInsertAt = null
+            midWordComposingStart = null
+            midWordSuffixVisible = null
             // S184: the chandrabindu marker edits the word like a letter.
             if (char.isLetter() || char == '^') tryResumeComposingBeforeTyping(ic)
         }
@@ -2190,6 +2196,8 @@ class BangluIMEService : InputMethodService(),
                 // typed letter is inserted at the edit point by the caller.
                 val roman = plan.romanPrefix + plan.romanSuffix
                 val visible = plan.visibleWord   // S175b: the word's own text until the letter lands
+                midWordComposingStart = editorSelStart - plan.deleteBefore   // S196
+                midWordSuffixVisible = visible.takeLast(plan.deleteAfter)
                 ic.beginBatchEdit()
                 ic.deleteSurroundingText(plan.deleteBefore, plan.deleteAfter)
                 buffer = roman
@@ -2534,6 +2542,7 @@ class BangluIMEService : InputMethodService(),
         when (keyboardMode.value) {
             KeyboardMode.BANGLU -> {
                 if (buffer.isNotEmpty()) {
+                    if (stepDeletionRun(ic, 1)) return
                     val edited = MidWordCaret.backspace(MidWordCaret.State(buffer, midWordInsertAt))
                     buffer = edited.buffer
                     midWordInsertAt = edited.insertAt
@@ -2583,6 +2592,50 @@ class BangluIMEService : InputMethodService(),
     }
 
     /**
+     * S196: one or more deletion-run steps. Returns true when the run handled
+     * the backspace(s); false when no run is active or the remaining text has no
+     * usable roman (the caller then does the ordinary roman backspace).
+     */
+    private fun stepDeletionRun(ic: InputConnection, steps: Int): Boolean {
+        var run = deletionRun ?: return false
+        var step: DeletionStep? = null
+        for (i in 0 until steps.coerceAtLeast(1)) {
+            val next = BackspaceResume.planForDeletionStep(
+                visible = run.visible,
+                prefixVisibleLength = run.prefixVisibleLength,
+                romanSuffix = run.romanSuffix,
+                reverse = { com.banglu.engine.util.ReverseTransliterator.reverseWord(it) },
+            )
+            if (next == null) {
+                if (step == null) { deletionRun = null; return false }
+                break
+            }
+            step = next
+            run = DeletionRun(next.visible, if (run.prefixVisibleLength == null) null else next.prefixVisibleLength, run.romanSuffix)
+        }
+        val s = step ?: return false
+        if (s.visible.isEmpty() || s.roman.isEmpty()) {
+            buffer = ""
+            midWordInsertAt = null
+            ic.setComposingText("", 0)
+            ic.finishComposingText()
+            suggestions.clear()
+            clearCommitCaches()
+            return true
+        }
+        buffer = s.roman
+        midWordInsertAt = s.insertAt
+        composingInput = s.roman
+        composingResult = null
+        composingVisibleText = s.visible
+        deletionRun = run
+        ic.setComposingText(s.visible, 1)
+        if (run.prefixVisibleLength != null) placeMidWordCaret(ic, s.visible, s.prefixVisibleLength)
+        refreshSuggestionsAsync(buffer)
+        return true
+    }
+
+    /**
      * S88: see [BackspaceResume]. Returns false when resume doesn't apply —
      * the caller then deletes a plain grapheme (previous behavior).
      */
@@ -2601,6 +2654,8 @@ class BangluIMEService : InputMethodService(),
             )?.let { plan ->
                 val roman = plan.romanPrefix + plan.romanSuffix
                 val visible = plan.visibleWord
+                midWordComposingStart = editorSelStart - plan.deleteBefore   // S196
+                midWordSuffixVisible = visible.takeLast(plan.deleteAfter)
                 ic.beginBatchEdit()
                 ic.deleteSurroundingText(plan.deleteBefore, plan.deleteAfter)
                 buffer = roman
@@ -2610,8 +2665,10 @@ class BangluIMEService : InputMethodService(),
                 composingResult = null
                 composingVisibleText = visible
                 midWordInsertAt = plan.romanPrefix.length   // S175: keep editing here
+                val prefixVisible = visible.length - plan.deleteAfter
+                placeMidWordCaret(ic, visible, prefixVisible)
+                deletionRun = DeletionRun(visible, prefixVisible, plan.romanSuffix)   // S196
                 refreshSuggestionsAsync(buffer)
-                prepareCommitConversionAsync(buffer)
                 return true
             }
         }
@@ -2628,8 +2685,8 @@ class BangluIMEService : InputMethodService(),
         composingInput = plan.romanBuffer
         composingResult = null
         composingVisibleText = plan.visibleFragment
+        deletionRun = DeletionRun(plan.visibleFragment, null, "")   // S196
         refreshSuggestionsAsync(buffer)
-        prepareCommitConversionAsync(buffer)
         return true
     }
 
@@ -2643,6 +2700,7 @@ class BangluIMEService : InputMethodService(),
         }
 
         if (keyboardMode.value == KeyboardMode.BANGLU && buffer.isNotEmpty()) {
+            if (stepDeletionRun(ic, safeCount)) return
             val dropCount = safeCount.coerceAtMost(buffer.length)
             var edited = MidWordCaret.State(buffer, midWordInsertAt)
             repeat(dropCount) { edited = MidWordCaret.backspace(edited) }
@@ -5121,11 +5179,35 @@ class BangluIMEService : InputMethodService(),
         val phonetic = buffer
         if (phonetic.isEmpty()) return
 
+        // S196: a deletion run shows a cluster-prefix of a word the user had; Space
+        // commits exactly that text — no authoritative re-conversion of a roman
+        // the user never typed, and nothing is learned from it.
+        deletionRun?.let { run ->
+            if (run.visible.isNotEmpty() && composingVisibleText == run.visible) {
+                log("commitBufferedWordFast: deletion run commits visible '${run.visible}'")
+                ic.commitText(run.visible + appendText, 1)
+                if (appendText.isEmpty()) restoreMidWordCaretAfterCommit(ic, run.visible.length)
+                midWordComposingStart = null
+                midWordSuffixVisible = null
+                lastCommittedTextLength = run.visible.length + appendText.length
+                sessionBangluWordCommitCount++
+                buffer = ""
+                midWordInsertAt = null
+                suggestions.clear()
+                clearCommitCaches()
+                updatePredictions(run.visible)
+                return
+            }
+        }
+
         val visibleBeforeCommit = composingResult?.takeIf { composingInput == phonetic }?.bengali
         val cached = cachedCommitResult?.takeIf { cachedCommitInput == phonetic }
         if (cached != null) {
             log("commitBufferedWordFast: committing '${cached.bengali}' cached=true")
             ic.commitText(cached.bengali + appendText, 1)
+            if (appendText.isEmpty()) restoreMidWordCaretAfterCommit(ic, cached.bengali.length)
+            midWordComposingStart = null
+            midWordSuffixVisible = null
             lastCommittedTextLength = cached.bengali.length + appendText.length
             sessionBangluWordCommitCount++
             maybeOfferAutoCorrectUndo(phonetic, visibleBeforeCommit, cached.bengali, appendText)
@@ -5154,6 +5236,9 @@ class BangluIMEService : InputMethodService(),
             ?: runCatching { SmartEngineAdapter.convertForInstantPreview(phonetic) }.getOrDefault(phonetic)
         log("commitBufferedWordFast: fast-committing visible '$committedNow', reconcile pending")
         ic.commitText(committedNow + appendText, 1)
+        if (appendText.isEmpty()) restoreMidWordCaretAfterCommit(ic, committedNow.length)
+        midWordComposingStart = null
+        midWordSuffixVisible = null
         lastCommittedTextLength = committedNow.length + appendText.length
         sessionBangluWordCommitCount++
         buffer = ""
@@ -5484,6 +5569,67 @@ class BangluIMEService : InputMethodService(),
         composingResult = null
         cachedCommitInput = ""
         cachedCommitResult = null
+        deletionRun = null
+    }
+
+    /**
+     * S196: a DELETION RUN — the word the backspace resume re-opened, kept as
+     * the text the user sees. While it is set, every further backspace shows
+     * that text minus one visible cluster (never a conversion of a roman the
+     * user never typed) and Space commits exactly what is visible. Any letter,
+     * chip, commit or caret move ends the run (cleared with the commit caches).
+     */
+    private data class DeletionRun(val visible: String, val prefixVisibleLength: Int?, val romanSuffix: String)
+    private var deletionRun: DeletionRun? = null
+    /** S196: absolute start of the composing span during a mid-word edit (null = unknown). */
+    private var midWordComposingStart: Int? = null
+    /** S196: the visible text after the edit point, as the plan found it. The
+     *  engine re-renders the whole word, but the suffix text is normally kept
+     *  verbatim, so "visible minus suffix" is the exact caret offset; the rule
+     *  preview of the roman prefix (তমা for "toma") is only the fallback. */
+    private var midWordSuffixVisible: String? = null
+
+    private fun midWordCaretOffset(visible: String): Int? {
+        val suffix = midWordSuffixVisible
+        if (suffix != null && suffix.isNotEmpty() && visible.length > suffix.length && visible.endsWith(suffix)) {
+            return visible.length - suffix.length
+        }
+        return midWordPrefixVisibleLength()
+    }
+
+    /**
+     * S196 (device: বাদ, caret after বা, hold c → বাঁদ, then the caret sat at the
+     * END of the word): after every composing repaint of a mid-word edit the
+     * editor caret is put back after the visible prefix. Skipped whenever the
+     * span start is unknown or the target would leave the span (that would end
+     * composing through onUpdateSelection).
+     */
+    private fun placeMidWordCaret(ic: InputConnection, visible: String, prefixVisibleLength: Int) {
+        val start = midWordComposingStart ?: return
+        val offset = prefixVisibleLength.coerceIn(0, visible.length)
+        if (offset == visible.length) return
+        ic.setSelection(start + offset, start + offset)
+    }
+
+    /**
+     * S196: a commit that happens in the middle of a mid-word edit (a capital,
+     * Enter, punctuation — anything but Space) must leave the caret where the
+     * user was editing, not after the whole word. Call BEFORE the buffer and
+     * edit point are cleared; the committed text starts where the composing
+     * span started.
+     */
+    private fun restoreMidWordCaretAfterCommit(ic: InputConnection, committedLength: Int) {
+        val start = midWordComposingStart ?: return
+        val offset = deletionRun?.prefixVisibleLength ?: midWordCaretOffset(composingVisibleText) ?: return
+        if (offset < 0 || offset >= committedLength) return
+        ic.setSelection(start + offset, start + offset)
+    }
+
+    /** S196: the visible length of the roman before the edit point, from the rule preview. */
+    private fun midWordPrefixVisibleLength(): Int? {
+        val at = midWordInsertAt ?: return null
+        if (at <= 0 || at > buffer.length) return null
+        return runCatching { SmartEngineAdapter.convertForInstantPreview(buffer.substring(0, at)).length }.getOrNull()
     }
 
     private fun commitPendingBuffer() {

@@ -342,6 +342,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         /** S142: corpus band above which a Bengali reading is an everyday word
          *  that keeps its key even against an English pronunciation. */
         private const val EVERYDAY_WORD_BAND = 75
+        /** S196: the z-faithful law stands down at and above this validator
+         *  frequency. Measured on the corpus: names আজিজ 79, জাকির 74, জাহিদ 74,
+         *  হামজা 72; chat-typed everyday words জেনে 81, জাতি 83, নিজে 84, জল 84,
+         *  জানা 86, কাজ 92 — 80 is the seam. */
+        private const val Z_EVERYDAY_BAND = 80
         /** S143: shapes Bangla romanization never produces. */
         private val ENGLISH_SHAPE = Regex("x|q|w[^aeiou]|tion$|sion$|ment$|ness$|ough|ight")
         private val ENGLISH_DERIVATION_SUFFIXES = listOf("ers", "er", "ing", "tion", "ment", "ness", "ful", "ist", "ly")
@@ -1266,7 +1271,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // the user never typed (boddhota → অবদ্ধতা). Both shared with the preview.
         val honestFloor = honestFloorForFarOffFuzzy(key, raw0)
         val typedFloor = if (honestFloor == null) typedReadingOverAddedLetters(key, raw0) else null
-        val raw = honestFloor ?: typedFloor ?: raw0
+        // S196: a typed z is য unless the dictionary's word is everyday (kaz → কাজ).
+        val zFloor = if (honestFloor == null && typedFloor == null) zFaithfulReading(key, raw0) else null
+        val raw = honestFloor ?: typedFloor ?: zFloor ?: raw0
         if (key.length < 4 || !key.all { it in 'a'..'z' }) return raw
         // S24/S26: English-intent arbitration. When an English key collides
         // with an EVIDENCED Bengali inflection (time -> টিমে, printer ->
@@ -1433,7 +1440,11 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 val addsUntypedLetter = typedFloor != null &&
                     distanceRoman(c.bengali).length > distanceRoman(key).length &&
                     keyReadingDistance(c.bengali, key) >= 1
-                !farOff && !addsUntypedLetter &&
+                // S196: the z-faithful floor is a clean reading of the exact
+                // key the user chose; any "correction" would change a typed
+                // letter (আজিয → আজি, যাকির → যাকের on the first cut).
+                val keepsTypedZ = zFloor != null
+                !farOff && !addsUntypedLetter && !keepsTypedZ &&
                     (!exactRaw || !(particleKept || keyReadingDistance(c.bengali, key) >= 2))
             }?.let { c ->
             c.copy(
@@ -2227,8 +2238,9 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
             convertByDictionary(key)?.takeUnless { isUnfaithfulFragmentMatch(key, it) }
         } else null
         if (dictionaryResult != null && dictionaryResult.confidence >= 0.88) {
+            // S196: the z-faithful law mirrors here too (aziz is a seed word).
             storeBeatsDictionary(key, dictionaryResult)?.let { corpusResult ->
-                return corpusResult.copy(alternatives = emptyList())
+                return (zFaithfulReading(key, corpusResult) ?: corpusResult).copy(alternatives = emptyList())
             }
             val ranked = applyCandidateLatticeRanking(key, dictionaryResult)
             // S56 store-precedence parity (tester: "likh produces likhy words"):
@@ -2244,10 +2256,10 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
                 if (storeHits.any { it.bengali == dictionaryResult.bengali } &&
                     storeHits.none { it.bengali == ranked.bengali }
                 ) {
-                    return dictionaryResult.copy(alternatives = ranked.alternatives)
+                    return (zFaithfulReading(key, dictionaryResult) ?: dictionaryResult).copy(alternatives = ranked.alternatives)
                 }
             }
-            return ranked
+            return zFaithfulReading(key, ranked)?.copy(alternatives = emptyList()) ?: ranked
         }
 
         // S67 mirror (tester: "typing Bengali, getting English"): the commit
@@ -2279,7 +2291,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         if (corpusResult != null && corpusResult.confidence >= 0.94) {
             // S193: the store's alias row is gated here exactly as in the
             // commit wrapper (boddhota → বদ্ধতা, not the alias অবদ্ধতা).
-            return (typedReadingOverAddedLetters(key, corpusResult) ?: corpusResult).copy(alternatives = emptyList())
+            return (typedReadingOverAddedLetters(key, corpusResult) ?: zFaithfulReading(key, corpusResult) ?: corpusResult).copy(alternatives = emptyList())
         }
 
         // S55 mirror (I2 precedence fix): convertWordRaw resolves lexicon-
@@ -2322,7 +2334,7 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
         // is Bangla for lexicon-miss English). Study: 41,190 inflected keys,
         // 9,302 rule-floor previews before the fix (docs/audits, S176 section).
         if (key.length >= 4) {
-            val committed = convertWordRaw(key).let { honestFloorForFarOffFuzzy(key, it) ?: typedReadingOverAddedLetters(key, it) ?: it }
+            val committed = convertWordRaw(key).let { honestFloorForFarOffFuzzy(key, it) ?: typedReadingOverAddedLetters(key, it) ?: zFaithfulReading(key, it) ?: it }
             if (committed.source != ResolutionSource.ENGLISH_PASSTHROUGH) {
                 return committed.copy(alternatives = emptyList())
             }
@@ -8210,6 +8222,58 @@ class SmartEngine(private val config: SmartEngineConfig = SmartEngineConfig()) {
      * vlo → ভালো) are what the user meant and stay. Keys of five letters or
      * more only. Shared by the commit wrapper and the composing preview.
      */
+    /**
+     * S196 (user's hand note: "z maps to য, j maps to জ … aziz → আযিয as engine,
+     * আজিজ suggestion; ajiz → আজিয; azij → আযিজ; check all type of this confusing
+     * combination"): the dictionary folds z into জ (aziz → আজিজ, zakir → জাকির)
+     * yet keeps য elsewhere (hamza → হামযা, zubayer → যুবায়ের), and ajiz → আজি
+     * dropped the z outright. Law, shared by commit and preview: when the key
+     * carries a z and the dictionary's answer differs from the typed reading
+     * ONLY in য↔জ (or lost the z altogether), the typed reading commits and the
+     * dictionary word rides as a chip — unless that word is EVERYDAY (validator
+     * frequency ≥ EVERYDAY_WORD_BAND: kaz → কাজ, zonno → জন্য stay). The
+     * j-direction is untouched: j for য is the chat habit (jodi → যদি).
+     * Needs the validator (lite mode keeps the dictionary; preview and commit
+     * share this function, so they never disagree).
+     */
+    private fun zFaithfulReading(key: String, raw: ConversionResult): ConversionResult? {
+        if ('z' !in key || key.length < 3 || !key.all { it in 'a'..'z' }) return null
+        // English-shaped keys belong to the S142/S143 English laws.
+        if (looksEnglish(key)) return null
+        val isFloor = raw.source == ResolutionSource.CLEAN_TRANSLITERATION || raw.source == ResolutionSource.RULE
+        if ((raw.source != ResolutionSource.DICTIONARY && !isFloor) || raw.confidence >= 0.99 || ' ' in raw.bengali) return null
+        if (!validator.isLoaded()) return null
+        // The rule layer is where "z is য" lives (typedReading folds z to জ):
+        // the instant preview IS the reading the user watched while typing.
+        val literal = convertForInstantPreview(key)
+        if (literal.isEmpty() || !literal.all { it in '\u0980'..'\u09FF' } || !readsAsCleanBengali(literal)) return null
+        if (keyReadingDistance(literal, key) != 0) return null
+        val rawFold = ReverseTransliterator.foldNukta(raw.bengali)
+        val litFold = ReverseTransliterator.foldNukta(literal)
+        if (rawFold == litFold) return null
+        val swapOnly = rawFold.length == litFold.length && rawFold.indices.all { i ->
+            rawFold[i] == litFold[i] || (rawFold[i] in "যজ" && litFold[i] in "যজ")
+        }
+        val droppedZ = !swapOnly && litFold.indices.any { i ->
+            litFold[i] == 'য' && litFold.removeRange(i, i + 1).replace('য', 'জ') == rawFold.replace('য', 'জ')
+        }
+        if (!swapOnly && !droppedZ) return null
+        // Names reach 79 in the news corpus (আজিজ 79, জাকির 74, জাহিদ 74);
+        // everyday words sit at 87+ (যারা 87, জীবন 88, কাজ 92, যদি 93, জন্য 96).
+        // A rule floor (typedReading folds z to জ: ajiz → আজিজ) has no word to
+        // protect — the instant reading simply replaces it.
+        if (swapOnly && !isFloor && validator.getFrequency(raw.bengali) >= Z_EVERYDAY_BAND) return null
+        // A replaced dictionary word is a confident reading (0.9); a replaced
+        // rule floor stays a floor (0.62) so the S143 English rescue can still
+        // claim an English word with a Bengali suffix glued on (citizene →
+        // সিটিজেন) — the 132K diff caught that class at 0.9. The Bengali typo
+        // stage is blocked for both (keepsTypedZ).
+        return ConversionResult(
+            literal, if (isFloor) 0.62 else 0.9, ResolutionSource.CLEAN_TRANSLITERATION,
+            listOf(Alternative(raw.bengali, minOf(raw.confidence, 0.85))) + raw.alternatives.filter { it.bengali != literal }.take(2)
+        )
+    }
+
     private fun typedReadingOverAddedLetters(key: String, raw: ConversionResult): ConversionResult? {
         if (raw.source != ResolutionSource.DICTIONARY || raw.confidence >= 0.99) return null
         if (key.length < 5 || !key.all { it in 'a'..'z' } || ' ' in raw.bengali) return null

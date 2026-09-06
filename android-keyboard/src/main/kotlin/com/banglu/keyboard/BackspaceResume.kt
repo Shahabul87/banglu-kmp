@@ -41,9 +41,50 @@ internal data class MidWordEditPlan(
     val visibleWord: String,
 )
 
+/**
+ * S196: one step of a DELETION RUN — the user keeps pressing backspace inside a
+ * word the resume re-opened. [visible] is what they see; the step removes the
+ * last user-visible cluster of the part before the edit point and re-derives the
+ * roman buffer from the remaining text, so the word only ever shrinks
+ * cluster by cluster (device before: বিশ্ববিদ্যালয় → বিশ্ববিদ্যা → বিশওয়বিদ্য →
+ * বিশওয়বিদ — each backspace re-converted a shorter roman the user never typed).
+ */
+internal data class DeletionStep(
+    val visible: String,
+    val roman: String,
+    /** Roman edit point (null = end of word). */
+    val insertAt: Int?,
+    /** Length of the visible prefix before the edit point (caret offset). */
+    val prefixVisibleLength: Int,
+)
+
 internal object BackspaceResume {
 
     private const val MAX_WORD_LENGTH = 24
+
+    /**
+     * S196: see [DeletionStep]. [prefixVisibleLength] is null for an end-of-word
+     * run. Returns null when nothing is left to delete or the remaining text has
+     * no usable roman — the caller then falls back to a plain roman backspace.
+     */
+    fun planForDeletionStep(
+        visible: String,
+        prefixVisibleLength: Int?,
+        romanSuffix: String,
+        reverse: (String) -> String,
+    ): DeletionStep? {
+        val prefixLen = (prefixVisibleLength ?: visible.length).coerceIn(0, visible.length)
+        val prefix = visible.substring(0, prefixLen)
+        val suffix = visible.substring(prefixLen)
+        if (prefix.isEmpty()) return null
+        val boundary = previousUserVisibleClusterBoundary(prefix)
+        val fragment = prefix.substring(0, boundary)
+        val romanPrefix = cleanRoman(fragment, reverse) ?: return null
+        val roman = romanPrefix + (if (suffix.isEmpty()) "" else romanSuffix)
+        if (roman.isEmpty() && (fragment + suffix).isNotEmpty()) return null
+        val insertAt = if (suffix.isEmpty()) null else romanPrefix.length.takeIf { it < roman.length }
+        return DeletionStep(fragment + suffix, roman, insertAt, fragment.length)
+    }
 
     private fun wordBefore(text: String): String {
         var start = text.length

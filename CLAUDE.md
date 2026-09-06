@@ -33,6 +33,53 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S196 overnight round (2026-09-06, user's list: "bad deleting
+  experience … horrified words", "cursor movement during chandrabindu",
+  the j/z hand note "z maps to য, j maps to জ … aziz → আযিয with আজিজ
+  suggestion, ajiz → আজিয, azij → আযিজ", ন/ণ patterns, the phrases):**
+  (1) DELETION RUN — device (S22) showed the S88 resume re-converting a
+  shorter roman on every backspace after the first (বিশ্ববিদ্যালয় →
+  বিশ্ববিদ্যা → বিশওয়বিদ্য → বিশওয়বিদ; তোমাদে → তোমা → তো jumping two
+  letters): `BackspaceResume.planForDeletionStep` + service `DeletionRun`
+  — inside a resumed word each backspace shows the visible text minus ONE
+  user-visible cluster, the roman is re-derived from what remains, Space
+  commits exactly the visible text (no reconcile, nothing learned), any
+  letter ends the run and typing resumes from that roman; hold-delete
+  unchanged (33 chars in 2 s, already accelerates to words). Emulator:
+  বিশ্বাবিদ্যালয় → …দ্যাল → …দ্যা → বিশ্বাবি → বিশ্বা → বি, তোমাদের →
+  তোমাদে → তোমা → তো → ∅; delete then type (আ + r → আর), delete then Space
+  (বিশ্বাবি), mid-word delete run with the caret kept (তোKর). Pins
+  S196DeletionRunTest. (2) MID-WORD CARET — device: বাদ, caret after বা,
+  hold c → বাঁদ but the caret sat at the END (marker বাঁদK). Every
+  composing repaint of a mid-word edit and every non-Space commit now put
+  the caret back after the visible prefix (`placeMidWordCaret`,
+  `restoreMidWordCaretAfterCommit`; span start = editorSelStart −
+  deleteBefore at plan time; offset = visible minus the plan's untouched
+  suffix text — the rule preview of the prefix is only the fallback, it
+  renders "toma" as তমা and was one off). Emulator: বাঁKদ, তোমাদেKর, তোKর.
+  Cursor stepping over চাঁদ was already correct (চাঁ is one cluster).
+  (3) Z-FAITHFUL LAW (engine, commit + preview, all surfaces): the
+  dictionary folded z into জ (aziz → আজিজ, zakir → জাকির) yet kept য
+  elsewhere (hamza → হামযা), and ajiz → আজি dropped the z. Now, when the
+  key carries a z and the answer differs from the instant-preview reading
+  (the rule layer is where "z is য" lives; `typedReading` folds z to জ)
+  ONLY in য↔জ or lost the z, the instant reading commits with the
+  dictionary word as a chip — unless the word is everyday (validator
+  frequency ≥ Z_EVERYDAY_BAND 80: names আজিজ 79/জাকির 74 flip, chat words
+  জেনে 81/জাতি 83/নিজে 84/কাজ 92 stay), the key looks English (S142/S143
+  own it), or the validator is absent (lite: both halves stand down, so
+  preview = commit). A replaced rule floor keeps floor confidence (0.62)
+  so the S143 English rescue still claims glued keys (citizene → সিটিজেন
+  — caught by the 132K diff); the S181 typo stage never touches a z-floor
+  (`keepsTypedZ`; first cuts gave আজি/যাকের). The j-direction is untouched
+  (j for য is the chat habit: jodi → যদি). REJECTED: a one-slip English
+  neighbour guard (zakir ~ fakir) and a lexicon-prefix guard (zaki). Pins
+  S196ZFaithfulJvmTest. (4) ন/ণ: dictionary spellings win where they
+  should (karon → কারণ, purno → পূর্ণ, kiron → কিরণ, bornona → বর্ণনা) — no
+  defect; observed but NOT changed: tarun → টাউন, nirmal → নর্মাল, sonket
+  → সকেট (English rescue ties on Bengali names), zubayer → যুবাইর. (5)
+  mashallah / subhanallah / inshallah were already S184 phrases. Android
+  1.5.129 (2166).
 - **S195 IME memory study (2026-09-06, user: "make sure app performance
   remains best always" after the smoke heap drifted 228 → 323 MB across
   clean installs):** measured, not guessed — a 5 s meminfo timeline
