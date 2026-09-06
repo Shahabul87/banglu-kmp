@@ -1021,3 +1021,22 @@ left" — a 💬 Phrases slot (IconPhrases) after ✥ opens the emoji panel on t
 Final bar: 😊 ✥ 💬 📋 🎤 ⚙ ⋯. Device: bar dump [Emoji, Cursor pad, Phrases, Clipboard,
 Bangla voice typing, Settings, More tools]; Phrases opens on সালাম ও শুভেচ্ছা.
 
+
+## S197 — low-RAM validation on the FULL profile (2026-09-06, 1.5.130 / 2167)
+
+S197 retired every automatic lite path (only the user's switch or `isLowRamDevice`
+runs lite), so the 2 GB / 128m class that used to auto-lite now runs the full profile.
+Same emulator as S171 (2 GB `Pixel_7_API_34`, rooted, `dalvik.vm.heapgrowthlimit=128m`),
+`adb uninstall` + install of the 1.5.130 release APK (`versionName=1.5.130` read back).
+
+| Measure | 1.5.130 (FULL profile, 128m limit) |
+|---|---|
+| Full dictionary loaded | Dalvik heap 73 MB size / 48 MB allocated after load; total PSS 110 MB |
+| Top-1,000 conjunct words (appended 20 per line, cleared between lines) | **999 / 1000 identical to the JVM oracle**; the one difference is context: `ta` after আমি reranks to তা, alone it commits টা exactly as the oracle (retyped and confirmed) → 1000 / 1000 engine-consistent |
+| Process | one PID (4498) for the whole ~55-minute session; 0 LMK / 0 OOM / 0 ANR in logcat |
+| Memory (every 50 words) | median total PSS 131 MB, max 153 MB; Dalvik heap 79 MB size / 54 MB allocated at the end |
+| Not comparable | frames (software GPU) |
+
+Data: `top1000/top1000-lowram-emulator-results-1.5.130-fullprofile.tsv`, harness
+`top1000/lowram_top1000.py` (needs the scratchpad `delete_test.py`/`kb.py` helpers,
+archived in `docs/audits/s196-editing-round/`).

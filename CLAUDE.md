@@ -47,7 +47,13 @@ cost, and privacy-promise reasons; see memory + git history).
   switch or an OS-declared low-RAM device (`isLowRamDevice`, Android Go).
   Trade-off recorded: a capable phone under real memory pressure now keeps
   the full profile and relies on cache shedding + the OS. Pin flip
-  documented in MemoryPressurePolicyTest. Android 1.5.130 (2167).
+  documented in MemoryPressurePolicyTest. VERIFIED on the S171 protocol
+  (2 GB emulator, heapgrowthlimit 128m, clean install, top-1,000 words):
+  the FULL profile fits — Dalvik 73 MB / 48 MB used after load, 999/1000
+  oracle-exact (the one is the context rerank: ta after আমি → তা; alone
+  → টা), one PID for 55 min, median PSS 131 MB / max 153 MB, 0 LMK/OOM/ANR
+  (audit-android-closed-testing-v1.5.105-2026-09-01.md §S197). Android
+  1.5.130 (2167).
 - **S196 overnight round (2026-09-06, user's list: "bad deleting
   experience … horrified words", "cursor movement during chandrabindu",
   the j/z hand note "z maps to য, j maps to জ … aziz → আযিয with আজিজ
