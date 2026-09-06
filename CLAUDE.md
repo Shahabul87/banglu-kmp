@@ -33,6 +33,36 @@ cost, and privacy-promise reasons; see memory + git history).
 
 **Current status (2026-09-02):** ONE ENGINE, SIX SURFACES (Windows IME
 বাংলু টাইপার added S130-S132, on the Microsoft Store + website MSI).
+- **S194 spacebar rollover + chandrabindu card (2026-09-06, tester via
+  Messenger: "sensitivity same as my phone keyboard (Samsung keyboard)…
+  English mode typing accuracy degraded"; user: "do investigate"):**
+  measured, not guessed — a multi-touch MotionEvent injector (scratchpad
+  inj/Inject.java via app_process, InputManagerGlobal) replayed EIGHT
+  identical touch sequences on Banglu (EN mode) and the Samsung keyboard in
+  the same EditText on the S22 (docs/audits/touch-sensitivity-study-
+  2026-09-06.md). Geometry is the same (105 px pitch both; Banglu key 83 px
+  + 22 px gap, Samsung 89 + 16; touch cells tile edge to edge on both).
+  Centre / 12 ms / sliding / edge / σ14 px jitter taps: 0 edits on both.
+  ONE real defect: rollover (next key down 25 ms before the previous up)
+  → Banglu 17 edits, Samsung 0; isolated to the SPACEBAR only (letters
+  over letters 0 edits at 25 and 60 ms): letters commit on DOWN (S11) but
+  space commits on RELEASE (tap vs cursor-drag, S13/S32), so a two-thumb
+  typist's space landed one character late ("theq uick"). Fix:
+  `SpaceRolloverPolicy` (pure, JUnit) + a root-level Initial-pass pointer
+  observer on the keyboard column — a pointer landing while space is held
+  commits the space right then (root-first, before the letter's own down
+  handler), the rest of that hold is inert (no second commit, no cursor
+  drag); plain taps and drags unchanged. NOT a touch-model round: the
+  tester's mid-word neighbour slips (apoearnce, sane, keybiard) and the
+  σ22 px jitter gap (2 vs 1 edits) are S99-model territory plus Samsung's
+  word auto-correct, which S182 deliberately turned OFF by default — a
+  product decision, recorded, not changed. Tutorial: NEW family
+  "চন্দ্রবিন্দু ঁ" (3 caps: dictionary-known chad/has/kacha…, "^" —
+  ta^r → তাঁর vs tar → তার, ka^pa vs kapa, ga^ vs gan, pe^cha, ra^dha…,
+  and the "n" habit tnar/bansh/shankh…), every pair verified on the real
+  engine first and pinned by S157TutorialWordsJvmTest; wording is
+  surface-neutral ("^ লিখুন — ফোনে c চেপে ধরুন") because only Android has
+  hold-c. Android 1.5.126 (2163); web tutorial-words.json regenerated.
 - **S193 no untyped letters (2026-09-06, user screenshot: typed boddhota,
   got অবদ্ধতা; "this kind of engine behaviour might frustrate user
   inserting new letter while he did not type … we have to dig dive"):**

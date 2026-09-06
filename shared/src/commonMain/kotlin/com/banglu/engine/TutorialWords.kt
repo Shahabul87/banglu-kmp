@@ -73,6 +73,42 @@ object TutorialWords {
                 Word("ইনশাআল্লাহ", "inshallah", listOf("in", "shal", "lah"), listOf("insaallah", "inshaallah"), "")
             ))
         )),
+        Family("চন্দ্রবিন্দু ঁ", "চাঁদ, হাঁস, তাঁর — ডিকশনারি চেনে; না চিনলে ^ লিখুন (ফোনে c চেপে ধরুন), ঁ আসবে", listOf(
+            CapWords("ঁ", listOf(
+                Word("চাঁদ", "chad", listOf("chad"), listOf("chand", "cha^d"), "ঁ", "", "", "কিছু লিখতে হয় না — বাংলু নিজেই ঁ চেনে"),
+                Word("হাঁস", "has", listOf("has"), listOf("hans", "ha^s"), "ঁ", "", "", "কিছু লিখতে হয় না — বাংলু নিজেই ঁ চেনে"),
+                Word("কাঁচা", "kacha", listOf("ka", "cha"), listOf("kancha", "ka^cha"), "ঁ", "", "", "কিছু লিখতে হয় না — বাংলু নিজেই ঁ চেনে"),
+                Word("দাঁত", "dant", listOf("dant"), listOf("da^t"), "ঁ", "", "", "কিছু লিখতে হয় না — বাংলু নিজেই ঁ চেনে"),
+                Word("পাঁচ", "panch", listOf("panch"), listOf("pa^ch"), "ঁ", "", "", "কিছু লিখতে হয় না — বাংলু নিজেই ঁ চেনে"),
+                Word("কাঁথা", "kantha", listOf("kan", "tha"), listOf("ka^tha"), "ঁ", "", "", "কিছু লিখতে হয় না — বাংলু নিজেই ঁ চেনে"),
+                Word("ফাঁদ", "phand", listOf("phand"), listOf("pha^d"), "ঁ", "", "", "কিছু লিখতে হয় না — বাংলু নিজেই ঁ চেনে"),
+                Word("সাঁতার", "santar", listOf("san", "tar"), listOf("sa^tar"), "ঁ", "", "", "কিছু লিখতে হয় না — বাংলু নিজেই ঁ চেনে"),
+                Word("হাঁটা", "hata", listOf("ha", "ta"), listOf("hanta"), "ঁ", "", "", "কিছু লিখতে হয় না — বাংলু নিজেই ঁ চেনে")
+            )),
+            CapWords("^", listOf(
+                Word("তাঁর", "ta^r", listOf("ta^", "r"), listOf("tnar"), "ঁ", "", "", "tar = তার; ^ দিলে (ফোনে c চেপে ধরুন) তাঁর"),
+                Word("তাঁদের", "ta^der", listOf("ta^", "der"), emptyList(), "ঁ", "", "", "tader = তাদের; ^ দিলে তাঁদের"),
+                Word("কাঁপা", "ka^pa", listOf("ka^", "pa"), emptyList(), "ঁ", "", "", "kapa = কাপা; ^ দিলে কাঁপা"),
+                Word("গাঁ", "ga^", listOf("ga^"), emptyList(), "ঁ", "", "", "ga = গা, gan = গান; ^ দিলে গাঁ"),
+                Word("বাঁকা", "ba^ka", listOf("ba^", "ka"), listOf("banka"), "ঁ", "", "", "^ লিখুন (ফোনে c চেপে ধরুন) — ঁ আসে"),
+                Word("পেঁচা", "pe^cha", listOf("pe^", "cha"), emptyList(), "ঁ", "", "", "^ লিখুন (ফোনে c চেপে ধরুন) — ঁ আসে"),
+                Word("খাঁচা", "kha^cha", listOf("kha^", "cha"), listOf("khancha"), "ঁ", "", "", "^ লিখুন (ফোনে c চেপে ধরুন) — ঁ আসে"),
+                Word("রাঁধা", "ra^dha", listOf("ra^", "dha"), listOf("randha"), "ঁ", "", "", "^ লিখুন (ফোনে c চেপে ধরুন) — ঁ আসে"),
+                Word("ফাঁক", "fa^k", listOf("fa^", "k"), listOf("fank"), "ঁ", "", "", "^ লিখুন (ফোনে c চেপে ধরুন) — ঁ আসে"),
+                Word("ওঁ", "o^", listOf("o^"), emptyList(), "ঁ", "", "", "^ লিখুন (ফোনে c চেপে ধরুন) — ঁ আসে")
+            )),
+            CapWords("n", listOf(
+                Word("তাঁর", "tnar", listOf("tnar"), listOf("ta^r"), "ঁ", "", "", "n লিখলেও চলে — বাংলু ঁ বোঝে"),
+                Word("বাঁশ", "bansh", listOf("bansh"), listOf("ba^sh"), "ঁ", "", "", "n লিখলেও চলে — বাংলু ঁ বোঝে"),
+                Word("শাঁখ", "shankh", listOf("shankh"), listOf("sha^kh"), "ঁ", "", "", "n লিখলেও চলে — বাংলু ঁ বোঝে"),
+                Word("আঁকা", "anka", listOf("an", "ka"), listOf("a^ka"), "ঁ", "", "", "n লিখলেও চলে — বাংলু ঁ বোঝে"),
+                Word("ঝাঁক", "jhank", listOf("jhank"), listOf("jha^k"), "ঁ", "", "", "n লিখলেও চলে — বাংলু ঁ বোঝে"),
+                Word("বাঁধন", "bandhon", listOf("ban", "dhon"), listOf("ba^dhon"), "ঁ", "", "", "n লিখলেও চলে — বাংলু ঁ বোঝে"),
+                Word("ভাঁজ", "bhanj", listOf("bhanj"), listOf("bha^j"), "ঁ", "", "", "n লিখলেও চলে — বাংলু ঁ বোঝে"),
+                Word("তাঁবু", "tabu", listOf("ta", "bu"), listOf("ta^bu"), "ঁ", "", "", "n লিখলেও চলে — বাংলু ঁ বোঝে"),
+                Word("কাঁদছি", "kadchi", listOf("kad", "chi"), listOf("kandchi"), "ঁ", "", "", "n লিখলেও চলে — বাংলু ঁ বোঝে")
+            ))
+        )),
         Family("কঠিন শব্দ, এখানে সহজ", "যুক্তবর্ণ, ৎ ঁ ঃ ঐ ঔ ঋ — হসন্ত নয়, বিশেষ কি নয়, শুধু ছোট হাতের অক্ষর", listOf(
             CapWords("ৎ", listOf(
                 Word("হঠাৎ", "hothat", listOf("ho", "that"), listOf("hothath"), "ৎ", "", "", "অন্য কিবোর্ডে আলাদা কি লাগে, এখানে নয়"),

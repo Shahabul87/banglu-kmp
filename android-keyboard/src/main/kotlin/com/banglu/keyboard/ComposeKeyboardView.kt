@@ -377,7 +377,10 @@ fun BangluKeyboardLayout(
     }
     val fontScale = baseFontScale * if (isLandscape) 0.94f else 1.0f
 
+    val spaceRolloverPolicy = remember { SpaceRolloverPolicy() }
+    val currentOnSpace by rememberUpdatedState(onSpace)
     CompositionLocalProvider(
+        LocalSpaceRollover provides spaceRolloverPolicy,
         // S168 (audit P2-4): the keyboard is a fixed LTR artefact — an RTL
         // system locale must not mirror the rows or the glide grid.
         LocalLayoutDirection provides LayoutDirection.Ltr,
@@ -437,6 +440,23 @@ fun BangluKeyboardLayout(
                 .padding(horizontal = if (isLandscape) 4.dp else KeyboardPadding)
                 .padding(top = if (isLandscape) 1.dp else 3.dp, bottom = bottomSafePadding)
                 .onSizeChanged { if (lettersMode) lettersContentHeightPx = it.height }
+                // S194: a held spacebar commits the instant ANY other finger
+                // lands (Samsung/Gboard press order). The Initial pass runs
+                // root-first, so the space goes out before the letter's own
+                // down handler fires.
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            if (event.type == PointerEventType.Press &&
+                                event.changes.count { it.pressed } >= 2 &&
+                                spaceRolloverPolicy.onOtherPointerDown()
+                            ) {
+                                currentOnSpace()
+                            }
+                        }
+                    }
+                }
         ) {
             if (noticeText != null) {
                 KeyboardNoticeRow(text = noticeText, onDismiss = onNoticeDismiss)
@@ -2129,6 +2149,9 @@ private fun GlideLetterRows(glide: GlideUiState, content: @Composable () -> Unit
 /** S163: while a glide is running, key popups must not fire. */
 private val LocalGlideActive = compositionLocalOf<() -> Boolean> { { false } }
 
+/** S194: the keyboard-wide spacebar rollover state (see SpaceRolloverPolicy). */
+private val LocalSpaceRollover = compositionLocalOf { SpaceRolloverPolicy() }
+
 @Composable
 private fun LetterRowsContent(
     shiftState: ShiftState,
@@ -2944,6 +2967,7 @@ private fun SpaceBar(
     val soundOn by rememberUpdatedState(LocalSoundEnabled.current)
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnCursorMove by rememberUpdatedState(onCursorMove)
+    val rollover = LocalSpaceRollover.current
     var isPressed by remember { mutableStateOf(false) }
     var isCursorMode by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -2984,6 +3008,7 @@ private fun SpaceBar(
                     val down = awaitFirstDown()
                     down.consume()
                     isPressed = true
+                    rollover.onSpaceDown()
                     if (hapticOn) view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                     if (soundOn) view.playSoundEffect(SoundEffectConstants.CLICK)
                     val downTime = down.uptimeMillis
@@ -2998,9 +3023,14 @@ private fun SpaceBar(
                         val heldMs = (change?.uptimeMillis ?: downTime) - downTime
                         event.changes.forEach { it.consume() }
                         totalDx += deltaX
-                        if (!cursorMode && kotlin.math.abs(totalDx) >= cursorEngagePx && heldMs >= cursorEngageMinMs) {
+                        // S194: a space that already went out (another finger
+                        // landed) can no longer become a cursor drag.
+                        if (!cursorMode && rollover.canEngageCursor &&
+                            kotlin.math.abs(totalDx) >= cursorEngagePx && heldMs >= cursorEngageMinMs
+                        ) {
                             cursorMode = true
                             isCursorMode = true
+                            rollover.onCursorModeEngaged()
                             remainder = 0f
                             if (hapticOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         } else if (cursorMode) {
@@ -3019,7 +3049,9 @@ private fun SpaceBar(
                     }
                     isPressed = false
                     isCursorMode = false
-                    if (!cursorMode) currentOnClick()
+                    // S194: the policy owns the release — a plain tap commits
+                    // here, a drag or an early (rollover) commit does nothing.
+                    if (rollover.onSpaceUp() == SpaceRolloverPolicy.Release.COMMIT) currentOnClick()
                 }
             },
         contentAlignment = Alignment.Center

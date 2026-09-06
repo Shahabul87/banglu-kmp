@@ -1,0 +1,9 @@
+test	keyboard	expected	got	edits
+T1 centre 30/30ms	samsung	the quick brown fox jumps over the lazy dog	the quick brown fox jumps over the lazy dog	0
+T2 short 12ms taps 50ms gap	samsung	the quick brown fox jumps over the lazy dog	the quick brown fox jumps over the lazy dog	0
+T3 rollover overlap 25ms	samsung	the quick brown fox jumps over the lazy dog	the quick brown fox jumps over the lazy dog	0
+T4 slide +24px in press	samsung	the quick brown fox jumps over the lazy dog	the quick brown fox jumps over the lazy dog	0
+T5 right-edge taps (+38% key)	samsung	the quick brown fox jumps over the lazy dog	the quick brown fox jumps over the lazy dog	0
+T6 bottom-edge taps (+40% row)	samsung	the quick brown fox jumps over the lazy dog	the quick brown fox jumps over the lazy dog	0
+T7 gaussian jitter 14px	samsung	the quick brown fox jumps over the lazy dog	the quick brown fox jumps over the lazy dog	0
+T8 gaussian jitter 22px	samsung	the quick brown fox jumps over the lazy dog	the quick brown fox jumps over the lazy fog	1
