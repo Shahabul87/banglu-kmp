@@ -1,0 +1,54 @@
+Banglu — Proprietary License
+
+Copyright © 2026 Md Shahabul Alam. All rights reserved.
+
+This repository and everything in it — the Banglu typing engine (Kotlin
+Multiplatform source and every compiled form of it), the dictionary compiler,
+the curated word, phrase, acronym, alias and correction data, the compiled
+dictionary and slim dictionary artifacts, the Android keyboard, the desktop
+editor (বাংলু এডিটর), the Windows input method (বাংলু টাইপার), the macOS input
+method, the browser extensions, the tutorial curriculum, the designs, the
+documentation and the audit studies — is the confidential and proprietary work
+of Md Shahabul Alam ("the Owner") and is protected by copyright law and by
+international treaties.
+
+1. No license is granted. Nothing in this repository is open source. No right
+   to use, copy, modify, merge, publish, distribute, sublicense, sell, host,
+   train models on, or create derivative works from any part of it is granted
+   to anyone by its availability, in whole or in part, in any form.
+
+2. Permitted use. Any use requires a prior written license agreement signed by
+   the Owner. End users of the published Banglu applications are licensed
+   only under the terms that accompany those applications (the Google Play,
+   Microsoft Store, browser-store and https://www.bangluweb.com terms), which
+   permit installing and using the applications as delivered and nothing more.
+
+3. Prohibited acts. Without the Owner's written permission you may not:
+   (a) copy, mirror, fork, or redistribute this source code or data;
+   (b) decompile, disassemble, reverse-engineer, extract, or scrape the
+       engine, the dictionary artifacts or the word data from any Banglu
+       application, bundle, package, installer, web page or API;
+   (c) reproduce the dictionary, phonetic index, alias tables or word lists,
+       or use them to build, train, tune or evaluate another input method,
+       transliteration system, dictionary or language model;
+   (d) remove or alter any copyright, ownership or license notice.
+
+4. Third-party components. Some files are third-party datasets and fonts
+   redistributed under their own licenses (see dictionary-compiler/data/
+   LICENSES.md and the font license files). Those licenses govern those files
+   only and grant no rights to any other part of this work.
+
+5. Trademarks. "Banglu", "বাংলু", "বাংলু এডিটর", "বাংলু টাইপার", the Banglu
+   logos and the bangluweb.com name are marks of Md Shahabul Alam and may not
+   be used without written permission.
+
+6. No warranty. The work is provided "as is". To the fullest extent permitted
+   by law the Owner disclaims all warranties and is not liable for any damages
+   arising from any use of it.
+
+7. Enforcement. Unauthorized use will be pursued under the Copyright Act of
+   Bangladesh and the copyright laws of every other jurisdiction in which it
+   occurs, including through takedown notices to hosting providers and app
+   stores. Governing law: Bangladesh.
+
+Contact for licensing: Md Shahabul Alam — https://www.bangluweb.com
